@@ -2,11 +2,14 @@
 
 **Current gate: READY FOR DEPLOYMENT VALIDATION** (not "ready with conditions",
 not "production ready"). The code is implementation-complete and deployment-
-prepared and passes **90** automated tests — including a real threaded HTTP E2E
+prepared and passes **96** automated tests — including a real threaded HTTP E2E
 (`test_http_e2e` / `validate_e2e.py`, 31-step lifecycle over sockets) plus
 restart-persistence, which caught and fixed a cross-thread SQLite defect
-(`check_same_thread=False` + `_DB_LOCK`). That proof ran on **SQLite only** and
-is **not** evidence of production PostgreSQL concurrency behavior. The integrated
+(`check_same_thread=False` + `_DB_LOCK`), and a static PostgreSQL-portability guard
+(`test_pg_portability.py`, see `PG_PORTABILITY_AUDIT.md`) that proves the
+`RETURNING id` / `NO_ID_TABLES` / `ON CONFLICT` translation is complete against the
+real schema. Those proofs ran on **SQLite only** (plus static analysis) and are
+**not** evidence of production PostgreSQL concurrency behavior. The integrated
 runtime proof below has **NOT** been executed in the build environment (no
 Docker/PostgreSQL runtime available here). Do not claim production readiness until
 this passes on PostgreSQL.

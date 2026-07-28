@@ -5,16 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-<title>LiftHaul — Heavy Lifting & Hauling · Book a Lift</title>
+<title>RGO Machine Rigging Services · Book a Lift</title>
 <style>
   :root{
-    --bg:#EAEEF2; --surface:#FFFFFF; --surface-2:#F3F6F8; --surface-3:#E9EEF2;
-    --ink:#12171C; --ink-2:#48555F; --muted:#7C8894; --line:#D6DDE3;
-    --accent:#F5A314; --accent-2:#E8890A; --accent-ink:#1E1400;
-    --primary:#2563EB; --primary-2:#1D4ED8; --primary-ink:#FFFFFF; --primary-soft:#E8F0FE;
-    --good:#1E9D57; --good-bg:#E4F4EB; --warn:#C9760A; --warn-bg:#FBEEDA;
-    --crit:#CE3E3E; --crit-bg:#FBE6E6; --info:#2C6FB0; --info-bg:#E4EEF7;
-    --steel:#161C22; --steel-2:#1F272E; --steel-ink:#E9EEF2; --steel-muted:#8C99A5;
+    --bg:#EAF4E0; --surface:#FFFFFF; --surface-2:#F1F7EB; --surface-3:#E4F0D9;
+    --ink:#14210C; --ink-2:#47563C; --muted:#7C8A70; --line:#D5E3C6;
+    --accent:#F2611A; --accent-2:#D9520F; --accent-ink:#FFFFFF;
+    --primary:#5FB92A; --primary-2:#4E9E20; --primary-ink:#0C2306; --primary-soft:#E1F2D2;
+    --good:#3B8F1E; --good-bg:#E4F3D6; --warn:#C9760A; --warn-bg:#FBEEDA;
+    --crit:#CE3E3E; --crit-bg:#FBE6E6; --info:#4E9E20; --info-bg:#E1F2D2;
+    --steel:#5FBE2A; --steel-2:#52A824; --steel-ink:#0C2306; --steel-muted:#2E5C1A;
     --radius:12px; --radius-sm:8px;
     --font-display:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
     --font-body:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
@@ -23,15 +23,15 @@
     --shadow-lg:0 20px 60px rgba(16,23,28,.22);
   }
   @media (prefers-color-scheme:dark){:root{
-    --bg:#0C0F12; --surface:#141A20; --surface-2:#1B222A; --surface-3:#222B33;
-    --ink:#ECF1F5; --ink-2:#AEB9C2; --muted:#788592; --line:#28323B;
-    --accent:#FDB022; --accent-2:#F59E0B; --primary:#3B82F6; --primary-2:#2563EB; --primary-ink:#FFFFFF; --primary-soft:#12233F;
-    --good:#3FBE77; --good-bg:#132A1E; --warn:#F0A83A; --warn-bg:#2C2109;
-    --crit:#F0655F; --crit-bg:#2E1616; --info:#5BA0DE; --info-bg:#12212F; --steel:#0A0E11; --steel-2:#141A20;
+    --bg:#0C1207; --surface:#151E0F; --surface-2:#1C2814; --surface-3:#24331A;
+    --ink:#ECF3E4; --ink-2:#AFC0A0; --muted:#7C8C6E; --line:#2A3820;
+    --accent:#FB7A2E; --accent-2:#F2611A; --accent-ink:#FFFFFF; --primary:#6BC42E; --primary-2:#5AAE22; --primary-ink:#0C2306; --primary-soft:#173010;
+    --good:#5FB92A; --good-bg:#16300C; --warn:#F0A83A; --warn-bg:#2C2109;
+    --crit:#F0655F; --crit-bg:#2E1616; --info:#6BC42E; --info-bg:#173010; --steel:#5FBE2A; --steel-2:#52A824; --steel-ink:#0C2306; --steel-muted:#2E5C1A;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5); --shadow-lg:0 24px 70px rgba(0,0,0,.7);
   }}
-  :root[data-theme="light"]{--bg:#EAEEF2;--surface:#FFFFFF;--surface-2:#F3F6F8;--surface-3:#E9EEF2;--ink:#12171C;--ink-2:#48555F;--muted:#7C8894;--line:#D6DDE3;--accent:#F5A314;--primary:#2563EB;--primary-2:#1D4ED8;--primary-ink:#FFFFFF;--primary-soft:#E8F0FE;--good:#1E9D57;--good-bg:#E4F4EB;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;--info:#2C6FB0;--info-bg:#E4EEF7;--steel:#161C22;--shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);}
-  :root[data-theme="dark"]{--bg:#0C0F12;--surface:#141A20;--surface-2:#1B222A;--surface-3:#222B33;--ink:#ECF1F5;--ink-2:#AEB9C2;--muted:#788592;--line:#28323B;--accent:#FDB022;--primary:#3B82F6;--primary-2:#2563EB;--primary-ink:#FFFFFF;--primary-soft:#12233F;--good:#3FBE77;--good-bg:#132A1E;--warn:#F0A83A;--warn-bg:#2C2109;--crit:#F0655F;--crit-bg:#2E1616;--info:#5BA0DE;--info-bg:#12212F;--steel:#0A0E11;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);}
+  :root[data-theme="light"]{--bg:#EAF4E0;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;--ink:#14210C;--ink-2:#47563C;--muted:#7C8A70;--line:#D5E3C6;--accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;--primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;--good:#3B8F1E;--good-bg:#E4F3D6;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;--info:#4E9E20;--info-bg:#E1F2D2;--steel:#5FBE2A;--steel-2:#52A824;--steel-ink:#0C2306;--steel-muted:#2E5C1A;--shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);}
+  :root[data-theme="dark"]{--bg:#0C1207;--surface:#151E0F;--surface-2:#1C2814;--surface-3:#24331A;--ink:#ECF3E4;--ink-2:#AFC0A0;--muted:#7C8C6E;--line:#2A3820;--accent:#FB7A2E;--accent-2:#F2611A;--accent-ink:#FFFFFF;--primary:#6BC42E;--primary-2:#5AAE22;--primary-ink:#0C2306;--primary-soft:#173010;--good:#5FB92A;--good-bg:#16300C;--warn:#F0A83A;--warn-bg:#2C2109;--crit:#F0655F;--crit-bg:#2E1616;--info:#6BC42E;--info-bg:#173010;--steel:#5FBE2A;--steel-2:#52A824;--steel-ink:#0C2306;--steel-muted:#2E5C1A;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);-webkit-font-smoothing:antialiased;line-height:1.5;font-size:15px}
   h1,h2,h3,h4{margin:0;text-wrap:balance;font-family:var(--font-display)}
@@ -246,7 +246,7 @@
 <!-- ================= PUBLIC SITE ================= -->
 <section id="public">
   <nav class="snav"><div class="in">
-    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/><path d="M9 41V10h3l24 6v3" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/><rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/></svg><span class="wordmark">LiftHaul<b>·</b>Heavy Lift &amp; Haul</span></div>
+    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg><span class="wordmark">RGO <b style="color:var(--accent)">Machine Rigging Services</b></span></div>
     <div class="links"><a href="#services">Services</a><a href="#portfolio">Projects</a><a href="#book">Book a Lift</a></div>
     <div class="sp"></div>
     <button class="btn line sm" data-act="staffLogin">Staff Login</button>
@@ -299,26 +299,26 @@
   </div></section>
 
   <footer class="foot"><div class="in">
-    <div class="col" style="max-width:260px"><span class="wordmark" style="font-size:17px;font-weight:800">LiftHaul<b style="color:var(--accent)">·</b>Heavy Lift &amp; Haul</span><p style="font-size:13px;margin-top:10px">Cranes, rigging, machinery relocation and oversized transport — engineered and supervised end to end.</p></div>
+    <div class="col" style="max-width:260px"><span class="wordmark" style="font-size:17px;font-weight:800">RGO <b style="color:var(--accent)">Machine Rigging</b></span><p style="font-size:13px;margin-top:10px">Cranes, rigging, machinery relocation and oversized transport — engineered and supervised end to end.</p></div>
     <div class="sp"></div>
     <div class="col"><b>Services</b><a href="#services">Crane hire</a><a href="#services">Machinery relocation</a><a href="#services">Heavy hauling</a></div>
     <div class="col"><b>Company</b><a href="#portfolio">Projects</a><a href="#book">Book a lift</a><a data-act="staffLogin" style="cursor:pointer">Staff login</a></div>
-    <div class="col"><b>Contact</b><a>dispatch@lifthaul.demo</a><a>+63 2 8•• •••• </a><a>24/7 operations</a></div>
-  </div><div class="in base">© LiftHaul Heavy Lift &amp; Haul (demo) · Operations powered by <b style="color:var(--steel-ink)">LiftHaul OS</b> · Developed by <a href="https://trenovatech.ai" target="_blank" rel="noopener" style="color:var(--accent);font-weight:800;text-decoration:none">TrenovaTech.ai</a></div></footer>
+    <div class="col"><b>Contact</b><a>dispatch@rgo-rigging.demo</a><a>+63 2 8•• •••• </a><a>24/7 operations</a></div>
+  </div><div class="in base">© RGO Machine Rigging Services (demo) · Powered by <b style="color:var(--steel-ink)">RGO OS</b> · Developed by <a href="https://trenovatech.ai" target="_blank" rel="noopener" style="color:var(--accent);font-weight:800;text-decoration:none">TrenovaTech.ai</a></div></footer>
 </section>
 
 <!-- ================= LOGIN ================= -->
 <section id="login">
   <div class="brand">
     <div class="hzbar hz"></div>
-    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/><path d="M9 41V10h3l24 6v3" stroke="#E9EEF2" stroke-width="2.4" stroke-linejoin="round"/><path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/><rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/></svg><div class="wordmark" style="font-weight:800;letter-spacing:.06em">LiftHaul<b style="color:var(--accent)">OS</b></div></div>
+    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg><div class="wordmark" style="font-weight:800;letter-spacing:.06em">RGO&nbsp;<b style="color:var(--accent)">OS</b></div></div>
     <div class="brand-hero"><div class="eyebrow">Operations Console</div><h1>The office behind the lift.</h1><p>Dispatch, fleet, permits and billing for the crew running the jobs your customers book online.</p></div>
     <div class="brand-foot"><a data-act="backSite">← Back to public site</a></div>
   </div>
   <div class="auth">
     <form class="card" id="loginForm">
       <a class="backlink" data-act="backSite"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Back to site</a>
-      <h2>Staff sign in</h2><div class="sub">LiftHaul OS — operations console.</div>
+      <h2>Staff sign in</h2><div class="sub">RGO OS — operations console.</div>
       <div class="seg" role="group" aria-label="Sign in as"><button type="button" data-role="Admin" aria-pressed="true">Admin</button><button type="button" data-role="Dispatcher" aria-pressed="false">Dispatcher</button><button type="button" data-role="Driver" aria-pressed="false">Driver</button></div>
       <label class="fld"><span>Username</span><input id="u" type="text" value="admin" autocomplete="username" spellcheck="false"></label>
       <label class="fld"><span>Password</span><input id="p" type="password" value="demo1234" autocomplete="current-password"></label>
@@ -333,7 +333,7 @@
 <!-- ================= APP ================= -->
 <section id="dash">
   <header class="topbar">
-    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/><path d="M9 41V10h3l24 6v3" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/><rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/></svg><div class="wordmark" style="font-weight:800;letter-spacing:.06em">LiftHaul<b style="color:var(--accent)">OS</b></div></div>
+    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg><div class="wordmark" style="font-weight:800;letter-spacing:.06em">RGO&nbsp;<b style="color:var(--accent)">OS</b></div></div>
     <div class="spacer"></div>
     <button class="iconbtn" data-act="notif" title="Notifications" aria-label="Notifications"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3a6 6 0 0 0-6 6c0 5-2 6-2 6h16s-2-1-2-6a6 6 0 0 0-6-6zM10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="ncount" id="notifCount">0</span></button>
     <button class="iconbtn" data-act="themeToggle" title="Toggle theme" aria-label="Toggle theme"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>

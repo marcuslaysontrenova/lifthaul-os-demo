@@ -19,209 +19,205 @@
     --font-body:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
     --font-mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
     --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);
-    --shadow-lg:0 12px 40px rgba(16,23,28,.16);
+    --shadow-lg:0 20px 60px rgba(16,23,28,.22);
   }
-  @media (prefers-color-scheme:dark){
-    :root{
-      --bg:#0C0F12; --surface:#141A20; --surface-2:#1B222A; --surface-3:#222B33;
-      --ink:#ECF1F5; --ink-2:#AEB9C2; --muted:#788592; --line:#28323B;
-      --accent:#FDB022; --accent-2:#F59E0B; --accent-ink:#1E1400;
-      --good:#3FBE77; --good-bg:#132A1E; --warn:#F0A83A; --warn-bg:#2C2109; --crit:#F0655F; --crit-bg:#2E1616;
-      --info:#5BA0DE; --info-bg:#12212F;
-      --steel:#0A0E11; --steel-2:#141A20; --steel-ink:#E9EEF2; --steel-muted:#8C99A5;
-      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
-      --shadow-lg:0 16px 48px rgba(0,0,0,.6);
-    }
-  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0C0F12; --surface:#141A20; --surface-2:#1B222A; --surface-3:#222B33;
+    --ink:#ECF1F5; --ink-2:#AEB9C2; --muted:#788592; --line:#28323B;
+    --accent:#FDB022; --accent-2:#F59E0B; --accent-ink:#1E1400;
+    --good:#3FBE77; --good-bg:#132A1E; --warn:#F0A83A; --warn-bg:#2C2109; --crit:#F0655F; --crit-bg:#2E1616;
+    --info:#5BA0DE; --info-bg:#12212F;
+    --steel:#0A0E11; --steel-2:#141A20;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
+    --shadow-lg:0 24px 70px rgba(0,0,0,.7);
+  }}
   :root[data-theme="light"]{
     --bg:#EAEEF2; --surface:#FFFFFF; --surface-2:#F3F6F8; --surface-3:#E9EEF2;
-    --ink:#12171C; --ink-2:#48555F; --muted:#7C8894; --line:#D6DDE3;
-    --accent:#F5A314; --good:#1E9D57; --good-bg:#E4F4EB; --warn:#C9760A; --warn-bg:#FBEEDA;
-    --crit:#CE3E3E; --crit-bg:#FBE6E6; --info:#2C6FB0; --info-bg:#E4EEF7;
-    --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);
-    --shadow-lg:0 12px 40px rgba(16,23,28,.16);
+    --ink:#12171C; --ink-2:#48555F; --muted:#7C8894; --line:#D6DDE3; --accent:#F5A314;
+    --good:#1E9D57; --good-bg:#E4F4EB; --warn:#C9760A; --warn-bg:#FBEEDA; --crit:#CE3E3E; --crit-bg:#FBE6E6;
+    --info:#2C6FB0; --info-bg:#E4EEF7; --steel:#161C22; --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);
   }
   :root[data-theme="dark"]{
     --bg:#0C0F12; --surface:#141A20; --surface-2:#1B222A; --surface-3:#222B33;
-    --ink:#ECF1F5; --ink-2:#AEB9C2; --muted:#788592; --line:#28323B;
-    --accent:#FDB022; --good:#3FBE77; --good-bg:#132A1E; --warn:#F0A83A; --warn-bg:#2C2109;
-    --crit:#F0655F; --crit-bg:#2E1616; --info:#5BA0DE; --info-bg:#12212F;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
-    --shadow-lg:0 16px 48px rgba(0,0,0,.6);
+    --ink:#ECF1F5; --ink-2:#AEB9C2; --muted:#788592; --line:#28323B; --accent:#FDB022;
+    --good:#3FBE77; --good-bg:#132A1E; --warn:#F0A83A; --warn-bg:#2C2109; --crit:#F0655F; --crit-bg:#2E1616;
+    --info:#5BA0DE; --info-bg:#12212F; --steel:#0A0E11; --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
   }
-
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);
-    -webkit-font-smoothing:antialiased;line-height:1.5;font-size:15px}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);-webkit-font-smoothing:antialiased;line-height:1.5;font-size:15px}
   h1,h2,h3,h4{margin:0;text-wrap:balance;font-family:var(--font-display)}
-  button{font-family:inherit;cursor:pointer}
+  button{font-family:inherit;cursor:pointer} input,select{font-family:inherit}
   .tnum{font-variant-numeric:tabular-nums}
   .hz{background-image:repeating-linear-gradient(-45deg,var(--accent) 0 14px,#12171C 14px 28px)}
 
+  /* chips / buttons */
+  .chip{font-size:11px;font-weight:700;letter-spacing:.02em;padding:4px 9px;border-radius:999px;white-space:nowrap;display:inline-block}
+  .c-good{color:var(--good);background:var(--good-bg)} .c-warn{color:var(--warn);background:var(--warn-bg)}
+  .c-info{color:var(--info);background:var(--info-bg)} .c-crit{color:var(--crit);background:var(--crit-bg)}
+  .c-mut{color:var(--ink-2);background:var(--surface-3)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:14px;padding:10px 15px;border-radius:9px;transition:.15s;box-shadow:0 6px 16px rgba(245,163,20,.24)}
+  .btn:hover{background:var(--accent-2);transform:translateY(-1px)} .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .btn.sm{padding:7px 11px;font-size:12.5px;box-shadow:none}
+  .btn.line{background:transparent;border:1px solid var(--line);color:var(--ink-2);box-shadow:none;font-weight:700}
+  .btn.line:hover{color:var(--ink);border-color:var(--muted);background:var(--surface-2)}
+  .btn.block{width:100%}
+  .btn[disabled]{opacity:.45;cursor:not-allowed;transform:none}
+
   /* ---------- LOGIN ---------- */
   #login{display:grid;grid-template-columns:1.05fr .95fr;min-height:100vh}
-  .brand{position:relative;background:var(--steel);color:var(--steel-ink);
-    padding:44px clamp(28px,4vw,64px);display:flex;flex-direction:column;overflow:hidden}
-  .brand::after{content:"";position:absolute;inset:0;background:
-    radial-gradient(120% 90% at 85% -10%,rgba(245,163,20,.18),transparent 55%);pointer-events:none}
+  .brand{position:relative;background:var(--steel);color:var(--steel-ink);padding:44px clamp(28px,4vw,64px);display:flex;flex-direction:column;overflow:hidden}
+  .brand::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 85% -10%,rgba(245,163,20,.18),transparent 55%);pointer-events:none}
   .brand .hzbar{position:absolute;top:0;left:0;right:0;height:6px}
-  .mark{display:flex;align-items:center;gap:12px;z-index:1}
-  .mark svg{width:40px;height:40px;flex:none}
-  .wordmark{font-weight:800;letter-spacing:.06em;font-size:20px}
-  .wordmark b{color:var(--accent)}
-  .brand-hero{margin-top:auto;margin-bottom:auto;z-index:1;padding:32px 0}
-  .brand-hero .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
-    color:var(--accent);font-weight:700}
-  .brand-hero h1{font-size:clamp(1.9rem,3.4vw,2.7rem);font-weight:800;line-height:1.08;
-    letter-spacing:-.01em;margin:14px 0 16px}
+  .mark{display:flex;align-items:center;gap:12px;z-index:1}.mark svg{width:40px;height:40px;flex:none}
+  .wordmark{font-weight:800;letter-spacing:.06em;font-size:20px}.wordmark b{color:var(--accent)}
+  .brand-hero{margin:auto 0;z-index:1;padding:32px 0}
+  .brand-hero .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  .brand-hero h1{font-size:clamp(1.9rem,3.4vw,2.7rem);font-weight:800;line-height:1.08;letter-spacing:-.01em;margin:14px 0 16px}
   .brand-hero p{color:var(--steel-muted);max-width:42ch;font-size:15px}
   .flow{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px;z-index:1}
-  .flow span{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;
-    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:var(--steel-ink)}
-  .flow span b{color:var(--accent);font-weight:700}
+  .flow span{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09)}
+  .flow span b{color:var(--accent)}
   .brand-foot{z-index:1;color:var(--steel-muted);font-size:12.5px;display:flex;gap:10px;align-items:center}
-
   .auth{display:flex;align-items:center;justify-content:center;padding:40px 24px}
-  .card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);
-    border-radius:var(--radius);box-shadow:var(--shadow);padding:30px}
-  .card h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
-  .card .sub{color:var(--ink-2);font-size:13.5px;margin-top:4px;margin-bottom:22px}
-  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface-2);
-    border:1px solid var(--line);border-radius:10px;padding:4px;margin-bottom:18px}
-  .seg button{border:0;background:transparent;color:var(--ink-2);font-weight:600;font-size:13px;
-    padding:9px 6px;border-radius:7px;transition:.15s}
+  .card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:30px}
+  .card h2{font-size:22px;font-weight:800}.card .sub{color:var(--ink-2);font-size:13.5px;margin:4px 0 22px}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:4px;margin-bottom:18px}
+  .seg button{border:0;background:transparent;color:var(--ink-2);font-weight:600;font-size:13px;padding:9px 6px;border-radius:7px}
   .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
   @media (prefers-color-scheme:dark){.seg button[aria-pressed="true"]{background:var(--surface-3)}}
   :root[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--surface-3)}
-  :root[data-theme="light"] .seg button[aria-pressed="true"]{background:var(--surface)}
   label.fld{display:block;margin-bottom:14px}
-  label.fld span{display:block;font-size:12px;font-weight:600;letter-spacing:.02em;
-    text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-  label.fld input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;
-    background:var(--surface-2);color:var(--ink);font-size:14.5px;font-family:inherit}
-  label.fld input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
-  .hint{background:var(--surface-2);border:1px dashed var(--line);border-radius:9px;padding:10px 12px;
-    font-size:12.5px;color:var(--ink-2);margin:2px 0 18px;display:flex;gap:8px;align-items:baseline}
-  .hint code{font-family:var(--font-mono);color:var(--ink);background:var(--surface-3);
-    padding:1px 6px;border-radius:5px;font-size:12px}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;
-    background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:15px;padding:12px;
-    border-radius:9px;letter-spacing:.01em;transition:.15s;box-shadow:0 6px 16px rgba(245,163,20,.28)}
-  .btn:hover{background:var(--accent-2);transform:translateY(-1px)}
-  .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  label.fld>span{display:block;font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  label.fld input,.frm input,.frm select,.frm textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--ink);font-size:14px}
+  label.fld input:focus,.frm input:focus,.frm select:focus,.frm textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .hint{background:var(--surface-2);border:1px dashed var(--line);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--ink-2);margin:2px 0 18px;display:flex;gap:8px;align-items:baseline}
+  .hint code{font-family:var(--font-mono);color:var(--ink);background:var(--surface-3);padding:1px 6px;border-radius:5px;font-size:12px}
   .fine{text-align:center;color:var(--muted);font-size:12px;margin-top:16px}
 
-  /* ---------- APP SHELL ---------- */
+  /* ---------- SHELL ---------- */
   #dash{display:none;min-height:100vh;grid-template-columns:236px 1fr;grid-template-rows:auto 1fr}
   #dash.on{display:grid}
-  .topbar{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:0 20px;height:60px;
-    background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-  .topbar .mark svg{width:30px;height:30px}
-  .topbar .wordmark{font-size:16px;color:var(--ink)}
+  .topbar{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:0 20px;height:60px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .topbar .mark svg{width:30px;height:30px}.topbar .wordmark{font-size:16px;color:var(--ink)}
   .topbar .spacer{flex:1}
-  .rolebadge{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--accent-ink);background:var(--accent);padding:5px 10px;border-radius:999px}
+  .rolebadge{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);background:var(--accent);padding:5px 10px;border-radius:999px}
   .user{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600}
-  .avatar{width:30px;height:30px;border-radius:50%;background:var(--steel);color:#fff;display:grid;
-    place-items:center;font-size:12px;font-weight:800;letter-spacing:.02em}
-  .ghost{background:transparent;border:1px solid var(--line);color:var(--ink-2);font-weight:600;
-    font-size:13px;padding:7px 12px;border-radius:8px}
-  .ghost:hover{color:var(--ink);border-color:var(--muted)}
-
-  .side{background:var(--surface);border-right:1px solid var(--line);padding:14px 12px;
-    display:flex;flex-direction:column;gap:2px;overflow-y:auto}
-  .side .grp{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--muted);padding:14px 10px 6px}
-  .nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;border:0;
-    background:transparent;color:var(--ink-2);font-weight:600;font-size:13.5px;text-align:left;width:100%}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--steel);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800}
+  .side{background:var(--surface);border-right:1px solid var(--line);padding:14px 12px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+  .side .grp{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:14px 10px 6px}
+  .nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;border:0;background:transparent;color:var(--ink-2);font-weight:600;font-size:13.5px;text-align:left;width:100%}
   .nav:hover{background:var(--surface-2);color:var(--ink)}
   .nav[aria-current="true"]{background:var(--surface-2);color:var(--ink)}
   .nav[aria-current="true"] .ic{color:var(--accent)}
   .nav .ic{width:17px;height:17px;flex:none;color:var(--muted)}
-  .nav .dot{margin-left:auto;font-size:11px;font-weight:700;color:var(--accent-ink);
-    background:var(--accent);border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
-
+  .nav .dot{margin-left:auto;font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
   main{padding:22px clamp(18px,2.4vw,32px);overflow-x:hidden}
-  .pagehead{display:flex;align-items:flex-end;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+
+  .pagehead{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+  .pagehead .crumb{color:var(--muted);font-size:12.5px}
   .pagehead h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
-  .pagehead .crumb{color:var(--muted);font-size:12.5px;margin-bottom:3px}
   .pagehead .spacer{flex:1}
-  .stripe{height:4px;border-radius:3px;width:64px;margin-top:8px}
 
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:16px 16px 14px;box-shadow:var(--shadow);position:relative;overflow:hidden}
-  .kpi .k{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
-  .kpi .v{font-size:28px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
-  .kpi .d{font-size:12px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:5px}
-  .kpi .spark{position:absolute;right:12px;top:14px;opacity:.9}
-  .up{color:var(--good)} .down{color:var(--crit)}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+  .kpi .v{font-size:27px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+  .kpi .d{font-size:12px;font-weight:600;margin-top:4px}.kpi .spark{position:absolute;right:12px;top:14px}
+  .up{color:var(--good)}.down{color:var(--crit)}
 
   .grid2{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
-  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    box-shadow:var(--shadow);overflow:hidden}
-  .panel-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
-  .panel-h h3{font-size:14.5px;font-weight:800}
-  .panel-h .spacer{flex:1}
-  .panel-h .cnt{font-size:12px;color:var(--muted);font-weight:600}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .panel-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .panel-h h3{font-size:14.5px;font-weight:800}.panel-h .spacer{flex:1}.panel-h .cnt{font-size:12px;color:var(--muted);font-weight:600}
   .panel-b{padding:12px 14px}
 
-  .job{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
-    padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:var(--surface-2)}
-  .job:last-child{margin-bottom:0}
-  .job .no{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--accent-2);
-    background:var(--warn-bg);border-radius:7px;padding:6px 8px;text-align:center;line-height:1.2}
-  .job .mid .cl{font-weight:700;font-size:14px}
-  .job .mid .ld{color:var(--ink-2);font-size:12.5px;margin-top:2px}
-  .job .mid .eq{color:var(--muted);font-size:12px;margin-top:3px;display:flex;gap:6px;align-items:center}
-  .job .rt{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
-  .chip{font-size:11px;font-weight:700;letter-spacing:.02em;padding:4px 9px;border-radius:999px;white-space:nowrap}
-  .c-good{color:var(--good);background:var(--good-bg)} .c-warn{color:var(--warn);background:var(--warn-bg)}
-  .c-info{color:var(--info);background:var(--info-bg)} .c-crit{color:var(--crit);background:var(--crit-bg)}
-  .c-mut{color:var(--ink-2);background:var(--surface-3)}
-  .job .rt .tm{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .search{position:relative;flex:1;min-width:180px}
+  .search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);font-size:13.5px}
+  .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
+  .selw{border:1px solid var(--line);border-radius:9px;background:var(--surface);position:relative}
+  .selw select{border:0;background:transparent;color:var(--ink);font-size:13.5px;font-weight:600;padding:9px 30px 9px 12px;appearance:none;cursor:pointer}
+  .selw::after{content:"▾";position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:11px}
 
-  .row{display:flex;align-items:center;gap:11px;padding:11px 6px;border-bottom:1px solid var(--line)}
-  .row:last-child{border-bottom:0}
-  .row .ei{width:34px;height:34px;border-radius:8px;background:var(--surface-3);display:grid;
-    place-items:center;color:var(--ink-2);flex:none}
-  .row .en{font-weight:700;font-size:13.5px} .row .es{font-size:12px;color:var(--muted);margin-top:1px}
-  .row .spacer{flex:1}
-  .bar{height:6px;border-radius:4px;background:var(--surface-3);width:70px;overflow:hidden;margin-top:5px}
-  .bar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+  table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+  .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}
+  .tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface-2)}
+  .tbl td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .tbl tbody tr:last-child td{border-bottom:0}
+  .tbl tbody tr{cursor:pointer;transition:background .1s}
+  .tbl tbody tr:hover{background:var(--surface-2)}
+  .tbl .id{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--accent-2)}
+  .tbl .strong{font-weight:700} .right{text-align:right}
+  .empty{padding:30px;text-align:center;color:var(--muted);font-size:13.5px}
 
-  .alert{display:flex;gap:10px;padding:11px;border-radius:9px;background:var(--warn-bg);
-    border:1px solid transparent;margin-bottom:9px;font-size:12.5px;color:var(--ink)}
-  .alert.crit{background:var(--crit-bg)} .alert svg{flex:none;margin-top:1px}
-  .alert b{font-weight:700}
+  /* kanban */
+  .board{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
+  .col{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px;min-width:180px}
+  .col-h{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);padding:2px 4px 10px}
+  .col-h .n{margin-left:auto;background:var(--surface);border:1px solid var(--line);border-radius:999px;font-size:11px;padding:1px 7px;color:var(--muted)}
+  .jobc{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px;box-shadow:var(--shadow)}
+  .jobc:last-child{margin-bottom:0}
+  .jobc .no{font-family:var(--font-mono);font-size:11.5px;font-weight:700;color:var(--accent-2)}
+  .jobc .cl{font-weight:700;font-size:13.5px;margin:3px 0 2px}
+  .jobc .ld{font-size:12px;color:var(--ink-2)}
+  .jobc .mt{display:flex;align-items:center;gap:6px;margin-top:9px}
+  .jobc .adv{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--accent-2);background:var(--warn-bg);border:0;padding:4px 9px;border-radius:7px}
+  .jobc .adv:hover{background:var(--accent);color:var(--accent-ink)}
 
-  /* module preview */
-  .mod{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    box-shadow:var(--shadow);padding:26px}
-  .mod .ic-lg{width:46px;height:46px;border-radius:12px;background:var(--warn-bg);color:var(--accent-2);
-    display:grid;place-items:center;margin-bottom:14px}
-  .mod h3{font-size:19px;font-weight:800}
-  .mod p{color:var(--ink-2);max-width:60ch;margin:8px 0 18px;font-size:14px}
-  .feats{display:flex;flex-wrap:wrap;gap:8px}
-  .feats span{font-size:12.5px;font-weight:600;color:var(--ink-2);background:var(--surface-2);
-    border:1px solid var(--line);border-radius:8px;padding:8px 11px}
-  .mod .tag{display:inline-block;margin-top:20px;font-size:12px;font-weight:700;color:var(--good);
-    background:var(--good-bg);padding:6px 11px;border-radius:999px}
+  /* rows / lists */
+  .lrow{display:flex;align-items:center;gap:12px;padding:12px 6px;border-bottom:1px solid var(--line)}
+  .lrow:last-child{border-bottom:0}
+  .lrow .ei{width:34px;height:34px;border-radius:8px;background:var(--surface-3);display:grid;place-items:center;color:var(--ink-2);flex:none}
+  .lrow .en{font-weight:700;font-size:13.5px}.lrow .es{font-size:12px;color:var(--muted);margin-top:1px}.lrow .spacer{flex:1}
+  .bar{height:6px;border-radius:4px;background:var(--surface-3);width:70px;overflow:hidden;margin-top:5px}.bar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+  .alert{display:flex;gap:10px;padding:11px;border-radius:9px;background:var(--warn-bg);margin-bottom:9px;font-size:12.5px;color:var(--ink)}
+  .alert.crit{background:var(--crit-bg)}.alert svg{flex:none;margin-top:1px}.alert b{font-weight:700}
 
-  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
-    background:var(--steel);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;
-    box-shadow:var(--shadow-lg);opacity:0;transition:.25s;z-index:20;pointer-events:none}
+  /* modal */
+  .backdrop{position:fixed;inset:0;background:rgba(8,12,16,.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
+  .backdrop.on{display:flex}
+  .modal{width:100%;max-width:520px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-lg);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal.wide{max-width:660px}
+  .modal-h{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .modal-h h3{font-size:16px;font-weight:800}.modal-h .x{margin-left:auto;background:transparent;border:0;color:var(--muted);font-size:20px;line-height:1;padding:2px 6px;border-radius:6px}
+  .modal-h .x:hover{background:var(--surface-2);color:var(--ink)}
+  .modal-b{padding:20px;overflow-y:auto}
+  .modal-f{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end}
+  .frm label{display:block;margin-bottom:13px}
+  .frm label>span{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
+  .frm .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .checks{display:grid;gap:7px;max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:10px;background:var(--surface-2)}
+  .checks label{display:flex;align-items:center;gap:9px;margin:0;font-size:13px;font-weight:600;cursor:pointer}
+  .checks input{width:auto}
+  /* detail */
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:8px 14px;font-size:13.5px}
+  .kv dt{color:var(--muted);font-weight:600}.kv dd{margin:0;font-weight:600}
+  .divide{height:1px;background:var(--line);margin:16px 0}
+
+  /* quote builder */
+  .qline{display:grid;grid-template-columns:1fr 62px 62px auto 30px;gap:8px;align-items:center;margin-bottom:8px}
+  .qline .selw{grid-column:auto}
+  .qtot{display:flex;justify-content:space-between;font-size:14px;padding:7px 0;border-top:1px solid var(--line);margin-top:6px}
+  .qtot.grand{font-size:17px;font-weight:800;border-top:2px solid var(--ink)}
+
+  /* charts */
+  .chartrow{display:flex;align-items:center;gap:12px;margin-bottom:10px;font-size:13px}
+  .chartrow .lbl{width:130px;color:var(--ink-2);font-weight:600;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chartrow .track{flex:1;height:20px;background:var(--surface-3);border-radius:6px;overflow:hidden}
+  .chartrow .track i{display:block;height:100%;background:var(--accent);border-radius:6px}
+  .chartrow .val{width:96px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+  .donut{width:132px;height:132px;border-radius:50%;display:grid;place-items:center;flex:none}
+  .donut .hole{width:88px;height:88px;background:var(--surface);border-radius:50%;display:grid;place-items:center;text-align:center}
+  .donut .hole b{font-size:24px;font-weight:800}.donut .hole span{font-size:11px;color:var(--muted);display:block}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--steel);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);opacity:0;transition:.25s;z-index:60;pointer-events:none;max-width:88vw}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .stripe{height:4px;border-radius:3px;width:64px}
 
   @media (max-width:920px){
-    #login{grid-template-columns:1fr}
-    .brand{display:none}
-    .grid2{grid-template-columns:1fr}
-    .kpis{grid-template-columns:repeat(2,1fr)}
-    #dash.on{grid-template-columns:1fr}
-    .side{display:none}
-    .topbar{grid-column:1}
-    main{grid-column:1}
+    #login{grid-template-columns:1fr}.brand{display:none}
+    .grid2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}
+    #dash.on{grid-template-columns:1fr}.side{display:none}.topbar{grid-column:1}main{grid-column:1}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -235,201 +231,381 @@
         <rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/>
         <path d="M9 41V10h3l24 6v3" stroke="#E9EEF2" stroke-width="2.4" stroke-linejoin="round"/>
         <path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/>
-        <path d="M30 19v7" stroke="#E9EEF2" stroke-width="2.4"/>
         <rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/>
         <path d="M9 22h8" stroke="#8C99A5" stroke-width="2.4"/>
       </svg>
       <div class="wordmark">LiftHaul<b>OS</b></div>
     </div>
-
     <div class="brand-hero">
       <div class="eyebrow">Heavy Lifting &amp; Hauling</div>
       <h1>Run the whole lift — from quote to final invoice.</h1>
       <p>One operating system for cranes, rigging, machinery relocation and oversized cargo.
          Replace the phone calls, spreadsheets and paper checklists with one coordinated job record.</p>
-      <div class="flow">
-        <span><b>1</b> Quote</span><span><b>2</b> Dispatch</span><span><b>3</b> Permits</span>
-        <span><b>4</b> Lift</span><span><b>5</b> Deliver</span><span><b>6</b> Bill</span>
-      </div>
+      <div class="flow"><span><b>1</b> Quote</span><span><b>2</b> Dispatch</span><span><b>3</b> Permits</span><span><b>4</b> Lift</span><span><b>5</b> Deliver</span><span><b>6</b> Bill</span></div>
     </div>
-
-    <div class="brand-foot">
-      <span class="hz" style="width:26px;height:10px;border-radius:2px;display:inline-block"></span>
-      Interactive demo build · sample data
-    </div>
+    <div class="brand-foot"><span class="hz" style="width:26px;height:10px;border-radius:2px;display:inline-block"></span>Interactive working demo · sample data</div>
   </div>
-
   <div class="auth">
     <form class="card" id="loginForm">
-      <h2>Sign in</h2>
-      <div class="sub">Access your dispatch, fleet and lifting operations.</div>
-
+      <h2>Sign in</h2><div class="sub">Access your dispatch, fleet and lifting operations.</div>
       <div class="seg" role="group" aria-label="Sign in as">
         <button type="button" data-role="Admin" aria-pressed="true">Admin</button>
         <button type="button" data-role="Dispatcher" aria-pressed="false">Dispatcher</button>
         <button type="button" data-role="Driver" aria-pressed="false">Driver</button>
       </div>
-
-      <label class="fld"><span>Username</span>
-        <input id="u" type="text" value="admin" autocomplete="username" spellcheck="false"></label>
-      <label class="fld"><span>Password</span>
-        <input id="p" type="password" value="demo1234" autocomplete="current-password"></label>
-
+      <label class="fld"><span>Username</span><input id="u" type="text" value="admin" autocomplete="username" spellcheck="false"></label>
+      <label class="fld"><span>Password</span><input id="p" type="password" value="demo1234" autocomplete="current-password"></label>
       <div class="hint">🔑&nbsp;<div>Demo access — user <code>admin</code> · pass <code>demo1234</code>. Any values sign you in.</div></div>
-
-      <button class="btn" type="submit">Sign in to LiftHaul OS →</button>
-      <div class="fine">Protected demo · no real data is stored</div>
+      <button class="btn block" type="submit">Sign in to LiftHaul OS →</button>
+      <div class="fine">Working demo · data lives in your browser only</div>
     </form>
   </div>
 </section>
 
-<!-- ===================== DASHBOARD ===================== -->
+<!-- ===================== APP ===================== -->
 <section id="dash">
   <header class="topbar">
     <div class="mark">
-      <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-        <rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/>
-        <path d="M9 41V10h3l24 6v3" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
-        <path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/>
-        <rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/>
-      </svg>
+      <svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/><path d="M9 41V10h3l24 6v3" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/><rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/></svg>
       <div class="wordmark">LiftHaul<b style="color:var(--accent)">OS</b></div>
     </div>
     <div class="spacer"></div>
     <span class="rolebadge" id="roleBadge">Admin</span>
-    <div class="user"><div class="avatar" id="avatar">RC</div><span id="uname">R. Cruz</span></div>
-    <button class="ghost" id="signout">Sign out</button>
+    <div class="user"><div class="avatar">RC</div><span>R. Cruz</span></div>
+    <button class="btn line sm" id="signout">Sign out</button>
   </header>
-
-  <aside class="side" id="side">
+  <aside class="side">
     <div class="grp">Operations</div>
     <button class="nav" data-mod="dashboard" aria-current="true"><svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="12" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>Dashboard</button>
-    <button class="nav" data-mod="jobs"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Job Orders<span class="dot">7</span></button>
+    <button class="nav" data-mod="jobs"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Job Orders<span class="dot" data-badge="jobs">0</span></button>
     <button class="nav" data-mod="quotes"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Quotations</button>
-    <button class="nav" data-mod="dispatch"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="7" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/><path d="M9.4 17H15M5 17V7h8v10M13 10h4l3 3v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Dispatch Board<span class="dot">4</span></button>
+    <button class="nav" data-mod="dispatch"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="7" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/><path d="M9.4 17H15M5 17V7h8v10M13 10h4l3 3v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Dispatch Board</button>
     <div class="grp">Assets</div>
-    <button class="nav" data-mod="fleet"><svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="13" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M16 11h3l2 3v2h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="18" r="1.6" fill="currentColor"/><circle cx="17" cy="18" r="1.6" fill="currentColor"/></svg>Fleet</button>
-    <button class="nav" data-mod="drivers"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Drivers</button>
-    <button class="nav" data-mod="equipment"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M5 20V6l11 3M5 6l11 3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="11" y="14" width="7" height="5" rx="1" stroke="currentColor" stroke-width="2"/></svg>Equipment</button>
+    <button class="nav" data-mod="fleet"><svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="13" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M16 11h3l2 3v2h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="18" r="1.6" fill="currentColor"/><circle cx="17" cy="18" r="1.6" fill="currentColor"/></svg>Fleet &amp; Equipment</button>
+    <button class="nav" data-mod="drivers"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Drivers &amp; Operators</button>
     <div class="grp">Admin</div>
-    <button class="nav" data-mod="permits"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.2-2.9 7.4-7 8.8C7.9 18.4 5 15.2 5 11V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 11.5l1.8 1.8 3.2-3.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Permits<span class="dot">3</span></button>
+    <button class="nav" data-mod="permits"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.2-2.9 7.4-7 8.8C7.9 18.4 5 15.2 5 11V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 11.5l1.8 1.8 3.2-3.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Permits<span class="dot" data-badge="permits">0</span></button>
     <button class="nav" data-mod="invoices"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Invoices</button>
     <button class="nav" data-mod="reports"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 20V4M20 20H4M8 16v-4M12 16V8M16 16v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Reports</button>
   </aside>
-
-  <main id="main"><!-- rendered by JS --></main>
+  <main id="main"></main>
 </section>
 
+<div class="backdrop" id="backdrop"></div>
 <div class="toast" id="toast"></div>
 
 <script>
 (function(){
-  var role="Admin";
-  // role segmented control
-  document.querySelectorAll('.seg button').forEach(function(b){
-    b.addEventListener('click',function(){
-      document.querySelectorAll('.seg button').forEach(function(x){x.setAttribute('aria-pressed','false')});
-      b.setAttribute('aria-pressed','true'); role=b.dataset.role;
-      var u=document.getElementById('u');
-      u.value = role==='Driver' ? 'driver' : role==='Dispatcher' ? 'dispatch' : 'admin';
-    });
-  });
+  "use strict";
+  var $=function(s,r){return (r||document).querySelector(s)};
+  var peso=function(n){return '₱'+Math.round(n).toLocaleString('en-PH')};
+  var STFLOW=['Scheduled','Permit Pending','En Route','On Site','Completed'];
+  var stChip={'Scheduled':'c-mut','Permit Pending':'c-warn','En Route':'c-info','On Site':'c-good','Completed':'c-good','Cancelled':'c-crit'};
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
 
-  var login=document.getElementById('login'), dash=document.getElementById('dash');
-  document.getElementById('loginForm').addEventListener('submit',function(e){
-    e.preventDefault();
-    document.getElementById('roleBadge').textContent=role;
-    login.style.display='none'; dash.classList.add('on');
-    window.scrollTo(0,0); render('dashboard');
-  });
-  document.getElementById('signout').addEventListener('click',function(){
-    dash.classList.remove('on'); login.style.display='grid';
-  });
-
-  // nav
-  document.querySelectorAll('.nav').forEach(function(n){
-    n.addEventListener('click',function(){
-      document.querySelectorAll('.nav').forEach(function(x){x.removeAttribute('aria-current')});
-      n.setAttribute('aria-current','true'); render(n.dataset.mod);
-      window.scrollTo(0,0);
-    });
-  });
-
-  function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
-    clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2200);}
-
-  // ---- data ----
-  var jobs=[
-    {no:'JO-2041',cl:'Meralco Substation',ld:'Transformer relocation · 42 t',eq:'250 t crawler crane + lowbed',st:'On Site',c:'c-good',tm:'07:30'},
-    {no:'JO-2044',cl:'SMC Infrastructure',ld:'Bridge girder set · 8 pcs · 36 t ea',eq:'100 t all-terrain crane',st:'En Route',c:'c-info',tm:'09:15'},
-    {no:'JO-2047',cl:'Aboitiz Power',ld:'Generator skid · oversized · 55 t',eq:'350 t crane + extendable trailer',st:'Permit Pending',c:'c-warn',tm:'Tomorrow'},
-    {no:'JO-2048',cl:'Cebu Port Authority',ld:'Reach stacker offload · 78 t',eq:'2× 50 t RT cranes (tandem)',st:'Scheduled',c:'c-mut',tm:'Thu 06:00'},
-    {no:'JO-2039',cl:'Ayala Land',ld:'Tower crane erection · sections',eq:'160 t all-terrain crane',st:'Completed',c:'c-good',tm:'Yesterday'}
-  ];
-  var equip=[
-    {n:'250 t Crawler — CC-250',s:'Deployed · JO-2041',p:100,ic:'crane'},
-    {n:'100 t All-Terrain — AT-100',s:'En route · JO-2044',p:70,ic:'crane'},
-    {n:'50 t Rough Terrain — RT-50 A',s:'Available · Yard',p:0,ic:'crane'},
-    {n:'Lowbed Trailer — LB-07',s:'Deployed · JO-2041',p:100,ic:'truck'},
-    {n:'Extendable Trailer — EX-03',s:'Maintenance · brakes',p:40,ic:'wrench'}
-  ];
-  var mods={
-    jobs:{t:'Job Orders',d:'Create and track every lift as one record — client, load specification, weight, dimensions, pick & set points, assigned equipment and crew, and live status from scheduled to completed.',f:['Create job order','Load & rigging details','Assign crane / trailer','Assign crew','Status tracking','Attach documents','Change-order logging']},
-    quotes:{t:'Quotations',d:'Build professional quotes from your equipment rate card, package inclusions and mobilization costs, then send to the client and convert an approved quote straight into a job order.',f:['Rate-card pricing','Equipment selection','Mobilization costs','Package builder','PDF quote','Approve → Job Order']},
-    dispatch:{t:'Dispatch Board',d:'Assign cranes, trailers, operators and rigging crews across the schedule on one board — with conflict detection so the same asset is never double-booked.',f:['Drag-and-drop schedule','Crew & operator assignment','Conflict detection','Multi-day jobs','Live status','Site notes']},
-    fleet:{t:'Fleet',d:'Track every truck and trailer — registration, GPS location, maintenance schedule, fuel and inspection due-dates — so nothing rolls out non-compliant.',f:['Vehicle registry','GPS location','Maintenance schedule','Inspection alerts','Fuel logs','Document expiry']},
-    drivers:{t:'Drivers & Operators',d:'Driver and crane-operator profiles with licenses, certifications, availability and assignment history — matched to the equipment they are qualified to run.',f:['Driver profiles','License & cert expiry','Operator qualifications','Availability','Assignment history','Mobile login']},
-    equipment:{t:'Equipment',d:'Your crane and rigging register with rated capacity, load charts, inspection status and scheduling — so dispatch always sends the right machine for the load.',f:['Crane register','Rated capacity & charts','Inspection status','Rigging inventory','Scheduling','Utilization']},
-    permits:{t:'Permits & Compliance',d:'Track oversize / overweight load permits, route approvals and safety checklists per job — with expiry alerts so a truck never moves without the paperwork.',f:['Permit tracking','Oversize / overweight','Route approval','Expiry alerts','Safety checklist','Lift plan attach']},
-    invoices:{t:'Invoices',d:'Generate invoices from completed jobs including standby time and additional charges, track payment status, and keep billing tied to the original quote.',f:['Invoice generation','Additional / standby charges','Payment status','Tied to quotation','Statements','Export']},
-    reports:{t:'Reports',d:'Utilization, revenue, job completion and safety reporting — see which cranes earn, where time is lost, and how the operation performs week over week.',f:['Equipment utilization','Revenue by client','Job completion','Standby analysis','Safety records','Custom export']}
+  // ---------- DATA ----------
+  var DB={
+    seq:{job:2049,quote:1102,inv:456,permit:333},
+    rateCard:[
+      {k:'250t Crawler Crane',r:85000},{k:'350t All-Terrain Crane',r:110000},
+      {k:'100t All-Terrain Crane',r:55000},{k:'50t Rough-Terrain Crane',r:28000},
+      {k:'Lowbed Trailer',r:12000},{k:'Extendable Trailer',r:15000},
+      {k:'Rigging Crew',r:18000},{k:'Mobilization (flat)',r:25000}
+    ],
+    equipment:[
+      {id:'CC-250',name:'250t Crawler Crane',type:'crane',cap:'250 t',status:'deployed',job:'JO-2041'},
+      {id:'AT-100',name:'100t All-Terrain Crane',type:'crane',cap:'100 t',status:'deployed',job:'JO-2044'},
+      {id:'RT-50A',name:'50t Rough-Terrain Crane',type:'crane',cap:'50 t',status:'available',job:''},
+      {id:'RT-50B',name:'50t Rough-Terrain Crane',type:'crane',cap:'50 t',status:'available',job:''},
+      {id:'AT-350',name:'350t All-Terrain Crane',type:'crane',cap:'350 t',status:'available',job:''},
+      {id:'LB-07',name:'Lowbed Trailer',type:'trailer',cap:'60 t',status:'deployed',job:'JO-2041'},
+      {id:'EX-03',name:'Extendable Trailer',type:'trailer',cap:'45 t',status:'maintenance',job:''},
+      {id:'RG-01',name:'Rigging Set + Crew',type:'rigging',cap:'—',status:'available',job:''}
+    ],
+    drivers:[
+      {id:'D-01',name:'R. Cruz',role:'Crane Operator',lic:'Heavy Equip · 2027',cert:'ok',status:'available'},
+      {id:'D-02',name:'J. Ramos',role:'Crane Operator',lic:'TESDA NC II · 12 days',cert:'soon',status:'on-job'},
+      {id:'D-03',name:'M. Santos',role:'Prime Mover Driver',lic:'Pro · 2026',cert:'ok',status:'available'},
+      {id:'D-04',name:'A. Dela Cruz',role:'Lead Rigger',lic:'Rigging Cert · 2027',cert:'ok',status:'on-job'},
+      {id:'D-05',name:'P. Reyes',role:'Prime Mover Driver',lic:'Pro · 2025',cert:'soon',status:'available'}
+    ],
+    jobs:[
+      {id:'JO-2041',client:'Meralco Substation',load:'Transformer relocation · 42 t',eq:['CC-250','LB-07'],status:'On Site',date:'Today 07:30',loc:'Quezon City',amount:385000,quote:'Q-1090'},
+      {id:'JO-2044',client:'SMC Infrastructure',load:'Bridge girder set · 8 pcs · 36 t ea',eq:['AT-100'],status:'En Route',date:'Today 09:15',loc:'Bulacan',amount:520000,quote:'Q-1093'},
+      {id:'JO-2047',client:'Aboitiz Power',load:'Generator skid · oversized · 55 t',eq:['AT-350'],status:'Permit Pending',date:'Tomorrow 06:00',loc:'Batangas',amount:610000,quote:''},
+      {id:'JO-2048',client:'Cebu Port Authority',load:'Reach stacker offload · 78 t',eq:['RT-50A','RT-50B'],status:'Scheduled',date:'Thu 06:00',loc:'Cebu',amount:445000,quote:''},
+      {id:'JO-2039',client:'Ayala Land',load:'Tower crane erection',eq:['AT-100'],status:'Completed',date:'Yesterday',loc:'Makati',amount:298000,quote:''}
+    ],
+    quotes:[
+      {id:'Q-1090',client:'Meralco Substation',items:[{k:'250t Crawler Crane',qty:1,days:2,rate:85000},{k:'Lowbed Trailer',qty:1,days:2,rate:12000},{k:'Mobilization (flat)',qty:1,days:1,rate:25000}],status:'approved',job:'JO-2041'},
+      {id:'Q-1093',client:'SMC Infrastructure',items:[{k:'100t All-Terrain Crane',qty:1,days:5,rate:55000},{k:'Rigging Crew',qty:1,days:5,rate:18000}],status:'approved',job:'JO-2044'},
+      {id:'Q-1101',client:'DMCI Homes',items:[{k:'100t All-Terrain Crane',qty:1,days:3,rate:55000},{k:'Mobilization (flat)',qty:1,days:1,rate:25000}],status:'draft',job:''}
+    ],
+    invoices:[
+      {id:'INV-0455',job:'JO-2039',client:'Ayala Land',amount:298000,extras:0,status:'paid'}
+    ],
+    permits:[
+      {id:'PM-330',job:'JO-2047',type:'Oversize / Overweight Load',expiry:'Due tomorrow',status:'pending',checklist:[{t:'Route survey completed',d:true},{t:'LTO permit filed',d:true},{t:'Escort vehicles booked',d:false},{t:'Lift plan approved',d:false}]},
+      {id:'PM-331',job:'JO-2044',type:'Route Approval',expiry:'Valid · 8 days',status:'approved',checklist:[{t:'Route survey completed',d:true},{t:'DPWH clearance',d:true}]},
+      {id:'PM-332',job:'JO-2048',type:'Oversize Load',expiry:'Due Wed',status:'pending',checklist:[{t:'Route survey completed',d:false},{t:'Port gate pass',d:true}]}
+    ]
   };
-  var icons={crane:'<path d="M5 20V6l11 3M5 6l11 3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="11" y="14" width="7" height="5" rx="1" stroke="currentColor" stroke-width="2"/>',
-    truck:'<rect x="3" y="8" width="13" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M16 11h3l2 3v2h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
-    wrench:'<path d="M14 6a4 4 0 0 0 5 5l-8 8-3-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'};
+  var qnum=function(q){return q.items.reduce(function(s,i){return s+i.qty*i.days*i.rate},0)};
 
-  function esc(s){return String(s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+  // ---------- SHELL / NAV ----------
+  var role='Admin';
+  document.querySelectorAll('.seg button').forEach(function(b){b.addEventListener('click',function(){
+    document.querySelectorAll('.seg button').forEach(function(x){x.setAttribute('aria-pressed','false')});
+    b.setAttribute('aria-pressed','true');role=b.dataset.role;
+    $('#u').value=role==='Driver'?'driver':role==='Dispatcher'?'dispatch':'admin';});});
+  $('#loginForm').addEventListener('submit',function(e){e.preventDefault();
+    $('#roleBadge').textContent=role;$('#login').style.display='none';$('#dash').classList.add('on');
+    window.scrollTo(0,0);go('dashboard');badges();});
+  $('#signout').addEventListener('click',function(){$('#dash').classList.remove('on');$('#login').style.display='grid'});
+  document.querySelectorAll('.nav').forEach(function(n){n.addEventListener('click',function(){go(n.dataset.mod)})});
+  function setActive(mod){document.querySelectorAll('.nav').forEach(function(x){x.removeAttribute('aria-current');if(x.dataset.mod===mod)x.setAttribute('aria-current','true')});}
+  function badges(){$('[data-badge="jobs"]').textContent=DB.jobs.filter(function(j){return j.status!=='Completed'&&j.status!=='Cancelled'}).length;
+    $('[data-badge="permits"]').textContent=DB.permits.filter(function(p){return p.status==='pending'}).length;}
+  var cur='dashboard';
+  function go(mod){cur=mod;setActive(mod);window.scrollTo(0,0);render();}
+  function render(){$('#main').innerHTML=views[cur]?views[cur]():views.dashboard();badges();}
 
-  function dashboard(){
-    var jobcards=jobs.map(function(j){return '<div class="job"><div class="no">'+j.no+'</div>'+
-      '<div class="mid"><div class="cl">'+esc(j.cl)+'</div><div class="ld">'+esc(j.ld)+'</div>'+
-      '<div class="eq"><svg width="13" height="13" viewBox="0 0 24 24" fill="none">'+icons.crane+'</svg>'+esc(j.eq)+'</div></div>'+
-      '<div class="rt"><span class="chip '+j.c+'">'+j.st+'</span><span class="tm">'+j.tm+'</span></div></div>';}).join('');
-    var eqrows=equip.map(function(e){return '<div class="row"><div class="ei"><svg width="17" height="17" viewBox="0 0 24 24" fill="none">'+icons[e.ic]+'</svg></div>'+
-      '<div><div class="en">'+esc(e.n)+'</div><div class="es">'+esc(e.s)+'</div></div><div class="spacer"></div>'+
-      '<div class="bar"><i style="width:'+e.p+'%;background:'+(e.p===0?'var(--good)':e.p<50?'var(--crit)':'var(--accent)')+'"></i></div></div>';}).join('');
-    return '<div class="pagehead"><div><div class="crumb">Operations</div><h2>Operations Dashboard</h2></div>'+
-      '<div class="spacer"></div></div><div class="stripe hz" style="margin:-12px 0 18px"></div>'+
-      '<div class="kpis">'+
-        kpi('Active Jobs','7','+2 vs last wk','up',spark([3,4,3,5,4,6,7]))+
-        kpi('Cranes Deployed','4 / 6','67% utilization','up',spark([2,3,3,4,3,4,4]))+
-        kpi('Permits Pending','3','1 due today','down',spark([1,2,1,3,2,3,3]))+
-        kpi("Revenue Today","₱412,500",'+18% vs avg','up',spark([2,3,4,3,5,4,6]))+
-      '</div><div class="grid2">'+
-        '<div class="panel"><div class="panel-h"><h3>Dispatch Board</h3><div class="spacer"></div><span class="cnt">Today · 5 jobs</span></div><div class="panel-b">'+jobcards+'</div></div>'+
-        '<div><div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Alerts</h3></div><div class="panel-b">'+
-          '<div class="alert crit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="var(--crit)" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="var(--crit)" stroke-width="2" stroke-linecap="round"/></svg><div><b>JO-2047</b> — oversize permit not yet approved; lift scheduled tomorrow 06:00.</div></div>'+
-          '<div class="alert"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="var(--warn)" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="var(--warn)" stroke-width="2" stroke-linecap="round"/></svg><div><b>EX-03 trailer</b> in maintenance (brakes) — reassign for Thu tandem lift.</div></div>'+
-          '<div class="alert"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="var(--warn)" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="var(--warn)" stroke-width="2" stroke-linecap="round"/></svg><div><b>Operator J. Ramos</b> — TESDA crane cert expires in 12 days.</div></div>'+
-        '</div></div>'+
-        '<div class="panel"><div class="panel-h"><h3>Equipment Status</h3><div class="spacer"></div><span class="cnt">6 assets</span></div><div class="panel-b">'+eqrows+'</div></div>'+
-      '</div></div>';
-  }
-  function kpi(k,v,d,dir,sp){return '<div class="kpi"><div class="spark">'+sp+'</div><div class="k">'+k+'</div>'+
-    '<div class="v tnum">'+v+'</div><div class="d '+dir+'">'+(dir==='up'?'▲':'▼')+' '+d+'</div></div>';}
-  function spark(a){var w=64,h=26,mx=Math.max.apply(null,a),mn=Math.min.apply(null,a),
-    pts=a.map(function(v,i){return (i/(a.length-1)*w).toFixed(1)+','+(h-2-(v-mn)/(mx-mn||1)*(h-6)).toFixed(1)}).join(' ');
-    var lx=w,ly=(h-2-(a[a.length-1]-mn)/(mx-mn||1)*(h-6));
-    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" fill="none"><polyline points="'+pts+'" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+lx+'" cy="'+ly.toFixed(1)+'" r="2.4" fill="var(--accent)"/></svg>';}
+  function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2400);}
 
-  function module(id){var m=mods[id];var f=m.f.map(function(x){return '<span>'+esc(x)+'</span>'}).join('');
-    return '<div class="pagehead"><div><div class="crumb">'+ (['jobs','quotes','dispatch'].indexOf(id)>-1?'Operations':['fleet','drivers','equipment'].indexOf(id)>-1?'Assets':'Admin') +'</div><h2>'+m.t+'</h2></div></div>'+
-      '<div class="mod"><div class="ic-lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none">'+icons.crane+'</svg></div>'+
-      '<h3>'+m.t+'</h3><p>'+esc(m.d)+'</p><div class="feats">'+f+'</div>'+
-      '<div class="tag">Included in the Standard Business System package</div></div>';}
+  // ---------- MODAL ----------
+  var bd=$('#backdrop');
+  function modal(html){bd.innerHTML=html;bd.classList.add('on');}
+  function closeModal(){bd.classList.remove('on');bd.innerHTML='';}
+  bd.addEventListener('click',function(e){if(e.target===bd||e.target.closest('[data-close]'))closeModal();});
 
-  function render(id){document.getElementById('main').innerHTML = id==='dashboard'?dashboard():module(id);
-    if(id!=='dashboard'){toast(mods[id].t+' — live module in the full build');}}
+  // ---------- VIEWS ----------
+  function head(crumb,title,btn){return '<div class="pagehead"><div><div class="crumb">'+crumb+'</div><h2>'+title+'</h2></div><div class="spacer"></div>'+(btn||'')+'</div>';}
+  function chip(s){return '<span class="chip '+(stChip[s]||'c-mut')+'">'+s+'</span>';}
+
+  var views={
+    dashboard:function(){
+      var active=DB.jobs.filter(function(j){return j.status!=='Completed'&&j.status!=='Cancelled'});
+      var deployed=DB.equipment.filter(function(e){return e.status==='deployed'}).length;
+      var pend=DB.permits.filter(function(p){return p.status==='pending'}).length;
+      var rev=DB.jobs.filter(function(j){return j.status==='On Site'||j.status==='En Route'}).reduce(function(s,j){return s+j.amount},0);
+      var cards=active.concat(DB.jobs.filter(function(j){return j.status==='Completed'}).slice(0,1)).map(function(j){
+        return '<div class="jobc"><div class="no">'+j.id+'</div><div class="cl">'+esc(j.client)+'</div><div class="ld">'+esc(j.load)+'</div>'+
+        '<div class="mt">'+chip(j.status)+'<span style="font-size:11.5px;color:var(--muted)" class="tnum">'+esc(j.date)+'</span></div></div>';}).join('');
+      var eq=DB.equipment.map(function(e){var p=e.status==='deployed'?100:e.status==='maintenance'?40:0;
+        return '<div class="lrow"><div class="ei"><svg width="17" height="17" viewBox="0 0 24 24" fill="none">'+ico(e.type)+'</svg></div>'+
+        '<div><div class="en">'+esc(e.name)+' · '+e.id+'</div><div class="es">'+({available:'Available · Yard',deployed:'Deployed · '+e.job,maintenance:'Maintenance'}[e.status])+'</div></div>'+
+        '<div class="spacer"></div><div class="bar"><i style="width:'+p+'%;background:'+(e.status==='available'?'var(--good)':e.status==='maintenance'?'var(--crit)':'var(--accent)')+'"></i></div></div>';}).join('');
+      return head('Operations','Operations Dashboard')+'<div class="stripe hz" style="margin:-8px 0 18px"></div>'+
+        '<div class="kpis">'+
+          kpi('Active Jobs',active.length,'live',spark([3,4,3,5,4,6,active.length]))+
+          kpi('Cranes Deployed',deployed+' / '+DB.equipment.filter(function(e){return e.type==='crane'}).length,'utilization',spark([2,3,3,4,3,4,deployed]))+
+          kpi('Permits Pending',pend,pend?'action needed':'clear',spark([1,2,1,3,2,3,pend]))+
+          kpi('Revenue In Progress',peso(rev),'on active jobs',spark([2,3,4,3,5,4,6]))+
+        '</div><div class="grid2">'+
+        '<div class="panel"><div class="panel-h"><h3>Dispatch — Today</h3><div class="spacer"></div><button class="btn sm" data-act="go" data-arg="dispatch">Open board →</button></div><div class="panel-b">'+cards+'</div></div>'+
+        '<div><div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Alerts</h3></div><div class="panel-b">'+alerts()+'</div></div>'+
+        '<div class="panel"><div class="panel-h"><h3>Equipment</h3><div class="spacer"></div><span class="cnt">'+DB.equipment.length+' assets</span></div><div class="panel-b">'+eq+'</div></div></div></div>';
+    },
+    jobs:function(){
+      var f=views._jf||{q:'',s:'all'};
+      var rows=DB.jobs.filter(function(j){return (f.s==='all'||j.status===f.s)&&(j.id+j.client+j.load+j.loc).toLowerCase().indexOf(f.q.toLowerCase())>-1;});
+      var body=rows.length?rows.map(function(j){return '<tr data-act="jobDetail" data-arg="'+j.id+'"><td class="id">'+j.id+'</td><td class="strong">'+esc(j.client)+'</td><td>'+esc(j.load)+'</td><td>'+j.eq.join(', ')+'</td><td>'+chip(j.status)+'</td><td class="right tnum strong">'+peso(j.amount)+'</td></tr>';}).join(''):'<tr><td colspan="6" class="empty">No job orders match.</td></tr>';
+      var opts=['all'].concat(STFLOW).map(function(s){return '<option'+(f.s===s?' selected':'')+'>'+(s==='all'?'All statuses':s)+'</option>'}).join('');
+      return head('Operations','Job Orders','<button class="btn" data-act="newJob">+ New Job Order</button>')+
+        '<div class="toolbar"><div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input placeholder="Search jobs, clients, sites…" data-inp="jq" value="'+esc(f.q)+'"></div>'+
+        '<div class="selw"><select data-inp="js">'+opts+'</select></div></div>'+
+        '<div class="tblwrap"><table class="tbl"><thead><tr><th>Job #</th><th>Client</th><th>Load</th><th>Equipment</th><th>Status</th><th class="right">Value</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+    },
+    dispatch:function(){
+      var cols=STFLOW.map(function(s){var js=DB.jobs.filter(function(j){return j.status===s});
+        var cards=js.map(function(j){var ni=STFLOW.indexOf(j.status);var next=STFLOW[ni+1];
+          return '<div class="jobc"><div class="no">'+j.id+'</div><div class="cl">'+esc(j.client)+'</div><div class="ld">'+esc(j.load)+'</div>'+
+          '<div class="mt"><span style="font-size:11px;color:var(--muted)">'+esc(j.loc)+'</span>'+(next?'<button class="adv" data-act="advance" data-arg="'+j.id+'">'+next+' →</button>':'<span class="adv" style="background:var(--good-bg);color:var(--good)">Done</span>')+'</div></div>';}).join('')||'<div style="font-size:12px;color:var(--muted);padding:8px 4px">—</div>';
+        return '<div class="col"><div class="col-h">'+s+'<span class="n">'+js.length+'</span></div>'+cards+'</div>';}).join('');
+      return head('Operations','Dispatch Board','<button class="btn" data-act="newJob">+ New Job Order</button>')+
+        '<p style="color:var(--ink-2);font-size:13px;margin:-6px 0 16px">Advance a job through the workflow — assigned cranes, trailers and crew move with it.</p>'+
+        '<div class="board">'+cols+'</div>';
+    },
+    quotes:function(){
+      var rows=DB.quotes.map(function(q){return '<tr data-act="quoteDetail" data-arg="'+q.id+'"><td class="id">'+q.id+'</td><td class="strong">'+esc(q.client)+'</td><td>'+q.items.length+' line items</td><td>'+chip2(q.status)+'</td><td class="right tnum strong">'+peso(qnum(q))+'</td></tr>';}).join('');
+      return head('Operations','Quotations','<button class="btn" data-act="newQuote">+ New Quotation</button>')+
+        '<div class="tblwrap"><table class="tbl"><thead><tr><th>Quote #</th><th>Client</th><th>Scope</th><th>Status</th><th class="right">Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    },
+    fleet:function(){
+      var rows=DB.equipment.map(function(e){return '<tr data-act="assetToggle" data-arg="'+e.id+'"><td class="id">'+e.id+'</td><td class="strong">'+esc(e.name)+'</td><td style="text-transform:capitalize">'+e.type+'</td><td>'+e.cap+'</td><td>'+chip2(e.status)+'</td><td class="right">'+(e.job||'—')+'</td></tr>';}).join('');
+      return head('Assets','Fleet & Equipment')+
+        '<p style="color:var(--ink-2);font-size:13px;margin:-6px 0 16px">Tap an asset to cycle its availability (Available → Maintenance → Available).</p>'+
+        '<div class="tblwrap"><table class="tbl"><thead><tr><th>Asset ID</th><th>Name</th><th>Type</th><th>Capacity</th><th>Status</th><th class="right">On Job</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    },
+    drivers:function(){
+      var rows=DB.drivers.map(function(d){return '<tr><td class="id">'+d.id+'</td><td class="strong">'+esc(d.name)+'</td><td>'+esc(d.role)+'</td><td>'+esc(d.lic)+'</td><td>'+(d.cert==='soon'?'<span class="chip c-warn">Expiring</span>':'<span class="chip c-good">Valid</span>')+'</td><td class="right">'+(d.status==='available'?'<span class="chip c-good">Available</span>':'<span class="chip c-info">On job</span>')+'</td></tr>';}).join('');
+      return head('Assets','Drivers & Operators')+'<div class="tblwrap"><table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>License / Cert</th><th>Cert</th><th class="right">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    },
+    permits:function(){
+      var rows=DB.permits.map(function(p){var done=p.checklist.filter(function(c){return c.d}).length;
+        return '<tr data-act="permitDetail" data-arg="'+p.id+'"><td class="id">'+p.id+'</td><td class="strong">'+esc(p.type)+'</td><td>'+p.job+'</td><td>'+esc(p.expiry)+'</td><td>'+done+'/'+p.checklist.length+' checks</td><td class="right">'+chip2(p.status)+'</td></tr>';}).join('');
+      return head('Admin','Permits & Compliance')+
+        '<p style="color:var(--ink-2);font-size:13px;margin:-6px 0 16px">Open a permit to work the safety checklist and approve it.</p>'+
+        '<div class="tblwrap"><table class="tbl"><thead><tr><th>Permit #</th><th>Type</th><th>Job</th><th>Validity</th><th>Checklist</th><th class="right">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    },
+    invoices:function(){
+      var rows=DB.invoices.map(function(v){return '<tr><td class="id">'+v.id+'</td><td>'+v.job+'</td><td class="strong">'+esc(v.client)+'</td><td class="right tnum strong">'+peso(v.amount+v.extras)+'</td><td class="right">'+(v.status==='paid'?'<span class="chip c-good">Paid</span>':'<button class="btn sm" data-act="markPaid" data-arg="'+v.id+'">Mark paid</button>')+'</td></tr>';}).join('')||'<tr><td colspan="5" class="empty">No invoices yet.</td></tr>';
+      var billable=DB.jobs.filter(function(j){return j.status==='Completed'&&!DB.invoices.some(function(v){return v.job===j.id})});
+      return head('Admin','Invoices',billable.length?'<button class="btn" data-act="genInvoice">+ Generate from completed job</button>':'')+
+        (billable.length?'':'<p style="color:var(--ink-2);font-size:13px;margin:-6px 0 16px">Complete a job on the dispatch board to make it billable.</p>')+
+        '<div class="tblwrap"><table class="tbl"><thead><tr><th>Invoice #</th><th>Job</th><th>Client</th><th class="right">Amount</th><th class="right">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    },
+    reports:function(){
+      var byClient={};DB.jobs.forEach(function(j){byClient[j.client]=(byClient[j.client]||0)+j.amount});
+      var mx=Math.max.apply(null,Object.keys(byClient).map(function(k){return byClient[k]}));
+      var revRows=Object.keys(byClient).sort(function(a,b){return byClient[b]-byClient[a]}).map(function(k){
+        return '<div class="chartrow"><div class="lbl">'+esc(k)+'</div><div class="track"><i style="width:'+(byClient[k]/mx*100)+'%"></i></div><div class="val">'+peso(byClient[k])+'</div></div>';}).join('');
+      var deployed=DB.equipment.filter(function(e){return e.status==='deployed'}).length,tot=DB.equipment.length,util=Math.round(deployed/tot*100);
+      var stc={};STFLOW.forEach(function(s){stc[s]=DB.jobs.filter(function(j){return j.status===s}).length});
+      var mxs=Math.max(1,Math.max.apply(null,STFLOW.map(function(s){return stc[s]})));
+      var stRows=STFLOW.map(function(s){return '<div class="chartrow"><div class="lbl">'+s+'</div><div class="track"><i style="width:'+(stc[s]/mxs*100)+'%;background:var(--'+(s==='Completed'?'good':'accent')+')"></i></div><div class="val">'+stc[s]+' job'+(stc[s]===1?'':'s')+'</div></div>';}).join('');
+      return head('Admin','Reports & Analytics')+'<div class="grid2">'+
+        '<div class="panel"><div class="panel-h"><h3>Revenue by Client</h3></div><div class="panel-b">'+revRows+'</div></div>'+
+        '<div><div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Equipment Utilization</h3></div><div class="panel-b" style="display:flex;align-items:center;gap:18px">'+
+          '<div class="donut" style="background:conic-gradient(var(--accent) 0 '+util+'%,var(--surface-3) '+util+'% 100%)"><div class="hole"><div><b>'+util+'%</b><span>'+deployed+' of '+tot+' deployed</span></div></div></div>'+
+          '<div style="font-size:13px;color:var(--ink-2)">Assets currently on jobs vs. total fleet. Cycle assets in <b>Fleet &amp; Equipment</b> to see this update.</div></div>'+
+        '<div class="panel"><div class="panel-h"><h3>Jobs by Stage</h3></div><div class="panel-b">'+stRows+'</div></div></div></div>';
+    }
+  };
+  function chip2(s){var m={approved:'c-good',paid:'c-good',available:'c-good',draft:'c-mut',sent:'c-info',pending:'c-warn',deployed:'c-info',maintenance:'c-crit'};
+    return '<span class="chip '+(m[s]||'c-mut')+'" style="text-transform:capitalize">'+s+'</span>';}
+  function ico(t){return {crane:'<path d="M5 20V6l11 3M5 6l11 3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="11" y="14" width="7" height="5" rx="1" stroke="currentColor" stroke-width="2"/>',
+    trailer:'<rect x="3" y="8" width="13" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M16 11h3l2 3v2h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+    rigging:'<path d="M12 3v6m0 0-4 5m4-5 4 5M8 14a4 4 0 0 0 8 0" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'}[t]||'';}
+  function kpi(k,v,d,sp){return '<div class="kpi"><div class="spark">'+sp+'</div><div class="k">'+k+'</div><div class="v tnum">'+v+'</div><div class="d up">'+d+'</div></div>';}
+  function spark(a){var w=64,h=26,mx=Math.max.apply(null,a),mn=Math.min.apply(null,a),pts=a.map(function(v,i){return (i/(a.length-1)*w).toFixed(1)+','+(h-2-(v-mn)/(mx-mn||1)*(h-6)).toFixed(1)}).join(' '),ly=(h-2-(a[a.length-1]-mn)/(mx-mn||1)*(h-6));
+    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" fill="none"><polyline points="'+pts+'" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+w+'" cy="'+ly.toFixed(1)+'" r="2.4" fill="var(--accent)"/></svg>';}
+  function alerts(){var a=[];
+    DB.permits.filter(function(p){return p.status==='pending'}).slice(0,1).forEach(function(p){a.push(['crit','<b>'+p.job+'</b> — '+esc(p.type)+' permit not approved ('+esc(p.expiry).toLowerCase()+').']);});
+    DB.equipment.filter(function(e){return e.status==='maintenance'}).forEach(function(e){a.push(['','<b>'+e.id+'</b> in maintenance — reassign before scheduling.']);});
+    DB.drivers.filter(function(d){return d.cert==='soon'}).slice(0,1).forEach(function(d){a.push(['','<b>'+esc(d.name)+'</b> — certification expiring soon.']);});
+    if(!a.length)a.push(['','All clear — no open compliance or asset alerts.']);
+    return a.map(function(x){return '<div class="alert'+(x[0]?' '+x[0]:'')+'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="var(--'+(x[0]?'crit':'warn')+')" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="var(--'+(x[0]?'crit':'warn')+')" stroke-width="2" stroke-linecap="round"/></svg><div>'+x[1]+'</div></div>';}).join('');}
+
+  // ---------- ACTIONS (event delegation) ----------
+  document.addEventListener('click',function(e){
+    var el=e.target.closest('[data-act]');if(!el||!$('#dash').classList.contains('on'))return;
+    var act=el.dataset.act,arg=el.dataset.arg;
+    if(act==='go')return go(arg);
+    if(act==='newJob')return formJob();
+    if(act==='newQuote')return formQuote();
+    if(act==='advance')return advance(arg);
+    if(act==='jobDetail')return jobDetail(arg);
+    if(act==='quoteDetail')return quoteDetail(arg);
+    if(act==='permitDetail')return permitDetail(arg);
+    if(act==='assetToggle')return assetToggle(arg);
+    if(act==='genInvoice')return formInvoice();
+    if(act==='markPaid')return markPaid(arg);
+    if(act==='convertQuote')return convertQuote(arg);
+    if(act==='approvePermit')return approvePermit(arg);
+    if(act==='toggleCheck'){var p=DB.permits.find(function(x){return x.id===el.dataset.p});p.checklist[+arg].d=!p.checklist[+arg].d;permitDetail(p.id);return;}
+    if(act==='addLine')return addQuoteLine();
+    if(act==='rmLine'){el.closest('.qline').remove();recalc();return;}
+    if(act==='saveJob')return saveJob(e);
+    if(act==='saveQuote')return saveQuote(e);
+  });
+  document.addEventListener('input',function(e){
+    var el=e.target;
+    if(el.dataset.inp==='jq'){views._jf=views._jf||{q:'',s:'all'};views._jf.q=el.value;var b=el;render();/*restore focus*/var ni=$('[data-inp="jq"]');if(ni){ni.focus();ni.value=b.value;ni.setSelectionRange(b.value.length,b.value.length);}return;}
+    if(el.dataset.inp==='js'){views._jf=views._jf||{q:'',s:'all'};views._jf.s=el.value;render();return;}
+    if(el.classList.contains('ql'))recalc();
+  });
+
+  function advance(id){var j=DB.jobs.find(function(x){return x.id===id});var i=STFLOW.indexOf(j.status);
+    if(i<STFLOW.length-1){j.status=STFLOW[i+1];
+      if(j.status==='Completed'){j.eq.forEach(function(eid){var e=DB.equipment.find(function(x){return x.id===eid});if(e){e.status='available';e.job='';}});}
+      toast(j.id+' → '+j.status);render();}}
+
+  function jobDetail(id){var j=DB.jobs.find(function(x){return x.id===id});var i=STFLOW.indexOf(j.status);var next=STFLOW[i+1];
+    modal('<div class="modal"><div class="modal-h"><h3>'+j.id+' · '+esc(j.client)+'</h3><button class="x" data-close>×</button></div>'+
+      '<div class="modal-b"><dl class="kv"><dt>Load</dt><dd>'+esc(j.load)+'</dd><dt>Equipment</dt><dd>'+j.eq.join(', ')+'</dd>'+
+      '<dt>Site</dt><dd>'+esc(j.loc)+'</dd><dt>Schedule</dt><dd>'+esc(j.date)+'</dd><dt>Status</dt><dd>'+chip(j.status)+'</dd>'+
+      '<dt>Contract value</dt><dd class="tnum">'+peso(j.amount)+'</dd>'+(j.quote?'<dt>From quote</dt><dd>'+j.quote+'</dd>':'')+'</dl></div>'+
+      '<div class="modal-f"><button class="btn line" data-close>Close</button>'+(next?'<button class="btn" data-act="advance" data-arg="'+j.id+'" data-close>Advance to '+next+' →</button>':'')+'</div></div>');}
+
+  function quoteDetail(id){var q=DB.quotes.find(function(x){return x.id===id});
+    var lines=q.items.map(function(it){return '<div class="qtot"><span>'+esc(it.k)+' · '+it.qty+'×'+it.days+'d</span><span class="tnum">'+peso(it.qty*it.days*it.rate)+'</span></div>';}).join('');
+    modal('<div class="modal"><div class="modal-h"><h3>'+q.id+' · '+esc(q.client)+'</h3><button class="x" data-close>×</button></div>'+
+      '<div class="modal-b">'+lines+'<div class="qtot grand"><span>Total</span><span class="tnum">'+peso(qnum(q))+'</span></div>'+
+      '<div style="margin-top:12px">'+chip2(q.status)+(q.job?' → '+q.job:'')+'</div></div>'+
+      '<div class="modal-f"><button class="btn line" data-close>Close</button>'+
+      (q.status!=='approved'?'<button class="btn" data-act="convertQuote" data-arg="'+q.id+'" data-close>Convert to Job Order →</button>':'')+'</div></div>');}
+
+  function convertQuote(id){var q=DB.quotes.find(function(x){return x.id===id});if(q.job)return;
+    var jid='JO-'+(DB.seq.job++);q.status='approved';q.job=jid;
+    DB.jobs.unshift({id:jid,client:q.client,load:q.items[0].k+' scope',eq:[],status:'Scheduled',date:'To schedule',loc:'TBD',amount:qnum(q),quote:q.id});
+    toast(q.id+' → '+jid+' created');go('jobs');}
+
+  function permitDetail(id){var p=DB.permits.find(function(x){return x.id===id});
+    var cl=p.checklist.map(function(c,i){return '<label><input type="checkbox" '+(c.d?'checked':'')+' data-act="toggleCheck" data-p="'+p.id+'" data-arg="'+i+'"> '+esc(c.t)+'</label>';}).join('');
+    var done=p.checklist.every(function(c){return c.d});
+    modal('<div class="modal"><div class="modal-h"><h3>'+p.id+' · '+esc(p.type)+'</h3><button class="x" data-close>×</button></div>'+
+      '<div class="modal-b"><dl class="kv"><dt>Job</dt><dd>'+p.job+'</dd><dt>Validity</dt><dd>'+esc(p.expiry)+'</dd><dt>Status</dt><dd>'+chip2(p.status)+'</dd></dl>'+
+      '<div class="divide"></div><div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:9px">Safety checklist</div><div class="checks">'+cl+'</div></div>'+
+      '<div class="modal-f"><button class="btn line" data-close>Close</button>'+
+      (p.status!=='approved'?'<button class="btn" data-act="approvePermit" data-arg="'+p.id+'" '+(done?'':'disabled')+' '+(done?'data-close':'')+'>'+(done?'Approve permit':'Complete checklist to approve')+'</button>':'')+'</div></div>');}
+  function approvePermit(id){var p=DB.permits.find(function(x){return x.id===id});if(!p.checklist.every(function(c){return c.d}))return;
+    p.status='approved';p.expiry='Approved · valid';
+    var j=DB.jobs.find(function(x){return x.id===p.job});if(j&&j.status==='Permit Pending')j.status='Scheduled';
+    toast(p.id+' approved');go('permits');}
+
+  function assetToggle(id){var e=DB.equipment.find(function(x){return x.id===id});
+    if(e.status==='deployed'){toast(e.id+' is on a job — free it by completing '+e.job);return;}
+    e.status=e.status==='available'?'maintenance':'available';toast(e.id+' → '+e.status);render();}
+
+  // forms
+  function formJob(){
+    var avail=DB.equipment.filter(function(e){return e.status==='available'});
+    var checks=avail.map(function(e){return '<label><input type="checkbox" value="'+e.id+'"> '+esc(e.name)+' · '+e.id+'</label>';}).join('')||'<div style="font-size:12.5px;color:var(--muted)">No available assets — free one in Fleet.</div>';
+    modal('<div class="modal"><div class="modal-h"><h3>New Job Order</h3><button class="x" data-close>×</button></div>'+
+      '<form class="modal-b frm" id="jf"><label><span>Client</span><input name="client" required placeholder="e.g. San Miguel Corp"></label>'+
+      '<label><span>Load / scope</span><input name="load" required placeholder="e.g. Transformer relocation · 40 t"></label>'+
+      '<div class="two"><label><span>Site</span><input name="loc" placeholder="City / site"></label><label><span>Schedule</span><input name="date" placeholder="e.g. Mon 06:00"></label></div>'+
+      '<label><span>Contract value (₱)</span><input name="amount" type="number" min="0" step="1000" placeholder="450000"></label>'+
+      '<label><span>Assign equipment</span></label><div class="checks">'+checks+'</div></form>'+
+      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="saveJob">Create job order</button></div></div>');}
+  function saveJob(){var f=$('#jf');if(!f.client.value.trim()||!f.load.value.trim()){toast('Client and load are required');return;}
+    var eq=Array.prototype.map.call(f.querySelectorAll('.checks input:checked'),function(c){return c.value;});
+    var jid='JO-'+(DB.seq.job++);
+    DB.jobs.unshift({id:jid,client:f.client.value.trim(),load:f.load.value.trim(),eq:eq,status:'Scheduled',date:f.date.value||'To schedule',loc:f.loc.value||'TBD',amount:+f.amount.value||0,quote:''});
+    eq.forEach(function(eid){var e=DB.equipment.find(function(x){return x.id===eid});if(e){e.status='deployed';e.job=jid;}});
+    closeModal();toast(jid+' created');go('jobs');}
+
+  function formQuote(){
+    modal('<div class="modal wide"><div class="modal-h"><h3>New Quotation</h3><button class="x" data-close>×</button></div>'+
+      '<form class="modal-b frm" id="qf"><label><span>Client</span><input name="client" required placeholder="Client company"></label>'+
+      '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 10px">Line items</div>'+
+      '<div id="qlines"></div><button type="button" class="btn line sm" data-act="addLine">+ Add line item</button>'+
+      '<div class="qtot grand" style="margin-top:14px"><span>Total</span><span class="tnum" id="qgrand">₱0</span></div></form>'+
+      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="saveQuote">Save quotation</button></div></div>');
+    addQuoteLine();}
+  function addQuoteLine(){var opts=DB.rateCard.map(function(r){return '<option value="'+r.r+'">'+r.k+' — '+peso(r.r)+'/day</option>'}).join('');
+    var row=document.createElement('div');row.className='qline';
+    row.innerHTML='<div class="selw"><select class="ql lr">'+opts+'</select></div><input class="ql qq" type="number" min="1" value="1" title="qty"><input class="ql qd" type="number" min="1" value="1" title="days"><span class="tnum lt right" style="font-weight:700;min-width:78px">₱0</span><button type="button" class="btn line sm" data-act="rmLine" style="padding:6px 9px">×</button>';
+    $('#qlines').appendChild(row);recalc();}
+  function recalc(){var g=0;document.querySelectorAll('#qlines .qline').forEach(function(r){var rate=+$('.lr',r).value,qq=+$('.qq',r).value||0,qd=+$('.qd',r).value||0,sub=rate*qq*qd;g+=sub;$('.lt',r).textContent=peso(sub);});var ge=$('#qgrand');if(ge)ge.textContent=peso(g);}
+  function saveQuote(){var f=$('#qf');if(!f.client.value.trim()){toast('Client is required');return;}
+    var items=[];document.querySelectorAll('#qlines .qline').forEach(function(r){var sel=$('.lr',r);items.push({k:sel.options[sel.selectedIndex].text.split(' — ')[0],qty:+$('.qq',r).value||1,days:+$('.qd',r).value||1,rate:+sel.value});});
+    if(!items.length){toast('Add at least one line item');return;}
+    var qid='Q-'+(DB.seq.quote++);DB.quotes.unshift({id:qid,client:f.client.value.trim(),items:items,status:'draft',job:''});
+    closeModal();toast(qid+' saved · '+peso(items.reduce(function(s,i){return s+i.qty*i.days*i.rate},0)));go('quotes');}
+
+  function formInvoice(){var jobs=DB.jobs.filter(function(j){return j.status==='Completed'&&!DB.invoices.some(function(v){return v.job===j.id})});
+    var opts=jobs.map(function(j){return '<option value="'+j.id+'">'+j.id+' · '+esc(j.client)+' · '+peso(j.amount)+'</option>'}).join('');
+    modal('<div class="modal"><div class="modal-h"><h3>Generate Invoice</h3><button class="x" data-close>×</button></div>'+
+      '<form class="modal-b frm" id="if"><label><span>Completed job</span><div class="selw"><select name="job">'+opts+'</select></div></label>'+
+      '<label><span>Additional / standby charges (₱)</span><input name="extras" type="number" min="0" step="500" value="0"></label></form>'+
+      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="doInvoice">Generate</button></div></div>');
+    bd.querySelector('[data-act="doInvoice"]').addEventListener('click',function(){var f=$('#if');var j=DB.jobs.find(function(x){return x.id===f.job.value});
+      var iid='INV-0'+(DB.seq.inv++);DB.invoices.unshift({id:iid,job:j.id,client:j.client,amount:j.amount,extras:+f.extras.value||0,status:'unpaid'});
+      closeModal();toast(iid+' generated · '+peso(j.amount+(+f.extras.value||0)));go('invoices');});}
+  function markPaid(id){var v=DB.invoices.find(function(x){return x.id===id});v.status='paid';toast(v.id+' marked paid');render();}
+
 })();
 </script>
 

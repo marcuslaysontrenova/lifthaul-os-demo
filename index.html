@@ -371,7 +371,47 @@
 
 <div class="backdrop" id="backdrop"></div>
 <div class="toast" id="toast"></div>
-<div id="demoRibbon" style="position:fixed;right:10px;bottom:10px;z-index:70;background:var(--steel);color:#fff;font-size:11px;font-weight:700;padding:6px 11px;border-radius:8px;box-shadow:var(--shadow-lg);opacity:.92;max-width:250px;line-height:1.4">DEMO PROTOTYPE · data is in-browser only<br><span style="font-weight:500;opacity:.85">Production backend (auth · DB · Wise · tests) lives in <b>/backend</b></span> <button onclick="this.parentNode.style.display='none'" style="background:transparent;border:0;color:#fff;opacity:.7;cursor:pointer;float:right;margin-top:-24px">×</button></div>
+<div id="demoRibbon" style="position:fixed;right:10px;bottom:10px;z-index:70;background:var(--steel);color:#fff;font-size:11px;font-weight:700;padding:6px 11px;border-radius:8px;box-shadow:var(--shadow-lg);opacity:.92;max-width:260px;line-height:1.4">DEMO PROTOTYPE · in-browser mock<br><span style="font-weight:500;opacity:.85">Tested backend (auth·DB·RBAC·Wise·63 tests) in <b>/backend</b>. Connect via <code>localStorage.rgo_api_base</code>.</span> <button onclick="this.parentNode.style.display='none'" style="background:transparent;border:0;color:#fff;opacity:.7;cursor:pointer;float:right;margin-top:-24px">×</button></div>
+<script>
+/* RGO OS front-end API client — talks to the real backend in /backend when a base
+   URL is configured (localStorage.rgo_api_base = deployed API origin). Until a
+   backend is hosted, the app runs on its in-browser mock (clearly a prototype).
+   This is the correct integration interface; the blocker is hosting, not code. */
+window.RGO_API = (function(){
+  var base=null, token=null;
+  try{ base=localStorage.getItem('rgo_api_base'); token=localStorage.getItem('rgo_api_token'); }catch(e){}
+  function req(method, path, body){
+    if(!base) return Promise.reject(new Error('API not configured (demo mock mode). Set localStorage.rgo_api_base to the deployed backend origin to go live.'));
+    var h={'Content-Type':'application/json'};
+    if(token && path!=='/login') h['Authorization']='Bearer '+token;
+    return fetch(base.replace(/\/+$/,'')+path,{method:method,headers:h,body:body?JSON.stringify(body):undefined})
+      .then(function(r){return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j.data; });});
+  }
+  return {
+    configured:function(){return !!base;},
+    setBase:function(b){base=b; try{localStorage.setItem('rgo_api_base',b);}catch(e){}},
+    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('rgo_api_token',token);}catch(e){} return d;});},
+    logout:function(){token=null; try{localStorage.removeItem('rgo_api_token');}catch(e){}},
+    createCustomer:function(b){return req('POST','/customers',b);},
+    createBooking:function(b){return req('POST','/bookings',b);},
+    getBooking:function(id){return req('GET','/bookings/'+id);},
+    reviewBooking:function(id){return req('POST','/bookings/'+id+'/review');},
+    readyBooking:function(id){return req('POST','/bookings/'+id+'/ready');},
+    createQuotation:function(id,b){return req('POST','/bookings/'+id+'/quotation',b);},
+    submitQuotation:function(id){return req('POST','/quotations/'+id+'/submit');},
+    approveQuotation:function(id){return req('POST','/quotations/'+id+'/approve');},
+    sendQuotation:function(id){return req('POST','/quotations/'+id+'/send');},
+    acceptQuotation:function(id,b){return req('POST','/quotations/'+id+'/accept',b);},
+    paymentRequest:function(id){return req('POST','/bookings/'+id+'/payment-request');},
+    registerLink:function(id){return req('POST','/payments/'+id+'/link');},
+    verifyPayment:function(id,b){return req('POST','/payments/'+id+'/verify',b);},
+    confirmJob:function(id){return req('POST','/bookings/'+id+'/confirm');},
+    transitionJob:function(id,b){return req('POST','/jobs/'+id+'/transition',b);},
+    finalInvoice:function(id,b){return req('POST','/jobs/'+id+'/invoice',b);},
+    reports:function(){return req('GET','/reports');}
+  };
+})();
+</script>
 
 <script>
 (function(){

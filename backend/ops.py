@@ -146,6 +146,11 @@ def reserve_resource(conn, actor, booking_id, resource_type, resource_ref,
     other = _resource_held_by_other(conn, resource_type, resource_ref, booking_id)
     if other:
         raise ConflictError(f"{resource_type} {resource_ref} already reserved by booking {other}")
+    # maintenance block: managed equipment must be ACTIVE
+    if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='equipment'").fetchone():
+        eq = conn.execute("SELECT status FROM equipment WHERE code=?", (resource_ref,)).fetchone()
+        if eq and eq["status"] != "ACTIVE":
+            raise ConflictError(f"maintenance block: {resource_ref} unavailable ({eq['status']})")
     from datetime import datetime, timedelta, timezone
     exp = (datetime.now(timezone.utc) + timedelta(hours=hold_hours)).isoformat()
     cur = conn.execute(

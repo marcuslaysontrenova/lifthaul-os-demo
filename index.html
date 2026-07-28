@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>LiftHaul OS — Heavy Lifting & Hauling Operations</title>
+<style>
+  :root{
+    --bg:#EAEEF2; --surface:#FFFFFF; --surface-2:#F3F6F8; --surface-3:#E9EEF2;
+    --ink:#12171C; --ink-2:#48555F; --muted:#7C8894; --line:#D6DDE3;
+    --accent:#F5A314; --accent-2:#E8890A; --accent-ink:#1E1400;
+    --good:#1E9D57; --good-bg:#E4F4EB; --warn:#C9760A; --warn-bg:#FBEEDA;
+    --crit:#CE3E3E; --crit-bg:#FBE6E6; --info:#2C6FB0; --info-bg:#E4EEF7;
+    --steel:#161C22; --steel-2:#1F272E; --steel-ink:#E9EEF2; --steel-muted:#8C99A5;
+    --radius:12px; --radius-sm:8px;
+    --font-display:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-body:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);
+    --shadow-lg:0 12px 40px rgba(16,23,28,.16);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0C0F12; --surface:#141A20; --surface-2:#1B222A; --surface-3:#222B33;
+      --ink:#ECF1F5; --ink-2:#AEB9C2; --muted:#788592; --line:#28323B;
+      --accent:#FDB022; --accent-2:#F59E0B; --accent-ink:#1E1400;
+      --good:#3FBE77; --good-bg:#132A1E; --warn:#F0A83A; --warn-bg:#2C2109; --crit:#F0655F; --crit-bg:#2E1616;
+      --info:#5BA0DE; --info-bg:#12212F;
+      --steel:#0A0E11; --steel-2:#141A20; --steel-ink:#E9EEF2; --steel-muted:#8C99A5;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
+      --shadow-lg:0 16px 48px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#EAEEF2; --surface:#FFFFFF; --surface-2:#F3F6F8; --surface-3:#E9EEF2;
+    --ink:#12171C; --ink-2:#48555F; --muted:#7C8894; --line:#D6DDE3;
+    --accent:#F5A314; --good:#1E9D57; --good-bg:#E4F4EB; --warn:#C9760A; --warn-bg:#FBEEDA;
+    --crit:#CE3E3E; --crit-bg:#FBE6E6; --info:#2C6FB0; --info-bg:#E4EEF7;
+    --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);
+    --shadow-lg:0 12px 40px rgba(16,23,28,.16);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0C0F12; --surface:#141A20; --surface-2:#1B222A; --surface-3:#222B33;
+    --ink:#ECF1F5; --ink-2:#AEB9C2; --muted:#788592; --line:#28323B;
+    --accent:#FDB022; --good:#3FBE77; --good-bg:#132A1E; --warn:#F0A83A; --warn-bg:#2C2109;
+    --crit:#F0655F; --crit-bg:#2E1616; --info:#5BA0DE; --info-bg:#12212F;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
+    --shadow-lg:0 16px 48px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;line-height:1.5;font-size:15px}
+  h1,h2,h3,h4{margin:0;text-wrap:balance;font-family:var(--font-display)}
+  button{font-family:inherit;cursor:pointer}
+  .tnum{font-variant-numeric:tabular-nums}
+  .hz{background-image:repeating-linear-gradient(-45deg,var(--accent) 0 14px,#12171C 14px 28px)}
+
+  /* ---------- LOGIN ---------- */
+  #login{display:grid;grid-template-columns:1.05fr .95fr;min-height:100vh}
+  .brand{position:relative;background:var(--steel);color:var(--steel-ink);
+    padding:44px clamp(28px,4vw,64px);display:flex;flex-direction:column;overflow:hidden}
+  .brand::after{content:"";position:absolute;inset:0;background:
+    radial-gradient(120% 90% at 85% -10%,rgba(245,163,20,.18),transparent 55%);pointer-events:none}
+  .brand .hzbar{position:absolute;top:0;left:0;right:0;height:6px}
+  .mark{display:flex;align-items:center;gap:12px;z-index:1}
+  .mark svg{width:40px;height:40px;flex:none}
+  .wordmark{font-weight:800;letter-spacing:.06em;font-size:20px}
+  .wordmark b{color:var(--accent)}
+  .brand-hero{margin-top:auto;margin-bottom:auto;z-index:1;padding:32px 0}
+  .brand-hero .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:700}
+  .brand-hero h1{font-size:clamp(1.9rem,3.4vw,2.7rem);font-weight:800;line-height:1.08;
+    letter-spacing:-.01em;margin:14px 0 16px}
+  .brand-hero p{color:var(--steel-muted);max-width:42ch;font-size:15px}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px;z-index:1}
+  .flow span{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:var(--steel-ink)}
+  .flow span b{color:var(--accent);font-weight:700}
+  .brand-foot{z-index:1;color:var(--steel-muted);font-size:12.5px;display:flex;gap:10px;align-items:center}
+
+  .auth{display:flex;align-items:center;justify-content:center;padding:40px 24px}
+  .card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:30px}
+  .card h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+  .card .sub{color:var(--ink-2);font-size:13.5px;margin-top:4px;margin-bottom:22px}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:10px;padding:4px;margin-bottom:18px}
+  .seg button{border:0;background:transparent;color:var(--ink-2);font-weight:600;font-size:13px;
+    padding:9px 6px;border-radius:7px;transition:.15s}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  @media (prefers-color-scheme:dark){.seg button[aria-pressed="true"]{background:var(--surface-3)}}
+  :root[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--surface-3)}
+  :root[data-theme="light"] .seg button[aria-pressed="true"]{background:var(--surface)}
+  label.fld{display:block;margin-bottom:14px}
+  label.fld span{display:block;font-size:12px;font-weight:600;letter-spacing:.02em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  label.fld input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;
+    background:var(--surface-2);color:var(--ink);font-size:14.5px;font-family:inherit}
+  label.fld input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .hint{background:var(--surface-2);border:1px dashed var(--line);border-radius:9px;padding:10px 12px;
+    font-size:12.5px;color:var(--ink-2);margin:2px 0 18px;display:flex;gap:8px;align-items:baseline}
+  .hint code{font-family:var(--font-mono);color:var(--ink);background:var(--surface-3);
+    padding:1px 6px;border-radius:5px;font-size:12px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;
+    background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:15px;padding:12px;
+    border-radius:9px;letter-spacing:.01em;transition:.15s;box-shadow:0 6px 16px rgba(245,163,20,.28)}
+  .btn:hover{background:var(--accent-2);transform:translateY(-1px)}
+  .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .fine{text-align:center;color:var(--muted);font-size:12px;margin-top:16px}
+
+  /* ---------- APP SHELL ---------- */
+  #dash{display:none;min-height:100vh;grid-template-columns:236px 1fr;grid-template-rows:auto 1fr}
+  #dash.on{display:grid}
+  .topbar{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:0 20px;height:60px;
+    background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .topbar .mark svg{width:30px;height:30px}
+  .topbar .wordmark{font-size:16px;color:var(--ink)}
+  .topbar .spacer{flex:1}
+  .rolebadge{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--accent-ink);background:var(--accent);padding:5px 10px;border-radius:999px}
+  .user{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--steel);color:#fff;display:grid;
+    place-items:center;font-size:12px;font-weight:800;letter-spacing:.02em}
+  .ghost{background:transparent;border:1px solid var(--line);color:var(--ink-2);font-weight:600;
+    font-size:13px;padding:7px 12px;border-radius:8px}
+  .ghost:hover{color:var(--ink);border-color:var(--muted)}
+
+  .side{background:var(--surface);border-right:1px solid var(--line);padding:14px 12px;
+    display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+  .side .grp{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);padding:14px 10px 6px}
+  .nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;border:0;
+    background:transparent;color:var(--ink-2);font-weight:600;font-size:13.5px;text-align:left;width:100%}
+  .nav:hover{background:var(--surface-2);color:var(--ink)}
+  .nav[aria-current="true"]{background:var(--surface-2);color:var(--ink)}
+  .nav[aria-current="true"] .ic{color:var(--accent)}
+  .nav .ic{width:17px;height:17px;flex:none;color:var(--muted)}
+  .nav .dot{margin-left:auto;font-size:11px;font-weight:700;color:var(--accent-ink);
+    background:var(--accent);border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
+
+  main{padding:22px clamp(18px,2.4vw,32px);overflow-x:hidden}
+  .pagehead{display:flex;align-items:flex-end;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+  .pagehead h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+  .pagehead .crumb{color:var(--muted);font-size:12.5px;margin-bottom:3px}
+  .pagehead .spacer{flex:1}
+  .stripe{height:4px;border-radius:3px;width:64px;margin-top:8px}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 16px 14px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi .k{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
+  .kpi .v{font-size:28px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+  .kpi .d{font-size:12px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:5px}
+  .kpi .spark{position:absolute;right:12px;top:14px;opacity:.9}
+  .up{color:var(--good)} .down{color:var(--crit)}
+
+  .grid2{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);overflow:hidden}
+  .panel-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .panel-h h3{font-size:14.5px;font-weight:800}
+  .panel-h .spacer{flex:1}
+  .panel-h .cnt{font-size:12px;color:var(--muted);font-weight:600}
+  .panel-b{padding:12px 14px}
+
+  .job{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
+    padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:var(--surface-2)}
+  .job:last-child{margin-bottom:0}
+  .job .no{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--accent-2);
+    background:var(--warn-bg);border-radius:7px;padding:6px 8px;text-align:center;line-height:1.2}
+  .job .mid .cl{font-weight:700;font-size:14px}
+  .job .mid .ld{color:var(--ink-2);font-size:12.5px;margin-top:2px}
+  .job .mid .eq{color:var(--muted);font-size:12px;margin-top:3px;display:flex;gap:6px;align-items:center}
+  .job .rt{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .chip{font-size:11px;font-weight:700;letter-spacing:.02em;padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .c-good{color:var(--good);background:var(--good-bg)} .c-warn{color:var(--warn);background:var(--warn-bg)}
+  .c-info{color:var(--info);background:var(--info-bg)} .c-crit{color:var(--crit);background:var(--crit-bg)}
+  .c-mut{color:var(--ink-2);background:var(--surface-3)}
+  .job .rt .tm{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .row{display:flex;align-items:center;gap:11px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .ei{width:34px;height:34px;border-radius:8px;background:var(--surface-3);display:grid;
+    place-items:center;color:var(--ink-2);flex:none}
+  .row .en{font-weight:700;font-size:13.5px} .row .es{font-size:12px;color:var(--muted);margin-top:1px}
+  .row .spacer{flex:1}
+  .bar{height:6px;border-radius:4px;background:var(--surface-3);width:70px;overflow:hidden;margin-top:5px}
+  .bar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+
+  .alert{display:flex;gap:10px;padding:11px;border-radius:9px;background:var(--warn-bg);
+    border:1px solid transparent;margin-bottom:9px;font-size:12.5px;color:var(--ink)}
+  .alert.crit{background:var(--crit-bg)} .alert svg{flex:none;margin-top:1px}
+  .alert b{font-weight:700}
+
+  /* module preview */
+  .mod{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px}
+  .mod .ic-lg{width:46px;height:46px;border-radius:12px;background:var(--warn-bg);color:var(--accent-2);
+    display:grid;place-items:center;margin-bottom:14px}
+  .mod h3{font-size:19px;font-weight:800}
+  .mod p{color:var(--ink-2);max-width:60ch;margin:8px 0 18px;font-size:14px}
+  .feats{display:flex;flex-wrap:wrap;gap:8px}
+  .feats span{font-size:12.5px;font-weight:600;color:var(--ink-2);background:var(--surface-2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 11px}
+  .mod .tag{display:inline-block;margin-top:20px;font-size:12px;font-weight:700;color:var(--good);
+    background:var(--good-bg);padding:6px 11px;border-radius:999px}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+    background:var(--steel);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;
+    box-shadow:var(--shadow-lg);opacity:0;transition:.25s;z-index:20;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:920px){
+    #login{grid-template-columns:1fr}
+    .brand{display:none}
+    .grid2{grid-template-columns:1fr}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    #dash.on{grid-template-columns:1fr}
+    .side{display:none}
+    .topbar{grid-column:1}
+    main{grid-column:1}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<!-- ===================== LOGIN ===================== -->
+<section id="login">
+  <div class="brand">
+    <div class="hzbar hz"></div>
+    <div class="mark">
+      <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/>
+        <path d="M9 41V10h3l24 6v3" stroke="#E9EEF2" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/>
+        <path d="M30 19v7" stroke="#E9EEF2" stroke-width="2.4"/>
+        <rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/>
+        <path d="M9 22h8" stroke="#8C99A5" stroke-width="2.4"/>
+      </svg>
+      <div class="wordmark">LiftHaul<b>OS</b></div>
+    </div>
+
+    <div class="brand-hero">
+      <div class="eyebrow">Heavy Lifting &amp; Hauling</div>
+      <h1>Run the whole lift — from quote to final invoice.</h1>
+      <p>One operating system for cranes, rigging, machinery relocation and oversized cargo.
+         Replace the phone calls, spreadsheets and paper checklists with one coordinated job record.</p>
+      <div class="flow">
+        <span><b>1</b> Quote</span><span><b>2</b> Dispatch</span><span><b>3</b> Permits</span>
+        <span><b>4</b> Lift</span><span><b>5</b> Deliver</span><span><b>6</b> Bill</span>
+      </div>
+    </div>
+
+    <div class="brand-foot">
+      <span class="hz" style="width:26px;height:10px;border-radius:2px;display:inline-block"></span>
+      Interactive demo build · sample data
+    </div>
+  </div>
+
+  <div class="auth">
+    <form class="card" id="loginForm">
+      <h2>Sign in</h2>
+      <div class="sub">Access your dispatch, fleet and lifting operations.</div>
+
+      <div class="seg" role="group" aria-label="Sign in as">
+        <button type="button" data-role="Admin" aria-pressed="true">Admin</button>
+        <button type="button" data-role="Dispatcher" aria-pressed="false">Dispatcher</button>
+        <button type="button" data-role="Driver" aria-pressed="false">Driver</button>
+      </div>
+
+      <label class="fld"><span>Username</span>
+        <input id="u" type="text" value="admin" autocomplete="username" spellcheck="false"></label>
+      <label class="fld"><span>Password</span>
+        <input id="p" type="password" value="demo1234" autocomplete="current-password"></label>
+
+      <div class="hint">🔑&nbsp;<div>Demo access — user <code>admin</code> · pass <code>demo1234</code>. Any values sign you in.</div></div>
+
+      <button class="btn" type="submit">Sign in to LiftHaul OS →</button>
+      <div class="fine">Protected demo · no real data is stored</div>
+    </form>
+  </div>
+</section>
+
+<!-- ===================== DASHBOARD ===================== -->
+<section id="dash">
+  <header class="topbar">
+    <div class="mark">
+      <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <rect x="3" y="41" width="42" height="4" rx="1" fill="#F5A314"/>
+        <path d="M9 41V10h3l24 6v3" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M12 10 36 16" stroke="#F5A314" stroke-width="2.4"/>
+        <rect x="25" y="26" width="10" height="7" rx="1" stroke="#F5A314" stroke-width="2.4"/>
+      </svg>
+      <div class="wordmark">LiftHaul<b style="color:var(--accent)">OS</b></div>
+    </div>
+    <div class="spacer"></div>
+    <span class="rolebadge" id="roleBadge">Admin</span>
+    <div class="user"><div class="avatar" id="avatar">RC</div><span id="uname">R. Cruz</span></div>
+    <button class="ghost" id="signout">Sign out</button>
+  </header>
+
+  <aside class="side" id="side">
+    <div class="grp">Operations</div>
+    <button class="nav" data-mod="dashboard" aria-current="true"><svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="12" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>Dashboard</button>
+    <button class="nav" data-mod="jobs"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Job Orders<span class="dot">7</span></button>
+    <button class="nav" data-mod="quotes"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Quotations</button>
+    <button class="nav" data-mod="dispatch"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="7" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/><path d="M9.4 17H15M5 17V7h8v10M13 10h4l3 3v4" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Dispatch Board<span class="dot">4</span></button>
+    <div class="grp">Assets</div>
+    <button class="nav" data-mod="fleet"><svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="13" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M16 11h3l2 3v2h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="18" r="1.6" fill="currentColor"/><circle cx="17" cy="18" r="1.6" fill="currentColor"/></svg>Fleet</button>
+    <button class="nav" data-mod="drivers"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Drivers</button>
+    <button class="nav" data-mod="equipment"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M5 20V6l11 3M5 6l11 3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="11" y="14" width="7" height="5" rx="1" stroke="currentColor" stroke-width="2"/></svg>Equipment</button>
+    <div class="grp">Admin</div>
+    <button class="nav" data-mod="permits"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.2-2.9 7.4-7 8.8C7.9 18.4 5 15.2 5 11V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 11.5l1.8 1.8 3.2-3.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Permits<span class="dot">3</span></button>
+    <button class="nav" data-mod="invoices"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Invoices</button>
+    <button class="nav" data-mod="reports"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 20V4M20 20H4M8 16v-4M12 16V8M16 16v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Reports</button>
+  </aside>
+
+  <main id="main"><!-- rendered by JS --></main>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var role="Admin";
+  // role segmented control
+  document.querySelectorAll('.seg button').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.seg button').forEach(function(x){x.setAttribute('aria-pressed','false')});
+      b.setAttribute('aria-pressed','true'); role=b.dataset.role;
+      var u=document.getElementById('u');
+      u.value = role==='Driver' ? 'driver' : role==='Dispatcher' ? 'dispatch' : 'admin';
+    });
+  });
+
+  var login=document.getElementById('login'), dash=document.getElementById('dash');
+  document.getElementById('loginForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    document.getElementById('roleBadge').textContent=role;
+    login.style.display='none'; dash.classList.add('on');
+    window.scrollTo(0,0); render('dashboard');
+  });
+  document.getElementById('signout').addEventListener('click',function(){
+    dash.classList.remove('on'); login.style.display='grid';
+  });
+
+  // nav
+  document.querySelectorAll('.nav').forEach(function(n){
+    n.addEventListener('click',function(){
+      document.querySelectorAll('.nav').forEach(function(x){x.removeAttribute('aria-current')});
+      n.setAttribute('aria-current','true'); render(n.dataset.mod);
+      window.scrollTo(0,0);
+    });
+  });
+
+  function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+    clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2200);}
+
+  // ---- data ----
+  var jobs=[
+    {no:'JO-2041',cl:'Meralco Substation',ld:'Transformer relocation · 42 t',eq:'250 t crawler crane + lowbed',st:'On Site',c:'c-good',tm:'07:30'},
+    {no:'JO-2044',cl:'SMC Infrastructure',ld:'Bridge girder set · 8 pcs · 36 t ea',eq:'100 t all-terrain crane',st:'En Route',c:'c-info',tm:'09:15'},
+    {no:'JO-2047',cl:'Aboitiz Power',ld:'Generator skid · oversized · 55 t',eq:'350 t crane + extendable trailer',st:'Permit Pending',c:'c-warn',tm:'Tomorrow'},
+    {no:'JO-2048',cl:'Cebu Port Authority',ld:'Reach stacker offload · 78 t',eq:'2× 50 t RT cranes (tandem)',st:'Scheduled',c:'c-mut',tm:'Thu 06:00'},
+    {no:'JO-2039',cl:'Ayala Land',ld:'Tower crane erection · sections',eq:'160 t all-terrain crane',st:'Completed',c:'c-good',tm:'Yesterday'}
+  ];
+  var equip=[
+    {n:'250 t Crawler — CC-250',s:'Deployed · JO-2041',p:100,ic:'crane'},
+    {n:'100 t All-Terrain — AT-100',s:'En route · JO-2044',p:70,ic:'crane'},
+    {n:'50 t Rough Terrain — RT-50 A',s:'Available · Yard',p:0,ic:'crane'},
+    {n:'Lowbed Trailer — LB-07',s:'Deployed · JO-2041',p:100,ic:'truck'},
+    {n:'Extendable Trailer — EX-03',s:'Maintenance · brakes',p:40,ic:'wrench'}
+  ];
+  var mods={
+    jobs:{t:'Job Orders',d:'Create and track every lift as one record — client, load specification, weight, dimensions, pick & set points, assigned equipment and crew, and live status from scheduled to completed.',f:['Create job order','Load & rigging details','Assign crane / trailer','Assign crew','Status tracking','Attach documents','Change-order logging']},
+    quotes:{t:'Quotations',d:'Build professional quotes from your equipment rate card, package inclusions and mobilization costs, then send to the client and convert an approved quote straight into a job order.',f:['Rate-card pricing','Equipment selection','Mobilization costs','Package builder','PDF quote','Approve → Job Order']},
+    dispatch:{t:'Dispatch Board',d:'Assign cranes, trailers, operators and rigging crews across the schedule on one board — with conflict detection so the same asset is never double-booked.',f:['Drag-and-drop schedule','Crew & operator assignment','Conflict detection','Multi-day jobs','Live status','Site notes']},
+    fleet:{t:'Fleet',d:'Track every truck and trailer — registration, GPS location, maintenance schedule, fuel and inspection due-dates — so nothing rolls out non-compliant.',f:['Vehicle registry','GPS location','Maintenance schedule','Inspection alerts','Fuel logs','Document expiry']},
+    drivers:{t:'Drivers & Operators',d:'Driver and crane-operator profiles with licenses, certifications, availability and assignment history — matched to the equipment they are qualified to run.',f:['Driver profiles','License & cert expiry','Operator qualifications','Availability','Assignment history','Mobile login']},
+    equipment:{t:'Equipment',d:'Your crane and rigging register with rated capacity, load charts, inspection status and scheduling — so dispatch always sends the right machine for the load.',f:['Crane register','Rated capacity & charts','Inspection status','Rigging inventory','Scheduling','Utilization']},
+    permits:{t:'Permits & Compliance',d:'Track oversize / overweight load permits, route approvals and safety checklists per job — with expiry alerts so a truck never moves without the paperwork.',f:['Permit tracking','Oversize / overweight','Route approval','Expiry alerts','Safety checklist','Lift plan attach']},
+    invoices:{t:'Invoices',d:'Generate invoices from completed jobs including standby time and additional charges, track payment status, and keep billing tied to the original quote.',f:['Invoice generation','Additional / standby charges','Payment status','Tied to quotation','Statements','Export']},
+    reports:{t:'Reports',d:'Utilization, revenue, job completion and safety reporting — see which cranes earn, where time is lost, and how the operation performs week over week.',f:['Equipment utilization','Revenue by client','Job completion','Standby analysis','Safety records','Custom export']}
+  };
+  var icons={crane:'<path d="M5 20V6l11 3M5 6l11 3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="11" y="14" width="7" height="5" rx="1" stroke="currentColor" stroke-width="2"/>',
+    truck:'<rect x="3" y="8" width="13" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M16 11h3l2 3v2h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+    wrench:'<path d="M14 6a4 4 0 0 0 5 5l-8 8-3-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'};
+
+  function esc(s){return String(s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+
+  function dashboard(){
+    var jobcards=jobs.map(function(j){return '<div class="job"><div class="no">'+j.no+'</div>'+
+      '<div class="mid"><div class="cl">'+esc(j.cl)+'</div><div class="ld">'+esc(j.ld)+'</div>'+
+      '<div class="eq"><svg width="13" height="13" viewBox="0 0 24 24" fill="none">'+icons.crane+'</svg>'+esc(j.eq)+'</div></div>'+
+      '<div class="rt"><span class="chip '+j.c+'">'+j.st+'</span><span class="tm">'+j.tm+'</span></div></div>';}).join('');
+    var eqrows=equip.map(function(e){return '<div class="row"><div class="ei"><svg width="17" height="17" viewBox="0 0 24 24" fill="none">'+icons[e.ic]+'</svg></div>'+
+      '<div><div class="en">'+esc(e.n)+'</div><div class="es">'+esc(e.s)+'</div></div><div class="spacer"></div>'+
+      '<div class="bar"><i style="width:'+e.p+'%;background:'+(e.p===0?'var(--good)':e.p<50?'var(--crit)':'var(--accent)')+'"></i></div></div>';}).join('');
+    return '<div class="pagehead"><div><div class="crumb">Operations</div><h2>Operations Dashboard</h2></div>'+
+      '<div class="spacer"></div></div><div class="stripe hz" style="margin:-12px 0 18px"></div>'+
+      '<div class="kpis">'+
+        kpi('Active Jobs','7','+2 vs last wk','up',spark([3,4,3,5,4,6,7]))+
+        kpi('Cranes Deployed','4 / 6','67% utilization','up',spark([2,3,3,4,3,4,4]))+
+        kpi('Permits Pending','3','1 due today','down',spark([1,2,1,3,2,3,3]))+
+        kpi("Revenue Today","₱412,500",'+18% vs avg','up',spark([2,3,4,3,5,4,6]))+
+      '</div><div class="grid2">'+
+        '<div class="panel"><div class="panel-h"><h3>Dispatch Board</h3><div class="spacer"></div><span class="cnt">Today · 5 jobs</span></div><div class="panel-b">'+jobcards+'</div></div>'+
+        '<div><div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Alerts</h3></div><div class="panel-b">'+
+          '<div class="alert crit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="var(--crit)" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="var(--crit)" stroke-width="2" stroke-linecap="round"/></svg><div><b>JO-2047</b> — oversize permit not yet approved; lift scheduled tomorrow 06:00.</div></div>'+
+          '<div class="alert"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="var(--warn)" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="var(--warn)" stroke-width="2" stroke-linecap="round"/></svg><div><b>EX-03 trailer</b> in maintenance (brakes) — reassign for Thu tandem lift.</div></div>'+
+          '<div class="alert"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="var(--warn)" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="var(--warn)" stroke-width="2" stroke-linecap="round"/></svg><div><b>Operator J. Ramos</b> — TESDA crane cert expires in 12 days.</div></div>'+
+        '</div></div>'+
+        '<div class="panel"><div class="panel-h"><h3>Equipment Status</h3><div class="spacer"></div><span class="cnt">6 assets</span></div><div class="panel-b">'+eqrows+'</div></div>'+
+      '</div></div>';
+  }
+  function kpi(k,v,d,dir,sp){return '<div class="kpi"><div class="spark">'+sp+'</div><div class="k">'+k+'</div>'+
+    '<div class="v tnum">'+v+'</div><div class="d '+dir+'">'+(dir==='up'?'▲':'▼')+' '+d+'</div></div>';}
+  function spark(a){var w=64,h=26,mx=Math.max.apply(null,a),mn=Math.min.apply(null,a),
+    pts=a.map(function(v,i){return (i/(a.length-1)*w).toFixed(1)+','+(h-2-(v-mn)/(mx-mn||1)*(h-6)).toFixed(1)}).join(' ');
+    var lx=w,ly=(h-2-(a[a.length-1]-mn)/(mx-mn||1)*(h-6));
+    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" fill="none"><polyline points="'+pts+'" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+lx+'" cy="'+ly.toFixed(1)+'" r="2.4" fill="var(--accent)"/></svg>';}
+
+  function module(id){var m=mods[id];var f=m.f.map(function(x){return '<span>'+esc(x)+'</span>'}).join('');
+    return '<div class="pagehead"><div><div class="crumb">'+ (['jobs','quotes','dispatch'].indexOf(id)>-1?'Operations':['fleet','drivers','equipment'].indexOf(id)>-1?'Assets':'Admin') +'</div><h2>'+m.t+'</h2></div></div>'+
+      '<div class="mod"><div class="ic-lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none">'+icons.crane+'</svg></div>'+
+      '<h3>'+m.t+'</h3><p>'+esc(m.d)+'</p><div class="feats">'+f+'</div>'+
+      '<div class="tag">Included in the Standard Business System package</div></div>';}
+
+  function render(id){document.getElementById('main').innerHTML = id==='dashboard'?dashboard():module(id);
+    if(id!=='dashboard'){toast(mods[id].t+' — live module in the full build');}}
+})();
+</script>
+
+</body>
+</html>

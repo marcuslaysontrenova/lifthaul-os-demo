@@ -288,6 +288,8 @@
         <label><span>Service required</span><select name="service" id="bkService"></select></label>
         <label><span>What needs lifting / hauling?</span><input name="load" required placeholder="e.g. 40-tonne transformer, factory relocation"></label>
         <div class="two"><label><span>Est. weight (tonnes)</span><input name="weight" type="number" min="0" placeholder="40"></label><label><span>Preferred date</span><input name="date" type="date"></label></div>
+        <div class="two"><label><span>Cargo dimensions (L×W×H)</span><input name="dims" placeholder="4.2 × 2.4 × 3.1 m"></label><label><span>Required equipment</span><input name="equip2" placeholder="Crane + rigging crew"></label></div>
+        <label><span>Site conditions (access, ground, clearances)</span><input name="conditions" placeholder="Paved yard, 5 m gate, overhead lines"></label>
         <div class="two"><label><span>Pickup location</span><input name="from" placeholder="City / site"></label><label><span>Delivery / site</span><input name="to" placeholder="City / site"></label></div>
         <div class="two"><label><span>Company</span><input name="company" required placeholder="Your company"></label><label><span>Contact name</span><input name="contact" required placeholder="Your name"></label></div>
         <div class="two"><label><span>Email</span><input name="email" type="email" required placeholder="you@company.com"></label><label><span>Phone</span><input name="phone" placeholder="+63…"></label></div>
@@ -433,9 +435,7 @@
       {id:'PM-331',job:'JO-2044',type:'Route Approval',expiry:'Valid · 8 days',status:'approved',checklist:[{t:'Route survey completed',d:true},{t:'DPWH clearance',d:true}]},
       {id:'PM-332',job:'JO-2048',type:'Oversize Load',expiry:'Due Wed',status:'pending',checklist:[{t:'Route survey completed',d:false},{t:'Port gate pass',d:true}]}
     ],
-    bookings:[
-      {id:'BK-1000',company:'Universal Robina',contact:'E. Villanueva',email:'evilla@urc.demo',phone:'+63 2 8000 0000',service:'Machinery Relocation',load:'Packaging line relocation · ~30 t',weight:'30',from:'Pasig plant',to:'Cavite plant',date:'Next week',notes:'Weekend shutdown window only.',status:'New'}
-    ]
+    bookings:[]
   };
   var qnum=function(q){return q.items.reduce(function(s,i){return s+i.qty*i.days*i.rate},0)};
   var svcTitle=function(id){var s=DB.services.find(function(x){return x.id===id});return s?s.t:id};
@@ -464,7 +464,7 @@
   ];
 
   // --- persistence (localStorage) ---
-  var DBKEY='lifthaul_os_v2';
+  var DBKEY='rgo_os_v3';
   function save(){try{localStorage.setItem(DBKEY,JSON.stringify(DB))}catch(e){}}
   function load(){try{var s=localStorage.getItem(DBKEY);if(s){var d=JSON.parse(s);Object.keys(d).forEach(function(k){DB[k]=d[k]})}}catch(e){}}
   function resetDemo(){try{localStorage.removeItem(DBKEY)}catch(e){}location.reload();}
@@ -526,12 +526,15 @@
     if(!f.company.value.trim()||!f.contact.value.trim()||!f.load.value.trim()){toast('Please fill the required fields');return;}
     var id='BK-'+(DB.seq.booking++);
     DB.bookings.unshift({id:id,company:f.company.value.trim(),contact:f.contact.value.trim(),email:f.email.value.trim(),phone:f.phone.value.trim(),
-      service:svcTitle(f.service.value),load:f.load.value.trim(),weight:f.weight.value,from:f.from.value.trim(),to:f.to.value.trim(),
-      date:f.date.value||'Flexible',notes:f.notes.value.trim(),status:'New'});
+      service:svcTitle(f.service.value),load:f.load.value.trim(),weight:f.weight.value,dims:(f.dims?f.dims.value.trim():''),equipmentReq:(f.equip2?f.equip2.value.trim():''),
+      from:f.from.value.trim(),to:f.to.value.trim(),date:f.date.value||'Flexible',conditions:(f.conditions?f.conditions.value.trim():''),notes:f.notes.value.trim(),photos:[],
+      stage:'REQUEST_RECEIVED',estimator:null,quote:null,payment:null,paymentStatus:'NOT_REQUESTED',jobId:null,
+      thread:[{from:'customer',by:f.contact.value.trim()||'Customer',text:'New booking request submitted via website.',ts:bkNow(),read:false}],
+      audit:[{ts:bkNow(),by:'system',note:'Booking request received (REQUEST RECEIVED)'}],lastComm:bkNow(),nextAction:BK_NEXT.REQUEST_RECEIVED});
     $('#bookCard').innerHTML='<div class="aside"><div class="hzbar hz"></div><h3>Request received.</h3><p>Our dispatch office has it and will come back to you shortly with a plan and price.</p><ul><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-11" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Logged to operations instantly</li></ul></div>'+
       '<div class="success"><div class="ok"><svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-11" stroke="var(--good)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'+
-      '<h3>Booking submitted</h3><p>Your reference number is</p><div class="ref">'+id+'</div>'+
-      '<p style="font-size:13px">A dispatcher will confirm availability and pricing. (In this demo, open <b>Staff Login → Bookings</b> to see it land in the office.)</p>'+
+      '<h3>Request received — under review</h3><p>Your reference number is</p><div class="ref">'+id+'</div>'+
+      '<p style="font-size:13px"><b>This is a service inquiry, not a confirmed booking yet.</b> Our team will review it, prepare a quotation, and send you a downpayment request. Your job is confirmed only after the downpayment is verified. (Demo: open <b>Staff Login → Bookings</b> to work it through the workflow.)</p>'+
       '<div style="display:flex;gap:10px;justify-content:center;margin-top:18px"><button class="btn line" data-act="anotherBooking">Make another</button><button class="btn" data-act="staffLogin">See it in the office →</button></div></div>';
     DB.notifications.unshift({t:'New booking '+id+' from '+f.company.value.trim(),k:'booking',read:false});
     badges();save();toast(id+' submitted');window.scrollTo({top:document.getElementById('book').offsetTop-40,behavior:'smooth'});}
@@ -548,7 +551,7 @@
   function badges(){
     var b=$('[data-badge="jobs"]');if(b)b.textContent=DB.jobs.filter(function(j){return j.status!=='Completed'&&j.status!=='Cancelled'}).length;
     var p=$('[data-badge="permits"]');if(p)p.textContent=DB.permits.filter(function(x){return x.status==='pending'}).length;
-    var k=$('[data-badge="bookings"]');if(k)k.textContent=DB.bookings.filter(function(x){return x.status==='New'}).length;
+    var k=$('[data-badge="bookings"]');if(k)k.textContent=DB.bookings.filter(function(x){return ['REQUEST_RECEIVED','PENDING_INTERNAL_APPROVAL','PAYMENT_UNDER_VERIFICATION'].indexOf(x.stage)>-1}).length;
     var mb=$('[data-badge="maint"]');if(mb)mb.textContent=DB.maintenance.filter(function(x){return x.status==='due'||x.status==='active'}).length;
     var nb=$('#notifCount');if(nb){var un=DB.notifications.filter(function(x){return !x.read}).length;nb.textContent=un;nb.style.display=un?'grid':'none';}
   }
@@ -574,21 +577,38 @@
     dashboard:function(){
       var active=DB.jobs.filter(function(j){return j.status!=='Completed'&&j.status!=='Cancelled'});
       var deployed=DB.equipment.filter(function(e){return e.status==='deployed'}).length;
-      var newBk=DB.bookings.filter(function(b){return b.status==='New'}).length;
+      var newBk=DB.bookings.filter(function(b){return ['REQUEST_RECEIVED','UNDER_REVIEW','MORE_INFO_REQUIRED','SITE_SURVEY_REQUIRED'].indexOf(b.stage)>-1}).length;
+      var awaitPay=DB.bookings.filter(function(b){return b.stage==='PAYMENT_UNDER_VERIFICATION'||b.stage==='PAYMENT_REQUEST_SENT'||b.stage==='APPROVED_AWAITING_DOWNPAYMENT'}).length;
       var rev=DB.jobs.filter(function(j){return j.status==='On Site'||j.status==='En Route'}).reduce(function(s,j){return s+j.amount},0);
       var cards=active.map(function(j){return '<div class="jobc"><div class="no">'+j.id+'</div><div class="cl">'+esc(j.client)+'</div><div class="ld">'+esc(j.load)+'</div><div class="mt">'+chip(j.status)+'<span style="font-size:11.5px;color:var(--muted)" class="tnum">'+esc(j.date)+'</span></div></div>';}).join('');
       var eq=DB.equipment.map(function(e){var p=e.status==='deployed'?100:e.status==='maintenance'?40:0;return '<div class="lrow"><div class="ei"><svg width="17" height="17" viewBox="0 0 24 24" fill="none">'+iconSvg(e.type)+'</svg></div><div><div class="en">'+esc(e.name)+' · '+e.id+'</div><div class="es">'+({available:'Available · Yard',deployed:'Deployed · '+e.job,maintenance:'Maintenance'}[e.status])+'</div></div><div class="spacer"></div><div class="bar"><i style="width:'+p+'%;background:'+(e.status==='available'?'var(--good)':e.status==='maintenance'?'var(--crit)':'var(--accent)')+'"></i></div></div>';}).join('');
       return head('Operations','Operations Dashboard')+'<div class="stripe hz" style="margin:-8px 0 18px"></div>'+
         '<div class="kpis">'+kpi('New Bookings',newBk,newBk?'needs review':'clear',spark([0,1,0,1,2,1,newBk]))+kpi('Active Jobs',active.length,'live',spark([3,4,3,5,4,6,active.length]))+kpi('Cranes Deployed',deployed+' / '+DB.equipment.filter(function(e){return e.type==='crane'}).length,'utilization',spark([2,3,3,4,3,4,deployed]))+kpi('Revenue In Progress',peso(rev),'on active jobs',spark([2,3,4,3,5,4,6]))+'</div>'+
         '<div class="grid2"><div class="panel"><div class="panel-h"><h3>Dispatch — Today</h3><div class="spacer"></div><button class="btn sm" data-act="go" data-arg="dispatch">Board →</button></div><div class="panel-b">'+cards+'</div></div>'+
-        '<div><div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>New Bookings</h3><div class="spacer"></div><button class="btn sm line" data-act="go" data-arg="bookings">Inbox →</button></div><div class="panel-b">'+(DB.bookings.filter(function(b){return b.status==='New'}).slice(0,3).map(function(b){return '<div class="lrow"><div><div class="en">'+esc(b.company)+'</div><div class="es">'+esc(b.service)+' · '+esc(b.load)+'</div></div><div class="spacer"></div>'+chip2(b.status)+'</div>';}).join('')||'<div class="empty">No new bookings.</div>')+'</div></div>'+
+        '<div><div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Booking Queue</h3><div class="spacer"></div><button class="btn sm line" data-act="go" data-arg="bookings">Open →</button></div><div class="panel-b">'+(DB.bookings.filter(function(b){return b.stage!=='CONFIRMED'&&b.stage!=='DECLINED'&&b.stage!=='CANCELLED'}).slice(0,4).map(function(b){return '<div class="lrow" data-act="go" data-arg="bookings" style="cursor:pointer"><div><div class="en">'+esc(b.company)+'</div><div class="es">'+esc(b.service)+'</div></div><div class="spacer"></div>'+chipBk(b.stage,'bk')+'</div>';}).join('')||'<div class="empty">Queue clear.</div>')+'</div></div>'+
         '<div class="panel"><div class="panel-h"><h3>Equipment</h3></div><div class="panel-b">'+eq+'</div></div></div></div>';
     },
     bookings:function(){
-      var rows=DB.bookings.map(function(b){return '<tr data-act="bookingDetail" data-arg="'+b.id+'"><td class="id">'+b.id+'</td><td class="strong">'+esc(b.company)+'</td><td>'+esc(b.service)+'</td><td>'+esc(b.load)+'</td><td>'+esc(b.date)+'</td><td class="right">'+chip2(b.status)+'</td></tr>';}).join('')||'<tr><td colspan="6" class="empty">No bookings yet — submit one from the public site.</td></tr>';
-      return head('Operations','Booking Requests','<button class="btn line" data-act="backSite">View public form ↗</button>')+
-        '<p style="color:var(--ink-2);font-size:13px;margin:-6px 0 16px">Customer bookings from the website land here. Open one to raise a quotation or job order.</p>'+
-        '<div class="tblwrap"><table class="tbl"><thead><tr><th>Ref</th><th>Company</th><th>Service</th><th>Load</th><th>Preferred</th><th class="right">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      var f=views._bf||'all';
+      var cnt=function(fn){return DB.bookings.filter(fn).length;};
+      var cards=[
+        ['New requests',cnt(function(b){return b.stage==='REQUEST_RECEIVED'}),'REQUEST_RECEIVED'],
+        ['Awaiting review',cnt(function(b){return b.stage==='UNDER_REVIEW'||b.stage==='MORE_INFO_REQUIRED'||b.stage==='SITE_SURVEY_REQUIRED'}),'review'],
+        ['Quotes in draft',cnt(function(b){return b.stage==='QUOTATION_DRAFT'||b.stage==='READY_FOR_QUOTATION'}),'QUOTATION_DRAFT'],
+        ['Awaiting approval',cnt(function(b){return b.stage==='PENDING_INTERNAL_APPROVAL'}),'PENDING_INTERNAL_APPROVAL'],
+        ['Awaiting client',cnt(function(b){return b.stage==='QUOTATION_SENT'||b.stage==='CLIENT_REVIEWING'||b.stage==='REVISION_REQUESTED'}),'QUOTATION_SENT'],
+        ['Awaiting downpayment',cnt(function(b){return b.stage==='APPROVED_AWAITING_DOWNPAYMENT'||b.stage==='PAYMENT_REQUEST_SENT'}),'APPROVED_AWAITING_DOWNPAYMENT'],
+        ['Payment verifying',cnt(function(b){return b.stage==='PAYMENT_UNDER_VERIFICATION'}),'PAYMENT_UNDER_VERIFICATION'],
+        ['Confirmed jobs',cnt(function(b){return b.stage==='CONFIRMED'}),'CONFIRMED']
+      ];
+      var kpi2=function(lbl,n,key){return '<div class="kpi" data-act="bkFilter" data-arg="'+key+'" style="cursor:pointer;'+(f===key?'outline:2px solid var(--primary)':'')+'"><div class="k">'+lbl+'</div><div class="v tnum">'+n+'</div></div>';};
+      var stat='<div class="kpis" style="grid-template-columns:repeat(4,1fr)">'+cards.map(function(c){return kpi2(c[0],c[1],c[2])}).join('')+'</div>';
+      var flt=function(b){if(f==='all')return true;if(f==='review')return ['UNDER_REVIEW','MORE_INFO_REQUIRED','SITE_SURVEY_REQUIRED'].indexOf(b.stage)>-1;if(f==='QUOTATION_DRAFT')return ['QUOTATION_DRAFT','READY_FOR_QUOTATION'].indexOf(b.stage)>-1;if(f==='QUOTATION_SENT')return ['QUOTATION_SENT','CLIENT_REVIEWING','REVISION_REQUESTED'].indexOf(b.stage)>-1;if(f==='APPROVED_AWAITING_DOWNPAYMENT')return ['APPROVED_AWAITING_DOWNPAYMENT','PAYMENT_REQUEST_SENT'].indexOf(b.stage)>-1;return b.stage===f;};
+      var rows=DB.bookings.filter(flt).map(function(b){return '<tr data-act="bookingDetail" data-arg="'+b.id+'"><td class="id">'+b.id+'</td><td class="strong">'+esc(b.company)+'</td><td>'+esc(b.service)+'</td><td>'+esc(b.date)+'</td><td>'+esc(b.from||'—')+' → '+esc(b.to||'—')+'</td><td>'+chipBk(b.stage,'bk')+'</td><td>'+(b.quote?b.quote.no+' <span style="color:var(--muted)">'+b.quote.status+'</span>':'—')+'</td><td>'+chipBk(b.paymentStatus,'pay')+'</td><td style="font-size:12px;color:var(--ink-2)">'+esc(b.nextAction||'—')+'</td></tr>';}).join('')||'<tr><td colspan="9" class="empty">No bookings in this view.</td></tr>';
+      return head('Commercial','Booking & Quotation Queue',(f!=='all'?'<button class="btn line sm" data-act="bkFilter" data-arg="all" style="margin-right:8px">Clear filter</button>':'')+'<button class="btn line" data-act="backSite">Public booking form ↗</button>')+
+        '<p style="color:var(--ink-2);font-size:13px;margin:-6px 0 16px">A submitted booking is a <b>service inquiry</b> — it flows through review → quotation → approval → client acceptance → Wise downpayment → verification before it becomes a confirmed job. Click a card to filter; open a row to work it.</p>'+
+        stat+
+        '<div class="tblwrap"><table class="tbl"><thead><tr><th>Ref</th><th>Customer</th><th>Service</th><th>Requested</th><th>Route</th><th>Stage</th><th>Quotation</th><th>Payment</th><th>Next action</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     },
     jobs:function(){
       var f=views._jf||{q:'',s:'all'};
@@ -725,9 +745,29 @@
     if(act==='convertQuote')return convertQuote(arg);
     if(act==='approvePermit')return approvePermit(arg);
     if(act==='bookingDetail')return bookingDetail(arg);
-    if(act==='bkQuote')return bookingToQuote(arg);
-    if(act==='bkJob')return bookingToJob(arg);
-    if(act==='bkReview'){var b=DB.bookings.find(function(x){return x.id===arg});if(b&&b.status==='New')b.status='Reviewed';closeModal();toast(arg+' marked reviewed');render();return;}
+    if(act==='bkFilter'){views._bf=arg;go('bookings');return;}
+    if(act==='goJobs')return go('jobs');
+    if(act==='bkReviewStart')return bkReviewStart(arg);
+    if(act==='bkMoreInfo')return bkMoreInfo(arg);
+    if(act==='bkSurvey')return bkSurvey(arg);
+    if(act==='bkReady')return bkReady(arg);
+    if(act==='bkBuildQuote')return bkBuildQuote(arg);
+    if(act==='bkSaveQuote')return bkSaveQuote(arg);
+    if(act==='bkSubmitApproval')return bkSubmitApproval(arg);
+    if(act==='bkApprove')return bkApprove(arg);
+    if(act==='bkRejectQuote')return bkRejectQuote(arg);
+    if(act==='bkSendQuote')return bkSendQuote(arg);
+    if(act==='bkAccept')return bkAccept(arg);
+    if(act==='bkRevise')return bkRevise(arg);
+    if(act==='bkDecline')return bkDecline(arg);
+    if(act==='bkGenPayment')return bkGenPayment(arg);
+    if(act==='bkRegisterWise')return bkRegisterWise(arg);
+    if(act==='bkCustomerPay')return bkCustomerPay(arg);
+    if(act==='bkVerifyPayment')return bkVerifyPayment(arg);
+    if(act==='bkConfirmPaid')return bkConfirmPaid(arg);
+    if(act==='bkConfirm')return bkConfirm(arg);
+    if(act==='bkCancel')return bkCancel(arg);
+    if(act==='bkPostMsg')return bkPostMsg(arg);
     if(act==='toggleCheck'){var p=DB.permits.find(function(x){return x.id===el.dataset.p});p.checklist[+arg].d=!p.checklist[+arg].d;permitDetail(p.id);return;}
     if(act==='addLine')return addQuoteLine();
     if(act==='rmLine'){el.closest('.qline').remove();recalc();return;}
@@ -739,7 +779,8 @@
     if(el.dataset.inp==='jq'){views._jf=views._jf||{q:'',s:'all'};views._jf.q=el.value;render();var ni=$('[data-inp="jq"]');if(ni){ni.focus();ni.setSelectionRange(el.value.length,el.value.length);}return;}
     if(el.dataset.inp==='js'){views._jf=views._jf||{q:'',s:'all'};views._jf.s=el.value;render();return;}
     if(el.classList.contains('ql'))recalc();
-    if(el.closest&&el.closest('#aiForm'))recalcAi();});
+    if(el.closest&&el.closest('#aiForm'))recalcAi();
+    if(el.classList.contains('bq'))bkPreview();});
 
   function advance(id){var j=DB.jobs.find(function(x){return x.id===id});var i=STFLOW.indexOf(j.status);
     if(j.status==='Permit Pending'){var pm=DB.permits.find(function(p){return p.job===j.id});if(pm&&pm.status!=='approved'){toast('🚫 Permit '+pm.id+' not approved — clear it in Permits first');return;}}
@@ -752,13 +793,156 @@
   function assetToggle(id){var e=DB.equipment.find(function(x){return x.id===id});if(e.status==='deployed'){toast(e.id+' is on a job — free it by completing '+e.job);return;}e.status=e.status==='available'?'maintenance':'available';toast(e.id+' → '+e.status);render();}
 
   // bookings → office
-  function bookingDetail(id){var b=DB.bookings.find(function(x){return x.id===id});
-    modal('<div class="modal"><div class="modal-h"><h3>'+b.id+' · '+esc(b.company)+'</h3><button class="x" data-close>×</button></div><div class="modal-b"><dl class="kv"><dt>Service</dt><dd>'+esc(b.service)+'</dd><dt>Load</dt><dd>'+esc(b.load)+'</dd><dt>Weight</dt><dd>'+(b.weight?esc(b.weight)+' t':'—')+'</dd><dt>Route</dt><dd>'+(esc(b.from||'—')+' → '+esc(b.to||'—'))+'</dd><dt>Preferred date</dt><dd>'+esc(b.date)+'</dd><dt>Contact</dt><dd>'+esc(b.contact)+'</dd><dt>Email</dt><dd>'+esc(b.email)+'</dd><dt>Phone</dt><dd>'+esc(b.phone||'—')+'</dd>'+(b.notes?'<dt>Notes</dt><dd>'+esc(b.notes)+'</dd>':'')+'<dt>Status</dt><dd>'+chip2(b.status)+'</dd></dl></div>'+
-      '<div class="modal-f">'+(b.status!=='Converted'?'<button class="btn line" data-act="bkReview" data-arg="'+b.id+'">Mark reviewed</button><button class="btn line" data-act="bkQuote" data-arg="'+b.id+'" data-close>Create quotation</button><button class="btn" data-act="bkJob" data-arg="'+b.id+'" data-close>Convert to job →</button>':'<button class="btn line" data-close>Close</button>')+'</div></div>');}
-  function bookingToJob(id){var b=DB.bookings.find(function(x){return x.id===id});var jid='JO-'+(DB.seq.job++);b.status='Converted';
-    DB.jobs.unshift({id:jid,client:b.company,load:b.load+(b.weight?' · '+b.weight+' t':''),eq:[],status:'Scheduled',date:b.date,loc:b.to||b.from||'TBD',amount:0,quote:''});
-    toast(b.id+' → '+jid+' created');go('jobs');}
-  function bookingToQuote(id){var b=DB.bookings.find(function(x){return x.id===id});b.status='Reviewed';formQuote(b.company);}
+  // ===================== BOOKING → CONFIRMED-JOB WORKFLOW =====================
+  DB.seq.qn=DB.seq.qn||3001;DB.seq.pr=DB.seq.pr||5001;
+  var BK_STAGES=['REQUEST_RECEIVED','UNDER_REVIEW','MORE_INFO_REQUIRED','SITE_SURVEY_REQUIRED','READY_FOR_QUOTATION','QUOTATION_DRAFT','PENDING_INTERNAL_APPROVAL','QUOTATION_SENT','CLIENT_REVIEWING','REVISION_REQUESTED','APPROVED_AWAITING_DOWNPAYMENT','PAYMENT_REQUEST_SENT','PAYMENT_UNDER_VERIFICATION','CONFIRMED','DECLINED','EXPIRED','CANCELLED'];
+  var BK_LABEL={REQUEST_RECEIVED:'Request received',UNDER_REVIEW:'Under review',MORE_INFO_REQUIRED:'More info required',SITE_SURVEY_REQUIRED:'Site survey required',READY_FOR_QUOTATION:'Ready for quotation',QUOTATION_DRAFT:'Quotation draft',PENDING_INTERNAL_APPROVAL:'Pending approval',QUOTATION_SENT:'Quotation sent',CLIENT_REVIEWING:'Client reviewing',REVISION_REQUESTED:'Revision requested',APPROVED_AWAITING_DOWNPAYMENT:'Accepted — awaiting downpayment',PAYMENT_REQUEST_SENT:'Payment request sent',PAYMENT_UNDER_VERIFICATION:'Payment verification',CONFIRMED:'Confirmed',DECLINED:'Declined',EXPIRED:'Expired',CANCELLED:'Cancelled'};
+  var BK_CHIP={REQUEST_RECEIVED:'c-warn',UNDER_REVIEW:'c-info',MORE_INFO_REQUIRED:'c-warn',SITE_SURVEY_REQUIRED:'c-warn',READY_FOR_QUOTATION:'c-info',QUOTATION_DRAFT:'c-mut',PENDING_INTERNAL_APPROVAL:'c-warn',QUOTATION_SENT:'c-info',CLIENT_REVIEWING:'c-info',REVISION_REQUESTED:'c-warn',APPROVED_AWAITING_DOWNPAYMENT:'c-warn',PAYMENT_REQUEST_SENT:'c-info',PAYMENT_UNDER_VERIFICATION:'c-warn',CONFIRMED:'c-good',DECLINED:'c-crit',EXPIRED:'c-mut',CANCELLED:'c-crit'};
+  var BK_NEXT={REQUEST_RECEIVED:'Assign estimator & review',UNDER_REVIEW:'Clarify or mark ready',MORE_INFO_REQUIRED:'Awaiting customer info',SITE_SURVEY_REQUIRED:'Schedule / complete survey',READY_FOR_QUOTATION:'Build quotation',QUOTATION_DRAFT:'Submit for internal approval',PENDING_INTERNAL_APPROVAL:'Approve quotation',QUOTATION_SENT:'Awaiting client decision',CLIENT_REVIEWING:'Awaiting client decision',REVISION_REQUESTED:'Revise quotation',APPROVED_AWAITING_DOWNPAYMENT:'Generate payment request',PAYMENT_REQUEST_SENT:'Send Wise link / await payment',PAYMENT_UNDER_VERIFICATION:'Verify payment (finance)',CONFIRMED:'Dispatch planning',DECLINED:'—',EXPIRED:'—',CANCELLED:'—'};
+  var PAY_LABEL={NOT_REQUESTED:'Not requested',REQUEST_GENERATED:'Request generated',PAYMENT_LINK_SENT:'Link sent',UNPAID:'Unpaid',PARTIALLY_PAID:'Partially paid',PAYMENT_SUBMITTED:'Payment submitted',UNDER_VERIFICATION:'Under verification',PAID:'Paid',FAILED:'Failed',EXPIRED:'Expired',REFUNDED:'Refunded',CANCELLED:'Cancelled'};
+  var PAY_CHIP={NOT_REQUESTED:'c-mut',REQUEST_GENERATED:'c-info',PAYMENT_LINK_SENT:'c-info',UNPAID:'c-warn',PARTIALLY_PAID:'c-warn',PAYMENT_SUBMITTED:'c-warn',UNDER_VERIFICATION:'c-warn',PAID:'c-good',FAILED:'c-crit',EXPIRED:'c-mut',REFUNDED:'c-info',CANCELLED:'c-crit'};
+  function bkNow(){return new Date().toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
+  function bkAudit(b,note){(b.audit=b.audit||[]).unshift({ts:bkNow(),by:role,note:note});}
+  function bkMsg(b,from,text){(b.thread=b.thread||[]).push({from:from,by:from==='customer'?(b.contact||'Customer'):('Staff · '+role),text:text,ts:bkNow(),read:false});b.lastComm=bkNow();}
+  function setBkStage(b,s,note){b.stage=s;b.nextAction=BK_NEXT[s]||'';bkAudit(b,note||('Stage → '+BK_LABEL[s]));DB.notifications.unshift({t:b.id+' · '+BK_LABEL[s],k:'booking',read:false});save();}
+  function bkGet(id){return DB.bookings.find(function(x){return x.id===id});}
+  function qCompute(items,discPct,taxPct,dpPct){var subtotal=items.reduce(function(s,i){return s+i.rate*(i.qty||1)*(i.days||1)},0);var discount=Math.round(subtotal*discPct/100);var taxable=subtotal-discount;var tax=Math.round(taxable*taxPct/100);var total=taxable+tax;var dpAmount=Math.round(total*dpPct/100/100)*100;return {subtotal:subtotal,discount:discount,tax:tax,total:total,dpAmount:dpAmount,balance:total-dpAmount};}
+  function bkNeedsApproval(b){var q=b.quote;if(!q)return false;var cust=DB.customers.find(function(c){return c.name===b.company});return q.total>=500000||q.discPct>10||(cust&&cust.credit==='On hold');}
+
+  function bookingDetail(id){var b=bkGet(id);var q=b.quote,p=b.payment;
+    var thread=(b.thread||[]).map(function(m){var me=m.from!=='customer';return '<div style="display:flex;margin:6px 0;'+(me?'justify-content:flex-end':'')+'"><div style="max-width:78%;background:'+(me?'var(--primary-soft)':'var(--surface-3)')+';padding:8px 11px;border-radius:10px;font-size:12.5px"><div style="font-weight:700;font-size:11px;color:var(--muted);margin-bottom:2px">'+esc(m.by)+' · '+esc(m.ts)+'</div>'+esc(m.text)+'</div></div>';}).join('')||'<div style="font-size:12.5px;color:var(--muted)">No messages yet.</div>';
+    var audit=(b.audit||[]).slice(0,8).map(function(a){return '<div style="font-size:11.5px;color:var(--ink-2);padding:3px 0;border-bottom:1px solid var(--line)"><b style="color:var(--muted)">'+esc(a.ts)+'</b> · '+esc(a.by)+' — '+esc(a.note)+'</div>';}).join('');
+    var qblk=q?'<div class="aiout"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Quotation '+q.no+' · v'+q.ver+'</b>'+chipBk(q.status,'quote')+'</div>'+
+      q.items.map(function(i){return '<div class="airow"><span>'+esc(i.k)+'</span><b>'+peso(i.rate*(i.qty||1)*(i.days||1))+'</b></div>'}).join('')+
+      '<div class="airow" style="border-top:1px solid var(--line);padding-top:6px"><span>Subtotal</span><b>'+peso(q.subtotal)+'</b></div>'+
+      (q.discount?'<div class="airow"><span>Discount ('+q.discPct+'%)</span><b>-'+peso(q.discount)+'</b></div>':'')+
+      '<div class="airow"><span>VAT ('+q.taxPct+'%)</span><b>'+peso(q.tax)+'</b></div>'+
+      '<div class="aigrand"><span style="font-weight:700">Total</span><span class="p tnum" style="font-size:18px">'+peso(q.total)+'</span></div>'+
+      '<div class="airow" style="margin-top:6px"><span>Downpayment ('+q.dpPct+'%)</span><b>'+peso(q.dpAmount)+'</b></div><div class="airow"><span>Balance on completion</span><b>'+peso(q.balance)+'</b></div>'+
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:8px">Valid until '+esc(q.validity)+' · '+(q.approved?('Approved by '+esc(q.approvedBy)):'Not yet approved')+(q.acceptedBy?(' · Accepted by '+esc(q.acceptedBy)+' ('+esc(q.acceptedTs)+')'):'')+'</div>'+
+      (q.history&&q.history.length?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+q.history.length+' superseded version(s)</div>':'')+'</div>':'<div style="font-size:12.5px;color:var(--muted)">No quotation yet.</div>';
+    var pblk=p?'<div class="aiout"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><b>Payment '+p.no+'</b>'+chipBk(p.status,'pay')+'</div>'+
+      '<div class="airow"><span>Downpayment due</span><b>'+peso(p.dpAmount)+' '+p.currency+'</b></div><div class="airow"><span>Due date</span><b>'+esc(p.dueDate)+'</b></div>'+
+      (p.wiseLink?'<div class="airow"><span>Wise link</span><b style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--primary-2)">'+esc(p.wiseLink)+'</b></div>':'')+
+      (p.verify?'<div style="font-size:11.5px;color:var(--ink-2);margin-top:6px;border-top:1px solid var(--line);padding-top:6px">Verified: ref '+esc(p.verify.ref)+' · net '+peso(p.verify.net)+' · by '+esc(p.verify.by)+' ('+esc(p.verify.ts)+')</div>':'')+
+      (p.proof?'<div style="font-size:11.5px;color:var(--warn);margin-top:4px">⚠ Customer proof on file — evidence only, not verified</div>':'')+'</div>':'<div style="font-size:12.5px;color:var(--muted)">No payment request yet.</div>';
+    var confirmable=q&&q.status==='accepted'&&p&&p.status==='PAID'&&b.stage!=='CONFIRMED';
+    modal('<div class="modal wide"><div class="modal-h"><h3>'+b.id+' · '+esc(b.company)+'</h3><button class="x" data-close>×</button></div>'+
+      '<div class="modal-b"><div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">'+chipBk(b.stage,'bk')+'<span style="font-size:12px;color:var(--muted)">Payment:</span>'+chipBk(b.paymentStatus,'pay')+'<div class="spacer" style="flex:1"></div><span style="font-size:12px;color:var(--muted)">Next: <b style="color:var(--ink-2)">'+esc(b.nextAction||'—')+'</b></span></div>'+
+      '<div class="grid2" style="grid-template-columns:1fr 1fr;gap:16px"><div><dl class="kv"><dt>Service</dt><dd>'+esc(b.service)+'</dd><dt>Cargo</dt><dd>'+esc(b.load)+'</dd><dt>Weight</dt><dd>'+(b.weight?esc(b.weight)+' t':'—')+'</dd><dt>Dimensions</dt><dd>'+esc(b.dims||'—')+'</dd><dt>Equipment</dt><dd>'+esc(b.equipmentReq||'—')+'</dd><dt>Route</dt><dd>'+esc(b.from||'—')+' → '+esc(b.to||'—')+'</dd><dt>Preferred</dt><dd>'+esc(b.date)+'</dd><dt>Site conditions</dt><dd>'+esc(b.conditions||'—')+'</dd><dt>Contact</dt><dd>'+esc(b.contact)+' · '+esc(b.email)+'</dd><dt>Estimator</dt><dd>'+esc(b.estimator||'Unassigned')+'</dd></dl>'+
+      '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px">Quotation</div>'+qblk+
+      '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px">Payment (Wise · downpayment)</div>'+pblk+'</div>'+
+      '<div><div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Customer communication</div>'+
+      '<div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface-2)">'+thread+'</div>'+
+      '<div style="display:flex;gap:6px;margin-top:8px"><input id="bkMsgIn" placeholder="Message to customer…" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink);font-size:13px"><button class="btn sm" data-act="bkPostMsg" data-arg="'+b.id+'">Send</button></div>'+
+      '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px">Audit trail</div><div style="max-height:150px;overflow:auto">'+audit+'</div></div></div></div>'+
+      '<div class="modal-f" style="flex-wrap:wrap;justify-content:flex-start">'+bkActions(b,confirmable)+'<div style="flex:1"></div><button class="btn line" data-close>Close</button></div></div>');}
+
+  function chipBk(s,kind){var map=kind==='bk'?BK_CHIP:kind==='pay'?PAY_CHIP:{draft:'c-mut',pending_approval:'c-warn',approved:'c-info',sent:'c-info',accepted:'c-good',revision:'c-warn',declined:'c-crit',expired:'c-mut'};
+    var lbl=kind==='bk'?BK_LABEL[s]:kind==='pay'?PAY_LABEL[s]:s;return '<span class="chip '+(map[s]||'c-mut')+'" style="text-transform:capitalize">'+(lbl||s)+'</span>';}
+
+  function bkActions(b,confirmable){var s=b.stage,q=b.quote,p=b.payment,out=[];
+    function A(lbl,act,cls){out.push('<button class="btn '+(cls||'')+' sm" data-act="'+act+'" data-arg="'+b.id+'" style="margin:2px">'+lbl+'</button>');}
+    if(s==='REQUEST_RECEIVED')A('Assign estimator & start review','bkReviewStart','');
+    else if(s==='UNDER_REVIEW'){A('Request more info','bkMoreInfo','line');A('Require site survey','bkSurvey','line');A('Ready for quotation','bkReady','');}
+    else if(s==='MORE_INFO_REQUIRED'){A('Customer replied → review','bkReviewStart','line');A('Ready for quotation','bkReady','');}
+    else if(s==='SITE_SURVEY_REQUIRED')A('Survey complete → Ready for quotation','bkReady','');
+    else if(s==='READY_FOR_QUOTATION')A('Build quotation','bkBuildQuote','');
+    else if(s==='QUOTATION_DRAFT'){A('Edit quotation','bkBuildQuote','line');if(q&&q.approved)A('Send to customer','bkSendQuote','');else A('Submit for internal approval','bkSubmitApproval','');}
+    else if(s==='PENDING_INTERNAL_APPROVAL'){A('✔ Approve (approver) & enable send','bkApprove','');A('Reject → draft','bkRejectQuote','line');}
+    else if(s==='QUOTATION_SENT'||s==='CLIENT_REVIEWING'){A('▸ Sim: customer accepts','bkAccept','accent');A('Sim: requests revision','bkRevise','line');A('Sim: declines','bkDecline','line');}
+    else if(s==='REVISION_REQUESTED')A('Revise (new version)','bkBuildQuote','');
+    else if(s==='APPROVED_AWAITING_DOWNPAYMENT')A('Generate downpayment request','bkGenPayment','');
+    else if(s==='PAYMENT_REQUEST_SENT'){if(!p||!p.wiseLink)A('Register Wise payment link (finance)','bkRegisterWise','');else A('▸ Sim: customer pays via Wise','bkCustomerPay','accent');}
+    else if(s==='PAYMENT_UNDER_VERIFICATION'){if(p&&p.status==='PAID'){}else A('Verify payment & mark PAID (finance)','bkVerifyPayment','');}
+    if(confirmable)A('✅ CONFIRM JOB','bkConfirm','');
+    if(s==='CONFIRMED'&&b.jobId)A('Go to job '+b.jobId,'goJobs','line');
+    if(s!=='CONFIRMED'&&s!=='DECLINED'&&s!=='CANCELLED')out.push('<button class="btn line sm" data-act="bkCancel" data-arg="'+b.id+'" style="margin:2px;color:var(--crit)">Cancel</button>');
+    return out.join('');}
+
+  // --- stage actions ---
+  function bkReviewStart(id){var b=bkGet(id);if(!b.estimator)b.estimator='Est. J. Ramos';setBkStage(b,'UNDER_REVIEW','Assigned '+b.estimator+'; under review');bookingDetail(id);}
+  function bkMoreInfo(id){var b=bkGet(id);var m=window.prompt('Message to customer (what info is needed):','Please share cargo dimensions and site access photos.');if(m===null)return;bkMsg(b,'staff',m);setBkStage(b,'MORE_INFO_REQUIRED','Requested more info');bookingDetail(id);}
+  function bkSurvey(id){var b=bkGet(id);setBkStage(b,'SITE_SURVEY_REQUIRED','Site survey required');bkMsg(b,'staff','We will schedule a site survey before quoting.');bookingDetail(id);}
+  function bkReady(id){var b=bkGet(id);setBkStage(b,'READY_FOR_QUOTATION','Ready for quotation');bookingDetail(id);}
+  function bkBuildQuote(id){var b=bkGet(id);var rc=DB.rateCard;
+    var eqOpts=rc.map(function(r){return '<option value="'+r.r+'" data-k="'+esc(r.k)+'">'+esc(r.k)+' — '+peso(r.r)+'/day</option>'}).join('');
+    modal('<div class="modal wide"><div class="modal-h"><h3>Quotation Builder · '+b.id+'</h3><button class="x" data-close>×</button></div>'+
+      '<div class="modal-b"><form class="frm mf" id="bqForm"><div class="two"><label><span>Primary equipment</span><div class="selw"><select name="equip" class="bq">'+eqOpts+'</select></div></label><label><span>Days</span><input class="bq" name="days" type="number" min="1" value="2"></label></div>'+
+      '<label><span>Logistics, crew, mobilization, fuel, permits (₱)</span><input class="bq" name="logi" type="number" min="0" value="120000"></label>'+
+      '<div class="two"><label><span>Discount %</span><input class="bq" name="disc" type="number" min="0" max="40" value="0"></label><label><span>VAT %</span><input class="bq" name="tax" type="number" min="0" value="12"></label></div>'+
+      '<div class="two"><label><span>Downpayment %</span><input class="bq" name="dp" type="number" min="0" max="100" value="30"></label><label><span>Validity (days)</span><input name="valid" type="number" min="1" value="14"></label></div>'+
+      '<div class="aiout" id="bqOut"></div></form></div>'+
+      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="bkSaveQuote" data-arg="'+b.id+'">Save quotation draft</button></div></div>');bkPreview();}
+  function bkQuoteData(){var f=$('#bqForm');if(!f)return null;var sel=f.equip,rate=+sel.value,ek=sel.options[sel.selectedIndex].getAttribute('data-k');var days=+f.days.value||1;var logi=+f.logi.value||0;var discPct=+f.disc.value||0,taxPct=+f.tax.value||0,dpPct=+f.dp.value||0;
+    var items=[{k:ek,qty:1,days:days,rate:rate},{k:'Logistics, crew, mobilization & permits',qty:1,days:1,rate:logi}];var t=qCompute(items,discPct,taxPct,dpPct);return {items:items,discPct:discPct,taxPct:taxPct,dpPct:dpPct,valid:+f.valid.value||14,t:t};}
+  function bkPreview(){var d=bkQuoteData();if(!d)return;var o=$('#bqOut');if(!o)return;o.innerHTML='<div class="airow"><span>Subtotal</span><b>'+peso(d.t.subtotal)+'</b></div>'+(d.t.discount?'<div class="airow"><span>Discount</span><b>-'+peso(d.t.discount)+'</b></div>':'')+'<div class="airow"><span>VAT</span><b>'+peso(d.t.tax)+'</b></div><div class="aigrand"><span style="font-weight:700">Total</span><span class="p tnum">'+peso(d.t.total)+'</span></div><div class="airow" style="margin-top:6px"><span>Downpayment ('+d.dpPct+'%)</span><b>'+peso(d.t.dpAmount)+'</b></div>';}
+  function bkSaveQuote(id){var b=bkGet(id);var d=bkQuoteData();if(!d)return;
+    if(b.quote&&b.stage==='REVISION_REQUESTED'){(b.quote.history=b.quote.history||[]).push({no:b.quote.no,ver:b.quote.ver,total:b.quote.total});b.quote.ver++;b.quote.superseded=false;}
+    var ver=b.quote?(b.stage==='REVISION_REQUESTED'?b.quote.ver:b.quote.ver):1;
+    var no=b.quote?b.quote.no:'QN-'+(DB.seq.qn++);
+    var vd=new Date();vd.setDate(vd.getDate()+d.valid);
+    b.quote={no:no,ver:ver,status:'draft',approved:false,approvedBy:null,acceptedBy:null,acceptedTs:null,items:d.items,discPct:d.discPct,taxPct:d.taxPct,dpPct:d.dpPct,subtotal:d.t.subtotal,discount:d.t.discount,tax:d.t.tax,total:d.t.total,dpAmount:d.t.dpAmount,balance:d.t.balance,validity:vd.toLocaleDateString('en-PH'),history:(b.quote&&b.quote.history)||[]};
+    closeModal();setBkStage(b,'QUOTATION_DRAFT','Quotation '+no+' v'+ver+' drafted · '+peso(d.t.total));bookingDetail(id);}
+  function bkSubmitApproval(id){var b=bkGet(id);if(!b.quote){toast('Build a quotation first');return;}
+    if(bkNeedsApproval(b)){setBkStage(b,'PENDING_INTERNAL_APPROVAL','Submitted for approval (rule: total ≥ ₱500k / discount > 10% / credit hold)');}
+    else{b.quote.approved=true;b.quote.approvedBy='Auto (within limits)';bkAudit(b,'Auto-approved within authority limits');save();toast('Within limits — approved. Ready to send.');}bookingDetail(id);}
+  function bkApprove(id){var b=bkGet(id);b.quote.approved=true;b.quote.approvedBy='Approver ('+role+')';setBkStage(b,'QUOTATION_DRAFT','Quotation approved by '+b.quote.approvedBy);bookingDetail(id);}
+  function bkRejectQuote(id){var b=bkGet(id);b.quote.approved=false;setBkStage(b,'QUOTATION_DRAFT','Approval rejected — back to draft');bookingDetail(id);}
+  function bkSendQuote(id){var b=bkGet(id);if(!b.quote||!b.quote.approved){toast('Quotation must be approved before sending');return;}b.quote.status='sent';bkMsg(b,'staff','Your quotation '+b.quote.no+' (v'+b.quote.ver+') is ready — total '+peso(b.quote.total)+'. Please review and accept in your portal.');setBkStage(b,'QUOTATION_SENT','Quotation '+b.quote.no+' sent to customer');bookingDetail(id);}
+  function bkAccept(id){var b=bkGet(id);b.quote.status='accepted';b.quote.acceptedBy=b.contact;b.quote.acceptedTs=bkNow();b.quote.acceptedVer=b.quote.ver;bkMsg(b,'customer','We accept quotation '+b.quote.no+' v'+b.quote.ver+'. Please send the downpayment details.');setBkStage(b,'APPROVED_AWAITING_DOWNPAYMENT','Customer accepted quotation (portal e-acknowledgment)');bookingDetail(id);}
+  function bkRevise(id){var b=bkGet(id);var r=window.prompt('Revision requested — reason:','Please reduce standby hours and re-quote.');if(r===null)return;b.quote.status='revision';bkMsg(b,'customer','Revision requested: '+r);setBkStage(b,'REVISION_REQUESTED','Customer requested revision: '+r);bookingDetail(id);}
+  function bkDecline(id){var b=bkGet(id);var r=window.prompt('Decline reason:','Budget not approved this quarter.');if(r===null)return;b.quote.status='declined';b.declineReason=r;bkMsg(b,'customer','We decline for now: '+r);setBkStage(b,'DECLINED','Customer declined: '+r);bookingDetail(id);}
+  function bkGenPayment(id){var b=bkGet(id);if(!b.quote||b.quote.status!=='accepted'){toast('CONTROL: payment request needs an accepted quotation');return;}
+    var due=new Date();due.setDate(due.getDate()+5);
+    b.payment={no:'PR-'+(DB.seq.pr++),quote:b.quote.no,ver:b.quote.ver,currency:'PHP',dpAmount:b.quote.dpAmount,dueDate:due.toLocaleDateString('en-PH'),wiseLink:null,status:'REQUEST_GENERATED',proof:null,verify:null};
+    b.paymentStatus='REQUEST_GENERATED';bkMsg(b,'staff','Downpayment request '+b.payment.no+' — '+peso(b.payment.dpAmount)+' due '+b.payment.dueDate+'.');setBkStage(b,'PAYMENT_REQUEST_SENT','Payment request '+b.payment.no+' generated');bookingDetail(id);}
+  function bkRegisterWise(id){var b=bkGet(id);var def='https://wise.com/pay/r/rgo-'+b.id.toLowerCase();var link=window.prompt('Paste the RGO Wise Business payment link (finance):',def);if(!link)return;
+    b.payment.wiseLink=link;b.payment.status='PAYMENT_LINK_SENT';b.paymentStatus='PAYMENT_LINK_SENT';bkMsg(b,'staff','Secure Wise payment link sent. Tap "Pay Downpayment" in your portal.');bkAudit(b,'Wise link registered (finance). No card/bank data stored.');save();bookingDetail(id);}
+  function bkCustomerPay(id){var b=bkGet(id);if(b.payment.wiseLink){try{window.open(b.payment.wiseLink,'_blank','noopener')}catch(e){}}
+    b.payment.status='PAYMENT_SUBMITTED';b.payment.proof='wise_receipt_'+b.id+'.pdf';b.paymentStatus='UNDER_VERIFICATION';bkMsg(b,'customer','Downpayment sent via Wise — receipt uploaded.');setBkStage(b,'PAYMENT_UNDER_VERIFICATION','Customer submitted payment (evidence only — NOT verified)');bookingDetail(id);}
+  function bkVerifyPayment(id){var b=bkGet(id);var p=b.payment;
+    modal('<div class="modal"><div class="modal-h"><h3>Verify Payment · '+p.no+' (Finance)</h3><button class="x" data-close>×</button></div>'+
+      '<div class="modal-b"><div class="aibadge" style="background:var(--warn-bg);color:var(--warn)">⚠ Only finance may mark PAID · proof alone is not sufficient</div>'+
+      '<form class="frm mf" id="vfForm"><label><span>Wise transaction reference</span><input name="ref" value="WISE-'+Math.floor(Math.random()*9e6+1e6)+'"></label>'+
+      '<div class="two"><label><span>Amount received (₱)</span><input name="amt" type="number" value="'+p.dpAmount+'"></label><label><span>Wise fees (₱)</span><input name="fee" type="number" value="'+Math.round(p.dpAmount*0.007)+'"></label></div>'+
+      '<label><span>Verification notes</span><input name="notes" value="Matched to Wise Business statement."></label></form></div>'+
+      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="bkConfirmPaid" data-arg="'+b.id+'">Confirm received & mark PAID</button></div></div>');}
+  function bkConfirmPaid(id){var b=bkGet(id);var f=$('#vfForm');var amt=+f.amt.value||0,fee=+f.fee.value||0;
+    b.payment.verify={ref:f.ref.value,amountReq:b.payment.dpAmount,amountRecv:amt,currency:'PHP',date:bkNow(),fees:fee,net:amt-fee,notes:f.notes.value,by:'Finance ('+role+')',ts:bkNow()};
+    b.payment.status='PAID';b.paymentStatus='PAID';closeModal();bkAudit(b,'Payment verified & marked PAID by Finance ('+role+')');bkMsg(b,'staff','Downpayment received and verified. Thank you!');save();toast('✔ '+b.payment.no+' verified PAID');bookingDetail(id);}
+  function bkConfirm(id){var b=bkGet(id);
+    if(!(b.quote&&b.quote.status==='accepted')){toast('CONTROL: quotation not accepted');return;}
+    if(!(b.payment&&b.payment.status==='PAID')){toast('CONTROL: downpayment not verified PAID');return;}
+    if(b.jobId){toast('CONTROL: job already created ('+b.jobId+')');return;}
+    var jid='JO-'+(DB.seq.job++);b.jobId=jid;
+    DB.jobs.unshift({id:jid,client:b.company,load:b.load+(b.weight?' · '+b.weight+' t':''),eq:[],status:'Scheduled',date:b.date,loc:b.to||b.from||'TBD',amount:b.quote.total,quote:b.quote.no});
+    setBkStage(b,'CONFIRMED','CONFIRMED → '+jid+' created · date reserved · ops notified');bkMsg(b,'staff','Booking confirmed! Job '+jid+' scheduled. Our operations team will coordinate the plan.');
+    DB.notifications.unshift({t:'Confirmed job '+jid+' from '+b.company,k:'booking',read:false});save();toast('✅ '+b.id+' CONFIRMED → '+jid);bookingDetail(id);}
+  function bkCancel(id){var b=bkGet(id);if(!window.confirm('Cancel booking '+b.id+'?'))return;setBkStage(b,'CANCELLED','Cancelled by '+role);closeModal();go('bookings');}
+  function bkPostMsg(id){var b=bkGet(id);var el=$('#bkMsgIn');if(!el||!el.value.trim())return;bkMsg(b,'staff',el.value.trim());save();bookingDetail(id);}
+
+  function seedBookings(){
+    function mkQ(no,status,approved,ek,rate,days,logi,disc,acceptedBy){var items=[{k:ek,qty:1,days:days,rate:rate},{k:'Logistics, crew, mobilization & permits',qty:1,days:1,rate:logi}];var t=qCompute(items,disc||0,12,30);
+      return {no:no,ver:1,status:status,approved:!!approved,approvedBy:approved?'Approver (Owner)':null,acceptedBy:acceptedBy||null,acceptedTs:acceptedBy?'Jul 26, 10:20 AM':null,acceptedVer:acceptedBy?1:null,items:items,discPct:disc||0,taxPct:12,dpPct:30,subtotal:t.subtotal,discount:t.discount,tax:t.tax,total:t.total,dpAmount:t.dpAmount,balance:t.balance,validity:'in 14 days',history:[]};}
+    function base(id,co,ct,em,svc,load,wt,fr,to,dt){return {id:id,company:co,contact:ct,email:em,phone:'+63 2 8•• ••••',service:svc,load:load,weight:wt,dims:'4.2 × 2.4 × 3.1 m',equipmentReq:'Operator + rigging crew',from:fr,to:to,date:dt,conditions:'Paved yard, overhead clearance to confirm',notes:'',photos:[],estimator:'Est. J. Ramos',quote:null,payment:null,paymentStatus:'NOT_REQUESTED',jobId:null,thread:[],audit:[{ts:'Jul 26, 09:00 AM',by:'system',note:'Booking request received'}],lastComm:'Jul 26'};}
+    var L=[];
+    var b;
+    b=base('BK-1000','Universal Robina','E. Villanueva','evilla@urc.demo','Machinery Relocation','Packaging line relocation',30,'Pasig plant','Cavite plant','Aug 12');b.stage='REQUEST_RECEIVED';b.estimator=null;b.nextAction=BK_NEXT.REQUEST_RECEIVED;L.push(b);
+    b=base('BK-1001','DMCI Homes','R. Santos','rsantos@dmci.demo','Crane Rental & Lifting','Tower crane dismantle',0,'Mandaluyong site','—','Aug 15');b.stage='MORE_INFO_REQUIRED';b.nextAction=BK_NEXT.MORE_INFO_REQUIRED;b.thread=[{from:'staff',by:'Staff · Admin',text:'Please share tower height and counter-jib details.',ts:'Jul 26, 11:10 AM',read:true}];L.push(b);
+    b=base('BK-1002','SM Prime','L. Tan','ltan@smprime.demo','Heavy Hauling','Chiller units haul · 3 pcs',48,'Laguna','Pasay','Aug 18');b.stage='QUOTATION_DRAFT';b.quote=mkQ('QN-3001','draft',false,'100t All-Terrain Crane',55000,3,120000,0,null);b.nextAction=BK_NEXT.QUOTATION_DRAFT;L.push(b);
+    b=base('BK-1003','Aboitiz Power','G. Sy','gsy@aboitiz.demo','Oversized / Project Cargo','Generator skid · oversized',55,'Batangas port','Batangas plant','Aug 20');b.stage='PENDING_INTERNAL_APPROVAL';b.quote=mkQ('QN-3002','draft',false,'350t All-Terrain Crane',110000,4,180000,0,null);b.nextAction=BK_NEXT.PENDING_INTERNAL_APPROVAL;b.audit.unshift({ts:'Jul 26, 02:00 PM',by:'Admin',note:'Submitted for approval (total ≥ ₱500k)'});L.push(b);
+    b=base('BK-1004','Megaworld','C. Lim','clim@megaworld.demo','Crane Rental & Lifting','Facade panel lifting',22,'BGC site','—','Aug 21');b.stage='QUOTATION_SENT';b.quote=mkQ('QN-3003','sent',true,'100t All-Terrain Crane',55000,5,140000,0,null);b.nextAction=BK_NEXT.QUOTATION_SENT;b.thread=[{from:'staff',by:'Staff · Admin',text:'Quotation QN-3003 sent — please review in your portal.',ts:'Jul 26, 03:30 PM',read:true}];L.push(b);
+    b=base('BK-1005','Ayala Land','M. Reyes','mreyes@ayala.demo','Rigging & Millwrighting','Press line install',36,'Makanti CBD','—','Aug 22');b.stage='REVISION_REQUESTED';b.quote=mkQ('QN-3004','revision',true,'50t Rough-Terrain Crane',28000,4,90000,0,null);b.nextAction=BK_NEXT.REVISION_REQUESTED;b.thread=[{from:'customer',by:'M. Reyes',text:'Please reduce standby hours and re-quote.',ts:'Jul 27, 09:15 AM',read:false}];L.push(b);
+    b=base('BK-1006','San Miguel Corp','E. Cruz','ecruz@smc.demo','Machinery Relocation','Brewery tank relocation',60,'Mandaue plant','—','Aug 23');b.stage='APPROVED_AWAITING_DOWNPAYMENT';b.quote=mkQ('QN-3005','accepted',true,'250t Crawler Crane',85000,3,150000,0,'E. Cruz');b.nextAction=BK_NEXT.APPROVED_AWAITING_DOWNPAYMENT;L.push(b);
+    b=base('BK-1007','Nestlé PH','A. Dizon','adizon@nestle.demo','Heavy Hauling','Line equipment transfer',40,'Cabuyao','Lipa','Aug 24');b.stage='PAYMENT_REQUEST_SENT';b.quote=mkQ('QN-3006','accepted',true,'100t All-Terrain Crane',55000,4,130000,0,'A. Dizon');
+      b.payment={no:'PR-5001',quote:'QN-3006',ver:1,currency:'PHP',dpAmount:b.quote.dpAmount,dueDate:'Aug 05',wiseLink:'https://wise.com/pay/r/rgo-bk-1007',status:'PAYMENT_LINK_SENT',proof:null,verify:null};b.paymentStatus='PAYMENT_LINK_SENT';b.nextAction=BK_NEXT.PAYMENT_REQUEST_SENT;L.push(b);
+    b=base('BK-1008','Jollibee Foods','P. Uy','puy@jfc.demo','Oversized / Project Cargo','Commissary equipment',33,'Ortigas','Cavite','Aug 25');b.stage='PAYMENT_UNDER_VERIFICATION';b.quote=mkQ('QN-3007','accepted',true,'100t All-Terrain Crane',55000,3,110000,0,'P. Uy');
+      b.payment={no:'PR-5002',quote:'QN-3007',ver:1,currency:'PHP',dpAmount:b.quote.dpAmount,dueDate:'Aug 03',wiseLink:'https://wise.com/pay/r/rgo-bk-1008',status:'PAYMENT_SUBMITTED',proof:'wise_receipt_BK-1008.pdf',verify:null};b.paymentStatus='UNDER_VERIFICATION';b.nextAction=BK_NEXT.PAYMENT_UNDER_VERIFICATION;L.push(b);
+    b=base('BK-1009','Toyota Motor PH','K. Ito','kito@toyota.demo','Machinery Relocation','Stamping die move',52,'Santa Rosa','Santa Rosa','Jul 30');b.stage='CONFIRMED';b.quote=mkQ('QN-3008','accepted',true,'250t Crawler Crane',85000,2,140000,0,'K. Ito');
+      b.payment={no:'PR-5003',quote:'QN-3008',ver:1,currency:'PHP',dpAmount:b.quote.dpAmount,dueDate:'Jul 28',wiseLink:'https://wise.com/pay/r/rgo-bk-1009',status:'PAID',proof:'wise_receipt_BK-1009.pdf',verify:{ref:'WISE-4820193',amountReq:b.quote.dpAmount,amountRecv:b.quote.dpAmount,currency:'PHP',date:'Jul 28',fees:Math.round(b.quote.dpAmount*0.007),net:b.quote.dpAmount-Math.round(b.quote.dpAmount*0.007),notes:'Matched to Wise Business statement.',by:'Finance (Admin)',ts:'Jul 28, 04:10 PM'}};b.paymentStatus='PAID';b.jobId='JO-2050';b.nextAction=BK_NEXT.CONFIRMED;L.push(b);
+    return L;
+  }
 
   // forms
   function formJob(){var avail=DB.equipment.filter(function(e){return e.status==='available'});var checks=avail.map(function(e){return '<label><input type="checkbox" value="'+e.id+'"> '+esc(e.name)+' · '+e.id+'</label>';}).join('')||'<div style="font-size:12.5px;color:var(--muted)">No available assets — free one in Fleet.</div>';
@@ -828,7 +1012,7 @@
   // ---------- BOOT ----------
   var savedTheme=null;try{savedTheme=localStorage.getItem('lifthaul_theme')}catch(e){}
   if(savedTheme)document.documentElement.setAttribute('data-theme',savedTheme);
-  load();initPublic();badges();showScreen('public');
+  DB.bookings=seedBookings();load();initPublic();badges();showScreen('public');
 })();
 </script>
 

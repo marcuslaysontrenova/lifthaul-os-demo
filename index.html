@@ -47,6 +47,33 @@
   .iconbtn{position:relative;width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);display:grid;place-items:center;transition:.15s}
   .iconbtn:hover{color:var(--ink);border-color:var(--muted);background:var(--surface-2)}
   .ncount{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:10px;font-weight:800;display:grid;place-items:center;line-height:1}
+  /* GPS map */
+  .maprow{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start}
+  .mapwrap{position:relative;height:520px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:#0E1621;box-shadow:var(--shadow)}
+  .mapwrap .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(120,150,180,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(120,150,180,.08) 1px,transparent 1px);background-size:34px 34px}
+  .mapwrap svg.roads{position:absolute;inset:0;width:100%;height:100%}
+  .maplive{position:absolute;top:12px;left:12px;z-index:3;display:flex;align-items:center;gap:8px;background:rgba(9,14,20,.72);border:1px solid rgba(255,255,255,.1);padding:6px 11px;border-radius:999px;color:#DCE6F0;font-size:12px;font-weight:600}
+  .maplive .pulse{width:8px;height:8px;border-radius:50%;background:#2FD07A;box-shadow:0 0 0 0 rgba(47,208,122,.6);animation:lp 1.6s infinite}
+  @keyframes lp{0%{box-shadow:0 0 0 0 rgba(47,208,122,.6)}70%{box-shadow:0 0 0 8px rgba(47,208,122,0)}100%{box-shadow:0 0 0 0 rgba(47,208,122,0)}}
+  .mk{position:absolute;transform:translate(-50%,-50%);z-index:2;display:flex;flex-direction:column;align-items:center;gap:3px;pointer-events:none;will-change:left,top}
+  .mk .pin{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;border:2px solid rgba(255,255,255,.85);box-shadow:0 3px 8px rgba(0,0,0,.5);position:relative}
+  .mk.moving .pin::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid currentColor;opacity:.5;animation:lp 1.8s infinite}
+  .mk .tag{font-size:10px;font-weight:700;color:#EAF1F8;background:rgba(9,14,20,.8);padding:2px 6px;border-radius:6px;white-space:nowrap}
+  .mk.sel .pin{outline:3px solid var(--accent);outline-offset:2px}
+  .fleetlist .lrow{cursor:pointer}.fleetlist .lrow:hover{background:var(--surface-2)}
+  .dotstat{width:9px;height:9px;border-radius:50%;flex:none}
+  .maplegend{position:absolute;bottom:12px;left:12px;z-index:3;display:flex;gap:12px;background:rgba(9,14,20,.72);border:1px solid rgba(255,255,255,.1);padding:7px 12px;border-radius:9px;color:#CDD8E4;font-size:11px}
+  .maplegend b{display:inline-flex;align-items:center;gap:5px;font-weight:600}
+  .maplegend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  /* AI assistant */
+  .aiout{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:6px}
+  .airow{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;color:var(--ink-2)}
+  .airow b{color:var(--ink);font-weight:700}
+  .aigrand{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid var(--ink);margin-top:8px;padding-top:10px}
+  .aigrand .p{font-size:24px;font-weight:800;color:var(--primary-2)}
+  .aibadge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.03em;color:var(--primary-2);background:var(--primary-soft);padding:4px 9px;border-radius:999px;margin-bottom:10px}
+  .aimargin{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px}
+  .aimargin input{width:70px}
   .btn.sm{padding:7px 11px;font-size:12.5px;box-shadow:none}
   .btn.line{background:transparent;border:1px solid var(--line);color:var(--ink-2);box-shadow:none;font-weight:700}
   .btn.line:hover{color:var(--ink);border-color:var(--muted);background:var(--surface-2)}
@@ -328,6 +355,7 @@
     <div class="grp">Assets</div>
     <button class="nav" data-mod="fleet"><svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="13" height="8" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M16 11h3l2 3v2h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="18" r="1.6" fill="currentColor"/><circle cx="17" cy="18" r="1.6" fill="currentColor"/></svg>Fleet &amp; Equipment</button>
     <button class="nav" data-mod="maintenance"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M14 6a4 4 0 0 0 5 5l-8 8a2.8 2.8 0 0 1-4-4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Maintenance<span class="dot" data-badge="maint">0</span></button>
+    <button class="nav" data-mod="fleetmap"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="2"/></svg>Fleet GPS<span class="dot" style="background:var(--good);color:#fff">LIVE</span></button>
     <button class="nav" data-mod="drivers"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Drivers &amp; Operators</button>
     <div class="grp">Admin</div>
     <button class="nav" data-mod="permits"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.2-2.9 7.4-7 8.8C7.9 18.4 5 15.2 5 11V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 11.5l1.8 1.8 3.2-3.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Permits<span class="dot" data-badge="permits">0</span></button>
@@ -442,12 +470,33 @@
   function resetDemo(){try{localStorage.removeItem(DBKEY)}catch(e){}location.reload();}
   var capOf=function(e){var m=String(e.cap||'').match(/(\d+)/);return e.type==='crane'&&m?+m[1]:0;};
 
+  // --- live fleet (demo GPS) ---
+  var fleetLive=[
+    {id:'AT-100',label:'AT-100 · 100t crane',type:'crane',color:'#F5A314',status:'En route',job:'JO-2044',eta:'18 min',kph:42,moving:true,route:[[8,78],[22,66],[34,60],[46,52],[58,44],[70,36]]},
+    {id:'PM-11',label:'PM-11 · Prime mover',type:'trailer',color:'#3B82F6',status:'En route',job:'JO-2047',eta:'54 min',kph:38,moving:true,route:[[86,20],[74,30],[62,40],[50,54],[40,66],[30,80]]},
+    {id:'SV-02',label:'SV-02 · Service truck',type:'service',color:'#8B5CF6',status:'To depot',job:'—',eta:'32 min',kph:35,moving:true,route:[[52,86],[52,70],[46,56],[40,42],[36,26]]},
+    {id:'CC-250',label:'CC-250 · 250t crawler',type:'crane',color:'#159C5B',status:'On site',job:'JO-2041',eta:'On site',kph:0,moving:false,route:[[70,36]]},
+    {id:'LB-07',label:'LB-07 · Lowbed',type:'trailer',color:'#159C5B',status:'On site',job:'JO-2041',eta:'On site',kph:0,moving:false,route:[[72,38]]},
+    {id:'RT-50A',label:'RT-50A · 50t RT crane',type:'crane',color:'#7C8894',status:'Yard',job:'—',eta:'Available',kph:0,moving:false,route:[[16,22]]}
+  ];
+  var mapRAF=null,mapClock=null;
+  function alongRoute(r,p){if(!r||r.length<2)return (r&&r[0])||[50,50];var segs=[],tot=0,i;for(i=0;i<r.length-1;i++){var dx=r[i+1][0]-r[i][0],dy=r[i+1][1]-r[i][1],d=Math.sqrt(dx*dx+dy*dy);segs.push(d);tot+=d;}var target=p*tot,acc=0;for(i=0;i<segs.length;i++){if(acc+segs[i]>=target){var t=segs[i]?(target-acc)/segs[i]:0;return [r[i][0]+(r[i+1][0]-r[i][0])*t,r[i][1]+(r[i+1][1]-r[i][1])*t];}acc+=segs[i];}return r[r.length-1];}
+  function stopMap(){if(mapRAF){cancelAnimationFrame(mapRAF);mapRAF=null;}if(mapClock){clearInterval(mapClock);mapClock=null;}}
+  function startMap(){
+    var items=fleetLive.map(function(a){return {a:a,el:document.getElementById('mk-'+a.id),p:Math.random(),spd:a.moving?(0.015+Math.random()*0.02):0};});
+    var last=performance.now();
+    function frame(now){var dt=Math.min(0.05,(now-last)/1000);last=now;items.forEach(function(it){if(!it.el)return;if(it.spd>0){it.p+=it.spd*dt;if(it.p>1)it.p-=1;}var pos=alongRoute(it.a.route,it.p);it.el.style.left=pos[0]+'%';it.el.style.top=pos[1]+'%';});mapRAF=requestAnimationFrame(frame);}
+    mapRAF=requestAnimationFrame(frame);
+    mapClock=setInterval(function(){var c=document.getElementById('mapClock');if(c)c.textContent=new Date().toLocaleTimeString();},1000);
+  }
+
   // ---------- SCREENS ----------
   var PUB=$('#public'),LOG=$('#login'),DSH=$('#dash');
   function showScreen(s){
     PUB.style.display=s==='public'?'block':'none';
     LOG.style.display=s==='login'?'grid':'none';LOG.classList.toggle('show',s==='login');
     DSH.classList.toggle('on',s==='dash');
+    if(s!=='dash')stopMap();
     window.scrollTo(0,0);
   }
 
@@ -506,7 +555,7 @@
   function stars(n){var s='';for(var i=0;i<5;i++)s+='<span style="color:'+(i<n?'var(--accent)':'var(--line)')+'">★</span>';return '<span style="font-size:12px;letter-spacing:1px">'+s+'</span>';}
   var cur='dashboard';
   function go(mod){cur=mod;setActive(mod);window.scrollTo(0,0);render();}
-  function render(){$('#main').innerHTML=views[cur]?views[cur]():views.dashboard();badges();save();}
+  function render(){stopMap();$('#main').innerHTML=views[cur]?views[cur]():views.dashboard();badges();save();if(cur==='fleetmap')startMap();}
   function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2400);}
 
   var bd=$('#backdrop');
@@ -556,7 +605,7 @@
     },
     quotes:function(){
       var rows=DB.quotes.map(function(q){return '<tr data-act="quoteDetail" data-arg="'+q.id+'"><td class="id">'+q.id+'</td><td class="strong">'+esc(q.client)+'</td><td>'+q.items.length+' line items</td><td>'+chip2(q.status)+'</td><td class="right tnum strong">'+peso(qnum(q))+'</td></tr>';}).join('');
-      return head('Operations','Quotations','<button class="btn" data-act="newQuote">+ New Quotation</button>')+'<div class="tblwrap"><table class="tbl"><thead><tr><th>Quote #</th><th>Client</th><th>Scope</th><th>Status</th><th class="right">Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      return head('Operations','Quotations','<button class="btn accent" data-act="aiQuote" style="margin-right:8px">✨ AI Assist</button><button class="btn" data-act="newQuote">+ New Quotation</button>')+'<div class="tblwrap"><table class="tbl"><thead><tr><th>Quote #</th><th>Client</th><th>Scope</th><th>Status</th><th class="right">Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     },
     fleet:function(){
       var rows=DB.equipment.map(function(e){return '<tr data-act="assetToggle" data-arg="'+e.id+'"><td class="id">'+e.id+'</td><td class="strong">'+esc(e.name)+'</td><td style="text-transform:capitalize">'+e.type+'</td><td>'+e.cap+'</td><td>'+chip2(e.status)+'</td><td class="right">'+(e.job||'—')+'</td></tr>';}).join('');
@@ -598,6 +647,26 @@
       var expRows=exp.map(function(e){return '<div class="chartrow"><div class="lbl">'+e[0]+'</div><div class="track"><i style="width:'+(e[1]*100)+'%;background:var(--accent)"></i></div><div class="val">'+Math.round(e[1]*100)+'%</div></div>';}).join('');
       return head('Admin','Finance Dashboard')+'<div class="stripe hz" style="margin:-8px 0 18px"></div><div class="kpis">'+kpi('Revenue (paid)',peso(paid),'collected',spark([2,3,3,4,5,4,6]))+kpi('Outstanding',peso(outInv+bal),'receivables',spark([3,4,3,5,4,5,6]))+kpi('Work in progress',peso(wip),'active jobs',spark([2,3,4,3,5,4,5]))+kpi('Maintenance spend',peso(mcost),'period',spark([1,2,1,2,3,2,3]))+'</div>'+
         '<div class="grid2"><div class="panel"><div class="panel-h"><h3>Revenue by Client</h3></div><div class="panel-b">'+revRows+'</div></div><div class="panel"><div class="panel-h"><h3>Expense Breakdown</h3></div><div class="panel-b">'+expRows+'</div></div></div>';
+    },
+    fleetmap:function(){
+      var mstat={'En route':'#3B82F6','On site':'#159C5B','To depot':'#8B5CF6','Yard':'#7C8894'};
+      var markers=fleetLive.map(function(a){var start=a.route[0];
+        return '<div class="mk'+(a.moving?' moving':'')+'" id="mk-'+a.id+'" style="left:'+start[0]+'%;top:'+start[1]+'%;color:'+a.color+'">'+
+          '<div class="pin" style="background:'+a.color+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none">'+iconSvg(a.type==='crane'?'crane':a.type==='service'?'rig':'haul')+'</svg></div>'+
+          '<div class="tag">'+a.id+'</div></div>';}).join('');
+      var list=fleetLive.map(function(a){return '<div class="lrow" data-act="mapSel" data-arg="'+a.id+'"><span class="dotstat" style="background:'+(mstat[a.status]||'#7C8894')+'"></span>'+
+        '<div><div class="en">'+esc(a.label)+'</div><div class="es">'+esc(a.status)+(a.job!=='—'?' · '+a.job:'')+'</div></div><div class="spacer"></div>'+
+        '<div style="text-align:right"><div style="font-size:12px;font-weight:700" class="tnum">'+(a.kph?a.kph+' km/h':'—')+'</div><div style="font-size:11px;color:var(--muted)">'+esc(a.eta)+'</div></div></div>';}).join('');
+      return head('Assets','Fleet GPS — Live Tracking')+
+        '<div class="maprow"><div class="mapwrap"><div class="grid"></div>'+
+        '<svg class="roads" viewBox="0 0 100 100" preserveAspectRatio="none"><g stroke="#31415580" stroke-width="1.1" fill="none">'+
+          '<path d="M8 78 L22 66 L34 60 L46 52 L58 44 L70 36 L84 30"/><path d="M86 20 L74 30 L62 40 L50 54 L40 66 L30 80"/><path d="M52 90 L52 56 L40 42 L36 26"/><path d="M12 40 L40 40 L64 40 L88 40"/><path d="M16 22 L16 60 L16 88"/></g>'+
+          '<g stroke="#3F5570" stroke-width="0.4" stroke-dasharray="1 2" fill="none"><path d="M8 78 L84 30"/><path d="M86 20 L30 80"/></g>'+
+          '<circle cx="16" cy="22" r="1.6" fill="#7C8894"/><circle cx="70" cy="36" r="2" fill="#159C5B"/></svg>'+
+        '<div class="maplive"><span class="pulse"></span>LIVE · <span id="mapClock" class="tnum">—</span></div>'+
+        '<div class="maplegend"><b><i style="background:#3B82F6"></i>En route</b><b><i style="background:#159C5B"></i>On site</b><b><i style="background:#8B5CF6"></i>Service</b><b><i style="background:#7C8894"></i>Yard</b></div>'+
+        '<div id="mapLayer">'+markers+'</div></div>'+
+        '<div class="panel fleetlist"><div class="panel-h"><h3>Assets in field</h3><div class="spacer"></div><span class="cnt">'+fleetLive.length+' tracked</span></div><div class="panel-b" style="padding:6px 10px">'+list+'</div></div></div>';
     },
     driver:function(){
       var mine=DB.jobs.filter(function(j){return j.status!=='Completed'&&j.status!=='Cancelled'});
@@ -647,6 +716,9 @@
     if(act==='mntStart')return mntStart(arg);
     if(act==='mntDone')return mntDone(arg);
     if(act==='drv'){toast('✓ '+arg);return;}
+    if(act==='aiQuote')return aiQuote();
+    if(act==='createAiQuote')return createAiQuote();
+    if(act==='mapSel'){document.querySelectorAll('.mk').forEach(function(m){m.classList.remove('sel')});var mk=document.getElementById('mk-'+arg);if(mk)mk.classList.add('sel');var a=fleetLive.find(function(x){return x.id===arg});if(a)toast(a.label+' · '+a.status+(a.job!=='—'?' · '+a.job:''));return;}
     if(act==='notif'){notifPanel();return;}
     if(act==='themeToggle')return toggleTheme();
     if(act==='resetDemo'){if(window.confirm('Reset all demo data to defaults?'))resetDemo();return;}
@@ -666,7 +738,8 @@
   document.addEventListener('input',function(e){var el=e.target;
     if(el.dataset.inp==='jq'){views._jf=views._jf||{q:'',s:'all'};views._jf.q=el.value;render();var ni=$('[data-inp="jq"]');if(ni){ni.focus();ni.setSelectionRange(el.value.length,el.value.length);}return;}
     if(el.dataset.inp==='js'){views._jf=views._jf||{q:'',s:'all'};views._jf.s=el.value;render();return;}
-    if(el.classList.contains('ql'))recalc();});
+    if(el.classList.contains('ql'))recalc();
+    if(el.closest&&el.closest('#aiForm'))recalcAi();});
 
   function advance(id){var j=DB.jobs.find(function(x){return x.id===id});var i=STFLOW.indexOf(j.status);
     if(j.status==='Permit Pending'){var pm=DB.permits.find(function(p){return p.job===j.id});if(pm&&pm.status!=='approved'){toast('🚫 Permit '+pm.id+' not approved — clear it in Permits first');return;}}
@@ -718,6 +791,38 @@
   function notifPanel(){var rows=DB.notifications.map(function(n){return '<div class="lrow"><div class="ei"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3a6 6 0 0 0-6 6c0 5-2 6-2 6h16s-2-1-2-6a6 6 0 0 0-6-6zM10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></div><div><div class="en" style="font-weight:'+(n.read?'500':'700')+'">'+esc(n.t)+'</div></div><div class="spacer"></div>'+(n.read?'':'<span class="chip c-warn">new</span>')+'</div>';}).join('');
     DB.notifications.forEach(function(n){n.read=true});
     modal('<div class="modal"><div class="modal-h"><h3>Notifications</h3><button class="x" data-close>×</button></div><div class="modal-b">'+(rows||'<div class="empty">No notifications.</div>')+'</div><div class="modal-f"><button class="btn" data-close>Close</button></div></div>');badges();save();}
+  // AI Quotation Assistant (rule-based estimate; manual approval still required)
+  function aiQuote(){var eqOpts=DB.rateCard.filter(function(r){return r.k.indexOf('Crane')>-1||r.k.indexOf('Trailer')>-1}).map(function(r){return '<option value="'+r.r+'" data-k="'+esc(r.k)+'">'+esc(r.k)+' — '+peso(r.r)+'/day</option>'}).join('');
+    modal('<div class="modal wide"><div class="modal-h"><h3>✨ AI Quotation Assistant</h3><button class="x" data-close>×</button></div>'+
+      '<div class="modal-b"><div class="aibadge">✨ AI-assisted estimate · you approve before it is sent</div>'+
+      '<form class="frm mf" id="aiForm"><label><span>Client</span><input name="client" placeholder="Client company"></label>'+
+      '<div class="two"><label><span>Primary equipment</span><div class="selw"><select name="equip">'+eqOpts+'</select></div></label><label><span>Duration (days)</span><input name="days" type="number" min="1" value="2"></label></div>'+
+      '<div class="two"><label><span>Distance one-way (km)</span><input name="dist" type="number" min="0" value="60"></label><label><span>Crew size</span><input name="crew" type="number" min="0" value="4"></label></div>'+
+      '<div class="two"><label><span>Est. work hours</span><input name="hours" type="number" min="0" value="16"></label><label><span>Load weight (t)</span><input name="weight" type="number" min="0" value="40"></label></div>'+
+      '<label style="display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600"><input type="checkbox" name="oversized" style="width:auto"> Oversized / permit &amp; escort required</label>'+
+      '<div class="aimargin">Target margin <input name="margin" type="number" min="0" max="80" value="30"> %</div></form>'+
+      '<div class="aiout" id="aiOut"></div></div>'+
+      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="createAiQuote" data-close>Create draft quotation →</button></div></div>');
+    recalcAi();}
+  function aiCompute(){var f=$('#aiForm');if(!f)return null;var days=+f.days.value||1,dist=+f.dist.value||0,crew=+f.crew.value||0,hours=+f.hours.value||0,margin=Math.min(80,+f.margin.value||0);
+    var sel=f.equip,rate=+sel.value,ekey=sel.options[sel.selectedIndex].getAttribute('data-k');
+    var equip=rate*days;var fuel=dist*2*95*Math.max(1,Math.ceil(days/2));var labor=crew*hours*260;var mob=25000;var permit=f.oversized.checked?18000:0;
+    var cost=equip+fuel+labor+mob+permit;var price=Math.round(cost*(1+margin/100)/500)*500;var profit=price-cost;
+    return {ekey:ekey,equip:equip,fuel:fuel,labor:labor,mob:mob,permit:permit,cost:cost,price:price,profit:profit,margin:margin,client:f.client.value.trim()};}
+  function recalcAi(){var r=aiCompute();if(!r)return;var o=$('#aiOut');if(!o)return;
+    o.innerHTML='<div class="airow"><span>Equipment ('+esc(r.ekey)+')</span><b>'+peso(r.equip)+'</b></div>'+
+      '<div class="airow"><span>Fuel &amp; mobilization transport</span><b>'+peso(r.fuel)+'</b></div>'+
+      '<div class="airow"><span>Crew &amp; operators</span><b>'+peso(r.labor)+'</b></div>'+
+      '<div class="airow"><span>Mobilization / demob</span><b>'+peso(r.mob)+'</b></div>'+
+      (r.permit?'<div class="airow"><span>Permits &amp; escorts</span><b>'+peso(r.permit)+'</b></div>':'')+
+      '<div class="airow" style="border-top:1px solid var(--line);margin-top:4px;padding-top:8px"><span>Operating cost</span><b>'+peso(r.cost)+'</b></div>'+
+      '<div class="airow"><span>Margin ('+r.margin+'%)</span><b style="color:var(--good)">'+peso(r.profit)+'</b></div>'+
+      '<div class="aigrand"><span style="font-weight:700">Suggested price</span><span class="p tnum">'+peso(r.price)+'</span></div>';}
+  function createAiQuote(){var r=aiCompute();if(!r)return;var qid='Q-'+(DB.seq.quote++);
+    var items=[{k:r.ekey,qty:1,days:1,rate:r.equip},{k:'Logistics, crew, permits & margin (AI-assisted)',qty:1,days:1,rate:r.price-r.equip}];
+    DB.quotes.unshift({id:qid,client:r.client||'New client',items:items,status:'draft',job:''});
+    toast('✨ '+qid+' drafted · '+peso(r.price)+' — review & approve to send');go('quotes');}
+
   function toggleTheme(){var cur=document.documentElement.getAttribute('data-theme');var next=cur==='dark'?'light':(cur==='light'?'dark':(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark'));document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('lifthaul_theme',next)}catch(e){}toast('Theme: '+next);}
 
   // ---------- BOOT ----------

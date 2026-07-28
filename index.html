@@ -103,9 +103,12 @@
   .hero .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
   .hero h1{font-size:clamp(2.1rem,5vw,3.5rem);font-weight:800;line-height:1.05;letter-spacing:-.02em;margin:16px 0;max-width:16ch}
   .hero p{color:var(--steel-muted);font-size:clamp(15px,1.6vw,18px);max-width:52ch}
-  .hero .cta{display:flex;gap:12px;margin-top:28px;flex-wrap:wrap}
-  .hero .btn.line{color:var(--steel-ink);border-color:rgba(255,255,255,.2)}
-  .hero .btn.line:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.35)}
+  .hero .cta{display:flex;gap:14px;margin-top:30px;flex-wrap:wrap}
+  .hero .cta .btn{padding:14px 24px;font-size:15px;border-radius:11px}
+  .hero .cta .btn:not(.line){background:var(--accent);color:#fff;box-shadow:0 10px 24px rgba(12,35,6,.28),0 2px 0 rgba(0,0,0,.06)}
+  .hero .cta .btn:not(.line):hover{background:var(--accent-2,#D9520F);transform:translateY(-1px);box-shadow:0 14px 30px rgba(12,35,6,.34)}
+  .hero .btn.line{background:rgba(255,255,255,.10);color:var(--steel-ink);border:2px solid rgba(12,35,6,.42);box-shadow:none}
+  .hero .btn.line:hover{background:#fff;border-color:#fff;color:var(--steel-ink);transform:translateY(-1px)}
   .stats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:38px;padding-top:26px;border-top:1px solid rgba(255,255,255,.12)}
   .stats div{display:flex;flex-direction:column}.stats b{font-size:22px;font-weight:800;color:var(--accent)}.stats span{font-size:12.5px;color:var(--steel-muted)}
   .sec{padding:clamp(46px,6vw,76px) 0}
@@ -251,7 +254,7 @@
 <!-- ================= PUBLIC SITE ================= -->
 <section id="public">
   <nav class="snav"><div class="in">
-    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg><span class="wordmark">RGO <b style="color:var(--accent)">Machine Rigging Services</b></span></div>
+    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg><span class="wordmark"><b>Machine</b> <b style="color:var(--accent)">Rigging Services</b></span></div>
     <div class="links"><a href="#services">Services</a><a href="#portfolio">Projects</a><a href="#book">Book a Lift</a></div>
     <div class="sp"></div>
     <button class="btn line sm" data-act="staffLogin">Staff Login</button>

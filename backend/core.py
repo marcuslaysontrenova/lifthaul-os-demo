@@ -146,7 +146,9 @@ CREATE TABLE IF NOT EXISTS audit_logs(
 
 
 def connect(path: str = ":memory:") -> sqlite3.Connection:
-    conn = sqlite3.connect(path)
+    # check_same_thread=False: the HTTP server may dispatch requests on worker
+    # threads; DB access is serialized by a lock in server.py.
+    conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)

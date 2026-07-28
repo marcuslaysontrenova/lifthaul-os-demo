@@ -47,7 +47,9 @@ def validate_config():
 
 
 validate_config()
+import threading
 _conn = db.connect(os.environ.get("DATABASE_URL"))   # sqlite (dev) or postgres (prod)
+_DB_LOCK = threading.Lock()                          # serialize DB access across worker threads
 _store = pdfgen.MemStore()                           # swap for S3/local disk in prod
 
 
@@ -319,8 +321,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self._send(400, {"error": "invalid JSON"})
         try:
-            actor = None if self.path == "/login" else _actor(self)
-            return self._send(200, {"data": fn(actor, body, params)})
+            with _DB_LOCK:                      # serialize DB access across worker threads
+                actor = None if self.path == "/login" else _actor(self)
+                result = fn(actor, body, params)
+            return self._send(200, {"data": result})
         except core.AppError as e:
             return self._send(e.http, {"error": str(e)})
         except KeyError as e:

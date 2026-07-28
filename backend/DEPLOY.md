@@ -25,7 +25,22 @@ In `APP_ENV=production` the server **refuses to start** (exit 2) if `APP_SECRET`
 3. Migrations run automatically on release/start via `python migrate.py` (also the
    `release:` Procfile line), which applies the schema and stamps `schema_version`.
 
-## 3. Build & run (Docker)
+## 2b. One-command single-node deploy (available NOW — SQLite + volume)
+SQLite here is a real transactional, FK-enforcing DB on a **persistent volume** —
+legitimate production for a single small operation (5–20 trucks). No PG refactor needed.
+```bash
+export APP_SECRET=$(openssl rand -hex 24)
+export CORS_ORIGINS=https://your-frontend.example
+docker compose up --build            # API on :8787, data persists in the rgo_data volume
+```
+Demo seed (non-production only): `APP_ENV=development python seed.py`.
+
+**PostgreSQL (multi-node/scale)** additionally needs the small, localized refactor tracked in
+`pgcompat.py` (lastrowid→RETURNING, executescript split, ON CONFLICT upsert) before the
+`db`/`DATABASE_URL` Postgres path is runtime-ready. `pgcompat` ships the verified param +
+DDL translation; the RETURNING refactor is the remaining code task.
+
+## 3. Build & run (Docker, managed host)
 ```bash
 docker build -t rgo-os .
 docker run -p 8787:8787 \

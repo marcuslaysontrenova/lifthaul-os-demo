@@ -13,9 +13,11 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import core
+import ops
+import admin
 
 DB_PATH = "rgo_os.sqlite"          # a real file DB (swap for Postgres DSN in core.connect)
-_conn = core.connect(DB_PATH)
+_conn = admin.connect_full(DB_PATH)   # core + ops + admin schema
 
 
 def _seed_users():
@@ -120,7 +122,65 @@ def _routes():
     }
 
 
+def _ops_routes():
+    def reserve(actor, body, p):
+        return {"id": ops.reserve_resource(_conn, actor, int(p["id"]), body["resource_type"],
+                                           body["resource_ref"], body.get("confirmed", False))}
+
+    def job_transition(actor, body, p):
+        return {"status": ops.transition_job(_conn, actor, int(p["id"]), body["to_status"],
+                                            evidence=body.get("evidence"), reason=body.get("reason"))}
+
+    def change_order(actor, body, p):
+        return {"id": ops.create_change_order(_conn, actor, int(p["id"]), body["reason"],
+                                             body["amount"], body.get("tax", 0))}
+
+    def co_approve(actor, body, p):
+        ops.approve_change_order(_conn, actor, int(p["id"])); return {"ok": True}
+
+    def expense(actor, body, p):
+        return {"id": ops.add_expense(_conn, actor, int(p["id"]), body["category"], body["amount"],
+                                     body.get("supplier"))}
+
+    def final_invoice(actor, body, p):
+        return {"id": ops.generate_final_invoice(_conn, actor, int(p["id"]), body.get("due_date"))}
+
+    def allocate(actor, body, p):
+        return ops.allocate_payment(_conn, actor, int(p["id"]), body["amount"], body["ref"])
+
+    def profitability(actor, body, p):
+        core.require(actor, "job.read"); return ops.job_profitability(_conn, int(p["id"]))
+
+    def safety(actor, body, p):
+        return {"id": admin.safety_record(_conn, actor, int(p["id"]), body["result"], notes=body.get("notes"))}
+
+    def inv_move(actor, body, p):
+        return {"qty": admin.inv_move(_conn, actor, int(p["id"]), body["kind"], body["qty"], body.get("ref"))}
+
+    def reports(actor, body, p):
+        core.require(actor, "booking.read")
+        return {"quotation_conversion": ops.report_quotation_conversion(_conn),
+                "receivables": ops.report_receivables(_conn),
+                "confirmed_jobs": ops.report_confirmed_jobs(_conn),
+                "awaiting_payment": ops.report_accepted_awaiting_payment(_conn)}
+
+    return {
+        ("POST", "/bookings/:id/reserve"): reserve,
+        ("POST", "/jobs/:id/transition"): job_transition,
+        ("POST", "/jobs/:id/change-order"): change_order,
+        ("POST", "/change-orders/:id/approve"): co_approve,
+        ("POST", "/jobs/:id/expense"): expense,
+        ("POST", "/jobs/:id/invoice"): final_invoice,
+        ("POST", "/invoices/:id/allocate"): allocate,
+        ("GET", "/jobs/:id/profitability"): profitability,
+        ("POST", "/jobs/:id/safety"): safety,
+        ("POST", "/inventory/:id/move"): inv_move,
+        ("GET", "/reports"): reports,
+    }
+
+
 ROUTES = _routes()
+ROUTES.update(_ops_routes())
 
 
 def _match(method, path):

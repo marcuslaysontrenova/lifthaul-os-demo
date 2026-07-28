@@ -229,6 +229,12 @@ def transition_job(conn, actor, job_id, to_status, *, evidence=None, reason=None
         if not conn.execute("SELECT 1 FROM reservations WHERE booking_id=? AND status='CONFIRMED'",
                             (j["booking_id"],)).fetchone():
             raise ConflictError("dispatch block: no confirmed resource reservation")
+        # safety block: if a safety check exists, the latest must PASS
+        if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='safety_records'").fetchone():
+            sr = conn.execute("SELECT result FROM safety_records WHERE job_id=? ORDER BY id DESC LIMIT 1",
+                              (job_id,)).fetchone()
+            if sr and sr["result"] != "PASS":
+                raise ConflictError("dispatch block: latest safety check did not PASS")
     if to_status == "DISPATCHED":
         if not _payment_verified(conn, j["booking_id"]):
             raise ConflictError("dispatch block: downpayment not verified")

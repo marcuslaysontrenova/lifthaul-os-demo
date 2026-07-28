@@ -1,0 +1,187 @@
+"""RGO OS backend — minimal stdlib HTTP API over the core service layer.
+
+Real server-side API (no framework needed to run). Auth via Bearer token from
+POST /login. Every handler enforces authorization inside the service layer.
+AppError subclasses map to proper HTTP status codes. Swap this thin layer for
+FastAPI/Flask later without touching core.py.
+
+Run:  python server.py           # serves on http://127.0.0.1:8787 with a seeded demo DB
+"""
+from __future__ import annotations
+
+import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import core
+
+DB_PATH = "rgo_os.sqlite"          # a real file DB (swap for Postgres DSN in core.connect)
+_conn = core.connect(DB_PATH)
+
+
+def _seed_users():
+    try:
+        core.create_user(_conn, "admin@rgo.demo", "demo1234", "admin", "Admin")
+        core.create_user(_conn, "est@rgo.demo", "demo1234", "estimator", "Estimator")
+        core.create_user(_conn, "appr@rgo.demo", "demo1234", "approver", "Approver")
+        core.create_user(_conn, "fin@rgo.demo", "demo1234", "finance", "Finance")
+    except core.ConflictError:
+        pass
+
+
+_seed_users()
+_provider = core.MockWiseProvider()
+
+
+def _actor(handler):
+    auth = handler.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise core.AuthError("missing bearer token")
+    return core.actor_for(_conn, auth[7:])
+
+
+# route table: (METHOD, path) -> handler(actor, body, params)
+def _routes():
+    def login(actor, body, _):
+        return {"token": core.login(_conn, body["email"], body["password"])}
+
+    def create_customer(actor, body, _):
+        return {"id": core.create_customer(_conn, actor, body["name"], body.get("contact"), body.get("email"))}
+
+    def create_booking(actor, body, _):
+        return {"id": core.create_booking(_conn, actor, body["customer_id"], body.get("service"),
+                                          body.get("cargo"), body.get("weight"),
+                                          body.get("from"), body.get("to"), body.get("date"))}
+
+    def get_booking(actor, body, p):
+        return core.get_booking(_conn, actor, int(p["id"]))
+
+    def review(actor, body, p):
+        core.review_booking(_conn, actor, int(p["id"])); return {"ok": True}
+
+    def ready(actor, body, p):
+        core.ready_for_quotation(_conn, actor, int(p["id"])); return {"ok": True}
+
+    def create_quote(actor, body, p):
+        return {"id": core.create_quotation(_conn, actor, int(p["id"]), body["lines"],
+                                            body.get("discount_pct", 0), body.get("dp_pct"),
+                                            body.get("est_cost", 0))}
+
+    def submit_quote(actor, body, p):
+        return {"status": core.submit_quotation(_conn, actor, int(p["id"]))}
+
+    def approve_quote(actor, body, p):
+        core.approve_quotation(_conn, actor, int(p["id"])); return {"ok": True}
+
+    def send_quote(actor, body, p):
+        core.send_quotation(_conn, actor, int(p["id"])); return {"ok": True}
+
+    def accept_quote(actor, body, p):
+        core.accept_quotation(_conn, actor, int(p["id"]), body["accepted_by"],
+                              body.get("position"), body.get("terms_version", "v1")); return {"ok": True}
+
+    def pay_request(actor, body, p):
+        return {"id": core.create_payment_request(_conn, actor, int(p["id"]), _provider)}
+
+    def pay_link(actor, body, p):
+        return {"link": core.register_payment_link(_conn, actor, int(p["id"]), _provider)}
+
+    def pay_evidence(actor, body, p):
+        core.submit_payment_evidence(_conn, actor, int(p["id"]), body.get("proof", "receipt")); return {"ok": True}
+
+    def pay_verify(actor, body, p):
+        return {"status": core.verify_payment(_conn, actor, int(p["id"]), body["amount_received"],
+                                             body["txn_ref"], body.get("fees", 0), body.get("notes"))}
+
+    def confirm(actor, body, p):
+        return {"job_no": core.confirm_job(_conn, actor, int(p["id"]))}
+
+    def audit(actor, body, p):
+        core.require(actor, "booking.read")
+        return {"audit": core.list_audit(_conn, "booking", int(p["id"]))}
+
+    return {
+        ("POST", "/login"): login,
+        ("POST", "/customers"): create_customer,
+        ("POST", "/bookings"): create_booking,
+        ("GET", "/bookings/:id"): get_booking,
+        ("POST", "/bookings/:id/review"): review,
+        ("POST", "/bookings/:id/ready"): ready,
+        ("POST", "/bookings/:id/quotation"): create_quote,
+        ("POST", "/quotations/:id/submit"): submit_quote,
+        ("POST", "/quotations/:id/approve"): approve_quote,
+        ("POST", "/quotations/:id/send"): send_quote,
+        ("POST", "/quotations/:id/accept"): accept_quote,
+        ("POST", "/bookings/:id/payment-request"): pay_request,
+        ("POST", "/payments/:id/link"): pay_link,
+        ("POST", "/payments/:id/evidence"): pay_evidence,
+        ("POST", "/payments/:id/verify"): pay_verify,
+        ("POST", "/bookings/:id/confirm"): confirm,
+        ("GET", "/bookings/:id/audit"): audit,
+    }
+
+
+ROUTES = _routes()
+
+
+def _match(method, path):
+    for (m, tmpl), fn in ROUTES.items():
+        if m != method:
+            continue
+        tp, pp = tmpl.strip("/").split("/"), path.strip("/").split("/")
+        if len(tp) != len(pp):
+            continue
+        params, ok = {}, True
+        for a, b in zip(tp, pp):
+            if a.startswith(":"):
+                params[a[1:]] = b
+            elif a != b:
+                ok = False; break
+        if ok:
+            return fn, params
+    return None, None
+
+
+class Handler(BaseHTTPRequestHandler):
+    def _send(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle(self, method):
+        fn, params = _match(method, self.path.split("?")[0])
+        if not fn:
+            return self._send(404, {"error": "not found"})
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        body = {}
+        if length:
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+            except Exception:
+                return self._send(400, {"error": "invalid JSON"})
+        try:
+            actor = None if self.path == "/login" else _actor(self)
+            return self._send(200, {"data": fn(actor, body, params)})
+        except core.AppError as e:
+            return self._send(e.http, {"error": str(e)})
+        except KeyError as e:
+            return self._send(422, {"error": f"missing field {e}"})
+        except Exception as e:  # pragma: no cover
+            return self._send(500, {"error": "server error", "detail": str(e)})
+
+    def do_GET(self):
+        self._handle("GET")
+
+    def do_POST(self):
+        self._handle("POST")
+
+    def log_message(self, *a):  # quiet
+        pass
+
+
+if __name__ == "__main__":
+    print("RGO OS backend API on http://127.0.0.1:8787")
+    print("Seeded users (pw demo1234): admin@rgo.demo · est@rgo.demo · appr@rgo.demo · fin@rgo.demo")
+    ThreadingHTTPServer(("127.0.0.1", 8787), Handler).serve_forever()

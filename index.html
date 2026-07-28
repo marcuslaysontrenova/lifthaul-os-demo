@@ -94,7 +94,12 @@
   .hero{position:relative;background:var(--steel);color:var(--steel-ink);overflow:hidden}
   .hero .hzbar{height:6px}
   .hero::after{content:"";position:absolute;inset:0;background:radial-gradient(90% 120% at 88% -20%,rgba(245,163,20,.16),transparent 55%);pointer-events:none}
-  .hero .in{position:relative;z-index:1;max-width:1140px;margin:0 auto;padding:clamp(48px,7vw,88px) clamp(18px,4vw,28px)}
+  .hero .in{position:relative;z-index:1;max-width:1140px;margin:0 auto;padding:clamp(48px,7vw,88px) clamp(18px,4vw,28px);display:grid;grid-template-columns:1fr;gap:clamp(24px,4vw,48px);align-items:center}
+  .hero .copy{min-width:0}
+  .hero .heroLogo{justify-self:center;width:min(100%,440px);height:auto;filter:drop-shadow(0 20px 34px rgba(0,0,0,.30));animation:heroLogoIn .8s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes heroLogoIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
+  @media(min-width:920px){.hero .in{grid-template-columns:1.1fr .9fr}.hero .heroLogo{justify-self:end}}
+  @media(max-width:560px){.hero .heroLogo{width:min(80%,300px)}}
   .hero .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
   .hero h1{font-size:clamp(2.1rem,5vw,3.5rem);font-weight:800;line-height:1.05;letter-spacing:-.02em;margin:16px 0;max-width:16ch}
   .hero p{color:var(--steel-muted);font-size:clamp(15px,1.6vw,18px);max-width:52ch}
@@ -254,11 +259,14 @@
   </div></nav>
 
   <header class="hero"><div class="hzbar hz"></div><div class="in">
+    <div class="copy">
     <div class="eyebrow">Nationwide Heavy Lifting &amp; Hauling</div>
     <h1>When it's too heavy, too big, or too critical to risk.</h1>
     <p>Cranes to 350 tonnes, rigging crews, lowbed transport and full permit handling — one team from lift plan to final set-down. Book online and our dispatch office takes it from there.</p>
     <div class="cta"><button class="btn" data-act="scrollBook">Request a booking →</button><button class="btn line" data-act="scrollServices">Explore services</button></div>
     <div class="stats"><div><b>350 t</b><span>Max crane capacity</span></div><div><b>25+</b><span>Cranes &amp; trailers</span></div><div><b>In-house</b><span>Permits &amp; rigging</span></div><div><b>24/7</b><span>Dispatch &amp; support</span></div></div>
+    </div>
+    <img class="heroLogo" src="rgo-logo.png" alt="RGO Machine Rigging Services" width="928" height="929">
   </div></header>
 
   <section class="sec" id="services"><div class="wrap">

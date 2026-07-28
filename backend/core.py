@@ -618,8 +618,7 @@ def confirm_job(conn, actor, bid):
     pr = conn.execute("SELECT * FROM payment_requests WHERE booking_id=?", (bid,)).fetchone()
     if not pr or pr["status"] != "VERIFIED":
         raise ConflictError("CONTROL: cannot confirm — downpayment not verified")
-    try:
-        conn.execute("BEGIN")
+    with conn:                                            # portable transaction (sqlite + postgres)
         n = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
         job_no = f"JO-{2050 + n}"
         cur = conn.execute(
@@ -630,11 +629,6 @@ def confirm_job(conn, actor, bid):
         conn.execute("UPDATE bookings SET stage='CONFIRMED', job_id=? WHERE id=?", (job_id, bid))
         audit(conn, actor, "job.confirm", "job", job_id,
               new={"no": job_no, "from_booking": b["ref"], "from_quote": q["no"]})
-        conn.execute("COMMIT")
-    except Exception:
-        conn.execute("ROLLBACK")
-        raise
-    conn.commit()
     return job_no
 
 

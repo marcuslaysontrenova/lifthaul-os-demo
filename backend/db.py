@@ -44,23 +44,25 @@ def _sqlite(path):
 
 def _postgres(url):
     try:
-        import psycopg  # noqa: F401
+        import psycopg2
     except Exception:
-        try:
-            import psycopg2  # noqa: F401
-        except Exception:
-            raise RuntimeError(
-                "PostgreSQL selected via DATABASE_URL but no psycopg/psycopg2 driver is "
-                "installed and no PostgreSQL server is reachable here. To go live: "
-                "`pip install 'psycopg[binary]'`, provision PostgreSQL, set DATABASE_URL, "
-                "then run `python migrate.py`. (BLOCKED ON OWNER INFRASTRUCTURE)")
-    # Driver present but this offline environment has no PG server; the service layer's
-    # SQL is standard, but Postgres needs the '?'->'%s' param shim + SERIAL DDL applied by
-    # migrate.py. Do not fake a connection.
-    raise RuntimeError(
-        "PostgreSQL driver found but connection/migration must be run against a real "
-        "PostgreSQL instance via `python migrate.py` with a valid DATABASE_URL. "
-        "Not runnable in this offline environment.")
+        raise RuntimeError(
+            "PostgreSQL selected via DATABASE_URL but psycopg2 is not installed. "
+            "Add `psycopg2-binary` (see requirements.txt) and rebuild. The RGO image "
+            "installs it. (fixable without owner cloud credentials)")
+    import dbconn
+    try:
+        raw = psycopg2.connect(url)                 # real connection to a real server
+    except Exception as e:
+        raise RuntimeError(
+            f"could not connect to PostgreSQL ({e}). Run `docker compose up` (bundles "
+            f"postgres:16) or point DATABASE_URL at a reachable server, then `python migrate.py`. "
+            f"(needs a running PostgreSQL — not owner cloud credentials)")
+    raw.autocommit = False
+    conn = dbconn.PgConnection(raw)
+    dbconn.apply_schema(conn)                       # idempotent DDL (dialect-translated)
+    ensure_version(conn)
+    return conn
 
 
 def connect(url: str | None = None):

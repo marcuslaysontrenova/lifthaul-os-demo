@@ -25,20 +25,21 @@ In `APP_ENV=production` the server **refuses to start** (exit 2) if `APP_SECRET`
 3. Migrations run automatically on release/start via `python migrate.py` (also the
    `release:` Procfile line), which applies the schema and stamps `schema_version`.
 
-## 2b. One-command single-node deploy (available NOW — SQLite + volume)
-SQLite here is a real transactional, FK-enforcing DB on a **persistent volume** —
-legitimate production for a single small operation (5–20 trucks). No PG refactor needed.
+## 2b. One-command FULL local stack (frontend + backend + PostgreSQL)
+`docker compose up --build` starts **PostgreSQL 16** (persistent volume) + the API
++ an nginx frontend. The PostgreSQL RETURNING adapter (`dbconn.py`) is complete, so
+the app runs on Postgres unchanged.
 ```bash
-export APP_SECRET=$(openssl rand -hex 24)
-export CORS_ORIGINS=https://your-frontend.example
-docker compose up --build            # API on :8787, data persists in the rgo_data volume
+docker compose up --build
+#   browser  -> http://localhost:8080   (frontend, config.js -> API)
+#   API      -> http://localhost:8787   (/health, /ready)
+#   DB       -> postgres:16 (volume pg_data)
 ```
-Demo seed (non-production only): `APP_ENV=development python seed.py`.
+Make targets: `make up | down | build | migrate | seed | test | backup | restore | logs | health`.
 
-**PostgreSQL (multi-node/scale)** additionally needs the small, localized refactor tracked in
-`pgcompat.py` (lastrowid→RETURNING, executescript split, ON CONFLICT upsert) before the
-`db`/`DATABASE_URL` Postgres path is runtime-ready. `pgcompat` ships the verified param +
-DDL translation; the RETURNING refactor is the remaining code task.
+Seed demo data (non-production): `make seed`.
+Backup: `make backup` (pg_dump) · Restore: `sh scripts/restore.sh < backup.sql`.
+(SQLite single-node remains available by setting `DATABASE_URL=sqlite:////data/rgo.sqlite`.)
 
 ## 3. Build & run (Docker, managed host)
 ```bash

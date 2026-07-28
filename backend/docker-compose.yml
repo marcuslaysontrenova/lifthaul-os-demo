@@ -1,25 +1,42 @@
-# RGO OS — one-command single-node deploy (real, persistent SQLite volume).
-# `docker compose up --build`  → API on :8787 with data persisted across restarts.
-# Switch to PostgreSQL by enabling the `db` service + DATABASE_URL once the
-# lastrowid->RETURNING refactor (see pgcompat.py) lands.
+# RGO OS — full local production-like stack (frontend + backend + PostgreSQL).
+# One command:  docker compose up --build
+#   frontend  -> http://localhost:8080   (browser)
+#   backend   -> http://localhost:8787   (API; reaches db over the compose network)
+#   db        -> PostgreSQL 16 with a persistent volume (system of record)
 services:
-  app:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rgo
+      POSTGRES_USER: rgo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rgo_local_dev}
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rgo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
     build: .
     environment:
       APP_ENV: ${APP_ENV:-production}
-      APP_SECRET: ${APP_SECRET:?set APP_SECRET (32+ random chars)}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
-      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/rgo.sqlite}
+      APP_SECRET: ${APP_SECRET:-local_dev_secret_change_me_please_32c}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      DATABASE_URL: postgresql://rgo:${POSTGRES_PASSWORD:-rgo_local_dev}@db:5432/rgo
       PORT: "8787"
+    depends_on:
+      db: {condition: service_healthy}
     ports: ["8787:8787"]
-    volumes: ["rgo_data:/data"]
     restart: unless-stopped
-  # db:                       # enable for PostgreSQL (after the PG refactor)
-  #   image: postgres:16
-  #   environment:
-  #     POSTGRES_DB: rgo
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set}
-  #   volumes: ["pg_data:/var/lib/postgresql/data"]
+
+  frontend:
+    image: nginx:alpine
+    volumes: ["./frontend:/usr/share/nginx/html:ro"]
+    ports: ["8080:80"]
+    depends_on: [backend]
+    restart: unless-stopped
+
 volumes:
-  rgo_data:
-  # pg_data:
+  pg_data:

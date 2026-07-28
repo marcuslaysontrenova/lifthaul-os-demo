@@ -224,7 +224,8 @@ def doc_upload(conn, actor, entity, entity_id, filename, content_type, size, sto
 # --------------------------------------------------------------------------- #
 def nt_template(conn, actor, code, subject, body):
     require(actor, "notification.create")
-    conn.execute("INSERT OR REPLACE INTO notification_templates(code,subject,body) VALUES(?,?,?)",
+    conn.execute("INSERT INTO notification_templates(code,subject,body) VALUES(?,?,?)"
+                 " ON CONFLICT(code) DO UPDATE SET subject=excluded.subject, body=excluded.body",
                  (code, subject, body))
     conn.commit()
 

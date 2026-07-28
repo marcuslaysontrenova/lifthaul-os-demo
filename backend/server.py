@@ -14,6 +14,8 @@ import logging
 import os
 import signal
 import sys
+import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import core
@@ -279,9 +281,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Request-ID", getattr(self, "_rid", "-"))
         self._cors()
         self.end_headers()
         self.wfile.write(body)
+        # structured access log (no bodies/secrets logged)
+        dur = round((time.time() - getattr(self, "_t0", time.time())) * 1000, 1)
+        log.info("req_id=%s method=%s path=%s status=%s dur_ms=%s",
+                 getattr(self, "_rid", "-"), self.command, self.path.split("?")[0], code, dur)
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -289,6 +296,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _handle(self, method):
+        self._t0 = time.time()
+        self._rid = self.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
         path = self.path.split("?")[0]
         # unauthenticated liveness/readiness probes
         if method == "GET" and path in ("/health", "/healthz"):
@@ -328,8 +337,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._handle("POST")
 
-    def log_message(self, fmt, *a):  # structured access log
-        log.info("%s %s", self.command, self.path)
+    def log_message(self, *a):  # handled by _send's structured log
+        pass
 
 
 def main():

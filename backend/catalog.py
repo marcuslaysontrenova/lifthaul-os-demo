@@ -190,7 +190,9 @@ def staff_thread(conn, booking_id):
 # system config --------------------------------------------------------------
 def set_config(conn, actor, key, value):
     require(actor, "config.write")
-    conn.execute("INSERT OR REPLACE INTO system_config(key,value,updated_by,updated_at) VALUES(?,?,?,?)",
+    conn.execute("INSERT INTO system_config(key,value,updated_by,updated_at) VALUES(?,?,?,?)"
+                 " ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_by=excluded.updated_by,"
+                 " updated_at=excluded.updated_at",
                  (key, str(value), actor["id"], now()))
     audit(conn, actor, "config.set", "system_config", None, new={"key": key})
     conn.commit()

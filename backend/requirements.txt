@@ -1,6 +1,3 @@
-# RGO OS backend runs on the Python standard library (no deps for dev/SQLite).
-# For PostgreSQL production persistence, install the driver:
-#   psycopg[binary]>=3.1
-# Pinned here (commented) so `pip install -r requirements.txt` stays a no-op in
-# environments without a PG server; uncomment for the production image:
-# psycopg[binary]==3.2.3
+# RGO OS backend. Standard library only for dev/SQLite (no install needed there).
+# PostgreSQL production persistence (used by docker-compose + managed hosts):
+psycopg2-binary==2.9.9

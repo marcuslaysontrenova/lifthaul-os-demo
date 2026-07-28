@@ -377,9 +377,12 @@
    URL is configured (localStorage.rgo_api_base = deployed API origin). Until a
    backend is hosted, the app runs on its in-browser mock (clearly a prototype).
    This is the correct integration interface; the blocker is hosting, not code. */
+/* Primary config is runtime (window.RGO_CONFIG.apiBase — injected by config.js / env at deploy).
+   localStorage.rgo_api_base is a clearly-labeled DEV/DEMO override only. */
+window.RGO_CONFIG = window.RGO_CONFIG || {};
 window.RGO_API = (function(){
-  var base=null, token=null;
-  try{ base=localStorage.getItem('rgo_api_base'); token=localStorage.getItem('rgo_api_token'); }catch(e){}
+  var base=(window.RGO_CONFIG.apiBase)||null, token=null;
+  try{ if(!base) base=localStorage.getItem('rgo_api_base'); token=localStorage.getItem('rgo_api_token'); }catch(e){}
   function req(method, path, body){
     if(!base) return Promise.reject(new Error('API not configured (demo mock mode). Set localStorage.rgo_api_base to the deployed backend origin to go live.'));
     var h={'Content-Type':'application/json'};

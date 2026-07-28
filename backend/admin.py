@@ -13,6 +13,7 @@ Same discipline: server-side authorization (core RBAC), foreign keys, audit.
 from __future__ import annotations
 
 import core
+import ops   # noqa: F401  — ensures base ops roles (fleet_manager, mechanic, safety_officer, ...) exist
 from core import require, audit, now, ConflictError, NotFoundError, ValidationError, ForbiddenError
 
 # extend RBAC

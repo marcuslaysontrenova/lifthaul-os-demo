@@ -7,6 +7,8 @@ invoice lines, booking messages (internal vs customer-visible), system config.
 from __future__ import annotations
 
 import core
+import ops   # noqa: F401  — ensures base ops/admin roles (fleet_manager, mechanic, ...) are registered
+import admin  # noqa: F401
 from core import require, audit, now, NotFoundError, ValidationError
 
 core.PERMISSIONS["operations_manager"] |= {"contact.*", "address.*", "equipment.*", "vehicle.*",

@@ -76,6 +76,10 @@ CREATE TABLE IF NOT EXISTS payment_allocations(
   id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id),
   amount REAL, ref TEXT, allocated_by INTEGER, allocated_at TEXT);
 
+CREATE TABLE IF NOT EXISTS invoice_lines(
+  id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id),
+  kind TEXT, description TEXT, amount REAL, source_ref TEXT);
+
 CREATE TABLE IF NOT EXISTS refunds(
   id INTEGER PRIMARY KEY, booking_id INTEGER NOT NULL REFERENCES bookings(id),
   reason TEXT, responsible TEXT, refundable REAL, non_refundable REAL,
@@ -355,6 +359,16 @@ def generate_final_invoice(conn, actor, job_id, due_date=None):
             (no, job_id, j["customer_id"], j["amount"], co_total, downpayment, total, balance,
              due_date, actor["id"], now()))
         iid = cur.lastrowid
+        # normalized invoice lines: quoted revenue + approved change orders − downpayment
+        q = conn.execute("SELECT no FROM quotations WHERE id=?", (j["quotation_id"],)).fetchone()
+        conn.execute("INSERT INTO invoice_lines(invoice_id,kind,description,amount,source_ref) VALUES(?,?,?,?,?)",
+                     (iid, "quoted", "Contracted works (quotation)", j["amount"], q["no"] if q else None))
+        for co in conn.execute("SELECT no,reason,amount,tax FROM change_orders WHERE job_id=? AND status IN ('ACCEPTED','BILLED')", (job_id,)).fetchall():
+            conn.execute("INSERT INTO invoice_lines(invoice_id,kind,description,amount,source_ref) VALUES(?,?,?,?,?)",
+                         (iid, "change_order", "Change order: " + (co["reason"] or ""), co["amount"] + (co["tax"] or 0), co["no"]))
+        if downpayment:
+            conn.execute("INSERT INTO invoice_lines(invoice_id,kind,description,amount,source_ref) VALUES(?,?,?,?,?)",
+                         (iid, "downpayment", "Less: verified downpayment", -downpayment, None))
     audit(conn, actor, "invoice.create", "invoice", iid, new={"no": no, "total": total, "balance": balance})
     conn.commit()
     return iid
@@ -377,6 +391,12 @@ def allocate_payment(conn, actor, invoice_id, amount, ref):
         audit(conn, actor, "payment.allocate", "invoice", invoice_id,
               new={"allocated": amount, "balance": balance, "status": status})
     return {"balance": balance, "status": status}
+
+
+def invoice_lines(conn, invoice_id):
+    return [dict(r) for r in conn.execute(
+        "SELECT kind,description,amount,source_ref FROM invoice_lines WHERE invoice_id=? ORDER BY id",
+        (invoice_id,)).fetchall()]
 
 
 def mark_overdue(conn, actor, as_of):
@@ -434,3 +454,46 @@ def report_receivables(conn):
 
 def report_confirmed_jobs(conn):
     return conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+
+
+# --------------------------------------------------------------------------- #
+# 16. Dispatch calendar API (range query + blocks + conflict detection)
+# --------------------------------------------------------------------------- #
+def calendar(conn, actor, start=None, end=None):
+    """Timezone-safe ISO range (start/end inclusive; None = unbounded). Returns
+    jobs with per-job blocks, active reservations, and resource conflicts."""
+    require(actor, "job.read")
+    q = "SELECT j.*, b.ref booking_ref, c.name customer FROM jobs j" \
+        " JOIN bookings b ON b.id=j.booking_id JOIN customers c ON c.id=j.customer_id WHERE 1=1"
+    args = []
+    if start:
+        q += " AND (j.scheduled_at IS NULL OR j.scheduled_at >= ?)"; args.append(start)
+    if end:
+        q += " AND (j.scheduled_at IS NULL OR j.scheduled_at <= ?)"; args.append(end)
+    has_eq = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='equipment'").fetchone()
+    jobs = []
+    for j in conn.execute(q, args).fetchall():
+        pay = conn.execute("SELECT status FROM payment_requests WHERE booking_id=?", (j["booking_id"],)).fetchone()
+        sr = conn.execute("SELECT result FROM safety_records WHERE job_id=? ORDER BY id DESC LIMIT 1", (j["id"],)).fetchone() \
+            if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='safety_records'").fetchone() else None
+        maint = False
+        if has_eq:
+            maint = bool(conn.execute(
+                "SELECT 1 FROM reservations r JOIN equipment e ON e.code=r.resource_ref"
+                " WHERE r.booking_id=? AND r.status IN ('TEMP','CONFIRMED') AND e.status<>'ACTIVE' LIMIT 1",
+                (j["booking_id"],)).fetchone())
+        jobs.append({
+            "job_no": j["no"], "customer": j["customer"], "booking": j["booking_ref"],
+            "status": j["status"], "scheduled_at": j["scheduled_at"], "amount": j["amount"],
+            "blocks": {
+                "payment": not (pay and pay["status"] == "VERIFIED"),
+                "safety": bool(sr and sr["result"] != "PASS"),
+                "maintenance": maint,
+            }})
+    reservations = [dict(r) for r in conn.execute(
+        "SELECT booking_id,resource_type,resource_ref,status FROM reservations WHERE status IN ('TEMP','CONFIRMED')").fetchall()]
+    conflicts = [dict(r) for r in conn.execute(
+        "SELECT resource_type,resource_ref,COUNT(DISTINCT booking_id) n FROM reservations"
+        " WHERE status IN ('TEMP','CONFIRMED') GROUP BY resource_type,resource_ref HAVING n>1").fetchall()]
+    return {"range": {"start": start, "end": end}, "jobs": jobs,
+            "reservations": reservations, "conflicts": conflicts}

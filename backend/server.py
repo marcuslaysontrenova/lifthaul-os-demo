@@ -10,14 +10,43 @@ Run:  python server.py           # serves on http://127.0.0.1:8787 with a seeded
 from __future__ import annotations
 
 import json
+import logging
+import os
+import signal
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import core
 import ops
 import admin
+import catalog   # noqa: F401  (ensures full schema/roles registered)
+import pdfgen
+import db
 
-DB_PATH = "rgo_os.sqlite"          # a real file DB (swap for Postgres DSN in core.connect)
-_conn = admin.connect_full(DB_PATH)   # core + ops + admin schema
+# --- configuration (never hard-coded; env-driven) --------------------------
+APP_ENV = os.environ.get("APP_ENV", "development")
+DEBUG = os.environ.get("APP_DEBUG", "false").lower() == "true"
+PORT = int(os.environ.get("PORT", "8787"))
+CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+APP_SECRET = os.environ.get("APP_SECRET")
+
+logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO,
+                    format='{"ts":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"}')
+log = logging.getLogger("rgo")
+
+
+def validate_config():
+    """Fail fast + safe when required production configuration is missing."""
+    if APP_ENV == "production":
+        missing = [k for k in ("APP_SECRET", "DATABASE_URL", "CORS_ORIGINS") if not os.environ.get(k)]
+        if missing:
+            log.error("startup blocked: missing required config: %s", ",".join(missing))
+            sys.exit(2)
+
+
+validate_config()
+_conn = db.connect(os.environ.get("DATABASE_URL"))   # sqlite (dev) or postgres (prod)
+_store = pdfgen.MemStore()                           # swap for S3/local disk in prod
 
 
 def _seed_users():
@@ -179,8 +208,35 @@ def _ops_routes():
     }
 
 
+def _phase2_routes():
+    import base64
+
+    def pdf_gen(actor, body, p):
+        r = pdfgen.generate_quotation_pdf(_conn, actor, int(p["id"]), _store)
+        return {"ref": r["ref"], "size": r["size"], "doc_id": r["doc_id"]}
+
+    def pdf_get(actor, body, p):
+        data = pdfgen.get_quotation_pdf(_conn, actor, int(p["id"]), _store)
+        return {"content_type": "application/pdf", "pdf_base64": base64.b64encode(data).decode()}
+
+    def calendar(actor, body, p):
+        return ops.calendar(_conn, actor, body.get("start"), body.get("end"))
+
+    def inv_lines(actor, body, p):
+        core.require(actor, "invoice.create")
+        return {"lines": ops.invoice_lines(_conn, int(p["id"]))}
+
+    return {
+        ("POST", "/quotations/:id/pdf"): pdf_gen,
+        ("GET", "/quotations/:id/pdf"): pdf_get,
+        ("GET", "/calendar"): calendar,
+        ("GET", "/invoices/:id/lines"): inv_lines,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
+ROUTES.update(_phase2_routes())
 
 
 def _match(method, path):
@@ -201,17 +257,49 @@ def _match(method, path):
     return None, None
 
 
+def _cors_origin(req_origin):
+    if not CORS_ORIGINS:
+        return None
+    if "*" in CORS_ORIGINS:
+        return "*"
+    return req_origin if req_origin in CORS_ORIGINS else None
+
+
 class Handler(BaseHTTPRequestHandler):
+    def _cors(self):
+        origin = _cors_origin(self.headers.get("Origin"))
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
     def _send(self, code, obj):
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self._cors()
         self.end_headers()
         self.wfile.write(body)
 
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
+
     def _handle(self, method):
-        fn, params = _match(method, self.path.split("?")[0])
+        path = self.path.split("?")[0]
+        # unauthenticated liveness/readiness probes
+        if method == "GET" and path in ("/health", "/healthz"):
+            return self._send(200, {"status": "ok", "env": APP_ENV})
+        if method == "GET" and path in ("/ready", "/readyz"):
+            try:
+                self._conn_ping()
+                return self._send(200, {"status": "ready", "schema_version": db.current_version(_conn)})
+            except Exception as e:
+                return self._send(503, {"status": "not-ready", "detail": str(e)})
+        fn, params = _match(method, path)
         if not fn:
             return self._send(404, {"error": "not found"})
         length = int(self.headers.get("Content-Length", 0) or 0)
@@ -231,17 +319,34 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # pragma: no cover
             return self._send(500, {"error": "server error", "detail": str(e)})
 
+    def _conn_ping(self):
+        _conn.execute("SELECT 1").fetchone()
+
     def do_GET(self):
         self._handle("GET")
 
     def do_POST(self):
         self._handle("POST")
 
-    def log_message(self, *a):  # quiet
+    def log_message(self, fmt, *a):  # structured access log
+        log.info("%s %s", self.command, self.path)
+
+
+def main():
+    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+
+    def _shutdown(*_):
+        log.info("graceful shutdown")
+        srv.shutdown()
+
+    signal.signal(signal.SIGINT, _shutdown)
+    try:
+        signal.signal(signal.SIGTERM, _shutdown)
+    except Exception:
         pass
+    log.info("RGO OS backend listening on :%d env=%s cors=%s", PORT, APP_ENV, CORS_ORIGINS or "(none)")
+    srv.serve_forever()
 
 
 if __name__ == "__main__":
-    print("RGO OS backend API on http://127.0.0.1:8787")
-    print("Seeded users (pw demo1234): admin@rgo.demo · est@rgo.demo · appr@rgo.demo · fin@rgo.demo")
-    ThreadingHTTPServer(("127.0.0.1", 8787), Handler).serve_forever()
+    main()

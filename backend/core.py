@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS jobs(
   booking_id INTEGER UNIQUE NOT NULL REFERENCES bookings(id),
   quotation_id INTEGER NOT NULL REFERENCES quotations(id),
   customer_id INTEGER NOT NULL REFERENCES customers(id),
-  status TEXT NOT NULL DEFAULT 'CONFIRMED', amount REAL,
+  status TEXT NOT NULL DEFAULT 'CONFIRMED', amount REAL, scheduled_at TEXT,
   created_by INTEGER, created_at TEXT);
 
 CREATE TABLE IF NOT EXISTS audit_logs(
@@ -402,6 +402,9 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
         raise ConflictError("booking is not ready for quotation")
     if not lines:
         raise ValidationError("quotation needs at least one line")
+    for l in lines:                                       # server-side line validation
+        if l.get("rate", 0) < 0 or l.get("qty", 1) < 0 or l.get("days", 1) < 0:
+            raise ValidationError("quotation line values must not be negative")
     dp_pct = CONFIG["downpayment_default_pct"] if dp_pct is None else dp_pct
     prev = _latest_quote(conn, bid)
     if prev:  # revision -> new version, supersede previous
@@ -620,9 +623,9 @@ def confirm_job(conn, actor, bid):
         n = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
         job_no = f"JO-{2050 + n}"
         cur = conn.execute(
-            "INSERT INTO jobs(no,booking_id,quotation_id,customer_id,status,amount,created_by,created_at)"
-            " VALUES(?,?,?,?, 'CONFIRMED',?,?,?)",
-            (job_no, bid, q["id"], b["customer_id"], q["total"], actor["id"], now()))
+            "INSERT INTO jobs(no,booking_id,quotation_id,customer_id,status,amount,scheduled_at,created_by,created_at)"
+            " VALUES(?,?,?,?, 'CONFIRMED',?,?,?,?)",
+            (job_no, bid, q["id"], b["customer_id"], q["total"], now(), actor["id"], now()))
         job_id = cur.lastrowid
         conn.execute("UPDATE bookings SET stage='CONFIRMED', job_id=? WHERE id=?", (job_id, bid))
         audit(conn, actor, "job.confirm", "job", job_id,

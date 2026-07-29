@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS admin_user_roles(
 
 CREATE TABLE IF NOT EXISTS platform_config(
   id INTEGER PRIMARY KEY, scope TEXT NOT NULL, scope_ref TEXT NOT NULL DEFAULT '',
-  key TEXT NOT NULL, value TEXT, updated_by INTEGER, updated_at TEXT,
+  key TEXT NOT NULL, value TEXT, effective_to TEXT, updated_by INTEGER, updated_at TEXT,
   UNIQUE(scope, scope_ref, key));
 
 CREATE TABLE IF NOT EXISTS login_history(
@@ -88,6 +88,7 @@ def init(conn):
     conn.executescript(SCHEMA)
     _ensure_columns(conn, "users", {"status": "TEXT NOT NULL DEFAULT 'ACTIVE'", "last_login_at": "TEXT"})
     _ensure_columns(conn, "sessions", {"ip": "TEXT", "last_seen": "TEXT"})
+    _ensure_columns(conn, "platform_config", {"effective_to": "TEXT"})
     conn.commit()
 
 
@@ -419,14 +420,19 @@ def _match(patterns, action) -> bool:
 # --------------------------------------------------------------------------- #
 # Configuration cascade (C-008): platform -> tenant -> unit -> user (most specific wins)
 # --------------------------------------------------------------------------- #
-def set_config(conn, scope, scope_ref, key, value, actor=None):
-    if scope not in ("platform", "tenant", "unit", "user"):
+# Config scopes: platform/tenant/user (base) + the org levels added by C-004.
+_CONFIG_SCOPES = ("platform", "tenant", "business_unit", "branch", "department", "team", "unit", "user")
+
+
+def set_config(conn, scope, scope_ref, key, value, actor=None, effective_to=None):
+    if scope not in _CONFIG_SCOPES:
         raise core.ConflictError(f"invalid config scope '{scope}'")
-    conn.execute("INSERT INTO platform_config(scope,scope_ref,key,value,updated_by,updated_at)"
-                 " VALUES(?,?,?,?,?,?)"
+    conn.execute("INSERT INTO platform_config(scope,scope_ref,key,value,effective_to,updated_by,updated_at)"
+                 " VALUES(?,?,?,?,?,?,?)"
                  " ON CONFLICT(scope,scope_ref,key) DO UPDATE SET value=excluded.value,"
-                 " updated_by=excluded.updated_by, updated_at=excluded.updated_at",
-                 (scope, scope_ref or "", key, str(value), (actor or {}).get("id"), _now()))
+                 " effective_to=excluded.effective_to, updated_by=excluded.updated_by,"
+                 " updated_at=excluded.updated_at",
+                 (scope, scope_ref or "", key, str(value), effective_to, (actor or {}).get("id"), _now()))
     if actor:
         core.audit(conn, actor, "CONFIG_SET", "platform_config", 0,
                    new={"scope": scope, "ref": scope_ref, "key": key, "value": str(value)})
@@ -435,14 +441,27 @@ def set_config(conn, scope, scope_ref, key, value, actor=None):
 
 def resolve_config(conn, key, tenant=None, unit=None, user=None):
     """Return (value, source_scope) using most-specific-wins; (None, None) if unset."""
-    for scope, ref in (("user", user), ("unit", unit), ("tenant", tenant), ("platform", "")):
+    r = resolve_config_chain(conn, key, [("user", user), ("unit", unit), ("tenant", tenant)])
+    return r["value"], r["scope"]
+
+
+def resolve_config_chain(conn, key, chain):
+    """Resolve `key` down an ordered scope chain (most-specific first); platform is always
+    the final fallback. Skips expired rows (effective_to < today). Returns a dict with the
+    effective value, source scope + ref, updated_at, and the fallback path walked (C-004 §11)."""
+    today = datetime.date.today().isoformat()
+    path = []
+    for scope, ref in list(chain) + [("platform", "")]:
         if ref is None:
             continue
-        row = conn.execute("SELECT value FROM platform_config WHERE scope=? AND scope_ref=? AND key=?",
-                           (scope, ref, key)).fetchone()
-        if row:
-            return row["value"], scope
-    return None, None
+        path.append(f"{scope}:{ref or '-'}")
+        row = conn.execute(
+            "SELECT value, updated_at, effective_to FROM platform_config"
+            " WHERE scope=? AND scope_ref=? AND key=?", (scope, ref, key)).fetchone()
+        if row and (row["effective_to"] is None or row["effective_to"] >= today):
+            return {"value": row["value"], "scope": scope, "scope_ref": ref,
+                    "updated_at": row["updated_at"], "fallback_path": path}
+    return {"value": None, "scope": None, "scope_ref": None, "updated_at": None, "fallback_path": path}
 
 
 # --------------------------------------------------------------------------- #

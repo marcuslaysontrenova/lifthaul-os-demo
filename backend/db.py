@@ -66,11 +66,14 @@ def _postgres(url):
 
 
 def _seed_platform(conn):
-    """Ensure Platform-1 tables + seed exist (tenants, roles, config). Idempotent;
-    additive to the operational schema. Keeps the running server/HTTP path governable."""
+    """Ensure Platform-1 tables + seed exist (tenants, roles, config, org hierarchy).
+    Idempotent; additive to the operational schema. Keeps the running server/HTTP path
+    governable."""
     import admin_platform
+    import org
     admin_platform.init(conn)
     admin_platform.seed(conn)
+    org.init(conn)
     return conn
 
 

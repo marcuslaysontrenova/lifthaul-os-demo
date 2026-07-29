@@ -24,7 +24,14 @@ Role model reflects the CTO 4-layer administration hierarchy:
 """
 from __future__ import annotations
 
+import base64
 import datetime
+import hashlib
+import hmac
+import re
+import secrets
+import struct
+import time
 
 import core   # for audit() + shared error types; core does not import this module
 
@@ -63,6 +70,14 @@ CREATE TABLE IF NOT EXISTS platform_config(
   id INTEGER PRIMARY KEY, scope TEXT NOT NULL, scope_ref TEXT NOT NULL DEFAULT '',
   key TEXT NOT NULL, value TEXT, updated_by INTEGER, updated_at TEXT,
   UNIQUE(scope, scope_ref, key));
+
+CREATE TABLE IF NOT EXISTS login_history(
+  id INTEGER PRIMARY KEY, user_id INTEGER, email TEXT, success INTEGER NOT NULL,
+  reason TEXT, ip TEXT, ts TEXT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS mfa_enrollments(
+  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, secret TEXT NOT NULL,
+  confirmed INTEGER NOT NULL DEFAULT 0, enrolled_at TEXT, UNIQUE(user_id));
 """
 
 # tenant_id 0 is reserved to mean "platform-global" (system role templates, platform config).
@@ -71,23 +86,23 @@ PLATFORM_TENANT = 0
 
 def init(conn):
     conn.executescript(SCHEMA)
-    _ensure_user_columns(conn)
+    _ensure_columns(conn, "users", {"status": "TEXT NOT NULL DEFAULT 'ACTIVE'", "last_login_at": "TEXT"})
+    _ensure_columns(conn, "sessions", {"ip": "TEXT", "last_seen": "TEXT"})
     conn.commit()
 
 
-def _ensure_user_columns(conn):
-    """C-006 migration: add users.status/last_login_at to pre-existing SQLite DBs.
-    Fresh DBs get them from core.SCHEMA; Postgres gets them from the translated DDL."""
+def _ensure_columns(conn, table, cols_spec):
+    """Idempotent additive migration for pre-existing SQLite DBs (C-006/C-007).
+    Fresh DBs get columns from core.SCHEMA; Postgres from the translated DDL."""
     try:
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     except Exception:
         return                                             # non-SQLite: columns come from DDL
-    if not cols:
+    if not have:
         return
-    if "status" not in cols:
-        conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE'")
-    if "last_login_at" not in cols:
-        conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT")
+    for col, spec in cols_spec.items():
+        if col not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
     conn.commit()
 
 
@@ -187,6 +202,12 @@ DEFAULT_CONFIG = {
     "quotation.validity_days": "30",
     "dispatch.double_book": "block",            # reservation conflict policy
     "iam.rbac_source": "hybrid",                # legacy | hybrid | db  (C-005 cutover switch)
+    # Authentication policy (C-007) — all admin-owned, resolved via the config cascade
+    "auth.pw_min_length": "10",
+    "auth.pw_require_complexity": "true",       # upper + lower + digit
+    "auth.lockout_threshold": "5",              # consecutive failures before lock (0 = off)
+    "auth.lockout_window_min": "15",            # minutes the failure window spans
+    "auth.mfa_policy": "optional",              # off | optional | required
 }
 
 
@@ -435,6 +456,7 @@ STATUSES = {"ACTIVE", "SUSPENDED", "LOCKED", "DEACTIVATED"}
 
 def create_user(conn, actor, email, password, role, name=None, tenant_code="RGO", customer_id=None) -> int:
     """Invite/create a user AND assign the matching system role so DB-RBAC governs them."""
+    validate_password(conn, password, tenant=tenant_code)          # C-007 policy
     uid = core.create_user(conn, email, password, role, name, customer_id)
     r = role_by_code(conn, tenant_code, role)
     if r:
@@ -472,6 +494,7 @@ def reset_password(conn, actor, user_id, new_password):
     """Admin-initiated password reset: set a new hash and revoke all sessions."""
     if not conn.execute("SELECT 1 FROM users WHERE id=?", (user_id,)).fetchone():
         raise core.ConflictError("unknown user")
+    validate_password(conn, new_password)                          # C-007 policy
     conn.execute("UPDATE users SET pw_hash=? WHERE id=?", (core.hash_pw(new_password), user_id))
     revoke_sessions(conn, user_id)
     if actor:
@@ -512,3 +535,195 @@ def user_audit(conn, user_id, limit=100):
         "SELECT ts,actor,role,action,new_value FROM audit_logs"
         " WHERE entity='users' AND entity_id=? ORDER BY id DESC LIMIT ?",
         (user_id, limit)).fetchall()
+
+
+# --------------------------------------------------------------------------- #
+# Authentication policy, MFA & session governance (C-007)
+# All policy is admin-owned config (ED-004), resolved through the cascade.
+# --------------------------------------------------------------------------- #
+def password_policy(conn, tenant=None) -> dict:
+    def g(key, default):
+        v, _ = resolve_config(conn, key, tenant=tenant)
+        return v if v is not None else default
+    return {"min_length": int(g("auth.pw_min_length", "10")),
+            "complexity": g("auth.pw_require_complexity", "true").lower() == "true"}
+
+
+def validate_password(conn, pw, tenant=None):
+    p = password_policy(conn, tenant)
+    if not pw or len(pw) < p["min_length"]:
+        raise core.ValidationError(f"password must be at least {p['min_length']} characters")
+    if p["complexity"] and (not re.search(r"[A-Z]", pw) or not re.search(r"[a-z]", pw)
+                            or not re.search(r"\d", pw)):
+        raise core.ValidationError("password must include an upper-case letter, a lower-case letter and a digit")
+
+
+# ---- login history + lockout (persistent, tenant-aware) -------------------- #
+def record_login(conn, email, success, reason, ip=None):
+    try:
+        u = conn.execute("SELECT id FROM users WHERE email=?", (email.lower(),)).fetchone()
+        conn.execute("INSERT INTO login_history(user_id,email,success,reason,ip,ts) VALUES(?,?,?,?,?,?)",
+                     (u["id"] if u else None, email.lower(), 1 if success else 0, reason, ip, _now()))
+        conn.commit()
+    except Exception:
+        pass                                               # degrade gracefully on a non-seeded conn
+
+
+def login_locked(conn, email, tenant=None) -> bool:
+    """Locked when consecutive recent failures (since the last success, within the
+    window) reach the threshold. Threshold 0 disables lockout."""
+    try:
+        thr, _ = resolve_config(conn, "auth.lockout_threshold", tenant=tenant)
+        win, _ = resolve_config(conn, "auth.lockout_window_min", tenant=tenant)
+        thr, win = int(thr or "5"), int(win or "15")
+        if thr <= 0:
+            return False
+        cutoff = (datetime.datetime.now(datetime.timezone.utc)
+                  - datetime.timedelta(minutes=win)).isoformat(timespec="seconds")
+        rows = conn.execute("SELECT success FROM login_history WHERE email=? AND ts>=? ORDER BY id DESC",
+                            (email.lower(), cutoff)).fetchall()
+        fails = 0
+        for r in rows:
+            if r["success"]:
+                break
+            fails += 1
+        return fails >= thr
+    except Exception:
+        return False
+
+
+def list_login_history(conn, user_id=None, email=None, limit=100):
+    if user_id is not None:
+        return conn.execute("SELECT * FROM login_history WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                            (user_id, limit)).fetchall()
+    if email:
+        return conn.execute("SELECT * FROM login_history WHERE email=? ORDER BY id DESC LIMIT ?",
+                            (email.lower(), limit)).fetchall()
+    return conn.execute("SELECT * FROM login_history ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
+# ---- MFA (TOTP, RFC 6238, stdlib only) ------------------------------------- #
+def _b32secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+def _hotp(secret_b32, counter) -> str:
+    key = base64.b32decode(secret_b32 + "=" * (-len(secret_b32) % 8))
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    off = digest[-1] & 0x0F
+    code = (struct.unpack(">I", digest[off:off + 4])[0] & 0x7FFFFFFF) % 1_000_000
+    return f"{code:06d}"
+
+
+def _totp(secret_b32, t=None, step=30) -> str:
+    t = time.time() if t is None else t
+    return _hotp(secret_b32, int(t // step))
+
+
+def verify_totp(secret_b32, code, t=None, step=30, window=1) -> bool:
+    t = time.time() if t is None else t
+    code = str(code).strip()
+    base = int(t // step)
+    return any(_hotp(secret_b32, base + w) == code
+               for w in range(-window, window + 1) if base + w >= 0)
+
+
+def enroll_mfa(conn, user_id) -> str:
+    """Begin MFA enrollment: create/replace an unconfirmed secret; return it for the
+    authenticator app (also expose as an otpauth:// URI via mfa_provisioning_uri)."""
+    secret = _b32secret()
+    conn.execute("INSERT INTO mfa_enrollments(user_id,secret,confirmed,enrolled_at) VALUES(?,?,0,?)"
+                 " ON CONFLICT(user_id) DO UPDATE SET secret=excluded.secret, confirmed=0,"
+                 " enrolled_at=excluded.enrolled_at", (user_id, secret, _now()))
+    conn.commit()
+    return secret
+
+
+def mfa_provisioning_uri(secret, email, issuer="LiftHaul OS") -> str:
+    return f"otpauth://totp/{issuer}:{email}?secret={secret}&issuer={issuer}"
+
+
+def confirm_mfa(conn, user_id, code) -> bool:
+    row = conn.execute("SELECT secret FROM mfa_enrollments WHERE user_id=?", (user_id,)).fetchone()
+    if not row or not verify_totp(row["secret"], code):
+        raise core.AuthError("invalid MFA code")
+    conn.execute("UPDATE mfa_enrollments SET confirmed=1 WHERE user_id=?", (user_id,))
+    conn.commit()
+    return True
+
+
+def verify_mfa(conn, user_id, code) -> bool:
+    row = conn.execute("SELECT secret,confirmed FROM mfa_enrollments WHERE user_id=?", (user_id,)).fetchone()
+    return bool(row and row["confirmed"] and verify_totp(row["secret"], code))
+
+
+def mfa_enrolled(conn, user_id) -> bool:
+    try:
+        row = conn.execute("SELECT confirmed FROM mfa_enrollments WHERE user_id=?", (user_id,)).fetchone()
+        return bool(row and row["confirmed"])
+    except Exception:
+        return False
+
+
+def disable_mfa(conn, actor, user_id):
+    conn.execute("DELETE FROM mfa_enrollments WHERE user_id=?", (user_id,))
+    if actor:
+        core.audit(conn, actor, "MFA_DISABLED", "users", user_id)
+    conn.commit()
+
+
+def mfa_policy(conn, tenant=None) -> str:
+    v, _ = resolve_config(conn, "auth.mfa_policy", tenant=tenant)
+    return (v or "optional").lower()
+
+
+def mfa_required_for(conn, user_row, tenant=None) -> bool:
+    pol = mfa_policy(conn, tenant)
+    if pol == "required":
+        return True
+    if pol == "off":
+        return False
+    return mfa_enrolled(conn, user_row["id"])              # optional: enforced once enrolled
+
+
+# ---- guarded login (lockout -> credentials -> status -> MFA -> session) ----- #
+def guarded_login(conn, email, password, ip=None, tenant="RGO", mfa_code=None) -> str:
+    if login_locked(conn, email, tenant):
+        record_login(conn, email, False, "locked", ip)
+        raise core.AuthError("account temporarily locked — too many failed attempts")
+    row = conn.execute("SELECT * FROM users WHERE email=?", (email.lower(),)).fetchone()
+    if not row or not core.verify_pw(password, row["pw_hash"]):
+        record_login(conn, email, False, "invalid_credentials", ip)
+        raise core.AuthError("invalid credentials")
+    if core._user_status(row) != "ACTIVE":
+        record_login(conn, email, False, "inactive", ip)
+        raise core.AuthError("account is not active")
+    if mfa_required_for(conn, row, tenant):
+        if not mfa_code:
+            record_login(conn, email, False, "mfa_required", ip)
+            raise core.AuthError("MFA code required")
+        if not verify_mfa(conn, row["id"], mfa_code):
+            record_login(conn, email, False, "mfa_invalid", ip)
+            raise core.AuthError("invalid MFA code")
+    token = core.login(conn, email, password)              # verifies again + creates session
+    if ip is not None:
+        conn.execute("UPDATE sessions SET ip=?, last_seen=? WHERE token=?", (ip, _now(), token))
+        conn.commit()
+    record_login(conn, email, True, "ok", ip)
+    return token
+
+
+# ---- session administration ------------------------------------------------ #
+def list_sessions(conn, user_id=None):
+    if user_id is not None:
+        return conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
+                            " WHERE user_id=? ORDER BY created_at DESC", (user_id,)).fetchall()
+    return conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
+                        " ORDER BY created_at DESC").fetchall()
+
+
+def revoke_session(conn, token, actor=None):
+    conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+    if actor:
+        core.audit(conn, actor, "SESSION_REVOKED", "sessions", 0, new={"token": token[:6] + "…"})
+    conn.commit()

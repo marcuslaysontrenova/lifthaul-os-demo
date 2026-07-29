@@ -20,7 +20,7 @@ class Base(unittest.TestCase):
         self.actor = {"id": 1, "role": "admin"}
 
     def _user(self, email="u@rgo.demo"):
-        return core.create_user(self.c, email, "demo1234", "admin", "U")
+        return core.create_user(self.c, email, "Demo1234Xy", "admin", "U")
 
 
 class TestTenantDimension(Base):                                  # C-003
@@ -177,55 +177,55 @@ class TestRbacCutover(Base):                                      # C-005 enforc
 
 class TestUserLifecycle(Base):                                    # C-006
     def test_invite_creates_active_user_with_role(self):
-        uid = ap.create_user(self.c, self.actor, "new@rgo.demo", "demo1234", "estimator", "New")
+        uid = ap.create_user(self.c, self.actor, "new@rgo.demo", "Demo1234Xy", "estimator", "New")
         u = ap.get_user(self.c, uid)
         self.assertEqual(u["status"], "ACTIVE")
         self.assertIn("estimator", {r["code"] for r in ap.user_roles(self.c, uid)})
-        self.assertTrue(core.login(self.c, "new@rgo.demo", "demo1234"))  # can authenticate
+        self.assertTrue(core.login(self.c, "new@rgo.demo", "Demo1234Xy"))  # can authenticate
 
     def test_suspend_blocks_login_and_kills_sessions(self):
-        uid = ap.create_user(self.c, self.actor, "s@rgo.demo", "demo1234", "estimator")
-        tok = core.login(self.c, "s@rgo.demo", "demo1234")
+        uid = ap.create_user(self.c, self.actor, "s@rgo.demo", "Demo1234Xy", "estimator")
+        tok = core.login(self.c, "s@rgo.demo", "Demo1234Xy")
         ap.suspend_user(self.c, self.actor, uid)
         with self.assertRaises(core.AuthError):
             core.actor_for(self.c, tok)                       # live session revoked
         with self.assertRaises(core.AuthError):
-            core.login(self.c, "s@rgo.demo", "demo1234")      # cannot re-authenticate
+            core.login(self.c, "s@rgo.demo", "Demo1234Xy")      # cannot re-authenticate
 
     def test_activate_restores_access(self):
-        uid = ap.create_user(self.c, self.actor, "a@rgo.demo", "demo1234", "estimator")
+        uid = ap.create_user(self.c, self.actor, "a@rgo.demo", "Demo1234Xy", "estimator")
         ap.suspend_user(self.c, self.actor, uid)
         ap.activate_user(self.c, self.actor, uid)
-        self.assertTrue(core.login(self.c, "a@rgo.demo", "demo1234"))
+        self.assertTrue(core.login(self.c, "a@rgo.demo", "Demo1234Xy"))
 
     def test_lock_unlock(self):
-        uid = ap.create_user(self.c, self.actor, "l@rgo.demo", "demo1234", "estimator")
+        uid = ap.create_user(self.c, self.actor, "l@rgo.demo", "Demo1234Xy", "estimator")
         ap.lock_user(self.c, self.actor, uid)
         with self.assertRaises(core.AuthError):
-            core.login(self.c, "l@rgo.demo", "demo1234")
+            core.login(self.c, "l@rgo.demo", "Demo1234Xy")
         ap.unlock_user(self.c, self.actor, uid)
-        self.assertTrue(core.login(self.c, "l@rgo.demo", "demo1234"))
+        self.assertTrue(core.login(self.c, "l@rgo.demo", "Demo1234Xy"))
 
     def test_deactivate_offboard_is_soft(self):
-        uid = ap.create_user(self.c, self.actor, "o@rgo.demo", "demo1234", "estimator")
+        uid = ap.create_user(self.c, self.actor, "o@rgo.demo", "Demo1234Xy", "estimator")
         ap.deactivate_user(self.c, self.actor, uid)
         with self.assertRaises(core.AuthError):
-            core.login(self.c, "o@rgo.demo", "demo1234")
+            core.login(self.c, "o@rgo.demo", "Demo1234Xy")
         self.assertIsNotNone(ap.get_user(self.c, uid))        # row retained for audit
         self.assertIn(uid, {u["id"] for u in ap.list_users(self.c)})
 
     def test_reset_password_invalidates_old_and_sessions(self):
-        uid = ap.create_user(self.c, self.actor, "p@rgo.demo", "demo1234", "estimator")
-        tok = core.login(self.c, "p@rgo.demo", "demo1234")
-        ap.reset_password(self.c, self.actor, uid, "newpass99")
+        uid = ap.create_user(self.c, self.actor, "p@rgo.demo", "Demo1234Xy", "estimator")
+        tok = core.login(self.c, "p@rgo.demo", "Demo1234Xy")
+        ap.reset_password(self.c, self.actor, uid, "NewPass1234")
         with self.assertRaises(core.AuthError):
             core.actor_for(self.c, tok)                       # old session gone
         with self.assertRaises(core.AuthError):
-            core.login(self.c, "p@rgo.demo", "demo1234")      # old password rejected
-        self.assertTrue(core.login(self.c, "p@rgo.demo", "newpass99"))
+            core.login(self.c, "p@rgo.demo", "Demo1234Xy")      # old password rejected
+        self.assertTrue(core.login(self.c, "p@rgo.demo", "NewPass1234"))
 
     def test_permission_review_and_audit_trail(self):
-        uid = ap.create_user(self.c, self.actor, "r@rgo.demo", "demo1234", "approver")
+        uid = ap.create_user(self.c, self.actor, "r@rgo.demo", "Demo1234Xy", "approver")
         self.assertIn("quotation.approve", ap.permission_review(self.c, uid))
         ap.suspend_user(self.c, self.actor, uid)
         actions = {a["action"] for a in ap.user_audit(self.c, uid)}
@@ -233,9 +233,87 @@ class TestUserLifecycle(Base):                                    # C-006
         self.assertIn("USER_STATUS_CHANGED", actions)
 
     def test_invalid_status_rejected(self):
-        uid = ap.create_user(self.c, self.actor, "x@rgo.demo", "demo1234", "estimator")
+        uid = ap.create_user(self.c, self.actor, "x@rgo.demo", "Demo1234Xy", "estimator")
         with self.assertRaises(core.ConflictError):
             ap.set_status(self.c, self.actor, uid, "ZOMBIE")
+
+
+class TestAuthPolicy(Base):                                       # C-007 password policy
+    def test_policy_enforced_on_create(self):
+        with self.assertRaises(core.ValidationError):
+            ap.create_user(self.c, self.actor, "weak@rgo.demo", "short", "estimator")
+        with self.assertRaises(core.ValidationError):
+            ap.create_user(self.c, self.actor, "weak2@rgo.demo", "alllowercase99", "estimator")
+
+    def test_policy_is_configurable(self):
+        ap.set_config(self.c, "platform", "", "auth.pw_min_length", "4")
+        ap.set_config(self.c, "platform", "", "auth.pw_require_complexity", "false")
+        uid = ap.create_user(self.c, self.actor, "ok@rgo.demo", "abcd", "estimator")
+        self.assertTrue(uid)                                  # weak password now allowed by config
+
+    def test_reset_enforces_policy(self):
+        uid = ap.create_user(self.c, self.actor, "r@rgo.demo", "Demo1234Xy", "estimator")
+        with self.assertRaises(core.ValidationError):
+            ap.reset_password(self.c, self.actor, uid, "weak")
+
+
+class TestMFA(Base):                                             # C-007 MFA / TOTP
+    def test_totp_roundtrip(self):
+        secret = ap._b32secret()
+        self.assertTrue(ap.verify_totp(secret, ap._totp(secret)))
+        self.assertFalse(ap.verify_totp(secret, "000000", t=0))
+
+    def test_enroll_confirm_verify(self):
+        uid = ap.create_user(self.c, self.actor, "m@rgo.demo", "Demo1234Xy", "estimator")
+        secret = ap.enroll_mfa(self.c, uid)
+        self.assertFalse(ap.mfa_enrolled(self.c, uid))        # unconfirmed
+        ap.confirm_mfa(self.c, uid, ap._totp(secret))
+        self.assertTrue(ap.mfa_enrolled(self.c, uid))
+        self.assertTrue(ap.verify_mfa(self.c, uid, ap._totp(secret)))
+        self.assertFalse(ap.verify_mfa(self.c, uid, "999999"))
+
+    def test_guarded_login_requires_mfa_once_enrolled(self):
+        uid = ap.create_user(self.c, self.actor, "g@rgo.demo", "Demo1234Xy", "estimator")
+        secret = ap.enroll_mfa(self.c, uid)
+        ap.confirm_mfa(self.c, uid, ap._totp(secret))
+        with self.assertRaises(core.AuthError):
+            ap.guarded_login(self.c, "g@rgo.demo", "Demo1234Xy")            # missing code
+        self.assertTrue(ap.guarded_login(self.c, "g@rgo.demo", "Demo1234Xy", mfa_code=ap._totp(secret)))
+
+    def test_mfa_required_policy_forces_all(self):
+        ap.set_config(self.c, "platform", "", "auth.mfa_policy", "required")
+        row = {"id": 999}
+        self.assertTrue(ap.mfa_required_for(self.c, row))
+
+
+class TestSessionsAndLockout(Base):                              # C-007 sessions + lockout
+    def test_lockout_after_threshold(self):
+        ap.create_user(self.c, self.actor, "k@rgo.demo", "Demo1234Xy", "estimator")
+        for _ in range(5):
+            with self.assertRaises(core.AuthError):
+                ap.guarded_login(self.c, "k@rgo.demo", "wrongpass")
+        with self.assertRaises(core.AuthError):
+            ap.guarded_login(self.c, "k@rgo.demo", "Demo1234Xy")           # locked despite correct pw
+        self.assertTrue(any(h["reason"] == "locked"
+                            for h in ap.list_login_history(self.c, email="k@rgo.demo")))
+
+    def test_login_history_records_success_and_failure(self):
+        ap.create_user(self.c, self.actor, "h@rgo.demo", "Demo1234Xy", "estimator")
+        with self.assertRaises(core.AuthError):
+            ap.guarded_login(self.c, "h@rgo.demo", "nope")
+        ap.guarded_login(self.c, "h@rgo.demo", "Demo1234Xy")
+        reasons = [h["reason"] for h in ap.list_login_history(self.c, email="h@rgo.demo")]
+        self.assertIn("ok", reasons)
+        self.assertIn("invalid_credentials", reasons)
+
+    def test_session_admin_list_and_revoke(self):
+        uid = ap.create_user(self.c, self.actor, "sa@rgo.demo", "Demo1234Xy", "estimator")
+        tok = ap.guarded_login(self.c, "sa@rgo.demo", "Demo1234Xy")
+        self.assertEqual(len(ap.list_sessions(self.c, uid)), 1)
+        ap.revoke_session(self.c, tok, actor=self.actor)
+        self.assertEqual(len(ap.list_sessions(self.c, uid)), 0)
+        with self.assertRaises(core.AuthError):
+            core.actor_for(self.c, tok)
 
 
 if __name__ == "__main__":

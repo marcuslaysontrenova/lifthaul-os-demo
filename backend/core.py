@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS users(
 
 CREATE TABLE IF NOT EXISTS sessions(
   token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
-  created_at TEXT NOT NULL);
+  ip TEXT, last_seen TEXT, created_at TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS customers(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, contact TEXT, email TEXT,

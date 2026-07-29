@@ -80,7 +80,9 @@ def _actor(handler):
 # route table: (METHOD, path) -> handler(actor, body, params)
 def _routes():
     def login(actor, body, _):
-        return {"token": core.login(_conn, body["email"], body["password"])}
+        # C-007: guarded login (lockout -> credentials -> status -> MFA -> session + history)
+        return {"token": admin_platform.guarded_login(
+            _conn, body["email"], body["password"], mfa_code=body.get("mfa_code"))}
 
     def create_customer(actor, body, _):
         return {"id": core.create_customer(_conn, actor, body["name"], body.get("contact"), body.get("email"))}

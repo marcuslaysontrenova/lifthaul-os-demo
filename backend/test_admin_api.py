@@ -87,8 +87,17 @@ class TestAdminApi(unittest.TestCase):
         self.assertTrue(len(call("GET", "/admin/audit", {}, self.admin)["audit"]) >= 1)
         integ = call("GET", "/admin/governance/data-integrity", {}, self.admin)
         self.assertTrue(integ["ok"])
-        self.assertEqual(call("GET", "/admin/governance/backfill-status", {}, self.admin)["status"],
-                         "PLANNED_NOT_EXECUTED")
+        self.assertIn("tenant_enforced", call("GET", "/admin/governance/backfill-status", {}, self.admin))
+
+    def test_backfill_governance_endpoints(self):
+        self.assertIn("tables", call("GET", "/admin/governance/backfill-analyze", {}, self.admin))
+        dry = call("POST", "/admin/governance/backfill-dry-run", {}, self.admin)
+        self.assertEqual(dry["writes"], 0)
+        res = call("POST", "/admin/governance/backfill-execute", {}, self.admin)
+        self.assertIn("updated", res)
+        st = call("GET", "/admin/governance/backfill-status", {}, self.admin)
+        self.assertIn("open_remediation", st)
+        self.assertIsInstance(call("GET", "/admin/governance/backfill-remediation", {}, self.admin)["remediation"], list)
 
     # ---- Authorization gating ---------------------------------------------
     def test_non_admin_is_forbidden(self):

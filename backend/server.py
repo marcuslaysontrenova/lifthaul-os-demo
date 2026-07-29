@@ -329,9 +329,25 @@ def _admin_routes():
             "SELECT ts,actor,role,action,entity,entity_id,reason,correlation_id FROM audit_logs"
             " ORDER BY id DESC LIMIT ?", (b.get("limit", 100),)).fetchall())}
     def backfill_status(a, b, p):
-        R(a, "audit.view")
-        return {"status": "PLANNED_NOT_EXECUTED", "plan": "docs/blueprint/TENANT_BACKFILL_MATRIX.md",
-                "note": "operational records not yet tenant/org scoped; org graph governs Platform-1 entities today"}
+        R(a, "audit.view"); import backfill
+        return backfill.status(_conn)
+
+    def backfill_analyze(a, b, p):
+        R(a, "audit.view"); import backfill
+        return backfill.analyze(_conn)
+
+    def backfill_dry_run(a, b, p):
+        R(a, "audit.view"); import backfill
+        return backfill.dry_run(_conn)
+
+    def backfill_execute(a, b, p):
+        R(a, "tenant.manage"); import backfill
+        return backfill.execute(_conn, a)
+
+    def backfill_remediation(a, b, p):
+        R(a, "audit.view"); import backfill
+        return {"remediation": _rows(_conn.execute(
+            "SELECT * FROM org_backfill_remediation ORDER BY status, table_name").fetchall())}
     def data_integrity(a, b, p):
         R(a, "audit.view")
         orphan_assign = _conn.execute(
@@ -379,6 +395,10 @@ def _admin_routes():
         ("POST", "/admin/config"): cfg_set,
         ("GET", "/admin/audit"): audit_trail,
         ("GET", "/admin/governance/backfill-status"): backfill_status,
+        ("GET", "/admin/governance/backfill-analyze"): backfill_analyze,
+        ("POST", "/admin/governance/backfill-dry-run"): backfill_dry_run,
+        ("POST", "/admin/governance/backfill-execute"): backfill_execute,
+        ("GET", "/admin/governance/backfill-remediation"): backfill_remediation,
         ("GET", "/admin/governance/data-integrity"): data_integrity,
     }
 

@@ -52,6 +52,23 @@ Legend — **Sev:** P0/P1/P2 (from Volume 1 §6). **Cov:** existing test coverag
 | C-023 | Mobile surfaces (approver/driver/customer) | 8 | P5 | C-009,C-011 | P2 | responsive web | approver acts on mobile; driver captures signature/GPS offline |
 | C-024 | Monitoring/Alerting/Feature flags | 9 | P5 | C-001 | P1 | logs only | flags gate rollout; alerts fire on SLA/error breach |
 
+## 2a. Gap-closure program (Phase 1 in progress)
+
+Driven by [ENTERPRISE_ADMINISTRATION_GAP_REGISTER.md](ENTERPRISE_ADMINISTRATION_GAP_REGISTER.md).
+
+| Phase-1 outcome | Status | Evidence |
+|---|---|---|
+| #1 Audit correlation IDs | **VERIFIED COMPLETE** | `audit_logs.correlation_id`, request-scoped propagation, +2 tests |
+| #2 Tenant backfill analysis | **VERIFIED COMPLETE (backend)** | `backfill.analyze` |
+| #3 Tenant backfill dry-run | **VERIFIED COMPLETE (backend)** | `backfill.dry_run` (writes=0) |
+| #4 Safe tenant backfill execution | **VERIFIED COMPLETE (backend)** | `backfill.execute` — tenant_id=RGO for legacy (DETERMINISTIC), idempotent, no non-tenant column change |
+| #5 Tenant enforcement on operational records | **PARTIAL** | guard (`assert_in_tenant`/`tenant_filter`) present; comprehensive read-path wiring pending |
+| #6 Org-scope backfill | **PARTIAL** | org scope classified AMBIGUOUS, queued (never auto-assigned) |
+| #7 Ambiguous-record remediation | **VERIFIED COMPLETE (backend)** | `org_backfill_remediation` queue + resolve; `/admin/governance/backfill-*` |
+| #8–#13 Administration frontend | **UI PARTIAL** | `admin-console.html` renders menu + live data; governance/backfill screens + per-scope views pending |
+| #14 Browser admin E2E | **NOT READY** | needs a running backend host |
+| #15 Restart persistence | **VERIFIED (SQLite)** | HTTP E2E restart check; PostgreSQL runtime still pending |
+
 ## 3. Reprioritized backlog (immediate order)
 
 1. **C-001, C-002** — earn the right to build on the foundation (finish the open gate).

@@ -71,9 +71,11 @@ def _seed_platform(conn):
     governable."""
     import admin_platform
     import org
+    import backfill
     admin_platform.init(conn)
     admin_platform.seed(conn)
     org.init(conn)
+    backfill.init(conn)
     return conn
 
 

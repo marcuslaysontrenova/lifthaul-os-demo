@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiftHaul OS — Enterprise Administration</title>
+<style>
+  :root{
+    --brand:#5FBE2A; --accent:#F2611A; --gold:#F2C21A; --ink:#0C2306;
+    --nav:#0A1705; --nav-2:#12240b; --line:#e3e8de; --surface:#ffffff; --surface-2:#f6f8f4;
+    --muted:#5b6b52; --danger:#c0392b; --ok:#2e7d32;
+    --mode-view:#5b6b7b; --mode-edit:#5FBE2A; --mode-approval:#F2C21A; --mode-finance:#F2611A; --mode-dispatch:#2f6fb0;
+  }
+  *{box-sizing:border-box;margin:0} body{font-family:Inter,Arial,Helvetica,sans-serif;color:var(--ink);background:var(--surface-2)}
+  a{color:inherit}
+  /* login */
+  #login{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(120% 120% at 80% -20%,rgba(242,97,26,.18),transparent 55%),linear-gradient(120deg,#0C2306,#18400e)}
+  #login .card{background:#fff;border-radius:16px;padding:32px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}
+  #login h1{font-size:19px;margin-bottom:4px} #login p{color:var(--muted);font-size:13px;margin-bottom:18px}
+  input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit;background:#fff}
+  label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:12px 0 5px}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:11px 18px;border:0;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;background:var(--accent);color:#fff;font-family:inherit}
+  .btn:hover{background:#d9520f} .btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)} .btn.ghost:hover{background:#eef1ea}
+  .btn.sm{padding:7px 12px;font-size:12.5px;border-radius:8px}
+  .err{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px}
+  /* shell */
+  #app{display:none;grid-template-columns:264px 1fr;min-height:100vh}
+  .side{background:var(--nav);color:#cfe0c3;padding:0 0 24px} .side .brand{display:flex;align-items:center;gap:10px;padding:18px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .side .brand b{color:#fff;font-size:15px} .side .brand .tag{color:var(--gold);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .side .sect{padding:14px 18px 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7fa06a;font-weight:800}
+  .side .item{display:block;padding:8px 18px;font-size:13.5px;color:#cfe0c3;text-decoration:none;cursor:pointer;border-left:3px solid transparent}
+  .side .item:hover{background:var(--nav-2);color:#fff} .side .item.active{background:var(--nav-2);color:#fff;border-left-color:var(--accent)}
+  .main{display:flex;flex-direction:column;min-width:0}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--line)}
+  .top .who{font-size:13px;color:var(--muted)} .top .who b{color:var(--ink)}
+  .content{padding:22px 24px;overflow:auto}
+  h2.screen{font-size:20px;margin-bottom:2px} .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+  .bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;font-size:13px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{background:var(--surface-2);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  tr:last-child td{border-bottom:0} .wrap{overflow-x:auto}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+  .pill.ACTIVE{background:#e7f5e1;color:var(--ok)} .pill.INACTIVE,.pill.ARCHIVED,.pill.SUSPENDED,.pill.LOCKED,.pill.DEACTIVATED{background:#fde8e6;color:var(--danger)}
+  .empty{padding:26px;text-align:center;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:10px}
+  .tree ul{list-style:none;margin:0;padding-left:18px} .tree>ul{padding-left:0}
+  .tree li{padding:3px 0;font-size:13.5px} .tree .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .note{background:#fff;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--muted)}
+  .kv{display:grid;grid-template-columns:200px 1fr;gap:6px 14px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;font-size:13.5px}
+  .kv .k{color:var(--muted)}
+  /* dialog (Dialog Standard, Vol 3) */
+  .ov{position:fixed;inset:0;background:rgba(12,35,6,.5);display:none;place-items:center;z-index:20}
+  .ov.open{display:grid}
+  .dlg{background:#fff;border-radius:14px;width:min(460px,94vw);box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden}
+  .dlg .head{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .dlg .chip{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;padding:3px 9px;border-radius:6px;margin-bottom:8px}
+  .dlg .body{padding:16px 18px;max-height:60vh;overflow:auto} .dlg .foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
+  .dlg h3{font-size:16px} .dlg .rule{color:var(--muted);font-size:12px;margin-top:3px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login">
+  <div class="card">
+    <h1>LiftHaul&nbsp;OS <span style="color:var(--accent)">Administration</span></h1>
+    <p>Enterprise Administration Portal · Platform 1</p>
+    <label>Backend URL</label><input id="api" placeholder="http://localhost:8787">
+    <label>Email</label><input id="email" placeholder="admin@rgo.demo">
+    <label>Password</label><input id="pw" type="password" placeholder="••••••••">
+    <label>MFA code <span style="text-transform:none;color:#9aa">(if enrolled)</span></label><input id="mfa" placeholder="optional">
+    <div style="margin-top:16px"><button class="btn" onclick="doLogin()">Sign in →</button></div>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div id="app">
+  <nav class="side">
+    <div class="brand"><span style="font-size:22px">🛡️</span><div><b>LiftHaul&nbsp;OS</b><div class="tag">Administration</div></div></div>
+    <div id="menu"></div>
+  </nav>
+  <div class="main">
+    <div class="top">
+      <div id="crumb" style="font-weight:700"></div>
+      <div class="who">Signed in as <b id="whoami">—</b> · <a style="color:var(--accent);cursor:pointer" onclick="logout()">Sign out</a></div>
+    </div>
+    <div class="content" id="content"><div class="empty">Select an item from the menu.</div></div>
+  </div>
+</div>
+
+<!-- DIALOG -->
+<div class="ov" id="ov"><div class="dlg">
+  <div class="head"><span class="chip" id="dchip"></span><h3 id="dtitle"></h3><div class="rule" id="drule"></div></div>
+  <div class="body" id="dbody"></div>
+  <div class="foot"><button class="btn ghost" onclick="closeDlg()">Cancel</button><button class="btn" id="dsave">Save</button></div>
+</div></div>
+
+<script>
+// ------------------------------------------------------------------ state
+let API = localStorage.getItem('lh_api') || (window.RGO_CONFIG && window.RGO_CONFIG.apiBase) || 'http://localhost:8787';
+let TOKEN = sessionStorage.getItem('lh_tok') || null;
+let EMAIL = sessionStorage.getItem('lh_email') || null;
+document.getElementById('api').value = API;
+
+async function api(method, path, body){
+  const opt = {method, headers:{'Content-Type':'application/json'}};
+  if(TOKEN) opt.headers['Authorization'] = 'Bearer '+TOKEN;
+  if(body!==undefined) opt.body = JSON.stringify(body);
+  const res = await fetch(API.replace(/\/$/,'')+path, opt);
+  const json = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error((json && json.error) || ('HTTP '+res.status));
+  return json.data;
+}
+
+// ------------------------------------------------------------------ auth
+async function doLogin(){
+  API = document.getElementById('api').value.trim(); localStorage.setItem('lh_api', API);
+  const email = document.getElementById('email').value.trim();
+  const pw = document.getElementById('pw').value;
+  const mfa = document.getElementById('mfa').value.trim();
+  document.getElementById('loginErr').textContent='';
+  try{
+    const d = await api('POST','/login',{email, password:pw, mfa_code:mfa||undefined});
+    TOKEN = d.token; EMAIL = email;
+    sessionStorage.setItem('lh_tok',TOKEN); sessionStorage.setItem('lh_email',EMAIL);
+    enterApp();
+  }catch(e){ document.getElementById('loginErr').textContent = 'Sign-in failed: '+e.message; }
+}
+function logout(){ TOKEN=null; sessionStorage.clear(); document.getElementById('app').style.display='none'; document.getElementById('login').style.display='grid'; }
+function enterApp(){
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='grid';
+  document.getElementById('whoami').textContent = EMAIL;
+  buildMenu(); select(MENU[0].items[0]);
+}
+
+// ------------------------------------------------------------------ menu (the CTO IA)
+const MENU = [
+  {sect:'Organization', items:[
+    {id:'profile', label:'Company Profile'},
+    {id:'structure', label:'Organization Structure'},
+    {id:'business_unit', label:'Business Units'},
+    {id:'branch', label:'Branches'},
+    {id:'department', label:'Departments'},
+    {id:'team', label:'Teams'},
+    {id:'operating_site', label:'Operating Sites'},
+    {id:'warehouse', label:'Warehouses'},
+    {id:'service_area', label:'Service Areas'},
+    {id:'cost_centers', label:'Cost Centers'},
+  ]},
+  {sect:'People & Access', items:[
+    {id:'users', label:'Users'},
+    {id:'roles', label:'Roles'},
+    {id:'permissions', label:'Permissions'},
+    {id:'assignments', label:'Organization Assignments'},
+    {id:'sessions', label:'Sessions'},
+    {id:'login_history', label:'Login History'},
+    {id:'mfa', label:'MFA Status'},
+  ]},
+  {sect:'Calendars', items:[
+    {id:'holiday_cal', label:'Holiday Calendars'},
+    {id:'working_cal', label:'Working Calendars'},
+    {id:'business_hours', label:'Business Hours'},
+  ]},
+  {sect:'Security', items:[
+    {id:'pw_policy', label:'Password Policy'},
+    {id:'auth_policy', label:'Authentication Policy'},
+    {id:'authz_mode', label:'Authorization Mode'},
+    {id:'sod', label:'Separation of Duties'},
+    {id:'sec_events', label:'Security Events'},
+  ]},
+  {sect:'Configuration', items:[
+    {id:'cfg_platform', label:'Platform Settings'},
+    {id:'cfg_tenant', label:'Tenant Settings'},
+    {id:'cfg_org', label:'Organization Overrides'},
+    {id:'cfg_effective', label:'Effective Configuration'},
+  ]},
+  {sect:'Governance', items:[
+    {id:'audit', label:'Audit Trail'},
+    {id:'backfill', label:'Backfill Status'},
+    {id:'integrity', label:'Data Integrity'},
+  ]},
+];
+function buildMenu(){
+  const m = document.getElementById('menu'); m.innerHTML='';
+  MENU.forEach(s=>{
+    m.insertAdjacentHTML('beforeend', `<div class="sect">${s.sect}</div>`);
+    s.items.forEach(it=>{
+      const a = document.createElement('a'); a.className='item'; a.textContent=it.label; a.dataset.id=it.id;
+      a.onclick=()=>select(it); m.appendChild(a);
+    });
+  });
+}
+let CURRENT=null;
+function select(it){
+  CURRENT=it;
+  document.querySelectorAll('.side .item').forEach(x=>x.classList.toggle('active',x.dataset.id===it.id));
+  document.getElementById('crumb').textContent='Administration › '+it.label;
+  render(it);
+}
+
+// ------------------------------------------------------------------ rendering
+const C = ()=>document.getElementById('content');
+function table(cols, rows, rowfmt){
+  if(!rows || !rows.length) return `<div class="empty">No records.</div>`;
+  const head = cols.map(c=>`<th>${c}</th>`).join('');
+  const body = rows.map(r=>`<tr>${(rowfmt?rowfmt(r):cols.map(c=>cell(r[c.toLowerCase()]))).map(v=>`<td>${v}</td>`).join('')}</tr>`).join('');
+  return `<div class="wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function cell(v){ if(v===null||v===undefined) return '<span style="color:#bbb">—</span>'; return String(v); }
+function pill(s){ return `<span class="pill ${s}">${s}</span>`; }
+async function render(it){
+  const c = C(); c.innerHTML = `<div class="empty">Loading…</div>`;
+  try{ await SCREENS[it.id](it, c); }
+  catch(e){ c.innerHTML = `<div class="note" style="border-left-color:var(--danger);color:var(--danger)">Error: ${e.message}</div>`; }
+}
+function header(it, sub, actions){
+  return `<h2 class="screen">${it.label}</h2><div class="sub">${sub||''}</div>`+(actions?`<div class="bar">${actions}</div>`:'');
+}
+
+const SCREENS = {
+  // Organization
+  profile: async (it,c)=>{ const d=await api('GET','/admin/org/company-profile'); const p=d.profile||{};
+    c.innerHTML=header(it,'Tenant-level legal identity. Cascade-governed values live in Configuration.',
+      `<button class="btn sm" onclick="dlgProfile()">Edit profile ✎</button>`)+
+      `<div class="kv">${['legal_name','trade_name','registration_number','tax_number','country','timezone','default_currency','locale','fiscal_year_start'].map(k=>`<div class="k">${k}</div><div>${cell(p[k])}</div>`).join('')}</div>`; },
+  structure: async (it,c)=>{ const d=await api('GET','/admin/org/tree');
+    c.innerHTML=header(it,'The full organization graph for this tenant.')+`<div class="tree">${treeHtml(d.tree)}</div>`; },
+  cost_centers: async (it,c)=>{ const d=await api('GET','/admin/org/cost-centers');
+    c.innerHTML=header(it,'Financial allocation targets.',`<button class="btn sm" onclick="dlgUnit('cost_center')">New cost center +</button>`)+
+      table(['Code','Name','Status'], d.cost_centers, r=>[r.code,r.name,pill(r.status)]); },
+  // People & Access
+  users: async (it,c)=>{ const d=await api('GET','/admin/users');
+    c.innerHTML=header(it,'User lifecycle — invite, suspend, lock, offboard.',`<button class="btn sm" onclick="dlgUser()">Invite user +</button>`)+
+      table(['Email','Role','Status','Last login'], d.users, r=>[r.email,r.role,pill(r.status),cell(r.last_login_at)]); },
+  roles: async (it,c)=>{ const d=await api('GET','/admin/roles');
+    c.innerHTML=header(it,'Data-driven roles across the 4-layer administration hierarchy.',`<button class="btn sm" onclick="dlgRole()">New role +</button>`)+
+      table(['Code','Name','Layer','Locked'], d.roles, r=>[r.code,r.name,'L'+r.layer,r.system_locked?'🔒':'']); },
+  permissions: async (it,c)=>{ const d=await api('GET','/admin/permissions');
+    c.innerHTML=header(it,'Capability catalog (module × action).')+table(['Code','Module','Action','Description'], d.permissions, r=>[r.code,r.module,r.action,cell(r.description)]); },
+  assignments: async (it,c)=>{ const d=await api('GET','/admin/users');
+    c.innerHTML=header(it,'Pick a user to view their organization assignments.')+
+      table(['Email','Role','Assignments'], d.users, r=>[r.email,r.role,`<a style="color:var(--accent);cursor:pointer" onclick="showAssign(${r.id},'${r.email}')">view</a>`]); },
+  sessions: async (it,c)=>{ const d=await api('GET','/admin/sessions');
+    c.innerHTML=header(it,'Active sessions across the platform.')+
+      table(['User','IP','Created','Last seen'], d.sessions, r=>[r.user_id,cell(r.ip),cell(r.created_at),cell(r.last_seen)]); },
+  login_history: async (it,c)=>{ const d=await api('GET','/admin/login-history');
+    c.innerHTML=header(it,'Authentication events (success and failure).')+
+      table(['Email','Result','Reason','IP','Time'], d.history, r=>[r.email, r.success?'<span style="color:var(--ok)">success</span>':'<span style="color:var(--danger)">fail</span>', r.reason, cell(r.ip), r.ts]); },
+  mfa: async (it,c)=>{ const d=await api('GET','/admin/users');
+    const rows=[]; for(const u of d.users){ const m=await api('GET','/admin/users/'+u.id+'/mfa'); rows.push({email:u.email, mfa:m.enrolled?'Enrolled ✓':'Not enrolled'}); }
+    c.innerHTML=header(it,'TOTP enrollment status per user.')+table(['Email','MFA'], rows, r=>[r.email,r.mfa]); },
+  // Calendars
+  holiday_cal: async (it,c)=>{ const d=await api('GET','/admin/holiday-calendars');
+    c.innerHTML=header(it,'Named holiday calendars with inheritance.',`<button class="btn sm" onclick="dlgHolCal()">New calendar +</button>`)+
+      table(['Code','Name','Scope','Status'], d.calendars, r=>[r.code,r.name,r.scope,pill(r.status)]); },
+  working_cal: async (it,c)=>{ const d=await api('GET','/admin/working-calendars');
+    c.innerHTML=header(it,'Working calendars (override + inherit).')+
+      table(['Code','Name','Workdays','Shift'], d.calendars, r=>[r.code,r.name,r.workdays,`${r.shift_start}–${r.shift_end}`]); },
+  business_hours: async (it,c)=>{ const d=await api('GET','/admin/working-calendars');
+    c.innerHTML=header(it,'Business hours derived from working calendars.')+
+      table(['Calendar','Shift start','Shift end','Break (min)'], d.calendars, r=>[r.name,r.shift_start,r.shift_end,r.break_minutes]); },
+  // Security
+  pw_policy: async (it,c)=>{ const d=await api('GET','/admin/security/policies'); const p=d.password_policy;
+    c.innerHTML=header(it,'Configuration-governed password rules.',`<button class="btn sm" onclick="dlgSec()">Edit policy ✎</button>`)+
+      `<div class="kv"><div class="k">Minimum length</div><div>${p.min_length}</div><div class="k">Complexity required</div><div>${p.complexity}</div></div>`; },
+  auth_policy: async (it,c)=>{ const d=await api('GET','/admin/security/policies');
+    c.innerHTML=header(it,'MFA policy and login lockout.',`<button class="btn sm" onclick="dlgSec()">Edit policy ✎</button>`)+
+      `<div class="kv"><div class="k">MFA policy</div><div>${d.mfa_policy}</div><div class="k">Lockout threshold</div><div>${cell(d.lockout.threshold)}</div><div class="k">Lockout window (min)</div><div>${cell(d.lockout.window_min)}</div></div>`; },
+  authz_mode: async (it,c)=>{ const d=await api('GET','/admin/security/policies');
+    c.innerHTML=header(it,'RBAC enforcement source (reversible cutover switch).')+
+      `<div class="kv"><div class="k">Authorization mode</div><div><b>${d.authorization_mode}</b> <span style="color:var(--muted)">(legacy | hybrid | db)</span></div></div>`; },
+  sod: async (it,c)=>{ c.innerHTML=header(it,'Separation of duties (maker ≠ checker).')+
+      `<div class="note">Enforced in the commercial spine: quotation approval requires a different actor than the creator; payment verification and job confirmation are separated. Configurable thresholds live under Configuration → Effective Configuration (<code>approval.quotation_threshold</code>).</div>`; },
+  sec_events: async (it,c)=>{ const d=await api('GET','/admin/security/events');
+    c.innerHTML=header(it,'Failed authentication and security-relevant events.')+
+      table(['Email','Reason','IP','Time'], d.events, r=>[r.email,r.reason,cell(r.ip),r.ts]); },
+  // Configuration
+  cfg_platform: (it,c)=>cfgList(it,c,'platform'),
+  cfg_tenant: (it,c)=>cfgList(it,c,'tenant'),
+  cfg_org: (it,c)=>cfgList(it,c,['business_unit','branch','department','team']),
+  cfg_effective: async (it,c)=>{ c.innerHTML=header(it,'Resolve a configuration key down the org cascade.')+
+      `<div class="bar"><input id="ck" placeholder="key e.g. approval.quotation_threshold" style="max-width:340px"><input id="cb" placeholder="branch id (optional)" style="max-width:160px"><button class="btn sm" onclick="doResolve()">Resolve</button></div><div id="cres"></div>`; },
+  // Governance
+  audit: async (it,c)=>{ const d=await api('GET','/admin/audit');
+    c.innerHTML=header(it,'Append-only trail of administrative actions.')+
+      table(['Time','Actor','Action','Entity','Id'], d.audit, r=>[r.ts,r.actor,r.action,r.entity,r.entity_id]); },
+  backfill: async (it,c)=>{ const d=await api('GET','/admin/governance/backfill-status');
+    c.innerHTML=header(it,'Tenant/organization backfill of operational records.')+
+      `<div class="kv"><div class="k">Status</div><div><b>${d.status}</b></div><div class="k">Plan</div><div>${d.plan}</div><div class="k">Note</div><div>${d.note}</div></div>`; },
+  integrity: async (it,c)=>{ const d=await api('GET','/admin/governance/data-integrity');
+    c.innerHTML=header(it,'Referential integrity checks.')+
+      `<div class="kv"><div class="k">Overall</div><div>${d.ok?'<span style="color:var(--ok)">OK ✓</span>':'<span style="color:var(--danger)">issues found</span>'}</div>${Object.entries(d.checks).map(([k,v])=>`<div class="k">${k}</div><div>${v}</div>`).join('')}</div>`; },
+};
+// generic org-unit kind screens
+['business_unit','branch','department','team','operating_site','warehouse','service_area'].forEach(kind=>{
+  SCREENS[kind] = async (it,c)=>{ const d=await api('POST','/admin/org/units/search',{kind});
+    c.innerHTML=header(it,`Organization units of kind “${kind}”.`,`<button class="btn sm" onclick="dlgUnit('${kind}')">New +</button>`)+
+      table(['Code','Name','Status'], d.units, r=>[r.code,r.name,pill(r.status)]); };
+});
+function treeHtml(nodes){ if(!nodes||!nodes.length) return '<div class="empty">No organization units yet.</div>';
+  const li = n=>`<li><span class="k">${n.kind}</span> <b>${n.code}</b> — ${n.name} ${n.status!=='ACTIVE'?pill(n.status):''}${n.children&&n.children.length?`<ul>${n.children.map(li).join('')}</ul>`:''}</li>`;
+  return `<ul>${nodes.map(li).join('')}</ul>`; }
+async function cfgList(it,c,scopes){ const d=await api('GET','/admin/config'); const set=[].concat(scopes);
+  const rows=d.config.filter(r=>set.includes(r.scope));
+  c.innerHTML=header(it,'Configuration values ('+set.join(', ')+').',`<button class="btn sm" onclick="dlgCfg('${set[0]}')">Set value +</button>`)+
+    table(['Scope','Ref','Key','Value','Expires'], rows, r=>[r.scope,cell(r.scope_ref),r.key,r.value,cell(r.effective_to)]); }
+async function doResolve(){ const key=document.getElementById('ck').value.trim(); const br=document.getElementById('cb').value.trim();
+  const body={key, tenant:'1'}; if(br) body.branch=br;
+  try{ const r=await api('POST','/admin/config/effective',body);
+    document.getElementById('cres').innerHTML=`<div class="kv"><div class="k">Value</div><div><b>${cell(r.value)}</b></div><div class="k">Source scope</div><div>${cell(r.scope)}</div><div class="k">Source ref</div><div>${cell(r.scope_ref)}</div><div class="k">Fallback path</div><div>${(r.fallback_path||[]).join(' → ')}</div></div>`;
+  }catch(e){ document.getElementById('cres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
+async function showAssign(uid,email){ const d=await api('GET','/admin/users/'+uid+'/assignments');
+  openDlg('view','Organization assignments','User: '+email, table(['Kind','Scope id','Type','Status'], d.assignments, r=>[r.scope_kind,r.scope_id,r.assignment_type,pill(r.status)]), null); }
+
+// ------------------------------------------------------------------ Dialog Standard
+const MODE={view:'View',edit:'Edit',approval:'Approval Required',finance:'Finance Action',dispatch:'Dispatch Action'};
+function openDlg(mode,title,rule,bodyHtml,onSave){
+  document.getElementById('dchip').textContent=MODE[mode];
+  document.getElementById('dchip').style.background='var(--mode-'+mode+')';
+  document.getElementById('dtitle').textContent=title;
+  document.getElementById('drule').textContent=rule||'';
+  document.getElementById('dbody').innerHTML=bodyHtml;
+  const save=document.getElementById('dsave');
+  save.style.display=onSave?'inline-flex':'none';
+  save.onclick=async()=>{ try{ await onSave(); closeDlg(); render(CURRENT); }catch(e){ alert(e.message); } };
+  document.getElementById('ov').classList.add('open');
+}
+function closeDlg(){ document.getElementById('ov').classList.remove('open'); }
+const val=id=>document.getElementById(id).value.trim();
+function field(id,label,ph){ return `<label>${label}</label><input id="${id}" placeholder="${ph||''}">`; }
+
+function dlgUnit(kind){ openDlg('edit','New '+kind.replace('_',' '),'Creates a tenant-scoped organization unit.',
+  field('u_code','Code','MNL')+field('u_name','Name','Manila Branch')+field('u_parent','Parent id (optional)',''),
+  ()=>api('POST','/admin/org/units',{kind,code:val('u_code'),name:val('u_name'),parent_id:val('u_parent')?parseInt(val('u_parent')):undefined})); }
+function dlgUser(){ openDlg('edit','Invite user','New user is created ACTIVE and assigned the matching system role.',
+  field('nu_email','Email','ops@rgo.demo')+field('nu_name','Name','')+field('nu_pw','Temp password','Min 10, upper+lower+digit')+
+  `<label>Role</label><select id="nu_role"><option>estimator</option><option>approver</option><option>finance</option><option>dispatcher</option><option>operations_manager</option></select>`,
+  ()=>api('POST','/admin/users',{email:val('nu_email'),name:val('nu_name'),password:val('nu_pw'),role:val('nu_role')})); }
+function dlgRole(){ openDlg('edit','New role','Grants use the wildcard grammar (e.g. quotation.*).',
+  field('r_code','Code','power_user')+field('r_name','Name','Power User')+field('r_grants','Grants (comma-separated)','quotation.*, customer.view'),
+  ()=>api('POST','/admin/roles',{code:val('r_code'),name:val('r_name'),grants:val('r_grants').split(',').map(s=>s.trim()).filter(Boolean)})); }
+function dlgHolCal(){ openDlg('edit','New holiday calendar','',
+  field('h_code','Code','PH')+field('h_name','Name','Philippines'),
+  ()=>api('POST','/admin/holiday-calendars',{code:val('h_code'),name:val('h_name')})); }
+function dlgProfile(){ openDlg('edit','Edit company profile','Identity fields only; currency/timezone resolve via Configuration.',
+  field('p_legal','Legal name','')+field('p_trade','Trade name','')+field('p_country','Country','PH')+field('p_tz','Timezone','Asia/Manila'),
+  ()=>api('POST','/admin/org/company-profile',{legal_name:val('p_legal'),trade_name:val('p_trade'),country:val('p_country'),timezone:val('p_tz')})); }
+function dlgSec(){ openDlg('edit','Edit security policy','Password + authentication policy (admin-owned configuration).',
+  field('s_min','Password min length','10')+`<label>Complexity required</label><select id="s_cx"><option>true</option><option>false</option></select>`+
+  `<label>MFA policy</label><select id="s_mfa"><option>optional</option><option>required</option><option>off</option></select>`+field('s_lock','Lockout threshold','5'),
+  ()=>api('POST','/admin/security/policies',{'auth.pw_min_length':val('s_min'),'auth.pw_require_complexity':val('s_cx'),'auth.mfa_policy':val('s_mfa'),'auth.lockout_threshold':val('s_lock')})); }
+function dlgCfg(scope){ openDlg('edit','Set configuration value','Most-specific scope wins in the cascade.',
+  `<label>Scope</label><select id="cf_scope"><option>platform</option><option>tenant</option><option>branch</option><option>department</option></select>`+
+  field('cf_ref','Scope ref (id/code, blank for platform)','')+field('cf_key','Key','approval.quotation_threshold')+field('cf_val','Value','750000'),
+  ()=>api('POST','/admin/config',{scope:val('cf_scope'),scope_ref:val('cf_ref'),key:val('cf_key'),value:val('cf_val')})); }
+
+// ------------------------------------------------------------------ boot
+if(TOKEN){ enterApp(); }
+</script>
+</body>
+</html>

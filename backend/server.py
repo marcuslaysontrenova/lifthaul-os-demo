@@ -24,6 +24,7 @@ import admin
 import catalog   # noqa: F401  (ensures full schema/roles registered)
 import pdfgen
 import admin_platform
+import org
 import db
 
 # --- configuration (never hard-coded; env-driven) --------------------------
@@ -243,9 +244,149 @@ def _phase2_routes():
     }
 
 
+def _rows(rowlist):
+    return [dict(r) for r in rowlist]
+
+
+def _row(r):
+    return dict(r) if r else None
+
+
+def _tid():
+    t = admin_platform.get_tenant(_conn, "RGO")
+    return t["id"] if t else 1
+
+
+def _admin_routes():
+    """Enterprise Administration console API (Platform 1). Read + key-mutation endpoints
+    backing the admin menu (Organization / People & Access / Calendars / Security /
+    Configuration / Governance). Permission-gated; org-scoped where relevant."""
+    R = core.require
+
+    # ---- Organization -----------------------------------------------------
+    def org_tree(a, b, p):       R(a, "org.view");   return {"tree": org.tree(_conn, _tid())}
+    def org_units(a, b, p):      R(a, "org.view");   return {"units": _rows(org.list_units(_conn, _tid(), kind=b.get("kind"), status=b.get("status"), q=b.get("q")))}
+    def org_unit_create(a, b, p):R(a, "org.manage"); return {"id": org.create_unit(_conn, a, _tid(), b["kind"], b["code"], b["name"], parent_id=b.get("parent_id"), description=b.get("description"), effective_from=b.get("effective_from"), effective_to=b.get("effective_to"))}
+    def org_reparent(a, b, p):   R(a, "org.manage"); org.reparent(_conn, a, int(p["id"]), b.get("parent_id")); return {"ok": True}
+    def org_status(a, b, p):     R(a, "org.manage"); org.set_status(_conn, a, int(p["id"]), b["status"]); return {"ok": True}
+    def cost_centers(a, b, p):   R(a, "org.view");   return {"cost_centers": _rows(org.list_cost_centers(_conn, _tid(), status=b.get("status")))}
+    def cc_create(a, b, p):      R(a, "org.manage"); return {"id": org.create_cost_center(_conn, a, _tid(), b["code"], b["name"], branch_id=b.get("branch_id"), department_id=b.get("department_id"), budget_ref=b.get("budget_ref"), external_code=b.get("external_code"))}
+    def profile_get(a, b, p):    R(a, "org.view");   return {"profile": _row(org.company_profile(_conn, _tid()))}
+    def profile_set(a, b, p):    R(a, "org.manage"); org.upsert_company_profile(_conn, a, _tid(), **{k: v for k, v in b.items()}); return {"ok": True}
+
+    # ---- People & Access --------------------------------------------------
+    def users(a, b, p):          R(a, "user_admin.view");   return {"users": _rows(admin_platform.list_users(_conn))}
+    def user_create(a, b, p):    R(a, "user_admin.manage"); return {"id": admin_platform.create_user(_conn, a, b["email"], b["password"], b["role"], b.get("name"))}
+    def user_status(a, b, p):    R(a, "user_admin.manage"); admin_platform.set_status(_conn, a, int(p["id"]), b["status"]); return {"ok": True}
+    def user_reset(a, b, p):     R(a, "user_admin.manage"); admin_platform.reset_password(_conn, a, int(p["id"]), b["password"]); return {"ok": True}
+    def roles(a, b, p):          R(a, "role_admin.view");   return {"roles": _rows(admin_platform.list_roles(_conn, "RGO"))}
+    def role_create(a, b, p):    R(a, "role_admin.manage"); return {"id": admin_platform.create_role(_conn, "RGO", b["code"], b["name"], layer=b.get("layer", 4), grants=set(b.get("grants", [])), actor=a)}
+    def permissions(a, b, p):    R(a, "role_admin.view");   return {"permissions": _rows(_conn.execute("SELECT code,module,action,description FROM admin_permissions ORDER BY module,action").fetchall())}
+    def assignments(a, b, p):    R(a, "user_admin.view");   return {"assignments": _rows(org.user_assignments(_conn, int(p["id"])))}
+    def assign(a, b, p):         R(a, "user_admin.manage"); return {"id": org.assign_user(_conn, a, _tid(), int(p["id"]), b["scope_kind"], b["scope_id"], b.get("assignment_type", "PRIMARY"), reason=b.get("reason"))}
+    def sessions(a, b, p):       R(a, "security.view");     return {"sessions": _rows(admin_platform.list_sessions(_conn))}
+    def session_revoke(a, b, p): R(a, "security.manage");   admin_platform.revoke_session(_conn, b["token"], actor=a); return {"ok": True}
+    def login_history(a, b, p):  R(a, "security.view");     return {"history": _rows(admin_platform.list_login_history(_conn, limit=b.get("limit", 100)))}
+    def mfa_status(a, b, p):     R(a, "user_admin.view");   return {"enrolled": admin_platform.mfa_enrolled(_conn, int(p["id"]))}
+
+    # ---- Calendars --------------------------------------------------------
+    def hol_cals(a, b, p):       R(a, "org.view");   return {"calendars": _rows(_conn.execute("SELECT * FROM holiday_calendars WHERE tenant_id=?", (_tid(),)).fetchall())}
+    def hol_cal_create(a, b, p): R(a, "org.manage"); return {"id": org.create_holiday_calendar(_conn, a, _tid(), b["code"], b["name"], scope=b.get("scope", "company"), parent_id=b.get("parent_id"))}
+    def hol_days(a, b, p):       R(a, "org.view");   return {"holidays": _rows(org.effective_holidays(_conn, int(p["id"])))}
+    def work_cals(a, b, p):      R(a, "org.view");   return {"calendars": _rows(_conn.execute("SELECT * FROM working_calendars WHERE tenant_id=?", (_tid(),)).fetchall())}
+    def work_cal_create(a, b, p):R(a, "org.manage"); return {"id": org.create_working_calendar(_conn, a, _tid(), b["code"], b["name"], workdays=b.get("workdays", "Mon,Tue,Wed,Thu,Fri"), shift_start=b.get("shift_start", "08:00"), shift_end=b.get("shift_end", "17:00"), parent_id=b.get("parent_id"))}
+
+    # ---- Security ---------------------------------------------------------
+    def sec_policies(a, b, p):
+        R(a, "security.view")
+        return {"password_policy": admin_platform.password_policy(_conn),
+                "mfa_policy": admin_platform.mfa_policy(_conn),
+                "authorization_mode": admin_platform.resolve_config(_conn, "iam.rbac_source", tenant="")[0] or "hybrid",
+                "lockout": {"threshold": admin_platform.resolve_config(_conn, "auth.lockout_threshold", tenant="")[0],
+                            "window_min": admin_platform.resolve_config(_conn, "auth.lockout_window_min", tenant="")[0]}}
+    def sec_policy_set(a, b, p):
+        R(a, "security.manage")
+        for k, v in b.items():
+            admin_platform.set_config(_conn, "platform", "", k, v, actor=a)
+        return {"ok": True}
+    def sec_events(a, b, p):
+        R(a, "security.view")
+        return {"events": _rows(_conn.execute(
+            "SELECT * FROM login_history WHERE success=0 ORDER BY id DESC LIMIT ?", (b.get("limit", 100),)).fetchall())}
+
+    # ---- Configuration ----------------------------------------------------
+    def cfg_effective(a, b, p):
+        R(a, "system_config.view")
+        return org.resolve_org_config(_conn, b["key"], tenant=b.get("tenant"), business_unit=b.get("business_unit"),
+                                      branch=b.get("branch"), department=b.get("department"), team=b.get("team"), user=b.get("user"))
+    def cfg_list(a, b, p):       R(a, "system_config.view");   return {"config": _rows(_conn.execute("SELECT scope,scope_ref,key,value,effective_to,updated_at FROM platform_config ORDER BY scope,key").fetchall())}
+    def cfg_set(a, b, p):        R(a, "system_config.manage"); admin_platform.set_config(_conn, b["scope"], b.get("scope_ref", ""), b["key"], b["value"], actor=a, effective_to=b.get("effective_to")); return {"ok": True}
+
+    # ---- Governance -------------------------------------------------------
+    def audit_trail(a, b, p):
+        R(a, "audit.view")
+        return {"audit": _rows(_conn.execute(
+            "SELECT ts,actor,role,action,entity,entity_id,reason FROM audit_logs ORDER BY id DESC LIMIT ?",
+            (b.get("limit", 100),)).fetchall())}
+    def backfill_status(a, b, p):
+        R(a, "audit.view")
+        return {"status": "PLANNED_NOT_EXECUTED", "plan": "docs/blueprint/TENANT_BACKFILL_MATRIX.md",
+                "note": "operational records not yet tenant/org scoped; org graph governs Platform-1 entities today"}
+    def data_integrity(a, b, p):
+        R(a, "audit.view")
+        orphan_assign = _conn.execute(
+            "SELECT COUNT(*) c FROM user_organization_assignments ua"
+            " LEFT JOIN users u ON u.id=ua.user_id WHERE u.id IS NULL").fetchone()["c"]
+        orphan_units = _conn.execute(
+            "SELECT COUNT(*) c FROM org_units o WHERE o.parent_id IS NOT NULL"
+            " AND NOT EXISTS (SELECT 1 FROM org_units p WHERE p.id=o.parent_id)").fetchone()["c"]
+        return {"checks": {"orphan_user_assignments": orphan_assign, "orphan_org_units": orphan_units},
+                "ok": orphan_assign == 0 and orphan_units == 0}
+
+    return {
+        ("GET", "/admin/org/tree"): org_tree,
+        ("POST", "/admin/org/units/search"): org_units,
+        ("POST", "/admin/org/units"): org_unit_create,
+        ("POST", "/admin/org/units/:id/reparent"): org_reparent,
+        ("POST", "/admin/org/units/:id/status"): org_status,
+        ("GET", "/admin/org/cost-centers"): cost_centers,
+        ("POST", "/admin/org/cost-centers"): cc_create,
+        ("GET", "/admin/org/company-profile"): profile_get,
+        ("POST", "/admin/org/company-profile"): profile_set,
+        ("GET", "/admin/users"): users,
+        ("POST", "/admin/users"): user_create,
+        ("POST", "/admin/users/:id/status"): user_status,
+        ("POST", "/admin/users/:id/reset-password"): user_reset,
+        ("GET", "/admin/roles"): roles,
+        ("POST", "/admin/roles"): role_create,
+        ("GET", "/admin/permissions"): permissions,
+        ("GET", "/admin/users/:id/assignments"): assignments,
+        ("POST", "/admin/users/:id/assignments"): assign,
+        ("GET", "/admin/sessions"): sessions,
+        ("POST", "/admin/sessions/revoke"): session_revoke,
+        ("GET", "/admin/login-history"): login_history,
+        ("GET", "/admin/users/:id/mfa"): mfa_status,
+        ("GET", "/admin/holiday-calendars"): hol_cals,
+        ("POST", "/admin/holiday-calendars"): hol_cal_create,
+        ("GET", "/admin/holiday-calendars/:id/holidays"): hol_days,
+        ("GET", "/admin/working-calendars"): work_cals,
+        ("POST", "/admin/working-calendars"): work_cal_create,
+        ("GET", "/admin/security/policies"): sec_policies,
+        ("POST", "/admin/security/policies"): sec_policy_set,
+        ("GET", "/admin/security/events"): sec_events,
+        ("POST", "/admin/config/effective"): cfg_effective,
+        ("GET", "/admin/config"): cfg_list,
+        ("POST", "/admin/config"): cfg_set,
+        ("GET", "/admin/audit"): audit_trail,
+        ("GET", "/admin/governance/backfill-status"): backfill_status,
+        ("GET", "/admin/governance/data-integrity"): data_integrity,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
+ROUTES.update(_admin_routes())
 
 
 def _match(method, path):

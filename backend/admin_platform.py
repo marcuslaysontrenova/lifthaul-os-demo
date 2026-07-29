@@ -169,6 +169,7 @@ DEFAULT_CONFIG = {
     "finance.vat_pct": "12",                    # was hard-coded 12%
     "quotation.validity_days": "30",
     "dispatch.double_book": "block",            # reservation conflict policy
+    "iam.rbac_source": "hybrid",                # legacy | hybrid | db  (C-005 cutover switch)
 }
 
 
@@ -330,6 +331,42 @@ def effective_permissions(conn, user_id) -> set:
 def has_permission(conn, user_id, action) -> bool:
     """Data-driven equivalent of core.can — same wildcard grammar, but grants live in the DB."""
     return _match(effective_permissions(conn, user_id), action)
+
+
+def apply_rbac(conn, actor):
+    """Enrich an actor with DB-sourced permissions per the `iam.rbac_source` flag (C-005).
+
+    Reversible cutover switch (a platform_config value, admin-owned):
+      * legacy  — leave the actor untouched; core.can uses in-code PERMISSIONS.
+      * hybrid  — use DB permissions IF the user has assigned roles, else legacy.
+      * db      — always use DB permissions (empty set = deny-all).
+    Returns the (possibly enriched) actor. server._actor calls this on every request.
+    """
+    src, _ = resolve_config(conn, "iam.rbac_source")
+    src = (src or "legacy").lower()
+    if src in ("db", "hybrid") and actor and "id" in actor:
+        perms = effective_permissions(conn, actor["id"])
+        if perms or src == "db":
+            actor["perms"] = perms
+    return actor
+
+
+def backfill_user_roles(conn, tenant_code="RGO", actor=None) -> int:
+    """Assign each existing user the system role matching their legacy users.role.
+
+    Completes the cutover at parity (system-role grants == assembled core.PERMISSIONS).
+    Idempotent; returns the number of new assignments made."""
+    made = 0
+    for u in conn.execute("SELECT id, role FROM users").fetchall():
+        role = role_by_code(conn, tenant_code, u["role"])
+        if not role:
+            continue
+        exists = conn.execute("SELECT 1 FROM admin_user_roles WHERE user_id=? AND role_id=?",
+                              (u["id"], role["id"])).fetchone()
+        if not exists:
+            assign_role(conn, u["id"], role["id"], actor=actor)
+            made += 1
+    return made
 
 
 def _match(patterns, action) -> bool:

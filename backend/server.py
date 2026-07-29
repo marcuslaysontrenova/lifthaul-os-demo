@@ -23,6 +23,7 @@ import ops
 import admin
 import catalog   # noqa: F401  (ensures full schema/roles registered)
 import pdfgen
+import admin_platform
 import db
 
 # --- configuration (never hard-coded; env-driven) --------------------------
@@ -71,7 +72,9 @@ def _actor(handler):
     auth = handler.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise core.AuthError("missing bearer token")
-    return core.actor_for(_conn, auth[7:])
+    actor = core.actor_for(_conn, auth[7:])
+    admin_platform.apply_rbac(_conn, actor)   # C-005: data-driven RBAC (flag-gated, reversible)
+    return actor
 
 
 # route table: (METHOD, path) -> handler(actor, body, params)

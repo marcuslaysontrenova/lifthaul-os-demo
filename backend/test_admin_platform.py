@@ -123,5 +123,57 @@ class TestConfigCascade(Base):                                    # C-008
             ap.set_config(self.c, "galaxy", "", "k", "v")
 
 
+class TestRbacCutover(Base):                                      # C-005 enforcement cutover
+    def _actor(self, uid, role="estimator"):
+        # mimic core.actor_for output shape, then apply the DB-RBAC resolver
+        actor = {"id": uid, "role": role}
+        ap.apply_rbac(self.c, actor)
+        return actor
+
+    def test_hybrid_leaves_unassigned_user_on_legacy(self):
+        # default flag is hybrid; a user with no DB roles keeps legacy behavior
+        u = self._user("legacy@rgo.demo")
+        actor = self._actor(u, role="estimator")
+        self.assertNotIn("perms", actor)                     # untouched -> core.can uses legacy
+        self.assertTrue(core.can(actor, "booking.create"))   # via legacy PERMISSIONS[estimator]
+        self.assertFalse(core.can(actor, "quotation.approve"))
+
+    def test_db_enforcement_after_role_assignment_no_code_change(self):
+        u = self._user("est@rgo.demo")
+        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "estimator")["id"])
+        actor = self._actor(u)
+        self.assertIn("perms", actor)                        # now DB-sourced
+        self.assertTrue(core.can(actor, "booking.create"))
+        self.assertFalse(core.can(actor, "quotation.approve"))
+        # grant approver at runtime -> enforcement changes with NO code change
+        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "approver")["id"])
+        actor = self._actor(u)
+        self.assertTrue(core.can(actor, "quotation.approve"))
+
+    def test_flag_db_denies_user_with_no_roles(self):
+        ap.set_config(self.c, "platform", "", "iam.rbac_source", "db")
+        u = self._user("norole@rgo.demo")
+        actor = self._actor(u)
+        self.assertEqual(actor["perms"], set())              # db mode: empty = deny-all
+        self.assertFalse(core.can(actor, "booking.create"))
+
+    def test_flag_legacy_is_reversible(self):
+        u = self._user("rev@rgo.demo")
+        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "estimator")["id"])
+        ap.set_config(self.c, "platform", "", "iam.rbac_source", "legacy")
+        actor = self._actor(u)
+        self.assertNotIn("perms", actor)                     # reverted to legacy path
+        self.assertTrue(core.can(actor, "booking.create"))
+
+    def test_backfill_maps_legacy_roles_at_parity(self):
+        u = self._user("bf@rgo.demo")                        # created with role 'admin'
+        made = ap.backfill_user_roles(self.c)
+        self.assertGreaterEqual(made, 1)
+        actor = self._actor(u, role="admin")
+        self.assertTrue(core.can(actor, "anything.at.all"))  # admin -> '*' via DB
+        # idempotent
+        self.assertEqual(ap.backfill_user_roles(self.c), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

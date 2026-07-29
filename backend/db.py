@@ -65,14 +65,23 @@ def _postgres(url):
     return conn
 
 
+def _seed_platform(conn):
+    """Ensure Platform-1 tables + seed exist (tenants, roles, config). Idempotent;
+    additive to the operational schema. Keeps the running server/HTTP path governable."""
+    import admin_platform
+    admin_platform.init(conn)
+    admin_platform.seed(conn)
+    return conn
+
+
 def connect(url: str | None = None):
     url = url if url is not None else os.environ.get("DATABASE_URL")
     if url and url.startswith(("postgres://", "postgresql://")):
-        return _postgres(url)
+        return _seed_platform(_postgres(url))
     if not url or url in (":memory:", "sqlite://:memory:", "sqlite::memory:"):
-        return _sqlite(":memory:")
+        return _seed_platform(_sqlite(":memory:"))
     if url.startswith("sqlite:///"):
         url = url[len("sqlite:///"):]
     elif url.startswith("sqlite://"):
         url = url[len("sqlite://"):]
-    return _sqlite(url or "rgo_os.sqlite")
+    return _seed_platform(_sqlite(url or "rgo_os.sqlite"))

@@ -31,7 +31,7 @@ Legend — **Sev:** P0/P1/P2 (from Volume 1 §6). **Cov:** existing test coverag
 | C-002 | CI secret-scan | 9 | P0 | — | P1 | no-secrets asserted in tests | pipeline fails on any secret in code/logs/bundle |
 | C-003 | Tenant/Organization dimension | 1 | P1 | C-001 | P0 | **✅ foundation (14 tests)** | `tenants` table; tenant-scoped roles/config; isolation proven (test) — *tenant_id backfill on domain rows still pending* |
 | C-004 | Company Profile + Org structure | 1 | P1 | C-003 | P0 | none | branches/departments/BU/cost centers CRUD + audit |
-| C-005 | Data-driven RBAC (roles/permissions) | 1 | P1 | C-003 | P0 | **✅ foundation (14 tests)** | admin creates role→user enforced w/o code change (proven); seeded at parity with assembled `core.PERMISSIONS` — *route cutover pending (Vol2 §10a)* |
+| C-005 | Data-driven RBAC (roles/permissions) + enforcement cutover | 1 | P1 | C-003 | P0 | **✅ DELIVERED (19 tests)** | admin creates role→user enforced server-side w/o code change (proven); `server._actor` enriches every request; `iam.rbac_source` flag (legacy/hybrid/db) reversible; backfill maps legacy roles at parity; 115-test suite green |
 | C-006 | User lifecycle admin | 1 | P1 | C-005 | P1 | `create_user` only | invite→suspend→offboard + session kill, audited |
 | C-007 | Sessions/MFA/Password policy/Login history | 1 | P1 | C-005 | P1 | sessions table only | MFA enforceable by role; lockout enforced; login history queryable |
 | C-008 | Configuration cascade + Limits Registry | 1 | P1 | C-003 | P0 | **✅ foundation (14 tests)** | `platform_config` cascade platform→tenant→unit→user with visible source (proven); 5 default limits seeded — *consumers still read code constants* |

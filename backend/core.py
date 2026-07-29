@@ -227,7 +227,12 @@ PERMISSIONS = {
 
 
 def can(actor, action) -> bool:
-    perms = PERMISSIONS.get(actor["role"], set())
+    # Data-driven RBAC cutover (C-005): when an actor has been enriched with a
+    # DB-sourced permission set (admin_platform.apply_rbac), use it; otherwise fall
+    # back to the legacy in-code PERMISSIONS. Same wildcard grammar either way.
+    perms = actor.get("perms")
+    if perms is None:
+        perms = PERMISSIONS.get(actor["role"], set())
     for p in perms:
         if p == "*" or p == action:
             return True

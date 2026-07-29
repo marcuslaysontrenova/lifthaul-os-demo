@@ -7,6 +7,31 @@
 
 ---
 
+## 0. Administration is a hierarchy, not a role (CTO amendment, 2026-07-29)
+
+"Administrator" is **not one role — it is an organizational hierarchy** across four
+layers. This is now the authoritative role model (implemented in
+`backend/admin_platform.py`, `layer` column on `admin_roles`):
+
+| Layer | Scope | Roles (system templates) | Can touch |
+|---|---|---|---|
+| **1 — Platform Administration** | The entire product | Super Platform Administrator, Platform Administrator | tenants, licenses, modules, workflows, auth, integrations, AI, branding, subscriptions, backups, audit retention, security. **Nobody else.** |
+| **2 — Company Administration** | One tenant (company) | Business Administrator | users, branches, departments, roles, approval limits, numbering, logo, taxes, payment terms — **cannot see other companies** |
+| **3 — Functional Administration** | One module | CRM Admin, Fleet Admin, Finance Admin, Dispatch Admin, Safety Admin | only their module (CRM Admin cannot change Finance; Finance cannot modify Fleet) |
+| **4 — Operational Users** | Their work | Ops Mgr, Estimator, Approver, Finance Clerk, Dispatcher, Fleet Mgr, Safety Officer, Mechanic, Driver, Operator, Customer | perform work per granted permissions |
+
+Full authority ladder (highest → lowest): Super Platform Admin → Platform Admin →
+Business Admin → Operations Manager → Finance Manager → Dispatcher → Estimator →
+Fleet Manager → Safety Officer → Mechanic → Driver → Operator → Customer.
+
+> **Implementation status (C-003/C-005/C-008 foundation — DELIVERED):**
+> `backend/admin_platform.py` + `test_admin_platform.py` (14 tests) implement the
+> tenant dimension, data-driven RBAC (the four-layer role templates above, seeded and
+> parity-verified against the assembled `core.PERMISSIONS`), and the configuration
+> cascade. Suite: **110 tests green.** Not yet cut over: `core.require()` still reads
+> the in-code model; the cutover (route enforcement via `admin_platform.has_permission`)
+> is the next authorized increment. See §10a.
+
 ## 1. Design premises
 
 - **Configuration-first (ED-004).** Each screen below turns a former code constant
@@ -217,3 +242,25 @@ carries the full matrix as the traceability seed.
    **without a code change**.
 4. Every admin mutation appears in the Audit browser with actor, before/after, time.
 5. Every configurable value resolves through the cascade (§4) with a visible source.
+
+## 10a. Cutover plan + key architectural finding
+
+**Finding (discovered during foundation build):** the operational permission model is
+**assembled across modules at import time** — `core.PERMISSIONS` is only the base, and
+`admin.py`, `ops.py`, `catalog.py`, `pdfgen.py` each augment it with `|=`. Any migration
+to the data-driven model must seed from the **fully assembled** dict, not the base.
+`admin_platform.seed()` does exactly this (grants pulled from `core.PERMISSIONS` at seed
+time), so the DB model captures the complete permission set and stays in parity as
+domain modules add capabilities.
+
+**RBAC cutover (next authorized increment, additive & reversible):**
+1. Wire `admin_platform.init()` + `seed()` into server/DB startup and `migrate.py`.
+2. On login, resolve the user's assigned `admin_user_roles` → effective permissions;
+   attach to the actor context.
+3. Change `core.require()` to consult `admin_platform.has_permission` when the user has
+   DB role assignments, falling back to the legacy `core.PERMISSIONS` for unmigrated
+   users (feature-flagged via `platform_config` key `iam.rbac_source`).
+4. Backfill: map each existing user's single `role` string to the matching system role.
+5. Flip the flag per tenant once verified; remove the legacy path in a later phase.
+
+Every step keeps the 110-test suite green and is independently revertible.

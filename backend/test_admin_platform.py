@@ -175,5 +175,68 @@ class TestRbacCutover(Base):                                      # C-005 enforc
         self.assertEqual(ap.backfill_user_roles(self.c), 0)
 
 
+class TestUserLifecycle(Base):                                    # C-006
+    def test_invite_creates_active_user_with_role(self):
+        uid = ap.create_user(self.c, self.actor, "new@rgo.demo", "demo1234", "estimator", "New")
+        u = ap.get_user(self.c, uid)
+        self.assertEqual(u["status"], "ACTIVE")
+        self.assertIn("estimator", {r["code"] for r in ap.user_roles(self.c, uid)})
+        self.assertTrue(core.login(self.c, "new@rgo.demo", "demo1234"))  # can authenticate
+
+    def test_suspend_blocks_login_and_kills_sessions(self):
+        uid = ap.create_user(self.c, self.actor, "s@rgo.demo", "demo1234", "estimator")
+        tok = core.login(self.c, "s@rgo.demo", "demo1234")
+        ap.suspend_user(self.c, self.actor, uid)
+        with self.assertRaises(core.AuthError):
+            core.actor_for(self.c, tok)                       # live session revoked
+        with self.assertRaises(core.AuthError):
+            core.login(self.c, "s@rgo.demo", "demo1234")      # cannot re-authenticate
+
+    def test_activate_restores_access(self):
+        uid = ap.create_user(self.c, self.actor, "a@rgo.demo", "demo1234", "estimator")
+        ap.suspend_user(self.c, self.actor, uid)
+        ap.activate_user(self.c, self.actor, uid)
+        self.assertTrue(core.login(self.c, "a@rgo.demo", "demo1234"))
+
+    def test_lock_unlock(self):
+        uid = ap.create_user(self.c, self.actor, "l@rgo.demo", "demo1234", "estimator")
+        ap.lock_user(self.c, self.actor, uid)
+        with self.assertRaises(core.AuthError):
+            core.login(self.c, "l@rgo.demo", "demo1234")
+        ap.unlock_user(self.c, self.actor, uid)
+        self.assertTrue(core.login(self.c, "l@rgo.demo", "demo1234"))
+
+    def test_deactivate_offboard_is_soft(self):
+        uid = ap.create_user(self.c, self.actor, "o@rgo.demo", "demo1234", "estimator")
+        ap.deactivate_user(self.c, self.actor, uid)
+        with self.assertRaises(core.AuthError):
+            core.login(self.c, "o@rgo.demo", "demo1234")
+        self.assertIsNotNone(ap.get_user(self.c, uid))        # row retained for audit
+        self.assertIn(uid, {u["id"] for u in ap.list_users(self.c)})
+
+    def test_reset_password_invalidates_old_and_sessions(self):
+        uid = ap.create_user(self.c, self.actor, "p@rgo.demo", "demo1234", "estimator")
+        tok = core.login(self.c, "p@rgo.demo", "demo1234")
+        ap.reset_password(self.c, self.actor, uid, "newpass99")
+        with self.assertRaises(core.AuthError):
+            core.actor_for(self.c, tok)                       # old session gone
+        with self.assertRaises(core.AuthError):
+            core.login(self.c, "p@rgo.demo", "demo1234")      # old password rejected
+        self.assertTrue(core.login(self.c, "p@rgo.demo", "newpass99"))
+
+    def test_permission_review_and_audit_trail(self):
+        uid = ap.create_user(self.c, self.actor, "r@rgo.demo", "demo1234", "approver")
+        self.assertIn("quotation.approve", ap.permission_review(self.c, uid))
+        ap.suspend_user(self.c, self.actor, uid)
+        actions = {a["action"] for a in ap.user_audit(self.c, uid)}
+        self.assertIn("USER_INVITED", actions)
+        self.assertIn("USER_STATUS_CHANGED", actions)
+
+    def test_invalid_status_rejected(self):
+        uid = ap.create_user(self.c, self.actor, "x@rgo.demo", "demo1234", "estimator")
+        with self.assertRaises(core.ConflictError):
+            ap.set_status(self.c, self.actor, uid, "ZOMBIE")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

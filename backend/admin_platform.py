@@ -71,6 +71,23 @@ PLATFORM_TENANT = 0
 
 def init(conn):
     conn.executescript(SCHEMA)
+    _ensure_user_columns(conn)
+    conn.commit()
+
+
+def _ensure_user_columns(conn):
+    """C-006 migration: add users.status/last_login_at to pre-existing SQLite DBs.
+    Fresh DBs get them from core.SCHEMA; Postgres gets them from the translated DDL."""
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+    except Exception:
+        return                                             # non-SQLite: columns come from DDL
+    if not cols:
+        return
+    if "status" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE'")
+    if "last_login_at" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT")
     conn.commit()
 
 
@@ -405,3 +422,93 @@ def resolve_config(conn, key, tenant=None, unit=None, user=None):
         if row:
             return row["value"], scope
     return None, None
+
+
+# --------------------------------------------------------------------------- #
+# User lifecycle administration (C-006)
+# Full lifecycle above core.create_user: invite -> active <-> suspended/locked ->
+# deactivated (offboard, soft). Non-active users cannot authenticate or act
+# (enforced in core.login / core.actor_for); state changes revoke live sessions.
+# --------------------------------------------------------------------------- #
+STATUSES = {"ACTIVE", "SUSPENDED", "LOCKED", "DEACTIVATED"}
+
+
+def create_user(conn, actor, email, password, role, name=None, tenant_code="RGO", customer_id=None) -> int:
+    """Invite/create a user AND assign the matching system role so DB-RBAC governs them."""
+    uid = core.create_user(conn, email, password, role, name, customer_id)
+    r = role_by_code(conn, tenant_code, role)
+    if r:
+        assign_role(conn, uid, r["id"])
+    if actor:
+        core.audit(conn, actor, "USER_INVITED", "users", uid, new={"email": email, "role": role})
+    conn.commit()
+    return uid
+
+
+def set_status(conn, actor, user_id, status):
+    status = status.upper()
+    if status not in STATUSES:
+        raise core.ConflictError(f"invalid user status '{status}'")
+    old = conn.execute("SELECT status FROM users WHERE id=?", (user_id,)).fetchone()
+    if not old:
+        raise core.ConflictError("unknown user")
+    conn.execute("UPDATE users SET status=? WHERE id=?", (status, user_id))
+    if status != "ACTIVE":
+        revoke_sessions(conn, user_id)                     # kill live sessions immediately
+    if actor:
+        core.audit(conn, actor, "USER_STATUS_CHANGED", "users", user_id,
+                   old={"status": old["status"]}, new={"status": status})
+    conn.commit()
+
+
+def suspend_user(conn, actor, uid):    set_status(conn, actor, uid, "SUSPENDED")
+def activate_user(conn, actor, uid):   set_status(conn, actor, uid, "ACTIVE")
+def lock_user(conn, actor, uid):       set_status(conn, actor, uid, "LOCKED")
+def unlock_user(conn, actor, uid):     set_status(conn, actor, uid, "ACTIVE")
+def deactivate_user(conn, actor, uid): set_status(conn, actor, uid, "DEACTIVATED")   # offboard (soft)
+
+
+def reset_password(conn, actor, user_id, new_password):
+    """Admin-initiated password reset: set a new hash and revoke all sessions."""
+    if not conn.execute("SELECT 1 FROM users WHERE id=?", (user_id,)).fetchone():
+        raise core.ConflictError("unknown user")
+    conn.execute("UPDATE users SET pw_hash=? WHERE id=?", (core.hash_pw(new_password), user_id))
+    revoke_sessions(conn, user_id)
+    if actor:
+        core.audit(conn, actor, "USER_PASSWORD_RESET", "users", user_id)
+    conn.commit()
+
+
+def revoke_sessions(conn, user_id) -> int:
+    cur = conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+    conn.commit()
+    return getattr(cur, "rowcount", 0) or 0
+
+
+def list_users(conn):
+    return conn.execute("SELECT id,email,role,name,status,last_login_at,created_at"
+                        " FROM users ORDER BY id").fetchall()
+
+
+def get_user(conn, user_id):
+    return conn.execute("SELECT id,email,role,name,status,last_login_at,created_at"
+                        " FROM users WHERE id=?", (user_id,)).fetchone()
+
+
+def user_roles(conn, user_id):
+    return conn.execute(
+        "SELECT r.code,r.name,r.layer FROM admin_user_roles ur"
+        " JOIN admin_roles r ON r.id=ur.role_id WHERE ur.user_id=? ORDER BY r.layer, r.code",
+        (user_id,)).fetchall()
+
+
+def permission_review(conn, user_id) -> set:
+    """The effective permission set an admin sees when reviewing a user (Vol2 §3.4)."""
+    return effective_permissions(conn, user_id)
+
+
+def user_audit(conn, user_id, limit=100):
+    return conn.execute(
+        "SELECT ts,actor,role,action,new_value FROM audit_logs"
+        " WHERE entity='users' AND entity_id=? ORDER BY id DESC LIMIT ?",
+        (user_id, limit)).fetchall()

@@ -79,6 +79,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users(
   id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL,
   role TEXT NOT NULL, name TEXT, customer_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'ACTIVE', last_login_at TEXT,
   created_at TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS sessions(
@@ -190,11 +191,21 @@ def login(conn, email, password) -> str:
     row = conn.execute("SELECT * FROM users WHERE email=?", (email.lower(),)).fetchone()
     if not row or not verify_pw(password, row["pw_hash"]):
         raise AuthError("invalid credentials")
+    if _user_status(row) != "ACTIVE":                       # C-006: suspended/locked/offboarded
+        raise AuthError("account is not active")
     token = secrets.token_urlsafe(24)
     conn.execute("INSERT INTO sessions(token,user_id,created_at) VALUES(?,?,?)",
                  (token, row["id"], now()))
+    conn.execute("UPDATE users SET last_login_at=? WHERE id=?", (now(), row["id"]))
     conn.commit()
     return token
+
+
+def _user_status(row) -> str:
+    try:
+        return row["status"] or "ACTIVE"
+    except (KeyError, IndexError):
+        return "ACTIVE"                                     # pre-migration rows are active
 
 
 def actor_for(conn, token) -> dict:
@@ -203,6 +214,8 @@ def actor_for(conn, token) -> dict:
         (token,)).fetchone()
     if not row:
         raise AuthError("invalid or expired session")
+    if _user_status(row) != "ACTIVE":                       # C-006: enforce mid-session deactivation
+        raise AuthError("account is not active")
     return {"id": row["id"], "role": row["role"], "email": row["email"],
             "customer_id": row["customer_id"]}
 

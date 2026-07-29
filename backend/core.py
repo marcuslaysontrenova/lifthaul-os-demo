@@ -142,7 +142,8 @@ CREATE TABLE IF NOT EXISTS jobs(
 CREATE TABLE IF NOT EXISTS audit_logs(
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL, actor INTEGER, role TEXT,
   action TEXT NOT NULL, entity TEXT, entity_id INTEGER,
-  old_value TEXT, new_value TEXT, reason TEXT, source TEXT DEFAULT 'api');
+  old_value TEXT, new_value TEXT, reason TEXT, source TEXT DEFAULT 'api',
+  correlation_id TEXT);
 """
 
 
@@ -262,13 +263,30 @@ def require(actor, action):
 # --------------------------------------------------------------------------- #
 # Audit
 # --------------------------------------------------------------------------- #
-def audit(conn, actor, action, entity, entity_id, old=None, new=None, reason=None):
+# Request-scoped correlation id. server._handle sets this per request (under _DB_LOCK,
+# which serializes DB access) so every audit event within one request shares an id and
+# the whole chain of governed writes is traceable end-to-end.
+_correlation_id = None
+
+
+def set_correlation_id(cid):
+    global _correlation_id
+    _correlation_id = cid
+
+
+def correlation_id():
+    return _correlation_id
+
+
+def audit(conn, actor, action, entity, entity_id, old=None, new=None, reason=None,
+          correlation_id=None):
     conn.execute(
-        "INSERT INTO audit_logs(ts,actor,role,action,entity,entity_id,old_value,new_value,reason)"
-        " VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO audit_logs(ts,actor,role,action,entity,entity_id,old_value,new_value,"
+        "reason,correlation_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
         (now(), actor["id"], actor["role"], action, entity, entity_id,
          json.dumps(old) if old is not None else None,
-         json.dumps(new) if new is not None else None, reason))
+         json.dumps(new) if new is not None else None, reason,
+         correlation_id if correlation_id is not None else _correlation_id))
 
 
 def list_audit(conn, entity=None, entity_id=None):

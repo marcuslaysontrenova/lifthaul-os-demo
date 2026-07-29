@@ -326,8 +326,8 @@ def _admin_routes():
     def audit_trail(a, b, p):
         R(a, "audit.view")
         return {"audit": _rows(_conn.execute(
-            "SELECT ts,actor,role,action,entity,entity_id,reason FROM audit_logs ORDER BY id DESC LIMIT ?",
-            (b.get("limit", 100),)).fetchall())}
+            "SELECT ts,actor,role,action,entity,entity_id,reason,correlation_id FROM audit_logs"
+            " ORDER BY id DESC LIMIT ?", (b.get("limit", 100),)).fetchall())}
     def backfill_status(a, b, p):
         R(a, "audit.view")
         return {"status": "PLANNED_NOT_EXECUTED", "plan": "docs/blueprint/TENANT_BACKFILL_MATRIX.md",
@@ -468,6 +468,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "invalid JSON"})
         try:
             with _DB_LOCK:                      # serialize DB access across worker threads
+                core.set_correlation_id(self._rid)   # tag every audited write in this request
                 actor = None if self.path == "/login" else _actor(self)
                 result = fn(actor, body, params)
             return self._send(200, {"data": result})

@@ -242,5 +242,26 @@ class TestAuditCompleteness(Base):
         self.assertIn("USER_ORG_ASSIGNED", actions)
 
 
+class TestAuditCorrelation(Base):                                # Phase 1 #1
+    def test_correlation_id_threads_through_audit(self):
+        core.set_correlation_id("req-abc123")
+        try:
+            org.create_branch(self.c, self.actor, self.rgo, "B", "B")
+        finally:
+            core.set_correlation_id(None)
+        row = self.c.execute("SELECT correlation_id FROM audit_logs WHERE action='ORG_UNIT_CREATED'"
+                             " ORDER BY id DESC LIMIT 1").fetchone()
+        self.assertEqual(row["correlation_id"], "req-abc123")
+
+    def test_explicit_correlation_overrides_ambient(self):
+        core.set_correlation_id("ambient")
+        try:
+            core.audit(self.c, self.actor, "X", "org_units", 1, correlation_id="explicit")
+        finally:
+            core.set_correlation_id(None)
+        row = self.c.execute("SELECT correlation_id FROM audit_logs WHERE action='X'").fetchone()
+        self.assertEqual(row["correlation_id"], "explicit")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

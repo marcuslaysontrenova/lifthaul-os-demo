@@ -43,16 +43,32 @@ def _apply_rounding(value, mode):
     return round(value)
 
 
-def evaluate_tax(conn, taxable, ctx):
+def evaluate_tax(conn, base, ctx):
+    """Multi-mode tax: standard | zero_rated | exempt, exclusive | inclusive, + withholding.
+    DEFAULT (exclusive standard 12%) reproduces the pre-Phase-2 calculation exactly."""
     rate, r = _num(conn, "tax.default.rate", ctx, 12)
     code = (_resolve(conn, "tax.default.code", ctx)["value"] or "VAT")
-    mode = (_resolve(conn, "tax.rounding_mode", ctx)["value"] or "round")
-    tax = _apply_rounding(taxable * rate / 100, mode)
+    calc_mode = (_resolve(conn, "tax.default.mode", ctx)["value"] or "exclusive")   # exclusive|inclusive
+    tax_type = (_resolve(conn, "tax.default.type", ctx)["value"] or "standard")     # standard|zero_rated|exempt
+    rounding = (_resolve(conn, "tax.rounding_mode", ctx)["value"] or "round")
+    wht_rate, _ = _num(conn, "tax.withholding.rate", ctx, 0)
+    eff_rate = 0.0 if tax_type in ("zero_rated", "exempt") else rate
+    inclusive = (calc_mode == "inclusive")
+    if inclusive and eff_rate:
+        tax = _apply_rounding(base - base / (1 + eff_rate / 100), rounding)
+        taxable_base = base - tax
+    else:
+        tax = _apply_rounding(base * eff_rate / 100, rounding)
+        taxable_base = base
+    withholding = _apply_rounding(taxable_base * wht_rate / 100, rounding) if wht_rate else 0
     snap = {"consumer": "tax", "config_key": "tax.default.rate", "tax_code": code,
-            "rate_applied": rate, "taxable_base": taxable, "tax_amount": tax, "rounding_mode": mode,
+            "tax_type": tax_type, "calc_mode": calc_mode, "inclusive": inclusive,
+            "rate_applied": eff_rate, "taxable_base": taxable_base, "tax_amount": tax,
+            "withholding_amount": withholding, "rounding_mode": rounding,
             "source_scope": r["scope"], "source_ref": r["scope_ref"], "calculated_at": _now(),
             "definition_version": 1}
-    return {"rate": rate, "code": code, "tax": tax, "snapshot": snap}
+    return {"rate": eff_rate, "code": code, "tax": tax, "inclusive": inclusive, "tax_type": tax_type,
+            "taxable_base": taxable_base, "withholding": withholding, "snapshot": snap}
 
 
 def evaluate_downpayment(conn, total, ctx, requested_rate=None):

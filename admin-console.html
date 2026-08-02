@@ -173,10 +173,12 @@ const MENU = [
     {id:'sec_events', label:'Security Events'},
   ]},
   {sect:'Configuration', items:[
+    {id:'cfg_definitions', label:'Configuration Definitions'},
     {id:'cfg_platform', label:'Platform Settings'},
     {id:'cfg_tenant', label:'Tenant Settings'},
     {id:'cfg_org', label:'Organization Overrides'},
     {id:'cfg_effective', label:'Effective Configuration'},
+    {id:'cfg_simulate', label:'Policy Simulation'},
   ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
@@ -284,6 +286,12 @@ const SCREENS = {
   cfg_platform: (it,c)=>cfgList(it,c,'platform'),
   cfg_tenant: (it,c)=>cfgList(it,c,'tenant'),
   cfg_org: (it,c)=>cfgList(it,c,['business_unit','branch','department','team']),
+  cfg_definitions: async (it,c)=>{ const d=await api('GET','/admin/config/definitions');
+    c.innerHTML=header(it,'Typed, governed configuration definitions (registry).')+
+      table(['Key','Category','Type','Default','Scopes','Risk','Snapshot'], d.definitions, r=>[r.key,r.category,r.data_type,cell(r.default_value),cell(r.scopes),r.risk_level,r.snapshot_required?'yes':'no']); },
+  cfg_simulate: async (it,c)=>{ c.innerHTML=header(it,'Simulate a governed policy decision (non-mutating).')+
+      `<div class="bar"><select id="sp"><option value="tax">Tax</option><option value="downpayment">Downpayment</option><option value="approval">Approval</option></select>`+
+      `<input id="s_taxable" placeholder="taxable/total" style="max-width:160px"><input id="s_disc" placeholder="discount % (approval)" style="max-width:150px"><input id="s_tenant" placeholder="tenant (optional)" style="max-width:150px"><button class="btn sm" onclick="doSimulate()">Simulate</button></div><div id="simres"></div>`; },
   cfg_effective: async (it,c)=>{ c.innerHTML=header(it,'Resolve a configuration key down the org cascade.')+
       `<div class="bar"><input id="ck" placeholder="key e.g. approval.quotation_threshold" style="max-width:340px"><input id="cb" placeholder="branch id (optional)" style="max-width:160px"><button class="btn sm" onclick="doResolve()">Resolve</button></div><div id="cres"></div>`; },
   // Effective access (from the real authorization service)
@@ -344,6 +352,12 @@ async function doBackfill(op,method){ try{ const r=await api(method,'/admin/gove
     if(el) el.innerHTML=`<div class="note" style="margin-top:12px"><b>${op}</b>: ${JSON.stringify(r).slice(0,400)}</div>`; if(op==='backfill-execute') render(CURRENT);
   }catch(e){ alert(e.message); } }
 async function resolveRem(id){ if(!confirm('Mark this remediation resolved?')) return; try{ await api('POST','/admin/governance/backfill-remediation/'+id+'/resolve'); render(CURRENT); }catch(e){ alert(e.message); } }
+async function doSimulate(){ const kind=document.getElementById('sp').value; const amt=parseFloat(document.getElementById('s_taxable').value||'0');
+  const body={policy:kind}; if(kind==='tax') body.taxable=amt; else body.total=amt; if(kind==='approval') body.discount_pct=parseFloat(document.getElementById('s_disc').value||'0');
+  const t=document.getElementById('s_tenant').value; if(t) body.tenant=t;
+  try{ const r=await api('POST','/admin/config/simulate',body);
+    document.getElementById('simres').innerHTML=`<div class="kv">${Object.entries(r).filter(([k])=>k!=='snapshot').map(([k,v])=>`<div class="k">${k}</div><div>${typeof v==='object'?JSON.stringify(v):cell(v)}</div>`).join('')}</div>`;
+  }catch(e){ document.getElementById('simres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
 
 // ------------------------------------------------------------------ Dialog Standard
 const MODE={view:'View',edit:'Edit',approval:'Approval Required',finance:'Finance Action',dispatch:'Dispatch Action'};

@@ -122,5 +122,53 @@ class TestSnapshotsAndHistory(Base):
         self.assertIn("LEGACY_DERIVED", after["tax_snapshot"])
 
 
+class TestTaxModes(Base):
+    def test_default_still_exclusive_standard_12(self):
+        self.assertEqual(policy.evaluate_tax(self.c, 600000, {})["tax"], 72000)   # unchanged
+
+    def test_inclusive(self):
+        ap.set_config(self.c, "platform", "", "tax.default.mode", "inclusive")
+        r = policy.evaluate_tax(self.c, 112000, {})     # 112000 incl 12% -> tax 12000
+        self.assertEqual(r["tax"], 12000)
+        self.assertTrue(r["inclusive"])
+
+    def test_zero_rated_and_exempt(self):
+        ap.set_config(self.c, "platform", "", "tax.default.type", "zero_rated")
+        self.assertEqual(policy.evaluate_tax(self.c, 600000, {})["tax"], 0)
+        ap.set_config(self.c, "platform", "", "tax.default.type", "exempt")
+        self.assertEqual(policy.evaluate_tax(self.c, 600000, {})["tax"], 0)
+
+    def test_withholding(self):
+        ap.set_config(self.c, "platform", "", "tax.withholding.rate", "2")
+        self.assertEqual(policy.evaluate_tax(self.c, 600000, {})["withholding"], 12000)
+
+    def test_branch_override_and_expired_fallback(self):
+        import org
+        br = org.create_branch(self.c, {"id": 1, "role": "admin", "perms": {"*"}}, self.rgo, "BR", "Branch")
+        ap.set_config(self.c, "branch", str(br), "tax.default.rate", "8")     # tax allows branch scope
+        self.assertEqual(policy.evaluate_tax(self.c, 600000, {"branch": str(br)})["rate"], 8.0)
+        import datetime
+        ap.set_config(self.c, "branch", str(br), "tax.default.rate", "8",
+                      effective_to=(datetime.date.today() - datetime.timedelta(days=1)).isoformat())
+        self.assertEqual(policy.evaluate_tax(self.c, 600000, {"branch": str(br)})["rate"], 12.0)  # expired -> platform
+
+
+class TestGranularPermissions(Base):
+    def test_config_perms_seeded_and_scoped(self):
+        ba = ap.effective_role_grants(self.c, ap.role_by_code(self.c, "RGO", "business_admin")["id"])
+        self.assertIn("admin.configuration.value.manage", ba)
+        self.assertNotIn("tax.policy.manage", ba)                  # platform/finance only
+        fa = ap.effective_role_grants(self.c, ap.role_by_code(self.c, "RGO", "finance_admin")["id"])
+        self.assertIn("tax.policy.*", fa)
+
+    def test_has_permission_granular_enforcement(self):
+        u = core.create_user(self.c, "cfgv@r", "Demo1234Xy", "estimator", "U")
+        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "business_admin")["id"])
+        self.assertTrue(ap.has_permission(self.c, u, "admin.configuration.view"))
+        self.assertTrue(ap.has_permission(self.c, u, "admin.configuration.value.manage"))
+        self.assertFalse(ap.has_permission(self.c, u, "tax.policy.manage"))          # denied (out of authority)
+        self.assertFalse(ap.has_permission(self.c, u, "admin.configuration.financial.manage"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

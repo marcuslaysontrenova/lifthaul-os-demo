@@ -295,7 +295,7 @@ def _admin_routes():
     def role_clone(a, b, p):     R(a, "role_admin.manage"); return {"id": admin_platform.clone_role(_conn, "RGO", p["code"], b["new_code"], b["name"], actor=a)}
     def reparent_preview(a, b, p): R(a, "org.view");         return org.reparent_preview(_conn, int(p["id"]), b.get("new_parent_id"))
     def config_history(a, b, p):
-        R(a, "system_config.view")
+        R(a, "admin.configuration.history.view")
         key = b.get("key")
         sql = "SELECT ts,actor,new_value,correlation_id FROM audit_logs WHERE action='CONFIG_SET'"
         args = []
@@ -347,7 +347,7 @@ def _admin_routes():
     def role_dependency(a, b, p):  R(a, "role_admin.view"); return admin_platform.role_dependency(_conn, "RGO", p["code"])
     def wcal_conflicts(a, b, p):   R(a, "org.view");        return org.working_calendar_conflicts(_conn, int(p["id"]))
     def cfg_preview(a, b, p):
-        R(a, "system_config.view")                        # non-mutating override preview
+        R(a, "admin.configuration.simulate")              # non-mutating override preview
         return org.effective_config_preview(_conn, b["key"], b["scope"], b.get("scope_ref", ""), b["value"],
                                             tenant=b.get("tenant"), business_unit=b.get("business_unit"),
                                             branch=b.get("branch"), department=b.get("department"),
@@ -380,20 +380,22 @@ def _admin_routes():
 
     # ---- Configuration ----------------------------------------------------
     def cfg_effective(a, b, p):
-        R(a, "system_config.view")
+        R(a, "admin.configuration.view")
         return org.resolve_org_config(_conn, b["key"], tenant=b.get("tenant"), business_unit=b.get("business_unit"),
                                       branch=b.get("branch"), department=b.get("department"), team=b.get("team"), user=b.get("user"))
-    def cfg_list(a, b, p):       R(a, "system_config.view");   return {"config": _rows(_conn.execute("SELECT scope,scope_ref,key,value,effective_to,updated_at FROM platform_config ORDER BY scope,key").fetchall())}
-    def cfg_definitions(a, b, p): R(a, "system_config.view"); import config_registry; return {"definitions": _rows(config_registry.list_definitions(_conn))}
+    def cfg_list(a, b, p):       R(a, "admin.configuration.view");   return {"config": _rows(_conn.execute("SELECT scope,scope_ref,key,value,effective_to,updated_at FROM platform_config ORDER BY scope,key").fetchall())}
+    def cfg_definitions(a, b, p): R(a, "admin.configuration.view"); import config_registry; return {"definitions": _rows(config_registry.list_definitions(_conn))}
     def policy_simulate(a, b, p):
-        R(a, "system_config.view"); import policy       # non-mutating policy decision preview
+        R(a, "admin.configuration.simulate"); import policy   # non-mutating policy decision preview
         ctx = {"tenant": b.get("tenant"), "business_unit": b.get("business_unit"), "branch": b.get("branch")}
         kind = b.get("policy")
-        if kind == "tax":         return policy.evaluate_tax(_conn, float(b.get("taxable", 0)), ctx)
-        if kind == "downpayment": return policy.evaluate_downpayment(_conn, float(b.get("total", 0)), ctx, requested_rate=b.get("rate"))
-        if kind == "approval":    return policy.evaluate_approval(_conn, float(b.get("total", 0)), float(b.get("discount_pct", 0)), ctx)
-        raise core.ValidationError("policy must be tax | downpayment | approval")
-    def cfg_set(a, b, p):        R(a, "system_config.manage"); admin_platform.set_config(_conn, b["scope"], b.get("scope_ref", ""), b["key"], b["value"], actor=a, effective_to=b.get("effective_to")); return {"ok": True}
+        if kind == "tax":         res = policy.evaluate_tax(_conn, float(b.get("taxable", 0)), ctx)
+        elif kind == "downpayment": res = policy.evaluate_downpayment(_conn, float(b.get("total", 0)), ctx, requested_rate=b.get("rate"))
+        elif kind == "approval":  res = policy.evaluate_approval(_conn, float(b.get("total", 0)), float(b.get("discount_pct", 0)), ctx)
+        else: raise core.ValidationError("policy must be tax | downpayment | approval")
+        core.audit(_conn, a, "POLICY_SIMULATED", "config", 0, new={"policy": kind, "ctx": ctx}); _conn.commit()
+        return res
+    def cfg_set(a, b, p):        R(a, "admin.configuration.value.manage"); admin_platform.set_config(_conn, b["scope"], b.get("scope_ref", ""), b["key"], b["value"], actor=a, effective_to=b.get("effective_to")); return {"ok": True}
 
     # ---- Governance -------------------------------------------------------
     def audit_trail(a, b, p):

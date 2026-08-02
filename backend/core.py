@@ -467,9 +467,9 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     taxable = subtotal - discount
     import policy
     ctx = policy.policy_context(conn, actor, b)            # tenant/org context from the authenticated actor
-    tp = policy.evaluate_tax(conn, taxable, ctx)           # governed tax policy (default == 12%)
+    tp = policy.evaluate_tax(conn, taxable, ctx)           # governed tax policy (default == 12% exclusive)
     tax = tp["tax"]
-    total = taxable + tax
+    total = taxable if tp["inclusive"] else taxable + tax  # inclusive => tax already embedded in the price
     dpe = policy.evaluate_downpayment(conn, total, ctx, requested_rate=requested_dp)  # default == 30%
     dp_pct, dp_amount = dpe["rate"], dpe["amount"]
     ape = policy.evaluate_approval(conn, total, discount_pct, ctx)                    # default threshold 500000

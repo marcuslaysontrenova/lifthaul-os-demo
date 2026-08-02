@@ -153,6 +153,17 @@ for _mod in ("tenant", "license", "org", "user_admin", "role_admin", "permission
              "reporting", "audit", "security"):
     for _a in ("view", "manage"):
         _perm(_mod, _a)
+# Granular Phase-2 configuration permissions (multi-dot codes; added verbatim)
+CONFIG_PERMISSIONS = [
+    "admin.configuration.view", "admin.configuration.definition.manage", "admin.configuration.value.manage",
+    "admin.configuration.override", "admin.configuration.simulate", "admin.configuration.history.view",
+    "admin.configuration.financial.manage", "admin.configuration.security.manage",
+    "quotation.policy.approval.view", "quotation.policy.approval.manage", "quotation.policy.approval.simulate",
+    "tax.policy.view", "tax.policy.manage", "tax.policy.simulate",
+    "payment.downpayment.policy.view", "payment.downpayment.policy.manage", "payment.downpayment.policy.simulate",
+]
+for _code in CONFIG_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -174,13 +185,20 @@ ADMIN_ROLES = [
     ("platform_admin",       "Platform Administrator",       1,
         {"tenant.*", "license.*", "integration.*", "system_config.*", "ai_admin.*",
          "workflow_admin.*", "branding.*", "security.*", "audit.*", "reporting.*",
-         "master_data.*"}),
+         "master_data.*", "admin.configuration.*", "tax.policy.*",
+         "quotation.policy.approval.*", "payment.downpayment.policy.*"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
-         "master_data.*", "system_config.view", "reporting.*", "audit.view"}),
+         "master_data.*", "system_config.view", "reporting.*", "audit.view",
+         "admin.configuration.view", "admin.configuration.value.manage",
+         "admin.configuration.override", "admin.configuration.simulate",
+         "admin.configuration.history.view"}),
     ("crm_admin",            "CRM Administrator",            3, {"crm_admin.*", "customer.*", "contact.*", "address.*"}),
     ("fleet_admin",          "Fleet Administrator",          3, {"fleet_admin.*", "equipment.*", "vehicle.*", "maintenance.*", "inspection.*"}),
-    ("finance_admin",        "Finance Administrator",        3, {"finance_admin.*", "invoice.*", "expense.*", "payment.*", "refund.*"}),
+    ("finance_admin",        "Finance Administrator",        3,
+        {"finance_admin.*", "invoice.*", "expense.*", "payment.*", "refund.*",
+         "tax.policy.*", "payment.downpayment.policy.*", "quotation.policy.approval.view",
+         "admin.configuration.financial.manage", "admin.configuration.view", "admin.configuration.simulate"}),
     ("dispatch_admin",       "Dispatch Administrator",       3, {"dispatch_admin.*", "job.read", "job.dispatch", "job.transition", "reservation.*"}),
     ("safety_admin",         "Safety Administrator",         3, {"safety.*", "incident.*"}),
 ]
@@ -224,6 +242,9 @@ DEFAULT_CONFIG = {
     "quotation.approval.discount_threshold_pct": "10",
     "tax.default.rate": "12",
     "tax.default.code": "VAT",
+    "tax.default.mode": "exclusive",            # exclusive | inclusive
+    "tax.default.type": "standard",             # standard | zero_rated | exempt
+    "tax.withholding.rate": "0",
     "tax.rounding_mode": "round",
     "payment.downpayment.default_rate": "30",
     "payment.downpayment.minimum_rate": "0",

@@ -141,7 +141,24 @@ def main():
     tot_after = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (pqid,)).fetchone()
     check(tot_before["tax"] == tot_after["tax"] == 72000 and tot_before["total"] == tot_after["total"] == 672000,
           "config change does NOT alter existing quotation on PostgreSQL (historical reproducibility)")
+    # UNEXPECTED FINANCIAL DIFFERENCES = 0 (aggregate invariant across a tax config change)
+    sum_before = conn.execute("SELECT COALESCE(SUM(total),0) s FROM quotations").fetchone()["s"]
+    ap.set_config(conn, "platform", "", "tax.default.rate", "25", actor=pa)
+    sum_after = conn.execute("SELECT COALESCE(SUM(total),0) s FROM quotations").fetchone()["s"]
+    check(sum_before == sum_after, "UNEXPECTED FINANCIAL DIFFERENCES = 0 after config change on PostgreSQL")
     ap.set_config(conn, "platform", "", "tax.default.rate", "12", actor=pa)   # restore default
+    # multi-mode tax on PostgreSQL
+    ap.set_config(conn, "platform", "", "tax.default.type", "zero_rated")
+    check(policy.evaluate_tax(conn, 600000, {})["tax"] == 0, "zero-rated tax == 0 on PostgreSQL")
+    ap.set_config(conn, "platform", "", "tax.default.type", "standard")
+    ap.set_config(conn, "platform", "", "tax.default.mode", "inclusive")
+    check(policy.evaluate_tax(conn, 112000, {})["tax"] == 12000, "inclusive tax on PostgreSQL")
+    ap.set_config(conn, "platform", "", "tax.default.mode", "exclusive")
+    # granular permission scoping
+    fa = ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "finance_admin")["id"])
+    check("tax.policy.*" in fa, "granular tax.policy permission granted to finance_admin on PostgreSQL")
+    ba = ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "business_admin")["id"])
+    check("tax.policy.manage" not in ba, "business_admin denied tax.policy.manage on PostgreSQL")
     try:
         ap.set_config(conn, "platform", "", "tax.default.rate", "150")
         check(False, "out-of-range config must be rejected")

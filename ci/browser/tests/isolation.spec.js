@@ -47,7 +47,12 @@ test('administration viewers respond through the browser network stack (PostgreS
   const defs = await request.get(API + '/admin/config/definitions', { headers: H });
   expect((await defs.json()).data.definitions.length, 'config definitions present').toBeGreaterThan(7);
   const sim = await request.post(API + '/admin/config/simulate', { headers: H, data: { policy: 'tax', taxable: 600000 } });
-  expect((await sim.json()).data.tax, 'tax policy simulate == 72000').toBe(72000);
+  expect((await sim.json()).data.tax, 'tax policy simulate == 72000 (default exclusive 12%)').toBe(72000);
+  // multi-mode tax simulation through the browser (non-mutating)
+  const inc = await request.post(API + '/admin/config/simulate', { headers: H, data: { policy: 'tax', taxable: 600000, tenant: 'RGO' } });
+  expect((await inc.json()).data.tax_type, 'tax type present').toBeDefined();
+  const dp = await request.post(API + '/admin/config/simulate', { headers: H, data: { policy: 'downpayment', total: 672000 } });
+  expect((await dp.json()).data.amount, 'downpayment simulate == 201600').toBe(201600);
 });
 
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {

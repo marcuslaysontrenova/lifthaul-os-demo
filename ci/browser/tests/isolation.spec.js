@@ -139,6 +139,46 @@ test('workflow instances are tenant-isolated through the browser (PostgreSQL)', 
   expect([200, 403].includes(res.status()), 'tenant workflow read is permission-gated').toBe(true);
 });
 
+test('Phase 5 form administration through the browser (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  // seeded booking form is present with an ACTIVE version
+  const defs = await request.get(API + '/admin/forms', { headers: H });
+  expect((await defs.json()).data.definitions.some(d => d.code === 'booking_form'), 'seeded form present').toBe(true);
+  // runtime effective form renders governed fields
+  const eff = await request.post(API + '/admin/forms/effective', { headers: H, data: { entity_type: 'booking', role: 'admin' } });
+  expect((await eff.json()).data.fields.some(f => f.code === 'service_type'), 'effective form renders fields').toBe(true);
+  // design a form: create -> section -> field -> validate -> simulate
+  await request.post(API + '/admin/forms', { headers: H, data: { entity_type: 'booking', code: 'browser.form', name: 'Browser Form' } });
+  const bvers = await request.get(API + '/admin/forms/browser.form/versions', { headers: H });
+  const vid = (await bvers.json()).data.versions[0].id;
+  await request.post(API + `/admin/form-versions/${vid}/sections`, { headers: H, data: { code: 'rigging', title: 'Rigging Requirements' } });
+  await request.post(API + `/admin/form-versions/${vid}/fields`, { headers: H, data: { code: 'insured', label: 'Insured', data_type: 'boolean', section_code: 'rigging' } });
+  await request.post(API + `/admin/form-versions/${vid}/fields`, { headers: H, data: { code: 'policy_no', label: 'Insurance Policy Number', data_type: 'short_text', section_code: 'rigging', visibility: { field: 'insured', op: 'is_true' }, required_condition: { field: 'insured', op: 'is_true' }, role_restriction: 'admin' } });
+  const val = await request.post(API + `/admin/form-versions/${vid}/validate`, { headers: H, data: {} });
+  expect((await val.json()).data.ok, 'form validates').toBe(true);
+  // simulate: policy_no visible only when insured=true
+  const s1 = await request.post(API + `/admin/form-versions/${vid}/simulate`, { headers: H, data: { ctx: { role: 'admin' }, values: { insured: 'true' } } });
+  const s2 = await request.post(API + `/admin/form-versions/${vid}/simulate`, { headers: H, data: { ctx: { role: 'admin' }, values: { insured: 'false' } } });
+  expect((await s1.json()).data.visible.includes('policy_no'), 'policy visible when insured').toBe(true);
+  expect((await s2.json()).data.visible.includes('policy_no'), 'policy hidden when not insured').toBe(false);
+  // circular visibility blocks publication
+  await request.post(API + '/admin/forms', { headers: H, data: { entity_type: 'booking', code: 'browser.circ', name: 'Circ' } });
+  const cvid = (await (await request.get(API + '/admin/forms/browser.circ/versions', { headers: H })).json()).data.versions[0].id;
+  await request.post(API + `/admin/form-versions/${cvid}/fields`, { headers: H, data: { code: 'a', label: 'A', data_type: 'short_text', visibility: { field: 'b', op: 'exists' } } });
+  await request.post(API + `/admin/form-versions/${cvid}/fields`, { headers: H, data: { code: 'b', label: 'B', data_type: 'short_text', visibility: { field: 'a', op: 'exists' } } });
+  const cval = await request.post(API + `/admin/form-versions/${cvid}/validate`, { headers: H, data: {} });
+  expect((await cval.json()).data.ok, 'circular visibility blocks validation').toBe(false);
+  // runtime submit + read-back through the browser network stack
+  const sub = await request.post(API + '/admin/forms/values', { headers: H, data: { entity_type: 'booking', entity_id: 7777, values: { service_type: 'CRANE_RENTAL' } } });
+  expect((await sub.json()).data.stored, 'value stored').toBe(1);
+  const got = await request.post(API + '/admin/forms/values/get', { headers: H, data: { entity_type: 'booking', entity_id: 7777 } });
+  expect((await got.json()).data.values.service_type.value, 'value read back').toBe('CRANE_RENTAL');
+  // unknown-field submission denied
+  const bad = await request.post(API + '/admin/forms/values', { headers: H, data: { entity_type: 'booking', entity_id: 7778, values: { not_a_field: 'x' } } });
+  expect(bad.status(), 'unknown field rejected').toBe(400);
+});
+
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {
   const errs = [];
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });

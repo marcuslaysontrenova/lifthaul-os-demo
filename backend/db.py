@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 9   # bump when any module schema changes (9 = Phase 4 workflow administration)
+SCHEMA_VERSION = 10  # bump when any module schema changes (10 = Phase 5 form & custom-field administration)
 
 
 def _now():
@@ -77,6 +77,7 @@ def _seed_platform(conn):
     import crm_admin
     import workflow
     import wfgov
+    import forms
     admin_platform.init(conn)
     config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
     admin_platform.seed(conn)
@@ -87,6 +88,7 @@ def _seed_platform(conn):
     crm_admin.init(conn); crm_admin.seed(conn)               # Phase 3: CRM administration (numbering/credit/dup/custom)
     wfgov.init(conn)                                          # Phase 4: approval/SLA/escalation/delegation tables
     workflow.init(conn); workflow.seed(conn)                 # Phase 4: governed workflow engine + imported booking def
+    forms.init(conn); forms.seed(conn)                        # Phase 5: governed form & custom-field engine + booking form
     return conn
 
 

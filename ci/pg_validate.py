@@ -308,6 +308,86 @@ def main():
           "operational booking stage unchanged by workflow engine (0 drift) on PostgreSQL")
     print("PHASE 4 WORKFLOW ADMINISTRATION: PASS on PostgreSQL", flush=True)
 
+    # Phase 5 — Form & Custom-Field Administration on PostgreSQL
+    import forms
+    fa = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    ef = forms.effective_form(conn, fa, "booking", role="admin")
+    check(ef["version_no"] is not None and bool(ef["checksum"]) and any(f["code"] == "service_type" for f in ef["fields"]),
+          "seeded booking form is ACTIVE + checksummed + renders fields on PostgreSQL")
+    fdef = forms.get_definition(conn, fa, "booking_form")
+    av = forms.active_version_for_entity(conn, fa, "booking")
+    try:
+        forms.add_field(conn, fa, av["id"], "hack", "Hack", "short_text")
+        check(False, "must not edit an active form version")
+    except core.ForbiddenError:
+        check(True, "active form version is immutable on PostgreSQL")
+    # protected financial field cannot be created
+    qdid = forms.create_definition(conn, fa, "quotation", "q_form_ci", "Q Form")
+    qv = conn.execute("SELECT id FROM form_versions WHERE definition_id=? AND version_no=1", (qdid,)).fetchone()["id"]
+    try:
+        forms.add_field(conn, fa, qv, "total", "Total", "currency")
+        check(False, "protected financial field must be blocked")
+    except core.ForbiddenError:
+        check(True, "protected financial field blocked on PostgreSQL")
+    # runtime submission: required-condition + unknown/invalid-option denial
+    try:
+        forms.submit_values(conn, fa, "booking", bkA, {"insured": "true", "service_type": "CRANE_RENTAL"})
+        check(False, "conditional-required must be enforced")
+    except core.ValidationError:
+        check(True, "runtime conditional-required enforced on PostgreSQL")
+    r = forms.submit_values(conn, fa, "booking", bkA, {"insured": "true", "insurance_policy_no": "POL-CI", "service_type": "CRANE_RENTAL"})
+    check(r["stored"] == 3, "runtime form submission persists values on PostgreSQL")
+    try:
+        forms.submit_values(conn, fa, "booking", bkA, {"ghost_field": "x"})
+        check(False, "unknown field must be rejected")
+    except core.ValidationError:
+        check(True, "unknown-field submission rejected on PostgreSQL")
+    try:
+        forms.submit_values(conn, fa, "booking", bkA, {"service_type": "NOT_REAL"})
+        check(False, "invalid option must be rejected")
+    except core.ValidationError:
+        check(True, "invalid master-data option rejected on PostgreSQL")
+    # sensitivity masking
+    forms.submit_values(conn, fa, "booking", bkA, {"client_contact_private": "+639170000000"})
+    viewer = actor_role(conn, tA, "estimator", "fviewer@ci")
+    viewer["perms"] = {"form.data.view"}
+    masked = forms.get_values(conn, viewer, "booking", bkA).get("client_contact_private", {})
+    check(masked.get("masked") is True, "sensitive field masked for unprivileged viewer on PostgreSQL")
+    # export excludes sensitive
+    exp = forms.export_values(conn, fa, "booking")
+    # fa has '*' -> sees sensitive; use a restricted exporter
+    exporter = actor_role(conn, tA, "estimator", "fexport@ci")
+    exporter["perms"] = {"form.data.export", "form.data.view"}
+    exp2 = forms.export_values(conn, exporter, "booking")
+    check("client_contact_private" in exp2["excluded_sensitive"], "sensitive field excluded from export on PostgreSQL")
+    # value tenant isolation
+    other = {"id": uB, "role": "estimator", "perms": {"form.data.view"}, "tenant_id": tB}
+    check(forms.get_values(conn, other, "booking", bkA) == {}, "form-value tenant isolation on PostgreSQL")
+    # historical version preservation: publish v2, old record keeps field_version 1
+    v1fv = forms.get_values(conn, fa, "booking", bkA)["service_type"]["field_version"]
+    nv = forms.create_version(conn, fa, "booking_form", "relabel")
+    forms.validate_version(conn, fa, nv); forms.approve_version(conn, fa, nv)
+    forms.publish_version(conn, fa, nv, "v2 label change")
+    forms.submit_values(conn, fa, "booking", bkB, {"service_type": "RIGGING"})
+    v2fv = forms.get_values(conn, fa, "booking", bkB)["service_type"]["field_version"]
+    check(v1fv == 1 and v2fv == 2 and forms.get_values(conn, fa, "booking", bkA)["service_type"]["field_version"] == 1,
+          "historical field-version preserved after new publish on PostgreSQL")
+    # search on a searchable field
+    sres = forms.search_values(conn, fa, "booking", "insurance_policy_no", "POL-CI")
+    check(any(x["entity_id"] == bkA for x in sres), "searchable field search works on PostgreSQL")
+    # migration: zero drift + zero loss
+    m5 = forms.classify_existing(conn)
+    check(m5["financial_differences"] == 0 and m5["operational_status_differences"] == 0 and m5["field_value_losses"] == 0,
+          "form migration zero financial/operational/value drift on PostgreSQL")
+    # granular permission scoping
+    baf = ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "business_admin")["id"])
+    check("form.field.manage" in baf and "form.version.publish" not in baf and "form.field.sensitive.manage" not in baf,
+          "business_admin can design forms but not publish/sensitive on PostgreSQL")
+    # 0 operational drift: bkA real booking stage unchanged by form submission
+    check(conn.execute("SELECT stage FROM bookings WHERE id=?", (bkA,)).fetchone()["stage"] == "QUOTATION_ACCEPTED",
+          "booking stage unchanged by form engine (0 operational drift) on PostgreSQL")
+    print("PHASE 5 FORM & CUSTOM-FIELD ADMINISTRATION: PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

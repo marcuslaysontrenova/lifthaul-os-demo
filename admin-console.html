@@ -210,6 +210,15 @@ const MENU = [
     {id:'wf_validation', label:'Validation Results'},
     {id:'wf_instances', label:'Instance Monitoring'},
   ]},
+  {sect:'Forms and Fields', items:[
+    {id:'form_definitions', label:'Form Definitions'},
+    {id:'form_versions', label:'Form Versions'},
+    {id:'form_designer', label:'Form Designer'},
+    {id:'form_simulation', label:'Simulation'},
+    {id:'form_validation', label:'Validation Results'},
+    {id:'form_dependencies', label:'Field Dependencies'},
+    {id:'form_remediation', label:'Data Remediation'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -579,6 +588,97 @@ async function wfValidate(){ const code=document.getElementById('wfd').value;
 async function wfStartInst(){ const code=prompt('Workflow code:','commercial.booking'); if(!code) return;
   const et=prompt('Entity type:','booking')||'booking'; const eid=prompt('Entity id:','1');
   try{ await api('POST','/admin/workflow-instances',{code,entity_type:et,entity_id:parseInt(eid)}); render(CURRENT); }catch(e){ alert(e.message); } }
+// ---- Phase 5 Form & Custom-Field Administration screens (all actions hit persisted APIs) ----
+Object.assign(SCREENS, {
+  form_definitions: async (it,c)=>{ const d=await api('GET','/admin/forms');
+    c.innerHTML=header(it,'Governed, tenant/role-aware forms. Published versions are immutable. System/financial fields are protected.',
+      `<button class="btn sm" onclick="formNewDef()">New form +</button>`)+
+      table(['Code','Entity','Name','Status'], d.definitions, r=>[r.code,r.entity_type,cell(r.name),pill(r.status)]); },
+  form_versions: async (it,c)=>{ const d=await api('GET','/admin/forms');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Version lifecycle: DRAFT → VALIDATED → APPROVED → PUBLISHED/ACTIVE → RETIRED.',
+      `<select id="fmd" onchange="formVerLoad()" style="max-width:280px">${opts}</select> <button class="btn sm" onclick="formNewVer()">New draft version +</button>`)+
+      `<div id="fmvlist"><div class="empty">Loading…</div></div>`; formVerLoad(); },
+  form_designer: async (it,c)=>{ const d=await api('GET','/admin/forms');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Design a DRAFT version — sections, fields, validation, visibility, sensitivity. Active versions are read-only.',
+      `<select id="fmd" onchange="formDesignLoad()" style="max-width:280px">${opts}</select>`)+
+      `<div id="fmdesign"><div class="empty">Loading…</div></div>`; formDesignLoad(); },
+  form_simulation: async (it,c)=>{ const d=await api('GET','/admin/forms');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Non-mutating form simulation — pick a role/portal + sample values; see visible/required/editable + validation.')+
+      `<div class="bar"><select id="fmd" style="max-width:220px">${opts}</select><input id="fmrole" placeholder="role e.g. dispatcher" style="max-width:170px"><label style="font-size:12px"><input type="checkbox" id="fmportal"> portal</label><input id="fmvals" placeholder='{"insured":"true"}' style="max-width:240px"><button class="btn sm" onclick="formSimulate()">Simulate</button></div><div id="fmsimres"></div>`; },
+  form_validation: async (it,c)=>{ const d=await api('GET','/admin/forms');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Validate the latest version of a form (field types, rules, circular visibility/required, protected fields).')+
+      `<div class="bar"><select id="fmd" style="max-width:260px">${opts}</select><button class="btn sm" onclick="formValidate()">Validate latest</button></div><div id="fmvalres"></div>`; },
+  form_dependencies: async (it,c)=>{ const d=await api('GET','/admin/forms');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Field dependency & impact analysis before changing or retiring a field.')+
+      `<div class="bar"><select id="fmd" style="max-width:220px">${opts}</select><input id="fmfield" placeholder="field code" style="max-width:180px"><button class="btn sm" onclick="formDeps()">Analyze</button></div><div id="fmdepres"></div>`; },
+  form_remediation: async (it,c)=>{ let m; try{ m=await api('GET','/admin/forms/migration'); }catch(e){ m={error:e.message}; }
+    c.innerHTML=header(it,'Data remediation — migration is additive; existing columns are retained; zero value loss.')+
+      (m.error?`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${m.error}</div>`:
+      `<div class="kv"><div class="k">CRM custom values preserved</div><div>${m.crm_custom_values_preserved}</div><div class="k">Form values</div><div>${m.form_values}</div><div class="k">Columns removed</div><div>${m.columns_removed}</div><div class="k">Financial differences</div><div><b>${m.financial_differences}</b></div><div class="k">Operational status differences</div><div><b>${m.operational_status_differences}</b></div><div class="k">Field-value losses</div><div><b>${m.field_value_losses}</b></div></div>`); },
+});
+async function formNewDef(){ const entity=prompt('Entity (customer/booking/quotation/job/equipment/incident/...):','booking'); if(!entity) return;
+  const code=prompt('Form code:'); if(!code) return; const name=prompt('Name:')||code;
+  try{ await api('POST','/admin/forms',{entity_type:entity,code,name}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function formVerLoad(){ const code=document.getElementById('fmd').value; const d=await api('GET','/admin/forms/'+encodeURIComponent(code)+'/versions');
+  document.getElementById('fmvlist').innerHTML=table(['Version','Status','Effective from','Checksum','Actions'], d.versions,
+    r=>['v'+r.version_no,pill(r.status==='ACTIVE'?'ACTIVE':'INACTIVE'),cell(r.effective_from),(r.checksum||'—').slice(0,10),formVerActions(r)]); }
+function formVerActions(r){ const b=[];
+  if(r.status==='DRAFT') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="formAct(${r.id},'validate')">validate</a>`);
+  if(r.status==='VALIDATED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="formAct(${r.id},'approve')">approve</a>`);
+  if(r.status==='APPROVED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="formPublish(${r.id})">publish</a>`);
+  if(r.status==='ACTIVE'||r.status==='PUBLISHED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="formAct(${r.id},'retire')">retire</a>`);
+  return b.join(' · ')||'—'; }
+async function formNewVer(){ const code=document.getElementById('fmd').value; const reason=prompt('Change reason:')||'new draft';
+  try{ await api('POST','/admin/forms/'+encodeURIComponent(code)+'/versions',{change_reason:reason}); formVerLoad(); }catch(e){ alert(e.message); } }
+async function formAct(vid,act){ try{ const r=await api('POST','/admin/form-versions/'+vid+'/'+act,{reason:'console'});
+  if(act==='validate' && !r.ok){ alert('Validation errors:\n'+(r.errors||[]).join('\n')); } formVerLoad(); }catch(e){ alert(e.message); } }
+async function formPublish(vid){ const reason=prompt('Change reason (required to publish):'); if(!reason) return;
+  const eff=prompt('Effective from (YYYY-MM-DD, blank = now):','');
+  try{ await api('POST','/admin/form-versions/'+vid+'/publish',{change_reason:reason,effective_from:eff||null}); formVerLoad(); }catch(e){ alert(e.message); } }
+async function formDesignLoad(){ const code=document.getElementById('fmd').value;
+  const vers=await api('GET','/admin/forms/'+encodeURIComponent(code)+'/versions');
+  const draft=vers.versions.filter(v=>v.status==='DRAFT').slice(-1)[0];
+  const el=document.getElementById('fmdesign');
+  if(!draft){ el.innerHTML=`<div class="note">No editable DRAFT version. Create one under Form Versions.</div>`; return; }
+  const g=await api('GET','/admin/form-versions/'+draft.id);
+  el.innerHTML=`<div class="bar"><b>Draft version #${draft.version_no}</b> (id ${draft.id}) <button class="btn sm" onclick="formAddSection(${draft.id})">Add section +</button> <button class="btn sm" onclick="formAddField(${draft.id})">Add field +</button> <button class="btn sm ghost" onclick="formAct(${draft.id},'validate')">Validate</button></div>`+
+    `<h3 style="margin:14px 0 6px;font-size:14px">Sections</h3>`+table(['Code','Title','Order'], g.sections, r=>[r.code,cell(r.title),r.sort_order])+
+    `<h3 style="margin:14px 0 6px;font-size:14px">Fields</h3>`+table(['Code','Label','Type','Required','Sensitivity','Section','Master data'], g.fields, r=>[r.code,cell(r.label),r.data_type,r.required?'yes':(r.required_condition?'conditional':''),r.sensitivity,cell(r.section_code),cell(r.master_data_domain)]); }
+async function formAddSection(vid){ const code=prompt('Section code:'); if(!code) return; const title=prompt('Title:')||code;
+  try{ await api('POST','/admin/form-versions/'+vid+'/sections',{code,title}); formDesignLoad(); }catch(e){ alert(e.message); } }
+async function formAddField(vid){ const code=prompt('Field code:'); if(!code) return; const label=prompt('Label:')||code;
+  const dt=prompt('Type (short_text/long_text/integer/decimal/currency/boolean/single_select/multi_select/email/telephone/date/signature/document_upload):','short_text')||'short_text';
+  const section=prompt('Section code (optional):','')||null;
+  const sens=prompt('Sensitivity (PUBLIC/INTERNAL/CONFIDENTIAL/RESTRICTED/PERSONAL_DATA/FINANCIAL_DATA/SAFETY_DATA):','INTERNAL')||'INTERNAL';
+  const md=prompt('Master-data domain for options (optional, e.g. ops.service_type):','')||null;
+  const body={code,label,data_type:dt,section_code:section,sensitivity:sens,master_data_domain:md};
+  const vis=prompt('Visibility condition JSON (optional, e.g. {"field":"insured","op":"is_true"}):','');
+  if(vis){ try{ body.visibility=JSON.parse(vis); }catch(e){ alert('bad JSON'); return; } }
+  const req=prompt('Required-when condition JSON (optional):','');
+  if(req){ try{ body.required_condition=JSON.parse(req); }catch(e){ alert('bad JSON'); return; } }
+  try{ await api('POST','/admin/form-versions/'+vid+'/fields',body); formDesignLoad(); }catch(e){ alert(e.message); } }
+async function formSimulate(){ const code=document.getElementById('fmd').value; const role=document.getElementById('fmrole').value||null;
+  const portal=document.getElementById('fmportal').checked; let vals={}; const raw=document.getElementById('fmvals').value;
+  if(raw){ try{ vals=JSON.parse(raw); }catch(e){ alert('bad JSON'); return; } }
+  const vers=await api('GET','/admin/forms/'+encodeURIComponent(code)+'/versions');
+  const v=vers.versions.filter(x=>x.status==='ACTIVE').slice(-1)[0]||vers.versions.slice(-1)[0];
+  try{ const r=await api('POST','/admin/form-versions/'+v.id+'/simulate',{ctx:{role,portal},values:vals});
+    document.getElementById('fmsimres').innerHTML=`<div class="kv"><div class="k">Visible</div><div>${r.visible.join(', ')||'—'}</div><div class="k">Required</div><div>${r.required.join(', ')||'—'}</div><div class="k">Editable</div><div>${r.editable.join(', ')||'—'}</div><div class="k">Validation errors</div><div>${r.validation_errors.map(e=>e.field+': '+e.error).join('; ')||'none'}</div></div>`;
+  }catch(e){ document.getElementById('fmsimres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
+async function formValidate(){ const code=document.getElementById('fmd').value;
+  const vers=await api('GET','/admin/forms/'+encodeURIComponent(code)+'/versions'); const v=vers.versions.slice(-1)[0];
+  const r=await api('POST','/admin/form-versions/'+v.id+'/validate',{});
+  document.getElementById('fmvalres').innerHTML=`<div class="kv"><div class="k">Result</div><div>${r.ok?'<span style="color:var(--ok)">VALID ✓</span>':'<span style="color:var(--danger)">errors</span>'}</div><div class="k">Fields</div><div>${r.fields}</div>${r.errors.map(e=>`<div class="k">error</div><div style="color:var(--danger)">${e}</div>`).join('')}${(r.warnings||[]).map(w=>`<div class="k">warning</div><div style="color:var(--warn)">${w}</div>`).join('')}</div>`; }
+async function formDeps(){ const code=document.getElementById('fmd').value; const fld=document.getElementById('fmfield').value; if(!fld){ alert('field code'); return; }
+  const vers=await api('GET','/admin/forms/'+encodeURIComponent(code)+'/versions'); const v=vers.versions.filter(x=>x.status==='ACTIVE').slice(-1)[0]||vers.versions.slice(-1)[0];
+  try{ const r=await api('POST','/admin/form-versions/'+v.id+'/dependencies',{code:fld});
+    document.getElementById('fmdepres').innerHTML=`<div class="kv"><div class="k">Records with values</div><div>${r.records_with_values}</div><div class="k">Forms using</div><div>${r.forms_using}</div><div class="k">Dependent fields</div><div>${r.dependent_fields.join(', ')||'—'}</div><div class="k">Safe to retire</div><div>${r.safe_to_retire?'yes':'<b>no</b>'}</div></div>`;
+  }catch(e){ document.getElementById('fmdepres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
 async function wfInstView(id){ const d=await api('GET','/admin/workflow-instances/'+id);
   const body=`<div class="kv"><div class="k">Workflow</div><div>${d.instance.definition_id}</div><div class="k">Step</div><div><b>${d.instance.current_step}</b></div><div class="k">Status</div><div>${d.instance.status}</div><div class="k">Correlation</div><div>${cell(d.instance.correlation_id)}</div></div>`+
     `<h3 style="margin:12px 0 6px;font-size:14px">Transition history</h3>`+table(['From','To','Action','Actor','Result','Time'], d.history, r=>[r.from_step,r.to_step,r.action,r.actor,r.result,r.ts])+

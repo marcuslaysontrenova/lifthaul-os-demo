@@ -764,12 +764,82 @@ def _phase4_routes():
     }
 
 
+def _phase5_routes():
+    """Phase 5 — Form & Custom-Field Administration: definitions/versions/designer/sections/fields/
+    options/validation/simulation/publication, dependency analysis, and runtime rendering/submission/
+    values/search/export/files. Permission-gated, tenant-scoped, audited; simulation non-mutating."""
+    import forms
+
+    def f_list(a, b, p):      return {"definitions": forms.list_definitions(_conn, a, entity_type=b.get("entity_type"))}
+    def f_create(a, b, p):    return {"id": forms.create_definition(_conn, a, b["entity_type"], b["code"], b["name"], description=b.get("description"), org_scope=b.get("org_scope"))}
+    def f_clone(a, b, p):     return {"id": forms.clone_definition(_conn, a, p["code"], b["new_code"], b["new_name"])}
+    def f_versions(a, b, p):  return {"versions": forms.list_versions(_conn, a, p["code"])}
+    def f_new_ver(a, b, p):   return {"id": forms.create_version(_conn, a, p["code"], change_reason=b.get("change_reason"))}
+    def f_ver_get(a, b, p):
+        core.require(a, "form.definition.view")
+        return {"sections": forms.sections(_conn, int(p["id"])), "fields": forms.fields(_conn, int(p["id"]))}
+    def f_add_section(a, b, p): return {"id": forms.add_section(_conn, a, int(p["id"]), b["code"], b.get("title"), sort_order=b.get("sort_order", 0), collapsible=b.get("collapsible", False), default_expanded=b.get("default_expanded", True), visibility=b.get("visibility"), role_restriction=b.get("role_restriction"))}
+    def f_add_field(a, b, p): return {"id": forms.add_field(_conn, a, int(p["id"]), b["code"], b["label"], b["data_type"], section_code=b.get("section_code"), required=b.get("required", False), required_condition=b.get("required_condition"), default_value=b.get("default_value"), validation=b.get("validation"), visibility=b.get("visibility"), editability=b.get("editability"), sensitivity=b.get("sensitivity", "INTERNAL"), searchable=b.get("searchable", False), reportable=b.get("reportable", False), exportable=b.get("exportable", True), master_data_domain=b.get("master_data_domain"), role_restriction=b.get("role_restriction"), workflow_stage=b.get("workflow_stage"), display_order=b.get("display_order", 0), options=b.get("options"))}
+    def f_del_field(a, b, p): return {"ok": forms.delete_field(_conn, a, int(p["id"]), b["code"])}
+    def f_add_option(a, b, p): return {"id": forms.add_option(_conn, a, int(p["id"]), b["code"], label=b.get("label"), sort_order=b.get("sort_order", 0))}
+    def f_deact_option(a, b, p): return {"ok": forms.deactivate_option(_conn, a, int(p["id"]), replacement_code=b.get("replacement_code"))}
+    def f_validate(a, b, p):  return forms.validate_version(_conn, a, int(p["id"]))
+    def f_simulate(a, b, p):  return forms.simulate(_conn, a, int(p["id"]), b.get("ctx", {}), values=b.get("values", {}))
+    def f_approve(a, b, p):   return {"ok": forms.approve_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def f_reject(a, b, p):    return {"ok": forms.reject_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def f_publish(a, b, p):   return forms.publish_version(_conn, a, int(p["id"]), b["change_reason"], effective_from=b.get("effective_from"))
+    def f_retire(a, b, p):    return {"ok": forms.retire_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def f_deps(a, b, p):      return forms.field_dependencies(_conn, a, int(p["id"]), b["code"])
+    def f_migration(a, b, p):
+        core.require(a, "form.data.remediate")
+        return forms.classify_existing(_conn)
+
+    # ---- runtime rendering / submission / values ----
+    def f_effective(a, b, p): return forms.effective_form(_conn, a, b["entity_type"], role=b.get("role"), stage=b.get("stage"), portal=b.get("portal", False))
+    def f_submit(a, b, p):    return forms.submit_values(_conn, a, b["entity_type"], int(b["entity_id"]), b.get("values", {}), stage=b.get("stage"))
+    def f_get_values(a, b, p): return {"values": forms.get_values(_conn, a, b["entity_type"], int(b["entity_id"]))}
+    def f_search(a, b, p):    return {"results": forms.search_values(_conn, a, b["entity_type"], b["field_code"], b["query"])}
+    def f_export(a, b, p):    return forms.export_values(_conn, a, b["entity_type"])
+    def f_upload(a, b, p):    return forms.upload_file(_conn, a, b["entity_type"], int(b["entity_id"]), b["field_code"], b["filename"], b["content_type"], int(b.get("size_bytes", 0)), allowed_types=b.get("allowed_types"), max_size=b.get("max_size"))
+    def f_sign(a, b, p):      return {"id": forms.add_signature(_conn, a, b["entity_type"], int(b["entity_id"]), b["field_code"], b["document_hash"], b["meaning"], form_version=b.get("form_version"), source_meta=b.get("source_meta"))}
+
+    return {
+        ("GET", "/admin/forms"): f_list,
+        ("POST", "/admin/forms"): f_create,
+        ("POST", "/admin/forms/:code/clone"): f_clone,
+        ("GET", "/admin/forms/:code/versions"): f_versions,
+        ("POST", "/admin/forms/:code/versions"): f_new_ver,
+        ("GET", "/admin/form-versions/:id"): f_ver_get,
+        ("POST", "/admin/form-versions/:id/sections"): f_add_section,
+        ("POST", "/admin/form-versions/:id/fields"): f_add_field,
+        ("POST", "/admin/form-versions/:id/fields/delete"): f_del_field,
+        ("POST", "/admin/form-fields/:id/options"): f_add_option,
+        ("POST", "/admin/form-options/:id/deactivate"): f_deact_option,
+        ("POST", "/admin/form-versions/:id/validate"): f_validate,
+        ("POST", "/admin/form-versions/:id/simulate"): f_simulate,
+        ("POST", "/admin/form-versions/:id/approve"): f_approve,
+        ("POST", "/admin/form-versions/:id/reject"): f_reject,
+        ("POST", "/admin/form-versions/:id/publish"): f_publish,
+        ("POST", "/admin/form-versions/:id/retire"): f_retire,
+        ("POST", "/admin/form-versions/:id/dependencies"): f_deps,
+        ("GET", "/admin/forms/migration"): f_migration,
+        ("POST", "/admin/forms/effective"): f_effective,
+        ("POST", "/admin/forms/values"): f_submit,
+        ("POST", "/admin/forms/values/get"): f_get_values,
+        ("POST", "/admin/forms/search"): f_search,
+        ("POST", "/admin/forms/export"): f_export,
+        ("POST", "/admin/forms/files"): f_upload,
+        ("POST", "/admin/forms/signatures"): f_sign,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
 ROUTES.update(_admin_routes())
 ROUTES.update(_phase3_routes())
 ROUTES.update(_phase4_routes())
+ROUTES.update(_phase5_routes())
 
 
 def _match(method, path):

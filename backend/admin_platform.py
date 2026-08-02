@@ -188,6 +188,19 @@ PHASE4_PERMISSIONS = [
 ]
 for _code in PHASE4_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-5 form & custom-field administration permissions (multi-dot codes)
+PHASE5_PERMISSIONS = [
+    "form.definition.view", "form.definition.manage",
+    "form.version.create", "form.version.validate", "form.version.approve",
+    "form.version.publish", "form.version.retire", "form.simulate",
+    "form.layout.view", "form.layout.manage",
+    "form.field.view", "form.field.manage", "form.field.sensitive.manage",
+    "form.field.option.manage", "form.field.validation.manage", "form.field.visibility.manage",
+    "form.data.view", "form.data.edit", "form.data.export",
+    "form.data.sensitive.view", "form.data.sensitive.edit", "form.data.remediate",
+]
+for _code in PHASE5_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -211,7 +224,7 @@ ADMIN_ROLES = [
          "workflow_admin.*", "branding.*", "security.*", "audit.*", "reporting.*",
          "master_data.*", "admin.configuration.*", "tax.policy.*",
          "quotation.policy.approval.*", "payment.downpayment.policy.*", "crm.admin.*",
-         "workflow.*"}),
+         "workflow.*", "form.*"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",
@@ -222,7 +235,13 @@ ADMIN_ROLES = [
          "workflow.definition.view", "workflow.definition.manage", "workflow.version.create",
          "workflow.version.validate", "workflow.simulate", "workflow.instance.view",
          "workflow.instance.manage", "workflow.instance.reassign", "workflow.approval.execute",
-         "workflow.approval.delegate", "workflow.sla.manage", "workflow.escalation.manage"}),
+         "workflow.approval.delegate", "workflow.sla.manage", "workflow.escalation.manage",
+         # forms: design/validate/simulate + field/layout/option/data, but NOT publish/retire or sensitive
+         "form.definition.view", "form.definition.manage", "form.version.create",
+         "form.version.validate", "form.simulate", "form.layout.view", "form.layout.manage",
+         "form.field.view", "form.field.manage", "form.field.option.manage",
+         "form.field.validation.manage", "form.field.visibility.manage",
+         "form.data.view", "form.data.edit", "form.data.export"}),
     ("crm_admin",            "CRM Administrator",            3,
         {"crm_admin.*", "customer.*", "contact.*", "address.*", "crm.admin.*", "master_data.*"}),
     ("fleet_admin",          "Fleet Administrator",          3, {"fleet_admin.*", "equipment.*", "vehicle.*", "maintenance.*", "inspection.*"}),

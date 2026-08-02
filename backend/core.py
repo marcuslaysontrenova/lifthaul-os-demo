@@ -79,7 +79,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users(
   id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL,
   role TEXT NOT NULL, name TEXT, customer_id INTEGER,
-  status TEXT NOT NULL DEFAULT 'ACTIVE', last_login_at TEXT,
+  status TEXT NOT NULL DEFAULT 'ACTIVE', last_login_at TEXT, tenant_id INTEGER,
   created_at TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS sessions(

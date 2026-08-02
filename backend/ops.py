@@ -156,9 +156,11 @@ def reserve_resource(conn, actor, booking_id, resource_type, resource_ref,
         raise ConflictError(f"{resource_type} {resource_ref} already reserved by booking {other}")
     # maintenance block: managed equipment must be ACTIVE
     if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='equipment'").fetchone():
-        eq = conn.execute("SELECT status FROM equipment WHERE code=?", (resource_ref,)).fetchone()
-        if eq and eq["status"] != "ACTIVE":
-            raise ConflictError(f"maintenance block: {resource_ref} unavailable ({eq['status']})")
+        eq = conn.execute("SELECT * FROM equipment WHERE code=?", (resource_ref,)).fetchone()
+        if eq:
+            tenant.guard(actor, eq)                        # reservation -> equipment tenant consistency
+            if eq["status"] != "ACTIVE":
+                raise ConflictError(f"maintenance block: {resource_ref} unavailable ({eq['status']})")
     from datetime import datetime, timedelta, timezone
     exp = (datetime.now(timezone.utc) + timedelta(hours=hold_hours)).isoformat()
     cur = conn.execute(
@@ -442,28 +444,39 @@ def approve_refund(conn, actor, refund_id, ref):
 # --------------------------------------------------------------------------- #
 # 27. Reporting — computed from stored data (no hard-coded metrics)
 # --------------------------------------------------------------------------- #
-def report_quotation_conversion(conn):
+def _rscope(actor):
+    """Tenant predicate for reports — no cross-tenant aggregates/counts (Item 1/4)."""
+    import tenant
+    frag, args = tenant.predicate(actor)
+    return frag, list(args)
+
+
+def report_quotation_conversion(conn, actor=None):
+    f, a = _rscope(actor)
     sent = conn.execute("SELECT COUNT(DISTINCT booking_id) c FROM quotations WHERE status IN"
-                        " ('sent','accepted','superseded','declined')").fetchone()["c"]
-    accepted = conn.execute("SELECT COUNT(DISTINCT booking_id) c FROM quotations WHERE status='accepted'").fetchone()["c"]
+                        " ('sent','accepted','superseded','declined')" + f, a).fetchone()["c"]
+    accepted = conn.execute("SELECT COUNT(DISTINCT booking_id) c FROM quotations WHERE status='accepted'" + f, a).fetchone()["c"]
     return {"quotations_sent": sent, "accepted": accepted,
             "conversion_pct": round(accepted / sent * 100, 1) if sent else 0.0}
 
 
-def report_accepted_awaiting_payment(conn):
+def report_accepted_awaiting_payment(conn, actor=None):
+    f, a = _rscope(actor)
     return conn.execute(
         "SELECT COUNT(*) c FROM bookings WHERE stage IN ('QUOTATION_ACCEPTED','AWAITING_DOWNPAYMENT',"
-        "'PAYMENT_UNDER_VERIFICATION')").fetchone()["c"]
+        "'PAYMENT_UNDER_VERIFICATION')" + f, a).fetchone()["c"]
 
 
-def report_receivables(conn):
+def report_receivables(conn, actor=None):
+    f, a = _rscope(actor)
     rows = conn.execute("SELECT status, COALESCE(SUM(balance),0) bal, COUNT(*) c FROM invoices"
-                        " WHERE status IN ('ISSUED','PARTIALLY_PAID','OVERDUE') GROUP BY status").fetchall()
+                        " WHERE status IN ('ISSUED','PARTIALLY_PAID','OVERDUE')" + f + " GROUP BY status", a).fetchall()
     return {r["status"]: {"balance": r["bal"], "count": r["c"]} for r in rows}
 
 
-def report_confirmed_jobs(conn):
-    return conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+def report_confirmed_jobs(conn, actor=None):
+    f, a = _rscope(actor)
+    return conn.execute("SELECT COUNT(*) c FROM jobs WHERE 1=1" + f, a).fetchone()["c"]
 
 
 # --------------------------------------------------------------------------- #

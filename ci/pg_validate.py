@@ -94,6 +94,18 @@ def main():
     except core.ForbiddenError:
         check(True, "self-elevation blocked on PostgreSQL")
 
+    # Item 1/4 — report counts are tenant-scoped on PostgreSQL (no cross-tenant aggregate)
+    import ops
+    conn.execute("UPDATE bookings SET stage='QUOTATION_ACCEPTED' WHERE id IN (?,?)", (bkA, bkB))
+    conn.commit()
+    check(ops.report_accepted_awaiting_payment(conn, aA) == 1, "report count scoped to tenant A on PostgreSQL")
+    check(ops.report_accepted_awaiting_payment(conn, aB) == 1, "report count scoped to tenant B on PostgreSQL")
+
+    # Item 6 — role clone copies grants on PostgreSQL
+    rid = ap.clone_role(conn, "RGO", "approver", "approver_ci", "Approver CI", actor=plat)
+    check(ap.effective_role_grants(conn, rid) == ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "approver")["id"]),
+          "role clone copies grants on PostgreSQL")
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

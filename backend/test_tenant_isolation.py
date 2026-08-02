@@ -116,6 +116,14 @@ class TestTwoTenantIsolation(unittest.TestCase):
             pass
         return _mkactor(email)
 
+    # ---- report isolation (no cross-tenant aggregates/counts) -------------
+    def test_report_counts_are_tenant_scoped(self):
+        import ops
+        server._conn.execute("UPDATE bookings SET stage='QUOTATION_ACCEPTED' WHERE id IN (?,?)",
+                             (self.bkA, self.bkB)); server._conn.commit()
+        self.assertEqual(ops.report_accepted_awaiting_payment(server._conn, self.aA), 1)  # only A
+        self.assertEqual(ops.report_accepted_awaiting_payment(server._conn, self.aB), 1)  # only B
+
     # ---- restart persistence ---------------------------------------------
     def test_restart_persistence_and_isolation(self):
         server._conn.close()

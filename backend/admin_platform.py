@@ -305,6 +305,19 @@ def create_role(conn, tenant_code, code, name, layer=4, grants=None, actor=None)
     return rid
 
 
+def clone_role(conn, tenant_code, src_code, new_code, name, actor=None) -> int:
+    """Clone a role's grants into a new tenant role (Item 6 role administration)."""
+    src = role_by_code(conn, tenant_code, src_code)
+    if not src:
+        raise core.ConflictError(f"unknown source role '{src_code}'")
+    return create_role(conn, tenant_code, new_code, name, layer=src["layer"],
+                       grants=effective_role_grants(conn, src["id"]), actor=actor)
+
+
+def role_assigned_user_count(conn, role_id) -> int:
+    return conn.execute("SELECT COUNT(*) c FROM admin_user_roles WHERE role_id=?", (role_id,)).fetchone()["c"]
+
+
 def grant_permission(conn, role_id, permission_code, actor=None):
     role = conn.execute("SELECT * FROM admin_roles WHERE id=?", (role_id,)).fetchone()
     if not role:

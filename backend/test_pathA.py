@@ -100,5 +100,28 @@ class TestAdminGuardrails(Base):                                 # Item 6
         self.assertEqual(ap.get_user(self.c, u1)["status"], "SUSPENDED")
 
 
+class TestResidualControls(Base):                               # Items 5/6 residual
+    def test_role_clone_copies_grants(self):
+        rid = ap.clone_role(self.c, "RGO", "approver", "approver_copy", "Approver Copy", actor=self.actor)
+        self.assertEqual(ap.effective_role_grants(self.c, rid),
+                         ap.effective_role_grants(self.c, ap.role_by_code(self.c, "RGO", "approver")["id"]))
+
+    def test_reparent_preview_reports_impact_and_validity(self):
+        a = org.create_business_unit(self.c, self.actor, self.rgo, "A", "A")
+        b = org.create_branch(self.c, self.actor, self.rgo, "B", "B", parent_id=a)
+        pv = org.reparent_preview(self.c, a, b)              # a under its own descendant
+        self.assertFalse(pv["valid"])
+        self.assertGreaterEqual(pv["descendants"], 1)
+
+    def test_calendar_validation(self):
+        with self.assertRaises(core.ValidationError):        # inverted shift
+            org.create_working_calendar(self.c, self.actor, self.rgo, "BAD", "Bad",
+                                        shift_start="18:00", shift_end="09:00")
+        cal = org.create_holiday_calendar(self.c, self.actor, self.rgo, "PH", "PH")
+        org.add_holiday(self.c, self.actor, cal, "New Year", "2027-01-01")
+        with self.assertRaises(core.ConflictError):          # duplicate holiday
+            org.add_holiday(self.c, self.actor, cal, "Dup", "2027-01-01")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

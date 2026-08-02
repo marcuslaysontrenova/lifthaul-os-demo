@@ -198,11 +198,11 @@ def _ops_routes():
         return {"qty": admin.inv_move(_conn, actor, int(p["id"]), body["kind"], body["qty"], body.get("ref"))}
 
     def reports(actor, body, p):
-        core.require(actor, "booking.read")
-        return {"quotation_conversion": ops.report_quotation_conversion(_conn),
-                "receivables": ops.report_receivables(_conn),
-                "confirmed_jobs": ops.report_confirmed_jobs(_conn),
-                "awaiting_payment": ops.report_accepted_awaiting_payment(_conn)}
+        core.require(actor, "booking.read")               # tenant-scoped aggregates (no cross-tenant leak)
+        return {"quotation_conversion": ops.report_quotation_conversion(_conn, actor),
+                "receivables": ops.report_receivables(_conn, actor),
+                "confirmed_jobs": ops.report_confirmed_jobs(_conn, actor),
+                "awaiting_payment": ops.report_accepted_awaiting_payment(_conn, actor)}
 
     return {
         ("POST", "/bookings/:id/reserve"): reserve,
@@ -290,6 +290,16 @@ def _admin_routes():
             raise core.ConflictError("unknown role")
         admin_platform.assign_role(_conn, int(p["id"]), role["id"], actor=a); return {"ok": True}
     def permissions(a, b, p):    R(a, "role_admin.view");   return {"permissions": _rows(_conn.execute("SELECT code,module,action,description FROM admin_permissions ORDER BY module,action").fetchall())}
+    def role_clone(a, b, p):     R(a, "role_admin.manage"); return {"id": admin_platform.clone_role(_conn, "RGO", p["code"], b["new_code"], b["name"], actor=a)}
+    def reparent_preview(a, b, p): R(a, "org.view");         return org.reparent_preview(_conn, int(p["id"]), b.get("new_parent_id"))
+    def config_history(a, b, p):
+        R(a, "system_config.view")
+        key = b.get("key")
+        sql = "SELECT ts,actor,new_value,correlation_id FROM audit_logs WHERE action='CONFIG_SET'"
+        args = []
+        if key:
+            sql += " AND new_value LIKE ?"; args.append('%"key": "' + key + '"%')
+        return {"history": _rows(_conn.execute(sql + " ORDER BY id DESC LIMIT 100", tuple(args)).fetchall())}
     def assignments(a, b, p):    R(a, "user_admin.view");   return {"assignments": _rows(org.user_assignments(_conn, int(p["id"])))}
     def assign(a, b, p):         R(a, "user_admin.manage"); return {"id": org.assign_user(_conn, a, _tid(), int(p["id"]), b["scope_kind"], b["scope_id"], b.get("assignment_type", "PRIMARY"), reason=b.get("reason"))}
     def sessions(a, b, p):       R(a, "security.view");     return {"sessions": _rows(admin_platform.list_sessions(_conn))}
@@ -403,32 +413,48 @@ def _admin_routes():
             "SELECT id,user_id,target_tenant,reason,activated_at,expires_at,terminated_at,status"
             " FROM cross_access_grants ORDER BY id DESC LIMIT 100").fetchall())}
     def data_integrity(a, b, p):
-        R(a, "audit.view")                                # expanded checks (Item 8)
+        R(a, "audit.view")                                # per-check statuses (Item 6/8)
         import datetime
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-        checks = {}
+        cid = core.correlation_id()
 
-        def count(sql, args=()):
+        def chk(code, sql, args=(), warn=False):
             try:
-                return _conn.execute(sql, args).fetchone()["c"]
-            except Exception:
-                return 0
-        checks["orphan_user_assignments"] = count(
-            "SELECT COUNT(*) c FROM user_organization_assignments ua"
-            " LEFT JOIN users u ON u.id=ua.user_id WHERE u.id IS NULL")
-        checks["orphan_org_units"] = count(
-            "SELECT COUNT(*) c FROM org_units o WHERE o.parent_id IS NOT NULL"
-            " AND NOT EXISTS (SELECT 1 FROM org_units p WHERE p.id=o.parent_id)")
-        checks["tenantless_operational_records"] = sum(
-            count("SELECT COUNT(*) c FROM " + t + " WHERE tenant_id IS NULL")
-            for t in ("customers", "bookings", "jobs", "invoices"))
-        checks["stale_active_cross_grants"] = count(
-            "SELECT COUNT(*) c FROM cross_access_grants WHERE status='ACTIVE'"
-            " AND terminated_at IS NULL AND expires_at < ?", (now_iso,))
-        checks["unresolved_remediation"] = count(
-            "SELECT COUNT(*) c FROM org_backfill_remediation WHERE status='OPEN'")
-        return {"checks": checks, "ok": all(v == 0 for v in checks.values()),
-                "executed_at": now_iso}
+                n = _conn.execute(sql, args).fetchone()["c"]
+                status = "PASS" if n == 0 else ("WARNING" if warn else "FAIL")
+                return {"check": code, "executed_at": now_iso, "findings": n,
+                        "severity": "low" if warn else "high", "status": status,
+                        "recommended_action": "none" if n == 0 else "review",
+                        "correlation_id": cid}
+            except Exception as e:
+                return {"check": code, "executed_at": now_iso, "findings": None,
+                        "severity": "unknown", "status": "NOT_RUN", "detail": str(e)[:60],
+                        "correlation_id": cid}
+        checks = [
+            chk("orphan_user_assignments",
+                "SELECT COUNT(*) c FROM user_organization_assignments ua LEFT JOIN users u ON u.id=ua.user_id WHERE u.id IS NULL"),
+            chk("orphan_org_units",
+                "SELECT COUNT(*) c FROM org_units o WHERE o.parent_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM org_units p WHERE p.id=o.parent_id)"),
+            chk("tenantless_operational_records",
+                "SELECT (SELECT COUNT(*) FROM customers WHERE tenant_id IS NULL)+(SELECT COUNT(*) FROM bookings WHERE tenant_id IS NULL)+(SELECT COUNT(*) FROM jobs WHERE tenant_id IS NULL) c", warn=True),
+            chk("stale_active_cross_grants",
+                "SELECT COUNT(*) c FROM cross_access_grants WHERE status='ACTIVE' AND terminated_at IS NULL AND expires_at < ?", (now_iso,)),
+            chk("unresolved_remediation",
+                "SELECT COUNT(*) c FROM org_backfill_remediation WHERE status='OPEN'", warn=True),
+            chk("duplicate_user_emails",
+                "SELECT COUNT(*) c FROM (SELECT email FROM users GROUP BY email HAVING COUNT(*)>1) x"),
+            chk("role_assignments_to_missing_roles",
+                "SELECT COUNT(*) c FROM admin_user_roles ur LEFT JOIN admin_roles r ON r.id=ur.role_id WHERE r.id IS NULL"),
+            chk("documents_without_owner",
+                "SELECT COUNT(*) c FROM documents WHERE entity_id IS NULL"),
+            chk("cross_tenant_parent_child_units",
+                "SELECT COUNT(*) c FROM org_units c JOIN org_units p ON p.id=c.parent_id WHERE c.tenant_id<>p.tenant_id"),
+        ]
+        blocking = [c for c in checks if c["status"] == "FAIL"]
+        return {"checks": checks, "ok": not blocking, "executed_at": now_iso,
+                "summary": {"total": len(checks), "fail": len(blocking),
+                            "warning": len([c for c in checks if c["status"] == "WARNING"]),
+                            "not_run": len([c for c in checks if c["status"] == "NOT_RUN"])}}
 
     return {
         ("GET", "/admin/org/tree"): org_tree,
@@ -447,6 +473,9 @@ def _admin_routes():
         ("GET", "/admin/roles"): roles,
         ("POST", "/admin/roles"): role_create,
         ("GET", "/admin/permissions"): permissions,
+        ("POST", "/admin/roles/:code/clone"): role_clone,
+        ("POST", "/admin/org/units/:id/reparent-preview"): reparent_preview,
+        ("GET", "/admin/config/history"): config_history,
         ("GET", "/admin/users/:id/assignments"): assignments,
         ("POST", "/admin/users/:id/assignments"): assign,
         ("GET", "/admin/sessions"): sessions,

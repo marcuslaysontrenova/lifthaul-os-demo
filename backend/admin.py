@@ -307,9 +307,12 @@ def safety_record(conn, actor, job_id, result, kind="toolbox", notes=None):
 
 def report_incident(conn, actor, job_id, severity, description):
     require(actor, "incident.create")
+    import tenant, ops
+    tenant.guard(actor, ops._job(conn, job_id))           # incident -> job tenant consistency
     cur = conn.execute("INSERT INTO incidents(job_id,severity,description,reported_by,created_at)"
                        " VALUES(?,?,?,?,?)", (job_id, severity, description, actor["id"], now()))
     conn.commit()
+    tenant.stamp(conn, actor, "incidents", cur.lastrowid)
     audit(conn, actor, "incident.report", "incident", cur.lastrowid, new={"severity": severity})
     conn.commit()
     return cur.lastrowid

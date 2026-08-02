@@ -121,6 +121,26 @@ class TestAdminApi(unittest.TestCase):
         with self.assertRaises(core.ValidationError):
             call("POST", "/admin/security/cross-access", {"target_tenant": "RGO"}, self.admin)  # no reason
 
+    def test_residual_admin_endpoints(self):
+        # role clone
+        rc = call("POST", "/admin/roles/approver/clone", {"new_code": "appr2_" + os.urandom(2).hex(), "name": "Appr2"}, self.admin)
+        self.assertIn("id", rc)
+        # re-parent preview
+        bu = call("POST", "/admin/org/units", {"kind": "business_unit", "code": "PV_" + os.urandom(2).hex(), "name": "PV"}, self.admin)["id"]
+        pv = call("POST", f"/admin/org/units/{bu}/reparent-preview", {"new_parent_id": bu}, self.admin)
+        self.assertFalse(pv["valid"])                        # self-parent invalid
+        # config history
+        call("POST", "/admin/config", {"scope": "platform", "key": "auth.mfa_policy", "value": "optional"}, self.admin)
+        self.assertIsInstance(call("GET", "/admin/config/history", {"key": "auth.mfa_policy"}, self.admin)["history"], list)
+        # data-integrity per-check statuses
+        di = call("GET", "/admin/governance/data-integrity", {}, self.admin)
+        self.assertIn("summary", di)
+        self.assertTrue(all("status" in c for c in di["checks"]))
+        # cross-access expiry endpoints
+        g = call("POST", "/admin/security/cross-access", {"target_tenant": "RGO", "reason": "audit"}, self.admin)
+        self.assertIn("expires_at", g)
+        call("POST", f"/admin/security/cross-access/{g['grant_id']}/terminate", {}, self.admin)
+
     # ---- Authorization gating ---------------------------------------------
     def test_non_admin_is_forbidden(self):
         est = self._actor("estapi@r")

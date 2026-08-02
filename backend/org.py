@@ -191,6 +191,30 @@ def create_warehouse(conn, actor, tenant_id, code, name, **kw):      return crea
 def create_service_area(conn, actor, tenant_id, code, name, **kw):   return create_unit(conn, actor, tenant_id, "service_area", code, name, **kw)
 
 
+def reparent_preview(conn, unit_id, new_parent_id):
+    """Impact preview for a re-parent (Item 6 org administration): descendant count,
+    active assigned-user count, validity + warnings — no mutation."""
+    sub = list(subtree_ids(conn, unit_id))
+    ph = ",".join("?" for _ in sub)
+    assigned = conn.execute(
+        f"SELECT COUNT(*) c FROM user_organization_assignments WHERE status='ACTIVE' AND scope_id IN ({ph})",
+        tuple(sub)).fetchone()["c"] if sub else 0
+    u = _unit(conn, unit_id)
+    valid, warnings = True, []
+    if not u:
+        return {"valid": False, "warnings": ["unknown unit"]}
+    if new_parent_id == unit_id:
+        valid = False; warnings.append("a unit cannot be its own parent")
+    if new_parent_id in set(sub):
+        valid = False; warnings.append("re-parenting would create a circular hierarchy")
+    try:
+        _assert_parent(conn, u["tenant_id"], new_parent_id)
+    except core.AppError as e:
+        valid = False; warnings.append(str(e))
+    return {"unit_id": unit_id, "new_parent_id": new_parent_id, "descendants": len(sub) - 1,
+            "active_assigned_users": assigned, "valid": valid, "warnings": warnings}
+
+
 def reparent(conn, actor, unit_id, new_parent_id):
     u = _unit(conn, unit_id)
     if not u:
@@ -346,6 +370,8 @@ def create_holiday_calendar(conn, actor, tenant_id, code, name, scope="company",
 
 
 def add_holiday(conn, actor, calendar_id, name, day, recurring=False) -> int:
+    if conn.execute("SELECT 1 FROM holidays WHERE calendar_id=? AND day=?", (calendar_id, day)).fetchone():
+        raise core.ConflictError(f"duplicate holiday on {day} in this calendar")   # Item 6 calendar validation
     cur = conn.execute("INSERT INTO holidays(calendar_id,name,day,recurring,created_at) VALUES(?,?,?,?,?)",
                        (calendar_id, name, day, 1 if recurring else 0, _now()))
     _audit(conn, actor, "HOLIDAY_ADDED", "holiday_calendars", calendar_id, new={"day": day, "name": name})
@@ -368,6 +394,10 @@ def effective_holidays(conn, calendar_id):
 def create_working_calendar(conn, actor, tenant_id, code, name, workdays="Mon,Tue,Wed,Thu,Fri",
                             shift_start="08:00", shift_end="17:00", break_minutes=60,
                             overtime_after=None, parent_id=None) -> int:
+    if shift_start and shift_end and shift_start >= shift_end:      # Item 6 calendar validation
+        raise core.ValidationError("shift_start must be before shift_end")
+    if break_minutes is not None and int(break_minutes) < 0:
+        raise core.ValidationError("break_minutes must not be negative")
     try:
         cur = conn.execute(
             "INSERT INTO working_calendars(tenant_id,code,name,workdays,shift_start,shift_end,"

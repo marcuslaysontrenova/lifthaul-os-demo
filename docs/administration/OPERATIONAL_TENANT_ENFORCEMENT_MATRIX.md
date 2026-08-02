@@ -25,13 +25,17 @@
 | `/bookings` create | POST | `core.create_booking` | **TENANT ENFORCED** (stamp + relationship check on customer) | ✓ |
 | `/bookings/:id` read | GET | `core.get_booking` | **TENANT ENFORCED** (guard → 404) | ✓ |
 | `/bookings/:id/quotation` create | POST | `core.create_quotation` | **TENANT ENFORCED** (guard on booking + stamp) | ✓ (spine) |
-| `/quotations/:id/*` submit/approve/send/accept | POST | `core` | **ENFORCED (via booking guard) — direct guard PENDING** | — |
-| `/bookings/:id/payment-request`, `/payments/:id/*` | POST | `core` | **PENDING** (load-by-tenant guard to add) | — |
-| `/bookings/:id/confirm` | POST | `core.confirm_job` | **PENDING** | — |
-| `/jobs/:id/*` transition/expense/invoice/allocate/profitability | POST/GET | `ops` | **PENDING** | — |
-| `/bookings/:id/reserve` | POST | `ops.reserve_resource` | **PENDING** | — |
-| `/jobs/:id/safety`, `/inventory/:id/move` | POST | `admin` | **PENDING** | — |
-| `/quotations/:id/pdf`, `/invoices/:id/lines`, `/calendar` | GET | `pdfgen`/`ops` | **PENDING** (document/export isolation) | — |
+| `/quotations/:id/*` submit/approve/send/accept/revision | POST | `core` (via `_quote(actor)`) | **TENANT ENFORCED** (404 no-leak) | ✓ (deep-spine) |
+| `/bookings/:id/payment-request` | POST | `core.create_payment_request` | **TENANT ENFORCED** (booking guard + stamp) | ✓ |
+| `/payments/:id/link|evidence|verify` | POST | `core` (guard on payment_request) | **TENANT ENFORCED** (404 no-leak) | ✓ (verify) |
+| `/bookings/:id/confirm` | POST | `core.confirm_job` | **TENANT ENFORCED** (booking guard + job stamp) | ✓ (spine) |
+| `/jobs/:id/transition|change-order|expense|invoice` | POST | `ops` (via `_job(actor)` + stamp) | **TENANT ENFORCED** (404 no-leak) | ✓ (pattern) |
+| `/jobs/:id/profitability` | GET | `ops.job_profitability(actor)` | **TENANT ENFORCED** | ✓ |
+| `/invoices/:id/allocate` | POST | `ops.allocate_payment` (invoice guard) | **TENANT ENFORCED** | ✓ |
+| `/bookings/:id/reserve` | POST | `ops.reserve_resource` (booking guard + stamp) | **TENANT ENFORCED** | ✓ |
+| `/invoices/:id/lines` | GET | route-level invoice guard | **TENANT ENFORCED** | ✓ |
+| `/jobs/:id/safety`, `/inventory/:id/move` | POST | `admin` | **ENFORCED (ORG SCOPE PENDING)** — parent job guard to add | — |
+| `/quotations/:id/pdf`, `/calendar` | GET | `pdfgen`/`ops` | **PENDING** (document/export isolation) | — |
 | `/reports` | GET | `ops` | **PENDING** (tenant-scoped aggregates) | — |
 | `/admin/*` (Administration) | GET/POST | `server._admin_routes` | **PLATFORM/TENANT-SCOPED** (RGO context; per-tenant scoping to add) | `test_admin_api` |
 | `/health`, `/ready`, `/login` | GET/POST | — | **N/A** (unauthenticated / auth) | — |

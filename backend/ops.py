@@ -99,10 +99,12 @@ def connect_full(path=":memory:"):
     return conn
 
 
-def _job(conn, jid):
+def _job(conn, jid, actor=None):
     r = conn.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
     if not r:
         raise NotFoundError("job not found")
+    if actor is not None:
+        import tenant; tenant.guard(actor, r)             # cross-tenant -> 404 (no leak)
     return r
 
 
@@ -147,6 +149,8 @@ def _resource_held_by_other(conn, resource_type, resource_ref, booking_id):
 def reserve_resource(conn, actor, booking_id, resource_type, resource_ref,
                      confirmed=False, hold_hours=48):
     require(actor, "reservation.create")
+    import tenant, core
+    tenant.guard(actor, core._booking(conn, booking_id))   # booking must be in the actor's tenant
     other = _resource_held_by_other(conn, resource_type, resource_ref, booking_id)
     if other:
         raise ConflictError(f"{resource_type} {resource_ref} already reserved by booking {other}")
@@ -163,6 +167,7 @@ def reserve_resource(conn, actor, booking_id, resource_type, resource_ref,
         (booking_id, resource_type, resource_ref, "CONFIRMED" if confirmed else "TEMP",
          None if confirmed else exp, actor["id"], now()))
     conn.commit()
+    tenant.stamp(conn, actor, "reservations", cur.lastrowid)
     audit(conn, actor, "reservation.create", "reservation", cur.lastrowid,
           new={"resource": f"{resource_type}:{resource_ref}", "status": "CONFIRMED" if confirmed else "TEMP"})
     conn.commit()
@@ -227,7 +232,7 @@ _EVIDENCE_REQUIRED = {"DISPATCHED", "ON_SITE", "COMPLETED", "ACCEPTED"}
 
 def transition_job(conn, actor, job_id, to_status, *, evidence=None, reason=None):
     require(actor, "job.transition")
-    j = _job(conn, job_id)
+    j = _job(conn, job_id, actor)
     frm = j["status"]
     if to_status not in JOB_FLOW.get(frm, set()):
         raise ConflictError(f"illegal job transition {frm} -> {to_status}")
@@ -262,7 +267,7 @@ def transition_job(conn, actor, job_id, to_status, *, evidence=None, reason=None
 # --------------------------------------------------------------------------- #
 def create_change_order(conn, actor, job_id, reason, amount, tax=0):
     require(actor, "changeorder.create")
-    j = _job(conn, job_id)
+    j = _job(conn, job_id, actor)
     n = conn.execute("SELECT COUNT(*) c FROM change_orders").fetchone()["c"]
     no = f"CO-{7001 + n}"
     revised = j["amount"] + amount + tax
@@ -271,6 +276,7 @@ def create_change_order(conn, actor, job_id, reason, amount, tax=0):
         " VALUES(?,?,?,?,?,?, 'DRAFT',?,?)",
         (no, job_id, reason, amount, tax, revised, actor["id"], now()))
     conn.commit()
+    import tenant; tenant.stamp(conn, actor, "change_orders", cur.lastrowid)
     audit(conn, actor, "changeorder.create", "change_order", cur.lastrowid, new={"no": no, "amount": amount})
     conn.commit()
     return cur.lastrowid
@@ -298,11 +304,13 @@ def approved_change_total(conn, job_id):
 # --------------------------------------------------------------------------- #
 def add_expense(conn, actor, job_id, category, amount, supplier=None):
     require(actor, "expense.create")
+    _job(conn, job_id, actor)                             # tenant guard on the parent job
     cur = conn.execute(
         "INSERT INTO expenses(job_id,category,amount,supplier,spent_on,status,submitted_by,created_at)"
         " VALUES(?,?,?,?,?, 'SUBMITTED',?,?)",
         (job_id, category, amount, supplier, now(), actor["id"], now()))
     conn.commit()
+    import tenant; tenant.stamp(conn, actor, "expenses", cur.lastrowid)
     audit(conn, actor, "expense.create", "expense", cur.lastrowid, new={"amount": amount, "category": category})
     conn.commit()
     return cur.lastrowid
@@ -320,8 +328,8 @@ def actual_cost(conn, job_id):
                         (job_id,)).fetchone()["t"]
 
 
-def job_profitability(conn, job_id):
-    j = _job(conn, job_id)
+def job_profitability(conn, job_id, actor=None):
+    j = _job(conn, job_id, actor)
     q = conn.execute("SELECT est_cost,total FROM quotations WHERE id=?", (j["quotation_id"],)).fetchone()
     revenue = j["amount"] + approved_change_total(conn, job_id)
     actual = actual_cost(conn, job_id)
@@ -337,7 +345,7 @@ def job_profitability(conn, job_id):
 # --------------------------------------------------------------------------- #
 def generate_final_invoice(conn, actor, job_id, due_date=None):
     require(actor, "invoice.create")
-    j = _job(conn, job_id)
+    j = _job(conn, job_id, actor)
     if j["status"] not in ("ACCEPTED", "CLOSED", "COMPLETED", "CUSTOMER_ACCEPTANCE_PENDING"):
         raise ConflictError("CONTROL: invoice only after job completion/acceptance")
     if conn.execute("SELECT 1 FROM invoices WHERE job_id=?", (job_id,)).fetchone():
@@ -369,6 +377,7 @@ def generate_final_invoice(conn, actor, job_id, due_date=None):
         if downpayment:
             conn.execute("INSERT INTO invoice_lines(invoice_id,kind,description,amount,source_ref) VALUES(?,?,?,?,?)",
                          (iid, "downpayment", "Less: verified downpayment", -downpayment, None))
+    import tenant; tenant.stamp(conn, actor, "invoices", iid)   # invoice inherits job's tenant
     audit(conn, actor, "invoice.create", "invoice", iid, new={"no": no, "total": total, "balance": balance})
     conn.commit()
     return iid
@@ -380,6 +389,7 @@ def allocate_payment(conn, actor, invoice_id, amount, ref):
     inv = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
     if not inv:
         raise NotFoundError("invoice not found")
+    import tenant; tenant.guard(actor, inv)               # cross-tenant -> 404
     with conn:
         conn.execute("INSERT INTO payment_allocations(invoice_id,amount,ref,allocated_by,allocated_at)"
                      " VALUES(?,?,?,?,?)", (invoice_id, amount, ref, actor["id"], now()))

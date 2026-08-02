@@ -13,9 +13,6 @@ import os
 import unittest
 
 DBFILE = "rgo_tenant_test.sqlite"
-if os.path.exists(DBFILE):
-    os.remove(DBFILE)
-os.environ["DATABASE_URL"] = "sqlite:///" + DBFILE
 
 import server   # noqa: E402
 import core      # noqa: E402
@@ -40,6 +37,10 @@ def _mkactor(email):
 class TestTwoTenantIsolation(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        try:
+            server._conn.close()                           # release any import-time file lock
+        except Exception:
+            pass
         if os.path.exists(DBFILE):
             os.remove(DBFILE)
         server._conn = db.connect("sqlite:///" + DBFILE)   # own fresh DB, import-order independent
@@ -83,6 +84,35 @@ class TestTwoTenantIsolation(unittest.TestCase):
     def test_cross_tenant_relationship_denied(self):
         with self.assertRaises(core.ForbiddenError):          # A booking a B customer
             call("POST", "/bookings", {"customer_id": self.custB, "service": "Crane", "cargo": "X", "weight": 1}, self.aA)
+
+    # ---- deep-path isolation (quotation -> payment) ----------------------
+    def test_cross_tenant_denied_across_full_spine(self):
+        # Cross-tenant denial must be a 404 by TENANT — the B actor holds the permission
+        # but is in the wrong tenant, so it is not a mere permission failure.
+        eA, apA, fA = self._ra(self.tA, "estimator", "est@haula"), self._ra(self.tA, "approver", "appr@haula"), self._ra(self.tA, "finance", "fin@haula")
+        eB, fB = self._ra(self.tB, "estimator", "est@haulb"), self._ra(self.tB, "finance", "fin@haulb")
+        call("POST", f"/bookings/{self.bkA}/review", {}, eA)
+        call("POST", f"/bookings/{self.bkA}/ready", {}, eA)
+        q = call("POST", f"/bookings/{self.bkA}/quotation",
+                 {"lines": [{"kind": "crane", "description": "350t", "qty": 1, "days": 2, "rate": 300000}], "est_cost": 200000}, eA)["id"]
+        with self.assertRaises(core.NotFoundError):                 # B estimator has quotation.submit
+            call("POST", f"/quotations/{q}/submit", {}, eB)         # but the quote is A's -> 404
+        call("POST", f"/quotations/{q}/submit", {}, eA)
+        call("POST", f"/quotations/{q}/approve", {}, apA)
+        call("POST", f"/quotations/{q}/send", {}, eA)
+        call("POST", f"/quotations/{q}/accept", {"accepted_by": "J", "position": "CFO"}, apA)
+        pr = call("POST", f"/bookings/{self.bkA}/payment-request", {}, fA)["id"]
+        with self.assertRaises(core.NotFoundError):                 # B finance has payment.verify
+            call("POST", f"/payments/{pr}/verify", {"amount_received": 999999, "txn_ref": "X"}, fB)
+
+    def _ra(self, tenant_id, role, email):
+        c = server._conn
+        try:
+            uid = core.create_user(c, email, "demo1234", role, role)
+            tenant.bind_user_tenant(c, None, uid, tenant_id)
+        except core.ConflictError:
+            pass
+        return _mkactor(email)
 
     # ---- restart persistence ---------------------------------------------
     def test_restart_persistence_and_isolation(self):

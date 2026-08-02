@@ -25,6 +25,7 @@ import catalog   # noqa: F401  (ensures full schema/roles registered)
 import pdfgen
 import admin_platform
 import org
+import tenant
 import db
 
 # --- configuration (never hard-coded; env-driven) --------------------------
@@ -188,7 +189,7 @@ def _ops_routes():
         return ops.allocate_payment(_conn, actor, int(p["id"]), body["amount"], body["ref"])
 
     def profitability(actor, body, p):
-        core.require(actor, "job.read"); return ops.job_profitability(_conn, int(p["id"]))
+        core.require(actor, "job.read"); return ops.job_profitability(_conn, int(p["id"]), actor)
 
     def safety(actor, body, p):
         return {"id": admin.safety_record(_conn, actor, int(p["id"]), body["result"], notes=body.get("notes"))}
@@ -234,6 +235,7 @@ def _phase2_routes():
 
     def inv_lines(actor, body, p):
         core.require(actor, "invoice.create")
+        tenant.guard(actor, _conn.execute("SELECT * FROM invoices WHERE id=?", (int(p["id"]),)).fetchone())
         return {"lines": ops.invoice_lines(_conn, int(p["id"]))}
 
     return {

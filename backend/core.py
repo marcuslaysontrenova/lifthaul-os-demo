@@ -331,10 +331,12 @@ class MockWiseProvider(PaymentProvider):
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-def _booking(conn, bid):
+def _booking(conn, bid, actor=None):
     r = conn.execute("SELECT * FROM bookings WHERE id=?", (bid,)).fetchone()
     if not r:
         raise NotFoundError("booking not found")
+    if actor is not None:
+        import tenant; tenant.guard(actor, r)             # cross-tenant -> 404 (no leak)
     return r
 
 
@@ -390,9 +392,7 @@ def create_booking(conn, actor, customer_id, service, cargo, weight=None,
 
 
 def get_booking(conn, actor, bid):
-    b = _booking(conn, bid)
-    import tenant
-    tenant.guard(actor, b)                                # 404 across tenants (no leak)
+    b = _booking(conn, bid, actor)                        # tenant guard in the loader
     if actor["role"] == "customer":
         require(actor, "self.booking.read")
         _enforce_customer_scope(actor, b["customer_id"])
@@ -431,21 +431,19 @@ def _set_stage(conn, actor, b, to_stage, reason=None):
 
 def review_booking(conn, actor, bid):
     require(actor, "booking.review")
-    _set_stage(conn, actor, _booking(conn, bid), "UNDER_REVIEW", "started review")
+    _set_stage(conn, actor, _booking(conn, bid, actor), "UNDER_REVIEW", "started review")
 
 
 def ready_for_quotation(conn, actor, bid):
     require(actor, "booking.ready")
-    _set_stage(conn, actor, _booking(conn, bid), "READY_FOR_QUOTATION")
+    _set_stage(conn, actor, _booking(conn, bid, actor), "READY_FOR_QUOTATION")
 
 
 def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_cost=0):
     """lines: [{kind,description,qty,days,rate}]. Creates version 1 (or a new
     version if revising). Never overwrites a sent quotation."""
     require(actor, "quotation.create")
-    b = _booking(conn, bid)
-    import tenant
-    tenant.guard(actor, b)                                # booking must be in the actor's tenant
+    b = _booking(conn, bid, actor)                        # booking must be in the actor's tenant
     if b["stage"] not in ("READY_FOR_QUOTATION", "REVISION_REQUESTED", "QUOTATION_IN_PROGRESS"):
         raise ConflictError("booking is not ready for quotation")
     if not lines:
@@ -475,7 +473,7 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
         (no, ver, bid, subtotal, discount_pct, discount, tax, total, dp_pct, dp_amount,
          total - dp_amount, est_cost, margin_pct, actor["id"], now()))
     qid = cur.lastrowid
-    tenant.stamp(conn, actor, "quotations", qid)          # inherit tenant from context
+    import tenant; tenant.stamp(conn, actor, "quotations", qid)   # inherit tenant from context
     for l in lines:
         amt = l["rate"] * l.get("qty", 1) * l.get("days", 1)
         conn.execute("INSERT INTO quotation_lines(quotation_id,kind,description,qty,days,rate,amount)"
@@ -490,10 +488,12 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     return qid
 
 
-def _quote(conn, qid):
+def _quote(conn, qid, actor=None):
     r = conn.execute("SELECT * FROM quotations WHERE id=?", (qid,)).fetchone()
     if not r:
         raise NotFoundError("quotation not found")
+    if actor is not None:
+        import tenant; tenant.guard(actor, r)             # cross-tenant -> 404 (no leak)
     return r
 
 
@@ -507,7 +507,7 @@ def _needs_approval(conn, q):
 
 def submit_quotation(conn, actor, qid):
     require(actor, "quotation.submit")
-    q = _quote(conn, qid)
+    q = _quote(conn, qid, actor)
     if q["status"] not in ("draft",):
         raise ConflictError("only a draft may be submitted")
     if _needs_approval(conn, q):
@@ -525,7 +525,7 @@ def submit_quotation(conn, actor, qid):
 
 def approve_quotation(conn, actor, qid):
     require(actor, "quotation.approve")
-    q = _quote(conn, qid)
+    q = _quote(conn, qid, actor)
     if q["status"] != "pending_approval":
         raise ConflictError("quotation is not pending approval")
     if CONFIG["separation_of_duties"] and q["created_by"] == actor["id"]:
@@ -538,7 +538,7 @@ def approve_quotation(conn, actor, qid):
 
 def send_quotation(conn, actor, qid):
     require(actor, "quotation.create")   # estimator/ops can send once approved
-    q = _quote(conn, qid)
+    q = _quote(conn, qid, actor)
     if q["status"] != "approved":
         raise ConflictError("CONTROL: quotation must be approved before sending")
     conn.execute("UPDATE quotations SET status='sent' WHERE id=?", (qid,))
@@ -548,7 +548,7 @@ def send_quotation(conn, actor, qid):
 
 
 def accept_quotation(conn, actor, qid, accepted_by, position=None, terms_version="v1"):
-    q = _quote(conn, qid)
+    q = _quote(conn, qid, actor)
     b = _booking(conn, q["booking_id"])
     if actor["role"] == "customer":
         require(actor, "self.quotation.accept")
@@ -567,7 +567,7 @@ def accept_quotation(conn, actor, qid, accepted_by, position=None, terms_version
 
 
 def request_revision(conn, actor, qid, reason):
-    q = _quote(conn, qid)
+    q = _quote(conn, qid, actor)
     conn.execute("UPDATE quotations SET status='revision' WHERE id=?", (qid,))
     conn.execute("UPDATE bookings SET stage='REVISION_REQUESTED' WHERE id=?", (q["booking_id"],))
     audit(conn, actor, "quotation.revision", "quotation", qid, reason=reason)
@@ -576,7 +576,7 @@ def request_revision(conn, actor, qid, reason):
 
 def create_payment_request(conn, actor, bid, provider: PaymentProvider = None):
     require(actor, "payment.create")
-    b = _booking(conn, bid)
+    b = _booking(conn, bid, actor)
     q = _latest_quote(conn, bid)
     if not q or q["status"] != "accepted":
         raise ConflictError("CONTROL: a payment request requires an accepted quotation")
@@ -589,6 +589,7 @@ def create_payment_request(conn, actor, bid, provider: PaymentProvider = None):
         "status,created_by,created_at) VALUES(?,?,?,?,?,?, 'REQUEST_CREATED',?,?)",
         (no, bid, q["id"], "PHP", q["dp_amount"], q["dp_pct"], actor["id"], now()))
     prid = cur.lastrowid
+    import tenant; tenant.stamp(conn, actor, "payment_requests", prid)
     _set_stage(conn, actor, b, "AWAITING_DOWNPAYMENT", "payment request created")
     audit(conn, actor, "payment.request", "payment_request", prid, new={"no": no, "amount": q["dp_amount"]})
     conn.commit()
@@ -600,6 +601,7 @@ def register_payment_link(conn, actor, prid, provider: PaymentProvider):
     pr = conn.execute("SELECT * FROM payment_requests WHERE id=?", (prid,)).fetchone()
     if not pr:
         raise NotFoundError("payment request not found")
+    import tenant; tenant.guard(actor, pr)                # cross-tenant -> 404
     link = provider.create_payment_link(payment_no=pr["no"], amount=pr["amount_due"], currency=pr["currency"])
     conn.execute("UPDATE payment_requests SET provider=?, provider_ref=?, pay_link=?, status='LINK_SENT',"
                  " updated_at=? WHERE id=?",
@@ -615,6 +617,7 @@ def submit_payment_evidence(conn, actor, prid, proof_ref):
     pr = conn.execute("SELECT * FROM payment_requests WHERE id=?", (prid,)).fetchone()
     if not pr:
         raise NotFoundError("payment request not found")
+    import tenant; tenant.guard(actor, pr)                # cross-tenant -> 404
     if actor["role"] == "customer":
         require(actor, "self.payment.evidence")
         b = _booking(conn, pr["booking_id"])
@@ -634,6 +637,7 @@ def verify_payment(conn, actor, prid, amount_received, txn_ref, fees=0, notes=No
     pr = conn.execute("SELECT * FROM payment_requests WHERE id=?", (prid,)).fetchone()
     if not pr:
         raise NotFoundError("payment request not found")
+    import tenant; tenant.guard(actor, pr)                # cross-tenant -> 404
     if pr["status"] == "VERIFIED":                       # idempotency
         audit(conn, actor, "payment.verify", "payment_request", prid, new={"idempotent": True})
         conn.commit()
@@ -658,7 +662,7 @@ def confirm_job(conn, actor, bid):
     """Transactional. Confirms a job ONLY when the accepted quotation is backed by a
     VERIFIED payment. Prevents duplicate job creation (idempotent)."""
     require(actor, "job.confirm")
-    b = _booking(conn, bid)
+    b = _booking(conn, bid, actor)
     q = _latest_quote(conn, bid)
     if b["job_id"]:                                       # duplicate prevention / idempotent
         return conn.execute("SELECT no FROM jobs WHERE id=?", (b["job_id"],)).fetchone()["no"]
@@ -678,6 +682,7 @@ def confirm_job(conn, actor, bid):
         conn.execute("UPDATE bookings SET stage='CONFIRMED', job_id=? WHERE id=?", (job_id, bid))
         audit(conn, actor, "job.confirm", "job", job_id,
               new={"no": job_no, "from_booking": b["ref"], "from_quote": q["no"]})
+    import tenant; tenant.stamp(conn, actor, "jobs", job_id)   # job inherits booking's tenant
     return job_no
 
 

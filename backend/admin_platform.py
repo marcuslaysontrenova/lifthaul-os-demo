@@ -201,6 +201,24 @@ PHASE5_PERMISSIONS = [
 ]
 for _code in PHASE5_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-6 platform & system settings permissions (multi-dot codes)
+PHASE6_PERMISSIONS = [
+    "platform.settings.view", "platform.settings.manage",
+    "tenant.settings.view", "tenant.settings.manage", "organization.settings.override",
+    "security.policy.view", "security.policy.manage",
+    "authentication.policy.manage", "session.policy.manage",
+    "numbering.view", "numbering.manage", "currency.settings.manage", "fiscal.settings.manage",
+    "calendar.settings.manage", "branding.view", "branding.manage",
+    "template.view", "template.manage", "template.publish",
+    "retention.view", "retention.manage", "audit.retention.manage",
+    "file.policy.view", "file.policy.manage", "api.policy.view", "api.policy.manage",
+    "feature_flag.view", "feature_flag.manage", "feature_flag.emergency_disable",
+    "module.view", "module.manage",
+    "maintenance.view", "maintenance.manage", "maintenance.platform_manage",
+    "backup.view", "backup.manage", "backup.execute", "restore.execute", "restore.approve",
+]
+for _code in PHASE6_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -224,7 +242,14 @@ ADMIN_ROLES = [
          "workflow_admin.*", "branding.*", "security.*", "audit.*", "reporting.*",
          "master_data.*", "admin.configuration.*", "tax.policy.*",
          "quotation.policy.approval.*", "payment.downpayment.policy.*", "crm.admin.*",
-         "workflow.*", "form.*"}),
+         "workflow.*", "form.*",
+         # Phase 6 platform & system settings (platform admin is the platform authority)
+         "platform.settings.*", "tenant.settings.*", "organization.settings.override",
+         "security.policy.*", "authentication.policy.manage", "session.policy.manage",
+         "numbering.*", "currency.settings.manage", "fiscal.settings.manage", "calendar.settings.manage",
+         "branding.*", "template.*", "retention.*", "audit.retention.manage",
+         "file.policy.*", "api.policy.*", "feature_flag.*", "module.*", "maintenance.*",
+         "backup.*", "restore.execute", "restore.approve"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",

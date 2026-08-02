@@ -219,6 +219,19 @@ const MENU = [
     {id:'form_dependencies', label:'Field Dependencies'},
     {id:'form_remediation', label:'Data Remediation'},
   ]},
+  {sect:'Platform and System Settings', items:[
+    {id:'sys_settings', label:'Platform / Tenant Settings'},
+    {id:'sys_security', label:'Security Policy'},
+    {id:'sys_secrets', label:'Secret References'},
+    {id:'sys_flags', label:'Feature Flags'},
+    {id:'sys_modules', label:'Modules'},
+    {id:'sys_maintenance', label:'Maintenance Mode'},
+    {id:'sys_retention', label:'Retention'},
+    {id:'sys_backup', label:'Backup and Restore'},
+    {id:'sys_branding', label:'Branding'},
+    {id:'sys_templates', label:'Document Templates'},
+    {id:'sys_integrity', label:'System Integrity'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -679,6 +692,88 @@ async function formDeps(){ const code=document.getElementById('fmd').value; cons
   try{ const r=await api('POST','/admin/form-versions/'+v.id+'/dependencies',{code:fld});
     document.getElementById('fmdepres').innerHTML=`<div class="kv"><div class="k">Records with values</div><div>${r.records_with_values}</div><div class="k">Forms using</div><div>${r.forms_using}</div><div class="k">Dependent fields</div><div>${r.dependent_fields.join(', ')||'—'}</div><div class="k">Safe to retire</div><div>${r.safe_to_retire?'yes':'<b>no</b>'}</div></div>`;
   }catch(e){ document.getElementById('fmdepres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
+// ---- Phase 6 Platform & System Settings screens (all actions hit persisted APIs) ----
+Object.assign(SCREENS, {
+  sys_settings: async (it,c)=>{ const d=await api('GET','/admin/settings/definitions');
+    c.innerHTML=header(it,'Typed, scoped, effective-dated settings. Platform → tenant → organization. Security invariants are platform floors.',
+      `<button class="btn sm" onclick="sysSetVal()">Set value +</button>`)+
+      table(['Key','Category','Type','Default','Scopes','Security floor'], d.definitions.filter(x=>x.category!=='SECURITY'), r=>[r.key,r.category,r.data_type,cell(r.default_value),cell(r.scopes),r.security_invariant?'yes':'']); },
+  sys_security: async (it,c)=>{ let defs; try{ defs=(await api('GET','/admin/settings/definitions')).definitions.filter(x=>x.category==='SECURITY'); }catch(e){ defs=[]; }
+    c.innerHTML=header(it,'Security minimums. A tenant may STRENGTHEN but never weaken below the platform floor (enforced server-side).',
+      `<button class="btn sm" onclick="sysSetVal('SECURITY')">Set policy +</button>`)+
+      table(['Key','Type','Platform floor','Direction'], defs, r=>[r.key,r.data_type,cell(r.default_value),r.invariant_direction==='max'?'lower=stronger':(r.invariant_direction==='rank'?'off<optional<required':'higher=stronger')]); },
+  sys_secrets: async (it,c)=>{ const d=await api('GET','/admin/settings/secrets');
+    c.innerHTML=header(it,'Secret REFERENCES only — values are never stored, displayed, logged, or exported.',
+      `<button class="btn sm" onclick="sysNewSecret()">New reference +</button>`)+
+      table(['Code','Provider','Status','Value','Last verified'], d.secrets, r=>[r.code,cell(r.provider),pill(r.status==='ACTIVE'?'ACTIVE':'INACTIVE'),'••••••',cell(r.last_verified_at)]); },
+  sys_flags: async (it,c)=>{ const d=await api('GET','/admin/settings/flags');
+    c.innerHTML=header(it,'Governed feature flags — platform default + tenant override + dependency + kill switch.',
+      `<button class="btn sm" onclick="sysNewFlag()">New flag +</button>`)+
+      table(['Key','Default','Dependency','Status','Actions'], d.flags, r=>[r.key,r.platform_default?'on':'off',cell(r.dependency),pill(r.status==='ACTIVE'?'ACTIVE':'INACTIVE'),
+        `<a style="color:var(--accent);cursor:pointer" onclick="sysFlagOv('${r.key}',true)">enable(tenant)</a> · <a style="color:var(--danger);cursor:pointer" onclick="sysFlagKill('${r.key}')">kill</a>`]); },
+  sys_modules: async (it,c)=>{ const d=await api('GET','/admin/settings/modules');
+    c.innerHTML=header(it,'Module registry — dependency + unsafe-disable guards with impact preview.')+
+      table(['Code','Name','Dependencies','Tenant status','Actions'], d.modules, r=>[r.code,cell(r.name),cell(r.dependencies),pill(r.tenant_status==='ENABLED'?'ACTIVE':'INACTIVE'),
+        `<a style="color:var(--accent);cursor:pointer" onclick="sysModImpact('${r.code}')">impact</a> · <a style="color:var(--accent);cursor:pointer" onclick="sysModSet('${r.code}',${r.tenant_status!=='ENABLED'})">${r.tenant_status==='ENABLED'?'disable':'enable'}</a>`]); },
+  sys_maintenance: async (it,c)=>{ const d=await api('GET','/admin/settings/maintenance');
+    c.innerHTML=header(it,'Scoped maintenance mode with mandatory expiry. Platform-wide requires platform authority.',
+      `<button class="btn sm" onclick="sysSchedMaint()">Schedule +</button>`)+
+      (d.active?`<div class="note" style="border-left-color:var(--warn)">ACTIVE: ${d.active.mode} until ${d.active.ends_at} — ${cell(d.active.message)}</div>`:`<div class="empty">No active maintenance window.</div>`); },
+  sys_retention: async (it,c)=>{ const d=await api('GET','/admin/settings/retention');
+    c.innerHTML=header(it,'Retention policies with legal hold. Audit retention cannot go below the platform minimum.',
+      `<button class="btn sm" onclick="sysSetRet()">Set policy +</button>`)+
+      table(['Category','Days','Legal hold','Archive','Deletion'], d.policies, r=>[r.category,r.retention_days,r.legal_hold?'HELD':'',cell(r.archive_behavior),cell(r.deletion_behavior)]); },
+  sys_backup: async (it,c)=>{ const d=await api('GET','/admin/settings/backups');
+    c.innerHTML=header(it,'Governed backup metadata + restore-approval workflow (separation of duties; no raw credentials).',
+      `<button class="btn sm" onclick="sysBackup()">Run backup +</button>`)+
+      table(['Id','Kind','Status','Checksum','Restore point','Actions'], d.backups, r=>[r.id,r.kind,pill(r.status==='SUCCESS'?'ACTIVE':'INACTIVE'),(r.checksum||'—').slice(0,10),cell(r.restore_point),
+        `<a style="color:var(--accent);cursor:pointer" onclick="sysRestore(${r.id})">request restore</a>`]); },
+  sys_branding: async (it,c)=>{ const d=await api('GET','/admin/settings/branding');
+    const rows=Object.values(d.branding||{});
+    c.innerHTML=header(it,'Sanitized branding (no scripts). Logos, colors, headers/footers.',
+      `<button class="btn sm" onclick="sysSetBranding()">Set branding +</button>`)+
+      table(['Kind','Value','Type'], rows, r=>[r.kind,cell(r.value),cell(r.content_type)]); },
+  sys_templates: async (it,c)=>{ const d=await api('GET','/admin/settings/templates');
+    c.innerHTML=header(it,'Document/notification templates — allowlisted variables only, versioned + published.',
+      `<button class="btn sm" onclick="sysNewTemplate()">New template +</button>`)+
+      table(['Code','Name','Channel','Version','Status','Actions'], d.templates, r=>[r.code,cell(r.name),cell(r.channel),'v'+r.version,pill(r.status==='PUBLISHED'?'ACTIVE':'INACTIVE'),
+        r.status==='DRAFT'?`<a style="color:var(--accent);cursor:pointer" onclick="sysPubTemplate(${r.id})">publish</a>`:'—']); },
+  sys_integrity: async (it,c)=>{ const d=await api('GET','/admin/settings/integrity');
+    c.innerHTML=header(it,'Configuration integrity — weak policy, maintenance without expiry, stale secrets, broken flag dependency, failed backups.')+
+      `<div class="note" style="border-left-color:${d.healthy?'var(--ok)':'var(--danger)'}">${d.healthy?'HEALTHY ✓':'ISSUES FOUND'} — ${d.summary.fail} fail, ${d.summary.warning} warning</div>`+
+      table(['Check','Status','Severity','Detail'], d.checks, r=>[r.check,pill(r.status==='PASS'?'ACTIVE':'INACTIVE')+' '+r.status,r.severity,cell(r.detail)]); },
+});
+async function sysSetVal(cat){ const key=prompt('Setting key:'); if(!key) return; const value=prompt('Value:'); if(value===null) return;
+  const scope=prompt('Scope (platform/tenant/branch):','tenant')||'tenant'; const ref=scope!=='platform'&&scope!=='tenant'?prompt('Scope ref:',''):null;
+  try{ await api('POST','/admin/settings/values',{key,value,scope,scope_ref:ref,reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysNewSecret(){ const code=prompt('Reference code:'); if(!code) return; const provider=prompt('Provider:','wise')||'wise';
+  const env=prompt('Environment variable name (the value stays in env, never stored):','WISE_API_KEY'); if(!env) return;
+  try{ await api('POST','/admin/settings/secrets',{code,provider,env_name:env}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysNewFlag(){ const key=prompt('Flag key:'); if(!key) return; const dep=prompt('Dependency flag (optional):','')||null;
+  const def=confirm('Platform default ON?');
+  try{ await api('POST','/admin/settings/flags',{key,platform_default:def,dependency:dep}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysFlagOv(key,enabled){ try{ await api('POST','/admin/settings/flags/'+encodeURIComponent(key)+'/override',{enabled}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysFlagKill(key){ if(!confirm('Emergency-disable flag "'+key+'"?')) return; try{ await api('POST','/admin/settings/flags/'+encodeURIComponent(key)+'/kill',{reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysModImpact(code){ try{ const r=await api('POST','/admin/settings/modules/'+code+'/impact',{});
+  alert('Impact for '+code+':\nDependents: '+(r.enabled_dependents.join(', ')||'none')+'\nBlockers: '+(r.active_blockers.join(', ')||'none')+'\nSafe to disable: '+r.safe_to_disable); }catch(e){ alert(e.message); } }
+async function sysModSet(code,enabled){ try{ await api('POST','/admin/settings/modules/'+code+'/status',{enabled,reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysSchedMaint(){ const mode=prompt('Mode (read_only/full_lock):','read_only')||'read_only';
+  const ends=prompt('Ends at (ISO, required — no permanent maintenance):',''); if(!ends){ alert('end required'); return; }
+  const msg=prompt('Message:','Scheduled maintenance')||'';
+  try{ await api('POST','/admin/settings/maintenance',{mode,starts_at:new Date().toISOString(),ends_at:ends,message:msg}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysSetRet(){ const cat=prompt('Category (audit/documents/sessions/...):','documents'); if(!cat) return;
+  const days=prompt('Retention days:','365'); const hold=confirm('Legal hold?');
+  try{ await api('POST','/admin/settings/retention',{category:cat,retention_days:parseInt(days),legal_hold:hold}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysBackup(){ try{ const r=await api('POST','/admin/settings/backups',{kind:'logical'}); alert('Backup '+r.status+' checksum '+r.checksum.slice(0,12)); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysRestore(bkId){ const reason=prompt('Restore reason:'); if(!reason) return;
+  try{ const r=await api('POST','/admin/settings/restore',{backup_run_id:bkId,reason}); alert('Restore requested (#'+r.id+'). Requires validate + a SEPARATE approver.'); }catch(e){ alert(e.message); } }
+async function sysSetBranding(){ const kind=prompt('Kind (logo/favicon/primary_color/document_header/document_footer):','primary_color'); if(!kind) return;
+  const val=prompt('Value (no scripts):',''); try{ await api('POST','/admin/settings/branding',{kind,value:val}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysNewTemplate(){ const code=prompt('Template code:'); if(!code) return; const name=prompt('Name:')||code;
+  const ch=prompt('Channel (email/sms/in_app):','email')||'email'; const body=prompt('Body (use {{variable}} placeholders):','Hello {{customer_name}}')||'';
+  const vars=(prompt('Allowed variables (comma-separated):','customer_name')||'').split(',').map(x=>x.trim()).filter(Boolean);
+  try{ await api('POST','/admin/settings/templates',{code,name,channel:ch,body,allowed_variables:vars}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function sysPubTemplate(id){ try{ await api('POST','/admin/settings/templates/'+id+'/publish',{reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
 async function wfInstView(id){ const d=await api('GET','/admin/workflow-instances/'+id);
   const body=`<div class="kv"><div class="k">Workflow</div><div>${d.instance.definition_id}</div><div class="k">Step</div><div><b>${d.instance.current_step}</b></div><div class="k">Status</div><div>${d.instance.status}</div><div class="k">Correlation</div><div>${cell(d.instance.correlation_id)}</div></div>`+
     `<h3 style="margin:12px 0 6px;font-size:14px">Transition history</h3>`+table(['From','To','Action','Actor','Result','Time'], d.history, r=>[r.from_step,r.to_step,r.action,r.actor,r.result,r.ts])+

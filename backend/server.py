@@ -833,6 +833,97 @@ def _phase5_routes():
     }
 
 
+def _phase6_routes():
+    """Phase 6 — Platform & System Settings: settings/secrets/flags/modules/maintenance/retention/
+    backup/restore/branding/templates/integrity. Permission-gated, tenant-scoped, audited; secrets
+    masked; security minimums enforced."""
+    import settings as s
+
+    def st_defs(a, b, p):     return {"definitions": s.list_definitions(_conn, a, category=b.get("category"))}
+    def st_set(a, b, p):      return {"id": s.set_value(_conn, a, b["key"], b["value"], scope=b.get("scope", "platform"), scope_ref=b.get("scope_ref"), effective_from=b.get("effective_from"), effective_to=b.get("effective_to"), reason=b.get("reason"))}
+    def st_eff(a, b, p):
+        core.require(a, "platform.settings.view")
+        return s.effective_value(_conn, a, b["key"], tenant=b.get("tenant"), org_chain=b.get("org_chain"))
+    def st_hist(a, b, p):     return {"history": s.value_history(_conn, a, b["key"], scope=b.get("scope"))}
+    # secrets
+    def sec_list(a, b, p):    return {"secrets": s.list_secret_references(_conn, a)}
+    def sec_create(a, b, p):  return {"id": s.create_secret_reference(_conn, a, b["code"], b.get("provider"), b["env_name"], scope=b.get("scope", "platform"), rotation_days=b.get("rotation_days", 90), masked_hint=b.get("masked_hint"))}
+    def sec_validate(a, b, p): return s.validate_secret_reference(_conn, a, b["code"])
+    def sec_rotate(a, b, p):  return {"ok": s.rotate_secret_reference(_conn, a, b["code"])}
+    def sec_revoke(a, b, p):  return {"ok": s.revoke_secret_reference(_conn, a, b["code"])}
+    # flags
+    def fl_list(a, b, p):     return {"flags": s.list_flags(_conn, a)}
+    def fl_create(a, b, p):   return {"id": s.create_flag(_conn, a, b["key"], description=b.get("description"), platform_default=b.get("platform_default", False), dependency=b.get("dependency"), risk=b.get("risk", "low"), expires_at=b.get("expires_at"))}
+    def fl_override(a, b, p): return {"ok": s.set_flag_override(_conn, a, p["key"], b["enabled"], tenant=b.get("tenant"), scope=b.get("scope", "tenant"), scope_ref=b.get("scope_ref"), effective_from=b.get("effective_from"), effective_to=b.get("effective_to"))}
+    def fl_kill(a, b, p):     return {"ok": s.emergency_disable_flag(_conn, a, p["key"], reason=b.get("reason"))}
+    # modules
+    def mod_list(a, b, p):    return {"modules": s.list_modules(_conn, a)}
+    def mod_impact(a, b, p):  return s.module_disable_impact(_conn, a, p["code"])
+    def mod_set(a, b, p):     return {"ok": s.set_module_status(_conn, a, p["code"], b["enabled"], reason=b.get("reason"))}
+    # maintenance
+    def mt_schedule(a, b, p): return {"id": s.schedule_maintenance(_conn, a, b["mode"], b.get("starts_at"), b["ends_at"], message=b.get("message"), scope=b.get("scope", "tenant"), allowed_roles=b.get("allowed_roles", "admin"))}
+    def mt_status(a, b, p):
+        core.require(a, "maintenance.view")
+        return {"active": s.maintenance_status(_conn, tenant=a.get("tenant_id"))}
+    def mt_end(a, b, p):      return {"ok": s.end_maintenance(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    # retention
+    def ret_list(a, b, p):    return {"policies": s.list_retention(_conn, a)}
+    def ret_set(a, b, p):     return {"ok": s.set_retention(_conn, a, b["category"], b["retention_days"], legal_hold=b.get("legal_hold", False), archive_behavior=b.get("archive_behavior", "archive"), deletion_behavior=b.get("deletion_behavior", "soft"), platform_minimum_days=b.get("platform_minimum_days"))}
+    # backup / restore
+    def bk_list(a, b, p):     return {"backups": s.list_backups(_conn, a)}
+    def bk_exec(a, b, p):     return s.execute_backup(_conn, a, kind=b.get("kind", "logical"), storage_ref=b.get("storage_ref"), encryption_ref=b.get("encryption_ref"))
+    def rs_request(a, b, p):  return {"id": s.request_restore(_conn, a, int(b["backup_run_id"]), reason=b.get("reason"), target=b.get("target", "isolated"))}
+    def rs_validate(a, b, p): return {"ok": s.validate_restore(_conn, a, int(p["id"]))}
+    def rs_approve(a, b, p):  return {"ok": s.approve_restore(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    # branding / templates
+    def br_get(a, b, p):      return {"branding": s.get_branding(_conn, a)}
+    def br_set(a, b, p):      return {"ok": s.set_branding(_conn, a, b["kind"], value=b.get("value"), file_ref=b.get("file_ref"), content_type=b.get("content_type"), size_bytes=b.get("size_bytes"))}
+    def tpl_list(a, b, p):    return {"templates": s.list_templates(_conn, a)}
+    def tpl_create(a, b, p):  return {"id": s.create_template(_conn, a, b["code"], b["name"], b.get("channel"), b["body"], allowed_variables=b.get("allowed_variables"))}
+    def tpl_publish(a, b, p): return s.publish_template(_conn, a, int(p["id"]), reason=b.get("reason"))
+    # integrity + migration
+    def integ(a, b, p):       return s.integrity_checks(_conn, a)
+    def migr(a, b, p):
+        core.require(a, "platform.settings.view")
+        return s.classify_existing(_conn)
+
+    return {
+        ("GET", "/admin/settings/definitions"): st_defs,
+        ("POST", "/admin/settings/values"): st_set,
+        ("POST", "/admin/settings/effective"): st_eff,
+        ("POST", "/admin/settings/history"): st_hist,
+        ("GET", "/admin/settings/secrets"): sec_list,
+        ("POST", "/admin/settings/secrets"): sec_create,
+        ("POST", "/admin/settings/secrets/validate"): sec_validate,
+        ("POST", "/admin/settings/secrets/rotate"): sec_rotate,
+        ("POST", "/admin/settings/secrets/revoke"): sec_revoke,
+        ("GET", "/admin/settings/flags"): fl_list,
+        ("POST", "/admin/settings/flags"): fl_create,
+        ("POST", "/admin/settings/flags/:key/override"): fl_override,
+        ("POST", "/admin/settings/flags/:key/kill"): fl_kill,
+        ("GET", "/admin/settings/modules"): mod_list,
+        ("POST", "/admin/settings/modules/:code/impact"): mod_impact,
+        ("POST", "/admin/settings/modules/:code/status"): mod_set,
+        ("POST", "/admin/settings/maintenance"): mt_schedule,
+        ("GET", "/admin/settings/maintenance"): mt_status,
+        ("POST", "/admin/settings/maintenance/:id/end"): mt_end,
+        ("GET", "/admin/settings/retention"): ret_list,
+        ("POST", "/admin/settings/retention"): ret_set,
+        ("GET", "/admin/settings/backups"): bk_list,
+        ("POST", "/admin/settings/backups"): bk_exec,
+        ("POST", "/admin/settings/restore"): rs_request,
+        ("POST", "/admin/settings/restore/:id/validate"): rs_validate,
+        ("POST", "/admin/settings/restore/:id/approve"): rs_approve,
+        ("GET", "/admin/settings/branding"): br_get,
+        ("POST", "/admin/settings/branding"): br_set,
+        ("GET", "/admin/settings/templates"): tpl_list,
+        ("POST", "/admin/settings/templates"): tpl_create,
+        ("POST", "/admin/settings/templates/:id/publish"): tpl_publish,
+        ("GET", "/admin/settings/integrity"): integ,
+        ("GET", "/admin/settings/migration"): migr,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
@@ -840,6 +931,7 @@ ROUTES.update(_admin_routes())
 ROUTES.update(_phase3_routes())
 ROUTES.update(_phase4_routes())
 ROUTES.update(_phase5_routes())
+ROUTES.update(_phase6_routes())
 
 
 def _match(method, path):

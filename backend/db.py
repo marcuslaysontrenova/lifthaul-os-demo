@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 10  # bump when any module schema changes (10 = Phase 5 form & custom-field administration)
+SCHEMA_VERSION = 11  # bump when any module schema changes (11 = Phase 6 platform & system settings)
 
 
 def _now():
@@ -78,6 +78,7 @@ def _seed_platform(conn):
     import workflow
     import wfgov
     import forms
+    import settings as sysconfig
     admin_platform.init(conn)
     config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
     admin_platform.seed(conn)
@@ -89,6 +90,7 @@ def _seed_platform(conn):
     wfgov.init(conn)                                          # Phase 4: approval/SLA/escalation/delegation tables
     workflow.init(conn); workflow.seed(conn)                 # Phase 4: governed workflow engine + imported booking def
     forms.init(conn); forms.seed(conn)                        # Phase 5: governed form & custom-field engine + booking form
+    sysconfig.init(conn); sysconfig.seed(conn)                # Phase 6: platform & system settings + modules + security floors
     return conn
 
 

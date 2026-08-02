@@ -393,6 +393,99 @@ def main():
           "booking stage unchanged by form engine (0 operational drift) on PostgreSQL")
     print("PHASE 5 FORM & CUSTOM-FIELD ADMINISTRATION: PASS on PostgreSQL", flush=True)
 
+    # Phase 6 — Platform & System Settings on PostgreSQL
+    import settings as sysc
+    sa = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    sysc.set_value(conn, sa, "platform.name", "RGO Ops", scope="platform")
+    check(sysc.effective_value(conn, sa, "platform.name")["value"] == "RGO Ops", "setting effective resolution on PostgreSQL")
+    # security floor: tenant may strengthen, not weaken
+    sysc.set_value(conn, sa, "auth.password.min_length", "14", scope="tenant")
+    check(sysc.effective_value(conn, sa, "auth.password.min_length")["value"] == "14", "tenant may strengthen security policy on PostgreSQL")
+    try:
+        sysc.set_value(conn, sa, "auth.password.min_length", "6", scope="tenant")
+        check(False, "security weakening must be blocked")
+    except core.ForbiddenError:
+        check(True, "tenant cannot weaken security below platform minimum on PostgreSQL")
+    try:
+        sysc.set_value(conn, sa, "auth.mfa.policy", "off", scope="tenant")
+        check(False, "MFA weakening must be blocked")
+    except core.ForbiddenError:
+        check(True, "MFA policy cannot be weakened below platform on PostgreSQL")
+    # secret reference: value never stored/returned
+    sysc.create_secret_reference(conn, sa, "wise_key", "wise", "WISE_API_KEY")
+    refs = sysc.list_secret_references(conn, sa)
+    check(refs and refs[0]["value"] == sysc.SENSITIVE_MASK and "env_name" not in refs[0],
+          "secret reference value masked + env hidden on PostgreSQL")
+    # feature flag: tenant isolation + dependency + kill switch
+    sysc.create_flag(conn, sa, "beta_ui", platform_default=False)
+    sysc.set_flag_override(conn, sa, "beta_ui", True, tenant=tA)
+    check(sysc.is_flag_enabled(conn, "beta_ui", tenant=tA) and not sysc.is_flag_enabled(conn, "beta_ui", tenant=tB),
+          "feature flag tenant isolation on PostgreSQL")
+    sysc.create_flag(conn, sa, "child_feat", dependency="beta_ui")
+    sysc.create_flag(conn, sa, "base_off", platform_default=False)
+    sysc.create_flag(conn, sa, "needs_base", dependency="base_off")
+    try:
+        sysc.set_flag_override(conn, sa, "needs_base", True, tenant=tA)
+        check(False, "flag dependency must be validated")
+    except core.ValidationError:
+        check(True, "feature flag dependency validated on PostgreSQL")
+    # module unsafe-disable guard
+    try:
+        sysc.set_module_status(conn, sa, "booking", False)
+        check(False, "unsafe module disable must be blocked")
+    except core.ConflictError:
+        check(True, "unsafe module disable blocked (dependents) on PostgreSQL")
+    # maintenance requires expiry
+    try:
+        sysc.schedule_maintenance(conn, sa, "read_only", sysc._now(), None)
+        check(False, "permanent maintenance must be blocked")
+    except core.ValidationError:
+        check(True, "permanent maintenance blocked on PostgreSQL")
+    # audit retention floor
+    try:
+        sysc.set_retention(conn, sa, "audit", 30)
+        check(False, "audit retention floor must hold")
+    except core.ForbiddenError:
+        check(True, "audit retention cannot drop below platform floor on PostgreSQL")
+    # backup + governed restore SoD
+    bk = sysc.execute_backup(conn, sa)
+    check(bk["status"] == "SUCCESS" and bool(bk["checksum"]), "governed backup executes with checksum on PostgreSQL")
+    rrid = sysc.request_restore(conn, sa, bk["backup_run_id"])
+    sysc.validate_restore(conn, sa, rrid)
+    try:
+        sysc.approve_restore(conn, sa, rrid)
+        check(False, "self-approval of restore must be blocked")
+    except core.ForbiddenError:
+        check(True, "restore approval requires a separate approver (SoD) on PostgreSQL")
+    approver = actor_role(conn, tA, "admin", "restoreappr@ci")
+    approver["perms"] = {"restore.approve"}
+    check(sysc.approve_restore(conn, approver, rrid) is True, "separate approver can approve restore on PostgreSQL")
+    # branding rejects scripts + template variable allowlist
+    try:
+        sysc.set_branding(conn, sa, "document_header", value="<script>x</script>")
+        check(False, "branding script must be rejected")
+    except core.ValidationError:
+        check(True, "branding rejects scripts on PostgreSQL")
+    try:
+        sysc.create_template(conn, sa, "quote_email", "Q", "email", "Hi {{name}} {{evil}}", allowed_variables=["name"])
+        check(False, "non-allowlisted template variable must be rejected")
+    except core.ValidationError:
+        check(True, "template variable allowlist enforced on PostgreSQL")
+    # integrity healthy + migration zero drift
+    rep = sysc.integrity_checks(conn, sa)
+    check(rep["summary"]["fail"] == 0, "system integrity has no FAIL on PostgreSQL")
+    m6 = sysc.classify_existing(conn)
+    check(m6["financial_differences"] == 0 and m6["operational_status_differences"] == 0 and m6["security_policy_weakening"] == 0,
+          "settings migration zero financial/operational/security drift on PostgreSQL")
+    # tenant isolation of settings values
+    tv = conn.execute("SELECT COUNT(*) c FROM setting_values WHERE scope='tenant' AND tenant_id=?", (tA,)).fetchone()["c"]
+    tvb = conn.execute("SELECT COUNT(*) c FROM setting_values WHERE scope='tenant' AND tenant_id=?", (tB,)).fetchone()["c"]
+    check(tv >= 1 and tvb == 0, "tenant setting values are tenant-scoped on PostgreSQL")
+    # 0 operational drift: booking stage unchanged by settings ops
+    check(conn.execute("SELECT stage FROM bookings WHERE id=?", (bkA,)).fetchone()["stage"] == "QUOTATION_ACCEPTED",
+          "booking stage unchanged by settings engine (0 operational drift) on PostgreSQL")
+    print("PHASE 6 PLATFORM & SYSTEM SETTINGS: PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

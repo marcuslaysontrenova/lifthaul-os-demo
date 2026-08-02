@@ -179,6 +179,48 @@ test('Phase 5 form administration through the browser (PostgreSQL)', async ({ re
   expect([400, 422].includes(bad.status()), 'unknown field rejected (validation error)').toBe(true);
 });
 
+test('Phase 6 platform & system settings through the browser (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  // change a safe platform display setting + read effective
+  await request.post(API + '/admin/settings/values', { headers: H, data: { key: 'platform.name', value: 'Browser Platform', scope: 'platform' } });
+  const eff = await request.post(API + '/admin/settings/effective', { headers: H, data: { key: 'platform.name' } });
+  expect((await eff.json()).data.value, 'platform setting persisted').toBe('Browser Platform');
+  // tenant may strengthen but not weaken a security minimum
+  const strong = await request.post(API + '/admin/settings/values', { headers: H, data: { key: 'auth.password.min_length', value: '14', scope: 'tenant' } });
+  expect(strong.status(), 'tenant may strengthen').toBe(200);
+  const weak = await request.post(API + '/admin/settings/values', { headers: H, data: { key: 'auth.password.min_length', value: '6', scope: 'tenant' } });
+  expect(weak.status(), 'tenant may not weaken below platform minimum').toBe(403);
+  // secret reference value is masked
+  await request.post(API + '/admin/settings/secrets', { headers: H, data: { code: 'br_secret', provider: 'env', env_name: 'APP_SECRET' } });
+  const secs = await request.get(API + '/admin/settings/secrets', { headers: H });
+  const sj = (await secs.json()).data.secrets.find(x => x.code === 'br_secret');
+  expect(sj.value, 'secret value masked').toBe('••••••');
+  expect(sj.env_name, 'secret env name hidden').toBeUndefined();
+  // feature flag: enable for this tenant + kill switch
+  await request.post(API + '/admin/settings/flags', { headers: H, data: { key: 'br_flag', platform_default: false } });
+  await request.post(API + '/admin/settings/flags/br_flag/override', { headers: H, data: { enabled: true } });
+  const flags = await request.get(API + '/admin/settings/flags', { headers: H });
+  expect((await flags.json()).data.flags.some(f => f.key === 'br_flag'), 'flag created').toBe(true);
+  // module unsafe-disable blocked (quotation depends on booking)
+  const md = await request.post(API + '/admin/settings/modules/booking/status', { headers: H, data: { enabled: false } });
+  expect(md.status(), 'unsafe module disable blocked').toBe(409);
+  // maintenance requires expiry
+  const badMt = await request.post(API + '/admin/settings/maintenance', { headers: H, data: { mode: 'read_only', starts_at: new Date().toISOString() } });
+  expect([400, 422].includes(badMt.status()), 'permanent maintenance blocked').toBe(true);
+  // governed backup + restore SoD (self-approval denied)
+  const bk = await request.post(API + '/admin/settings/backups', { headers: H, data: { kind: 'logical' } });
+  const bkId = (await bk.json()).data.backup_run_id;
+  const rr = await request.post(API + '/admin/settings/restore', { headers: H, data: { backup_run_id: bkId, reason: 'drill' } });
+  const rid = (await rr.json()).data.id;
+  await request.post(API + `/admin/settings/restore/${rid}/validate`, { headers: H, data: {} });
+  const selfApprove = await request.post(API + `/admin/settings/restore/${rid}/approve`, { headers: H, data: {} });
+  expect(selfApprove.status(), 'restore self-approval denied (SoD)').toBe(403);
+  // system integrity has no FAIL
+  const integ = await request.get(API + '/admin/settings/integrity', { headers: H });
+  expect((await integ.json()).data.summary.fail, 'no integrity FAIL').toBe(0);
+});
+
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {
   const errs = [];
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });

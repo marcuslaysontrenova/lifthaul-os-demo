@@ -37,6 +37,7 @@ import crm_admin
 import workflow
 import wfgov
 import forms
+import settings as sysconfig
 import dbconn
 
 # The canonical DDL surface (same parts pgcompat.full_postgres_ddl assembles),
@@ -44,6 +45,7 @@ import dbconn
 _SCHEMA_PARTS = [core.SCHEMA, ops.OPS_SCHEMA, admin.ADMIN_SCHEMA, catalog.CATALOG_SCHEMA,
                  admin_platform.SCHEMA, org.SCHEMA, backfill.SCHEMA, config_registry.SCHEMA,
                  masterdata.SCHEMA, crm_admin.SCHEMA, workflow.SCHEMA, wfgov.SCHEMA, forms.SCHEMA,
+                 sysconfig.SCHEMA,
                  "CREATE TABLE IF NOT EXISTS schema_version(version INTEGER, applied_at TEXT);"]
 _ALL_DDL = "\n".join(_SCHEMA_PARTS)
 

@@ -218,7 +218,8 @@ def actor_for(conn, token) -> dict:
     if _user_status(row) != "ACTIVE":                       # C-006: enforce mid-session deactivation
         raise AuthError("account is not active")
     return {"id": row["id"], "role": row["role"], "email": row["email"],
-            "customer_id": row["customer_id"]}
+            "customer_id": row["customer_id"],
+            "tenant_id": row["tenant_id"] if "tenant_id" in row.keys() else None}
 
 
 # --------------------------------------------------------------------------- #
@@ -358,6 +359,8 @@ def create_customer(conn, actor, name, contact=None, email=None):
         "INSERT INTO customers(name,contact,email,created_by,created_at) VALUES(?,?,?,?,?)",
         (name, contact, email, actor["id"], now()))
     conn.commit()
+    import tenant
+    tenant.stamp(conn, actor, "customers", cur.lastrowid)   # server-derived tenant ownership
     audit(conn, actor, "create", "customer", cur.lastrowid, new={"name": name})
     conn.commit()
     return cur.lastrowid
@@ -370,6 +373,8 @@ def create_booking(conn, actor, customer_id, service, cargo, weight=None,
         _enforce_customer_scope(actor, customer_id)
     else:
         require(actor, "booking.create")
+    import tenant
+    tenant.assert_related(conn, actor, "customers", customer_id)   # no cross-tenant linkage
     n = conn.execute("SELECT COUNT(*) c FROM bookings").fetchone()["c"]
     ref = f"BK-{1000 + n}"
     cur = conn.execute(
@@ -378,6 +383,7 @@ def create_booking(conn, actor, customer_id, service, cargo, weight=None,
         (ref, customer_id, service, cargo, weight, from_loc, to_loc, date, actor["id"], now()))
     bid = cur.lastrowid
     conn.commit()
+    tenant.stamp(conn, actor, "bookings", bid)
     audit(conn, actor, "booking.create", "booking", bid, new={"ref": ref, "stage": "REQUEST_RECEIVED"})
     conn.commit()
     return bid
@@ -385,6 +391,8 @@ def create_booking(conn, actor, customer_id, service, cargo, weight=None,
 
 def get_booking(conn, actor, bid):
     b = _booking(conn, bid)
+    import tenant
+    tenant.guard(actor, b)                                # 404 across tenants (no leak)
     if actor["role"] == "customer":
         require(actor, "self.booking.read")
         _enforce_customer_scope(actor, b["customer_id"])
@@ -436,6 +444,8 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     version if revising). Never overwrites a sent quotation."""
     require(actor, "quotation.create")
     b = _booking(conn, bid)
+    import tenant
+    tenant.guard(actor, b)                                # booking must be in the actor's tenant
     if b["stage"] not in ("READY_FOR_QUOTATION", "REVISION_REQUESTED", "QUOTATION_IN_PROGRESS"):
         raise ConflictError("booking is not ready for quotation")
     if not lines:
@@ -465,6 +475,7 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
         (no, ver, bid, subtotal, discount_pct, discount, tax, total, dp_pct, dp_amount,
          total - dp_amount, est_cost, margin_pct, actor["id"], now()))
     qid = cur.lastrowid
+    tenant.stamp(conn, actor, "quotations", qid)          # inherit tenant from context
     for l in lines:
         amt = l["rate"] * l.get("qty", 1) * l.get("days", 1)
         conn.execute("INSERT INTO quotation_lines(quotation_id,kind,description,qty,days,rate,amount)"

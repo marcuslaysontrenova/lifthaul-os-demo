@@ -86,7 +86,8 @@ PLATFORM_TENANT = 0
 
 def init(conn):
     conn.executescript(SCHEMA)
-    _ensure_columns(conn, "users", {"status": "TEXT NOT NULL DEFAULT 'ACTIVE'", "last_login_at": "TEXT"})
+    _ensure_columns(conn, "users", {"status": "TEXT NOT NULL DEFAULT 'ACTIVE'",
+                                    "last_login_at": "TEXT", "tenant_id": "INTEGER"})
     _ensure_columns(conn, "sessions", {"ip": "TEXT", "last_seen": "TEXT"})
     _ensure_columns(conn, "platform_config", {"effective_to": "TEXT"})
     _ensure_columns(conn, "audit_logs", {"correlation_id": "TEXT"})

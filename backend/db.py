@@ -76,6 +76,7 @@ def _seed_platform(conn):
     admin_platform.seed(conn)
     org.init(conn)
     backfill.init(conn)
+    backfill.add_tenant_columns(conn)   # operational tables carry tenant_id from the start
     return conn
 
 

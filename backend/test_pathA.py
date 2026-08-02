@@ -154,6 +154,21 @@ class TestAdminViewers(Base):                                   # Items 1/5/6 vi
         after = org.resolve_org_config(self.c, "approval.quotation_threshold", tenant=self.rgo, branch=br)
         self.assertEqual(before["value"], after["value"])           # preview did not mutate
 
+    def test_config_preview_scope_breakdown(self):
+        pv = org.effective_config_preview(self.c, "approval.quotation_threshold", "tenant", str(self.rgo),
+                                          "900000", tenant=str(self.rgo))
+        self.assertEqual(pv["scope_values"]["platform"], "500000")   # seeded platform default visible
+        self.assertIn("branch", pv["scope_values"])
+
+    def test_reparent_preview_config_inheritance(self):
+        p1 = org.create_business_unit(self.c, self.actor, self.rgo, "P1", "P1")
+        p2 = org.create_business_unit(self.c, self.actor, self.rgo, "P2", "P2")
+        dep = org.create_department(self.c, self.actor, self.rgo, "D", "D", parent_id=p1)
+        ap.set_config(self.c, "business_unit", str(p2), "approval.quotation_threshold", "999999")
+        pv = org.reparent_preview(self.c, dep, p2)
+        self.assertIn("config_inheritance", pv)
+        self.assertTrue(any(ci["key"] == "approval.quotation_threshold" for ci in pv["config_inheritance"]))
+
     def test_config_preview_validates_numeric(self):
         pv = org.effective_config_preview(self.c, "approval.quotation_threshold", "platform", "",
                                           "not-a-number", tenant=self.rgo)

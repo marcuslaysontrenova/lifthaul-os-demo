@@ -317,13 +317,24 @@ def _admin_routes():
             role = admin_platform.role_by_code(_conn, "RGO", r["code"])
             if role:
                 for g in sorted(admin_platform.effective_role_grants(_conn, role["id"])):
-                    grants.append({"permission": g, "source_role": r["code"], "source": "wildcard" if g.endswith("*") else "explicit"})
+                    grants.append({"permission": g, "module": g.split(".")[0], "source_role": r["code"],
+                                   "layer": r["layer"], "source": "wildcard" if g.endswith("*") else "explicit",
+                                   "decision": "allow"})
+        if b.get("module"):                               # filters (Item 4)
+            grants = [g for g in grants if g["module"] == b["module"]]
+        if b.get("source_role"):
+            grants = [g for g in grants if g["source_role"] == b["source_role"]]
         eff = sorted(admin_platform.effective_permissions(_conn, uid))
         u = admin_platform.get_user(_conn, uid)
+        urow = _conn.execute("SELECT tenant_id FROM users WHERE id=?", (uid,)).fetchone()
+        t = admin_platform.get_tenant(_conn, "RGO")
+        import datetime
         return {"user_id": uid, "roles": roles, "grants": grants, "effective_permissions": eff,
                 "user_status": (u["status"] if u else None),
-                "sod_conflicts": admin_platform.sod_conflicts(set(admin_platform.effective_permissions(_conn, uid))),
-                "recalculated_at": core.now() if hasattr(core, "now") else None}
+                "tenant": (urow["tenant_id"] if urow else None),
+                "tenant_status": (t["status"] if t else None), "cache_state": "live",
+                "sod_conflicts": admin_platform.sod_conflicts(set(eff)),
+                "recalculated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
 
     def access_check(a, b, p):
         R(a, "user_admin.view")                           # decision matches route enforcement

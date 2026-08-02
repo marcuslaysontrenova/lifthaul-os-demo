@@ -219,10 +219,20 @@ def reparent_preview(conn, unit_id, new_parent_id):
     managers = conn.execute(
         f"SELECT COUNT(*) c FROM org_managers WHERE status='ACTIVE' AND scope_id IN ({ph2})",
         tuple(refs)).fetchone()["c"] if refs else 0
+    def _parent_overrides(pid):
+        if not pid:
+            return {}
+        return {r["key"]: r["value"] for r in conn.execute(
+            "SELECT key,value FROM platform_config WHERE scope_ref=?", (str(pid),)).fetchall()}
+    cur_ov, new_ov = _parent_overrides(u["parent_id"]), _parent_overrides(new_parent_id)
+    config_inheritance = [{"key": k, "current_source_value": cur_ov.get(k),
+                           "proposed_source_value": new_ov.get(k),
+                           "changed": cur_ov.get(k) != new_ov.get(k)}
+                          for k in sorted(set(cur_ov) | set(new_ov))]
     return {"unit_id": unit_id, "current_parent_id": u["parent_id"], "new_parent_id": new_parent_id,
             "descendants": len(sub) - 1, "active_assigned_users": assigned, "active_managers": managers,
             "config_keys_in_subtree": cfg_keys, "config_impact_count": len(cfg_keys),
-            "valid": valid, "warnings": warnings}
+            "config_inheritance": config_inheritance, "valid": valid, "warnings": warnings}
 
 
 def _resolve_with_override(conn, key, ctx, ov_scope, ov_ref, ov_value):
@@ -254,9 +264,19 @@ def effective_config_preview(conn, key, scope, scope_ref, proposed_value, **ctx)
     overrides = [dict(r) for r in conn.execute(
         "SELECT scope,scope_ref,value,effective_to FROM platform_config WHERE key=? ORDER BY scope",
         (key,)).fetchall()]
+    # per-scope value breakdown for the given context (platform..user)
+    scope_values = {}
+    for sc, ref in (("platform", ""), ("tenant", ctx.get("tenant")), ("business_unit", ctx.get("business_unit")),
+                    ("branch", ctx.get("branch")), ("department", ctx.get("department")),
+                    ("team", ctx.get("team")), ("user", ctx.get("user"))):
+        if ref is None:
+            scope_values[sc] = None; continue
+        row = conn.execute("SELECT value FROM platform_config WHERE scope=? AND scope_ref=? AND key=?",
+                          (sc, str(ref), key)).fetchone()
+        scope_values[sc] = row["value"] if row else None
     return {"key": key, "current": current, "proposed_value": str(proposed_value),
             "proposed_scope": scope, "proposed_ref": scope_ref, "proposed_effective": proposed,
-            "changed": current.get("value") != proposed.get("value"),
+            "changed": current.get("value") != proposed.get("value"), "scope_values": scope_values,
             "overrides": overrides, "valid": valid, "error": error}
 
 

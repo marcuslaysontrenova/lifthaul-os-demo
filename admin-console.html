@@ -232,6 +232,16 @@ const MENU = [
     {id:'sys_templates', label:'Document Templates'},
     {id:'sys_integrity', label:'System Integrity'},
   ]},
+  {sect:'Integrations', items:[
+    {id:'int_catalog', label:'Integration Catalog'},
+    {id:'int_profiles', label:'Connection Profiles'},
+    {id:'int_wise', label:'Wise'},
+    {id:'int_transfers', label:'Transfers'},
+    {id:'int_webhooks', label:'Webhook Events'},
+    {id:'int_reconciliation', label:'Reconciliation'},
+    {id:'int_deadletter', label:'Dead-Letter Queue'},
+    {id:'int_health', label:'Provider Health'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -774,6 +784,63 @@ async function sysNewTemplate(){ const code=prompt('Template code:'); if(!code) 
   const vars=(prompt('Allowed variables (comma-separated):','customer_name')||'').split(',').map(x=>x.trim()).filter(Boolean);
   try{ await api('POST','/admin/settings/templates',{code,name,channel:ch,body,allowed_variables:vars}); render(CURRENT); }catch(e){ alert(e.message); } }
 async function sysPubTemplate(id){ try{ await api('POST','/admin/settings/templates/'+id+'/publish',{reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
+// ---- Phase 7 Integration Administration + Wise screens (all actions hit persisted APIs) ----
+Object.assign(SCREENS, {
+  int_catalog: async (it,c)=>{ const d=await api('GET','/admin/integrations/catalog');
+    c.innerHTML=header(it,'Governed integration catalog. Wise is the highest-priority payments integration. Live Wise is BLOCKED until owner credentials validate.')+
+      table(['Provider','Name','Category','Webhook','Polling','Risk'], d.definitions, r=>[r.provider_code,cell(r.provider_name),r.category,r.webhook_support?'yes':'',r.polling_support?'yes':'',r.risk_level]); },
+  int_profiles: async (it,c)=>{ const d=await api('GET','/admin/integrations/profiles');
+    c.innerHTML=header(it,'Connection profiles (MOCK/SANDBOX/TEST/PRODUCTION). Validate → activate. Health is never HEALTHY without validation.',
+      `<button class="btn sm" onclick="intNewProfile()">New profile +</button>`)+
+      table(['Id','Provider','Env','Status','Health','Circuit','Actions'], d.profiles, r=>[r.id,r.provider_code,r.environment,pill(r.status==='ACTIVE'?'ACTIVE':'INACTIVE'),cell(r.health),cell(r.circuit_state),intProfActions(r)]); },
+  int_wise: async (it,c)=>{ const d=await api('GET','/admin/integrations/profiles',null);
+    c.innerHTML=header(it,'Wise: amount always from the stored downpayment snapshot; provider 200 is never settlement; verification needs reconciled evidence + separation of duties.',
+      `<button class="btn sm" onclick="intWisePay()">Create Wise payment (mock) +</button>`)+
+      `<div class="note">Mock scenarios: completed · pending · partial · overpay · failed · expired. Live Wise stays BLOCKED (owner credentials required).</div>`; },
+  int_transfers: async (it,c)=>{ const d=await api('GET','/admin/wise/transfers');
+    c.innerHTML=header(it,'Wise transfers — normalized status, idempotency, reconciliation, verification.')+
+      table(['Id','Wise ref','Amount','Currency','Normalized','Reference','Actions'], d.transfers, r=>[r.id,cell(r.provider_transfer_id),r.amount,r.currency,pill(r.normalized_status==='COMPLETED'?'ACTIVE':'INACTIVE')+' '+r.normalized_status,cell(r.reference),
+        `<a style="color:var(--accent);cursor:pointer" onclick="intWiseSync(${r.id})">sync</a> · <a style="color:var(--accent);cursor:pointer" onclick="intWiseRecon(${r.id})">reconcile</a> · <a style="color:var(--accent);cursor:pointer" onclick="intWiseVerify(${r.id})">verify</a>`]); },
+  int_webhooks: async (it,c)=>{ const d=await api('GET','/admin/integrations/webhook-events');
+    c.innerHTML=header(it,'Governed webhook events — signature verified, deduplicated, replay-safe. Reaching the URL is not trust.')+
+      table(['Id','Provider','Event id','Type','Verified','Status','Retries'], d.events, r=>[r.id,r.provider_code,cell(r.provider_event_id),cell(r.event_type),r.verified?'yes':'no',pill(r.status==='PROCESSED'?'ACTIVE':'INACTIVE')+' '+r.status,r.retries]); },
+  int_reconciliation: async (it,c)=>{ const d=await api('GET','/admin/integrations/reconciliation');
+    c.innerHTML=header(it,'Reconciliation — matched vs partial/over/under/mismatch/duplicate. Ambiguous items route to manual review (never auto-verified).')+
+      table(['Id','Payment req','Wise ref','Amount','Status','Variance','Actions'], d.items, r=>[r.id,r.payment_request_id,cell(r.provider_transfer_id),r.amount,pill(r.status==='RECONCILED'||r.status==='MATCHED'?'ACTIVE':'INACTIVE')+' '+r.status,r.variance,
+        r.status==='MANUAL_REVIEW'?`<a style="color:var(--accent);cursor:pointer" onclick="intReconResolve(${r.id})">resolve</a>`:'—']); },
+  int_deadletter: async (it,c)=>{ const d=await api('GET','/admin/integrations/dead-letters');
+    c.innerHTML=header(it,'Integration dead-letter queue — only safe (transient) failures may be replayed; permanent failures are not.')+
+      table(['Id','Provider','Operation','Category','Attempts','Status','Actions'], d.items, r=>[r.id,r.provider_code,cell(r.operation),r.failure_category,r.attempts,pill(r.status==='OPEN'?'INACTIVE':'ACTIVE')+' '+r.status,
+        `<a style="color:var(--accent);cursor:pointer" onclick="intDlqReplay(${r.id})">replay</a>`]); },
+  int_health: async (it,c)=>{ const d=await api('GET','/admin/integrations/health');
+    c.innerHTML=header(it,'Provider health, circuit state, dead-letter + reconciliation backlogs.')+
+      table(['Provider','Env','Status','Health','Circuit','DLQ backlog','Recon backlog'], d.providers, r=>[r.provider,r.environment,pill(r.status==='ACTIVE'?'ACTIVE':'INACTIVE'),cell(r.health),cell(r.circuit_state),r.dead_letter_backlog,r.reconciliation_backlog]); },
+});
+function intProfActions(r){ const b=[];
+  if(r.health!=='HEALTHY') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="intProfAct(${r.id},'validate')">validate</a>`);
+  if(r.status!=='ACTIVE'&&r.health==='HEALTHY') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="intProfAct(${r.id},'activate')">activate</a>`);
+  if(r.status==='ACTIVE') b.push(`<a style="color:var(--warn);cursor:pointer" onclick="intProfAct(${r.id},'suspend')">suspend</a>`);
+  b.push(`<a style="color:var(--danger);cursor:pointer" onclick="intProfKill(${r.id})">kill</a>`);
+  return b.join(' · '); }
+async function intNewProfile(){ const prov=prompt('Provider code:','wise')||'wise';
+  const env=prompt('Environment (MOCK/SANDBOX/TEST/PRODUCTION):','MOCK')||'MOCK';
+  const sec=prompt('Secret reference code (Phase-6; value stays in env):','wise_key')||null;
+  try{ await api('POST','/admin/integrations/profiles',{provider_code:prov,environment:env,secret_ref:sec}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intProfAct(id,act){ try{ const r=await api('POST','/admin/integrations/profiles/'+id+'/'+act,{reason:'console'});
+  if(act==='validate') alert('Health: '+r.health+(r.profiles?'\nProfiles offered: '+r.profiles.map(p=>p.id).join(', '):'')); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intProfKill(id){ if(!confirm('Kill switch — disable this integration?')) return; try{ await api('POST','/admin/integrations/profiles/'+id+'/kill',{reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intWisePay(){ const bid=prompt('Booking id (must have an accepted quotation):'); if(!bid) return;
+  const pid=prompt('Connection profile id (ACTIVE Wise profile):'); if(!pid) return;
+  const idem=prompt('Idempotency key:','idem-'+Date.now())||('idem-'+Date.now());
+  const scen=prompt('Mock scenario (completed/pending/partial/overpay/failed/expired):','completed')||'completed';
+  try{ const r=await api('POST','/admin/wise/payments',{booking_id:parseInt(bid),profile_id:parseInt(pid),idem_key:idem,scenario:scen});
+    alert('Wise transfer created: '+r.provider_transfer_id+'\nAmount (from dp snapshot): '+r.amount+' '+r.currency+(r.idempotent_replay?'\n(idempotent replay)':'')); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intWiseSync(id){ try{ const r=await api('POST','/admin/wise/transfers/'+id+'/sync',{}); alert('Normalized status: '+r.normalized_status); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intWiseRecon(id){ try{ const r=await api('POST','/admin/wise/transfers/'+id+'/reconcile',{}); alert('Reconciliation: '+r.status+(r.variance?(' (variance '+r.variance+')'):'')); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intWiseVerify(id){ const notes=prompt('Verification notes:','wise settlement')||''; try{ const r=await api('POST','/admin/wise/transfers/'+id+'/verify',{notes}); alert('Payment status: '+r.payment_status); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intReconResolve(id){ const res=prompt('Resolution (RECONCILED/MISMATCH/DUPLICATE/IGNORED):','RECONCILED')||'RECONCILED';
+  try{ await api('POST','/admin/integrations/reconciliation/'+id+'/resolve',{resolution:res,reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function intDlqReplay(id){ const reason=prompt('Replay reason:'); if(!reason) return; try{ const r=await api('POST','/admin/integrations/dead-letters/'+id+'/replay',{reason}); alert('Status: '+r.status); render(CURRENT); }catch(e){ alert(e.message); } }
 async function wfInstView(id){ const d=await api('GET','/admin/workflow-instances/'+id);
   const body=`<div class="kv"><div class="k">Workflow</div><div>${d.instance.definition_id}</div><div class="k">Step</div><div><b>${d.instance.current_step}</b></div><div class="k">Status</div><div>${d.instance.status}</div><div class="k">Correlation</div><div>${cell(d.instance.correlation_id)}</div></div>`+
     `<h3 style="margin:12px 0 6px;font-size:14px">Transition history</h3>`+table(['From','To','Action','Actor','Result','Time'], d.history, r=>[r.from_step,r.to_step,r.action,r.actor,r.result,r.ts])+

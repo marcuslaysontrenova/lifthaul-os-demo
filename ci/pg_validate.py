@@ -486,6 +486,111 @@ def main():
           "booking stage unchanged by settings engine (0 operational drift) on PostgreSQL")
     print("PHASE 6 PLATFORM & SYSTEM SETTINGS: PASS on PostgreSQL", flush=True)
 
+    # Phase 7 — Integration Administration + Wise (mock) on PostgreSQL
+    import integrations as ig, wise
+    wa = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    wapprover = actor_role(conn, tA, "admin", "wapprover@ci"); wapprover["perms"] = {"*"}
+
+    def _accepted_wise_booking(actor, approver, cust_name):
+        cid = core.create_customer(conn, actor, cust_name)
+        b = core.create_booking(conn, actor, cid, "CRANE_RENTAL", "x", 1)
+        core.review_booking(conn, actor, b); core.ready_for_quotation(conn, actor, b)
+        q = core.create_quotation(conn, actor, b, [{"kind": "crane", "description": "x", "qty": 2, "days": 1, "rate": 300000}])
+        core.submit_quotation(conn, actor, q)
+        if conn.execute("SELECT status FROM quotations WHERE id=?", (q,)).fetchone()["status"] == "pending_approval":
+            core.approve_quotation(conn, approver, q)
+        core.send_quotation(conn, actor, q); core.accept_quotation(conn, approver, q, "J. Roe", "CFO")
+        return b, q
+
+    wprofile = ig.create_profile(conn, wa, "wise", environment="MOCK", secret_ref="wise_key")
+    vres = ig.validate_profile(conn, wa, wprofile)
+    check(vres["health"] == "HEALTHY" and len(vres["profiles"]) >= 2,
+          "Wise mock profile validates + offers multiple profiles on PostgreSQL")
+    ig.activate_profile(conn, wa, wprofile)
+    # health is UNKNOWN before validation for a fresh profile
+    fresh = ig.create_profile(conn, wa, "wise", environment="SANDBOX")
+    hh = [p for p in ig.provider_health(conn, wa, "wise")["providers"] if p["profile_id"] == fresh][0]
+    check(hh["health"] == "UNKNOWN", "provider health UNKNOWN until validated on PostgreSQL")
+
+    wb, wq = _accepted_wise_booking(wa, wapprover, "Wise Co")
+    r = wise.create_wise_payment(conn, wa, wb, wprofile, "idem-ci", scenario="completed")
+    check(r["amount"] == 201600, "Wise payment amount == stored downpayment snapshot on PostgreSQL")
+    r2 = wise.create_wise_payment(conn, wa, wb, wprofile, "idem-ci", scenario="completed")
+    check(r2["idempotent_replay"] and r2["transfer_id"] == r["transfer_id"],
+          "idempotency prevents duplicate Wise transfer on PostgreSQL")
+    ntr = conn.execute("SELECT COUNT(*) c FROM provider_transfers WHERE payment_request_id=?", (r["payment_request_id"],)).fetchone()["c"]
+    check(ntr == 1, "no duplicate provider transfer on PostgreSQL")
+    try:
+        ig.idempotent(conn, wa, "idem-ci", "create_wise_payment", {"different": "payload"})
+        check(False, "conflicting idempotency payload must be rejected")
+    except core.ConflictError:
+        check(True, "conflicting idempotency payload rejected on PostgreSQL")
+    wise.sync_transfer_status(conn, wa, r["transfer_id"])
+    rec = wise.reconcile_transfer(conn, wa, r["transfer_id"])
+    check(rec["status"] == "MATCHED", "exact-match reconciliation on PostgreSQL")
+    try:
+        wise.verify_wise_payment(conn, wa, r["transfer_id"])
+        check(False, "self-verification must be blocked")
+    except core.ForbiddenError:
+        check(True, "payment verification separation-of-duties (self-verify blocked) on PostgreSQL")
+    vr = wise.verify_wise_payment(conn, wapprover, r["transfer_id"])
+    check(vr["payment_status"] == "VERIFIED", "authorized verifier settles Wise payment on PostgreSQL")
+    check(core.confirm_job(conn, wa, wb), "job-activation prerequisite satisfied after Wise verification on PostgreSQL")
+
+    # partial payment -> manual review
+    wb2, _ = _accepted_wise_booking(wa, wapprover, "Wise Partial Co")
+    rp = wise.create_wise_payment(conn, wa, wb2, wprofile, "idem-partial", scenario="partial")
+    wise.sync_transfer_status(conn, wa, rp["transfer_id"])
+    check(wise.reconcile_transfer(conn, wa, rp["transfer_id"])["status"] == "MANUAL_REVIEW",
+          "partial payment routes to manual review on PostgreSQL")
+
+    # webhook: signature verify + duplicate dedup
+    import hmac as _hmac, hashlib as _hl, json as _json
+    ph = _hl.sha256(_json.dumps({"id": "T"}, sort_keys=True, default=str).encode()).hexdigest()
+    good = _hmac.new(b"whsecret", ph.encode(), _hl.sha256).hexdigest()
+    ok = ig.ingest_webhook(conn, "wise", "wevt-1", "transfer.state_change", {"id": "T"}, signature=good, tenant_id=tA, secret="whsecret")
+    bad = ig.ingest_webhook(conn, "wise", "wevt-2", "x", {"id": "T"}, signature="deadbeef", tenant_id=tA, secret="whsecret")
+    dupe = ig.ingest_webhook(conn, "wise", "wevt-1", "transfer.state_change", {"id": "T"}, signature=good, tenant_id=tA, secret="whsecret")
+    check(ok["status"] == "ACCEPTED" and bad["status"] == "REJECTED" and dupe["status"] == "DUPLICATE",
+          "webhook signature verify + duplicate dedup on PostgreSQL")
+
+    # dead-letter: safe replay vs unsafe denial + cross-tenant denial
+    dls = ig.dead_letter(conn, wa, "wise", "create_transfer", "transient_network", "timeout")
+    check(ig.replay_dead_letter(conn, wa, dls, reason="recovered")["status"] == "REPLAYED", "safe dead-letter replay on PostgreSQL")
+    dlp = ig.dead_letter(conn, wa, "wise", "create_transfer", "permanent_business_rejection", "declined")
+    try:
+        ig.replay_dead_letter(conn, wa, dlp, reason="try")
+        check(False, "unsafe replay must be denied")
+    except core.ForbiddenError:
+        check(True, "unsafe dead-letter replay denied on PostgreSQL")
+
+    # circuit breaker + fail-safe on disabled profile
+    for _ in range(5):
+        ig._record_failure(conn, wprofile)
+    check(conn.execute("SELECT circuit_state FROM connection_profiles WHERE id=?", (wprofile,)).fetchone()["circuit_state"] == "OPEN",
+          "circuit breaker opens after failure threshold on PostgreSQL")
+
+    # live Wise BLOCKED (no fabricated success)
+    la = wise.get_adapter("PRODUCTION")
+    check(la.is_mock is False and la.validate_connection({"secret_ref": "x"}).get("blocked") is True,
+          "live Wise adapter BLOCKED without owner credentials on PostgreSQL")
+
+    # cross-tenant profile isolation
+    try:
+        ig.get_profile(conn, aB, wprofile)
+        check(False, "cross-tenant profile read must be denied")
+    except core.NotFoundError:
+        check(True, "connection profile tenant isolation (404 no-leak) on PostgreSQL")
+
+    # migration zero drift + financials unchanged by Wise
+    m7 = ig.classify_existing(conn)
+    check(m7["financial_differences"] == 0 and m7["payment_status_changes"] == 0 and m7["job_status_changes"] == 0
+          and m7["fake_transaction_ids_assigned"] == 0, "integration migration zero drift on PostgreSQL")
+    fin = conn.execute("SELECT tax,total,dp_amount FROM quotations WHERE id=?", (wq,)).fetchone()
+    check(fin["tax"] == 72000 and fin["total"] == 672000 and fin["dp_amount"] == 201600,
+          "Wise flow did not change snapshot financials on PostgreSQL")
+    print("PHASE 7 INTEGRATION ADMINISTRATION + WISE (MOCK): PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

@@ -219,6 +219,22 @@ PHASE6_PERMISSIONS = [
 ]
 for _code in PHASE6_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-7 integration administration + Wise payments permissions (multi-dot codes)
+PHASE7_PERMISSIONS = [
+    "integration.catalog.view", "integration.profile.view", "integration.profile.manage",
+    "integration.secret.view_metadata", "integration.secret.manage",
+    "integration.health.view", "integration.health.test",
+    "integration.webhook.view", "integration.webhook.manage", "integration.webhook.replay",
+    "integration.polling.view", "integration.polling.manage",
+    "integration.dead_letter.view", "integration.dead_letter.manage", "integration.replay.execute",
+    "payment.wise.view", "payment.wise.manage", "payment.wise.quote.create",
+    "payment.wise.transfer.create", "payment.wise.transfer.cancel", "payment.wise.reconcile",
+    "payment.wise.verify", "payment.wise.refund.request", "payment.wise.refund.approve",
+    "integration.email.manage", "integration.sms.manage", "integration.maps.manage",
+    "integration.accounting.manage", "integration.fx.manage",
+]
+for _code in PHASE7_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -249,7 +265,13 @@ ADMIN_ROLES = [
          "numbering.*", "currency.settings.manage", "fiscal.settings.manage", "calendar.settings.manage",
          "branding.*", "template.*", "retention.*", "audit.retention.manage",
          "file.policy.*", "api.policy.*", "feature_flag.*", "module.*", "maintenance.*",
-         "backup.*", "restore.execute", "restore.approve"}),
+         "backup.*", "restore.execute", "restore.approve",
+         # Phase 7 integration administration + Wise (platform admin is the integration authority)
+         "integration.catalog.view", "integration.profile.*", "integration.secret.*",
+         "integration.health.*", "integration.webhook.*", "integration.polling.*",
+         "integration.dead_letter.*", "integration.replay.execute", "payment.wise.*",
+         "integration.email.manage", "integration.sms.manage", "integration.maps.manage",
+         "integration.accounting.manage", "integration.fx.manage"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",

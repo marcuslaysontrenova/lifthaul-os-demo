@@ -924,6 +924,75 @@ def _phase6_routes():
     }
 
 
+def _phase7_routes():
+    """Phase 7 — Integration Administration + Wise: catalog/profiles/secrets/webhooks/polling/
+    reconciliation/dead-letter/replay/health/circuit-breaker + Wise quote/transfer/reconcile/verify/
+    refund. Permission-gated, tenant-scoped, audited; secrets masked; provider 200 is never settlement."""
+    import integrations as ig
+    import wise
+
+    # catalog + profiles
+    def cat(a, b, p):        return {"definitions": ig.list_definitions(_conn, a)}
+    def prof_list(a, b, p):  return {"profiles": ig.list_profiles(_conn, a, provider_code=b.get("provider_code"))}
+    def prof_create(a, b, p): return {"id": ig.create_profile(_conn, a, b["provider_code"], environment=b.get("environment", "MOCK"), name=b.get("name"), secret_ref=b.get("secret_ref"), base_url=b.get("base_url"), default_currency=b.get("default_currency", "PHP"), account_ref=b.get("account_ref"), org_scope=b.get("org_scope"))}
+    def prof_validate(a, b, p): return ig.validate_profile(_conn, a, int(p["id"]))
+    def prof_activate(a, b, p): return {"ok": ig.activate_profile(_conn, a, int(p["id"]))}
+    def prof_suspend(a, b, p): return {"ok": ig.suspend_profile(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def prof_kill(a, b, p):   return {"ok": ig.kill_switch(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def health(a, b, p):      return ig.provider_health(_conn, a, provider_code=b.get("provider_code"))
+    # webhooks
+    def wh_register(a, b, p): return {"id": ig.register_webhook(_conn, a, b["provider_code"], b["event_type"], secret_ref=b.get("secret_ref"), algorithm=b.get("algorithm", "hmac_sha256"))}
+    def wh_events(a, b, p):   return {"events": ig.list_webhook_events(_conn, a, provider_code=b.get("provider_code"))}
+    def wh_process(a, b, p):  return ig.process_webhook_event(_conn, a, int(p["id"]))
+    # reconciliation
+    def rec_list(a, b, p):    return {"items": ig.list_reconciliation(_conn, a, status=b.get("status"))}
+    def rec_resolve(a, b, p): return {"ok": ig.resolve_manual_review(_conn, a, int(p["id"]), b["resolution"], reason=b.get("reason"))}
+    # dead-letter + replay
+    def dlq_list(a, b, p):    return {"items": ig.list_dead_letters(_conn, a, status=b.get("status"))}
+    def dlq_replay(a, b, p):  return ig.replay_dead_letter(_conn, a, int(p["id"]), reason=b.get("reason"))
+    # fx
+    def fx_record(a, b, p):   return {"id": ig.record_fx_rate(_conn, a, b["source_currency"], b["target_currency"], b["rate"], provider_code=b.get("provider_code", "fx_generic"), expiry=b.get("expiry"), manual_override=b.get("manual_override", False))}
+    # Wise
+    def w_pay(a, b, p):       return wise.create_wise_payment(_conn, a, int(b["booking_id"]), int(b["profile_id"]), b["idem_key"], scenario=b.get("scenario", "completed"))
+    def w_transfers(a, b, p): return {"transfers": wise.list_transfers(_conn, a)}
+    def w_sync(a, b, p):      return wise.sync_transfer_status(_conn, a, int(p["id"]))
+    def w_reconcile(a, b, p): return wise.reconcile_transfer(_conn, a, int(p["id"]))
+    def w_verify(a, b, p):    return wise.verify_wise_payment(_conn, a, int(p["id"]), notes=b.get("notes"))
+    def w_refund_req(a, b, p): return {"id": wise.request_refund(_conn, a, int(p["id"]), b["amount"], b["reason"])}
+    def w_refund_appr(a, b, p): return {"ok": wise.approve_refund(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    # webhook ingress (unauthenticated provider callback; verified by signature, not by reaching the URL)
+    def w_webhook(a, b, p):
+        return ig.ingest_webhook(_conn, "wise", b.get("provider_event_id"), b.get("event_type"), b.get("payload", {}),
+                                 signature=b.get("signature"), tenant_id=(a or {}).get("tenant_id"), secret=None)
+
+    return {
+        ("GET", "/admin/integrations/catalog"): cat,
+        ("GET", "/admin/integrations/profiles"): prof_list,
+        ("POST", "/admin/integrations/profiles"): prof_create,
+        ("POST", "/admin/integrations/profiles/:id/validate"): prof_validate,
+        ("POST", "/admin/integrations/profiles/:id/activate"): prof_activate,
+        ("POST", "/admin/integrations/profiles/:id/suspend"): prof_suspend,
+        ("POST", "/admin/integrations/profiles/:id/kill"): prof_kill,
+        ("GET", "/admin/integrations/health"): health,
+        ("POST", "/admin/integrations/webhooks"): wh_register,
+        ("GET", "/admin/integrations/webhook-events"): wh_events,
+        ("POST", "/admin/integrations/webhook-events/:id/process"): wh_process,
+        ("GET", "/admin/integrations/reconciliation"): rec_list,
+        ("POST", "/admin/integrations/reconciliation/:id/resolve"): rec_resolve,
+        ("GET", "/admin/integrations/dead-letters"): dlq_list,
+        ("POST", "/admin/integrations/dead-letters/:id/replay"): dlq_replay,
+        ("POST", "/admin/integrations/fx"): fx_record,
+        ("POST", "/admin/wise/payments"): w_pay,
+        ("GET", "/admin/wise/transfers"): w_transfers,
+        ("POST", "/admin/wise/transfers/:id/sync"): w_sync,
+        ("POST", "/admin/wise/transfers/:id/reconcile"): w_reconcile,
+        ("POST", "/admin/wise/transfers/:id/verify"): w_verify,
+        ("POST", "/admin/wise/transfers/:id/refund"): w_refund_req,
+        ("POST", "/admin/wise/refunds/:id/approve"): w_refund_appr,
+        ("POST", "/admin/wise/webhook"): w_webhook,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
@@ -932,6 +1001,7 @@ ROUTES.update(_phase3_routes())
 ROUTES.update(_phase4_routes())
 ROUTES.update(_phase5_routes())
 ROUTES.update(_phase6_routes())
+ROUTES.update(_phase7_routes())
 
 
 def _match(method, path):

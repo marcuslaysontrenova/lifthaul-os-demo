@@ -288,7 +288,9 @@ def _admin_routes():
         role = admin_platform.role_by_code(_conn, "RGO", b["role"])
         if not role:
             raise core.ConflictError("unknown role")
-        admin_platform.assign_role(_conn, int(p["id"]), role["id"], actor=a); return {"ok": True}
+        admin_platform.assign_role(_conn, int(p["id"]), role["id"], actor=a,
+                                   allow_sod_exception=b.get("allow_sod_exception", False),
+                                   reason=b.get("reason")); return {"ok": True}
     def permissions(a, b, p):    R(a, "role_admin.view");   return {"permissions": _rows(_conn.execute("SELECT code,module,action,description FROM admin_permissions ORDER BY module,action").fetchall())}
     def role_clone(a, b, p):     R(a, "role_admin.manage"); return {"id": admin_platform.clone_role(_conn, "RGO", p["code"], b["new_code"], b["name"], actor=a)}
     def reparent_preview(a, b, p): R(a, "org.view");         return org.reparent_preview(_conn, int(p["id"]), b.get("new_parent_id"))
@@ -316,8 +318,29 @@ def _admin_routes():
             if role:
                 for g in sorted(admin_platform.effective_role_grants(_conn, role["id"])):
                     grants.append({"permission": g, "source_role": r["code"], "source": "wildcard" if g.endswith("*") else "explicit"})
-        return {"user_id": uid, "roles": roles, "grants": grants,
-                "effective_permissions": sorted(admin_platform.effective_permissions(_conn, uid))}
+        eff = sorted(admin_platform.effective_permissions(_conn, uid))
+        u = admin_platform.get_user(_conn, uid)
+        return {"user_id": uid, "roles": roles, "grants": grants, "effective_permissions": eff,
+                "user_status": (u["status"] if u else None),
+                "sod_conflicts": admin_platform.sod_conflicts(set(admin_platform.effective_permissions(_conn, uid))),
+                "recalculated_at": core.now() if hasattr(core, "now") else None}
+
+    def access_check(a, b, p):
+        R(a, "user_admin.view")                           # decision matches route enforcement
+        perm = b["permission"]
+        allowed = admin_platform.has_permission(_conn, int(p["id"]), perm)
+        return {"user_id": int(p["id"]), "permission": perm, "decision": "allow" if allowed else "deny",
+                "reason": "granted by role" if allowed else "deny-by-default (no matching grant)"}
+
+    def role_compare(a, b, p):     R(a, "role_admin.view"); return admin_platform.compare_roles(_conn, "RGO", b["a"], b["b"])
+    def role_dependency(a, b, p):  R(a, "role_admin.view"); return admin_platform.role_dependency(_conn, "RGO", p["code"])
+    def wcal_conflicts(a, b, p):   R(a, "org.view");        return org.working_calendar_conflicts(_conn, int(p["id"]))
+    def cfg_preview(a, b, p):
+        R(a, "system_config.view")                        # non-mutating override preview
+        return org.effective_config_preview(_conn, b["key"], b["scope"], b.get("scope_ref", ""), b["value"],
+                                            tenant=b.get("tenant"), business_unit=b.get("business_unit"),
+                                            branch=b.get("branch"), department=b.get("department"),
+                                            team=b.get("team"), user=b.get("user"))
 
     # ---- Calendars --------------------------------------------------------
     def hol_cals(a, b, p):       R(a, "org.view");   return {"calendars": _rows(_conn.execute("SELECT * FROM holiday_calendars WHERE tenant_id=?", (_tid(),)).fetchall())}
@@ -449,12 +472,23 @@ def _admin_routes():
                 "SELECT COUNT(*) c FROM documents WHERE entity_id IS NULL"),
             chk("cross_tenant_parent_child_units",
                 "SELECT COUNT(*) c FROM org_units c JOIN org_units p ON p.id=c.parent_id WHERE c.tenant_id<>p.tenant_id"),
+            chk("users_with_no_tenant",
+                "SELECT COUNT(*) c FROM users WHERE tenant_id IS NULL AND role NOT IN ('admin','super_admin','owner')", warn=True),
+            chk("active_sessions_for_inactive_users",
+                "SELECT COUNT(*) c FROM sessions s JOIN users u ON u.id=s.user_id WHERE u.status<>'ACTIVE'"),
+            chk("role_assignments_to_missing_users",
+                "SELECT COUNT(*) c FROM admin_user_roles ur LEFT JOIN users u ON u.id=ur.user_id WHERE u.id IS NULL"),
+            chk("config_referencing_inactive_units",
+                "SELECT COUNT(*) c FROM platform_config pc WHERE pc.scope IN ('branch','department','team','business_unit')"
+                " AND NOT EXISTS (SELECT 1 FROM org_units o WHERE CAST(o.id AS TEXT)=pc.scope_ref AND o.status='ACTIVE')", warn=True),
         ]
-        blocking = [c for c in checks if c["status"] == "FAIL"]
-        return {"checks": checks, "ok": not blocking, "executed_at": now_iso,
-                "summary": {"total": len(checks), "fail": len(blocking),
+        fail = [c for c in checks if c["status"] == "FAIL"]
+        not_run = [c for c in checks if c["status"] == "NOT_RUN"]
+        # not healthy if any required check FAILed or did NOT_RUN (directive)
+        return {"checks": checks, "ok": (not fail and not not_run), "executed_at": now_iso,
+                "summary": {"total": len(checks), "fail": len(fail),
                             "warning": len([c for c in checks if c["status"] == "WARNING"]),
-                            "not_run": len([c for c in checks if c["status"] == "NOT_RUN"])}}
+                            "not_run": len(not_run)}}
 
     return {
         ("GET", "/admin/org/tree"): org_tree,
@@ -474,6 +508,11 @@ def _admin_routes():
         ("POST", "/admin/roles"): role_create,
         ("GET", "/admin/permissions"): permissions,
         ("POST", "/admin/roles/:code/clone"): role_clone,
+        ("POST", "/admin/roles/compare"): role_compare,
+        ("GET", "/admin/roles/:code/dependency"): role_dependency,
+        ("POST", "/admin/users/:id/access-check"): access_check,
+        ("GET", "/admin/working-calendars/:id/conflicts"): wcal_conflicts,
+        ("POST", "/admin/config/preview"): cfg_preview,
         ("POST", "/admin/org/units/:id/reparent-preview"): reparent_preview,
         ("GET", "/admin/config/history"): config_history,
         ("GET", "/admin/users/:id/assignments"): assignments,

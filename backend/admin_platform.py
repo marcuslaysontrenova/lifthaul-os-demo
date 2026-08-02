@@ -305,6 +305,62 @@ def create_role(conn, tenant_code, code, name, layer=4, grants=None, actor=None)
     return rid
 
 
+# Separation-of-duties: permission pairs that must not be held by the same user.
+# Only genuinely-separate-role pairs in THIS product (the finance role holds payment
+# submit+verify by design, so that pair is NOT listed); super-admins ('*') are exempt.
+SOD_PAIRS = [
+    ("quotation.create", "quotation.approve"),      # estimator vs approver
+    ("user_admin.manage", "audit.manage"),          # user admin vs audit admin
+]
+HIGH_RISK = {"quotation.approve", "payment.verify", "expense.approve", "*",
+             "tenant.manage", "role_admin.manage", "user_admin.manage", "security.manage"}
+
+
+def _perm_covers(perms, action):
+    if "*" in perms or action in perms:
+        return True
+    return any(p.endswith(".*") and action.startswith(p[:-1]) for p in perms)
+
+
+def sod_conflicts(perms):
+    """Incompatible permission pairs held simultaneously (Item 1 SoD visibility).
+    Super-administrators ('*') are the platform exception and are not flagged."""
+    if "*" in perms:
+        return []
+    out = []
+    for a, b in SOD_PAIRS:
+        if _perm_covers(perms, a) and _perm_covers(perms, b):
+            out.append({"a": a, "b": b, "reason": f"{a} and {b} must be separated (maker≠checker)"})
+    return out
+
+
+def compare_roles(conn, tenant_code, code_a, code_b):
+    """Side-by-side role comparison from the persisted model (Item 1 role admin)."""
+    ra, rb = role_by_code(conn, tenant_code, code_a), role_by_code(conn, tenant_code, code_b)
+    if not ra or not rb:
+        raise core.ConflictError("unknown role in comparison")
+    ga, gb = effective_role_grants(conn, ra["id"]), effective_role_grants(conn, rb["id"])
+    combined = ga | gb
+    return {
+        "a": {"code": code_a, "layer": ra["layer"], "system_locked": ra["system_locked"],
+              "assigned_users": role_assigned_user_count(conn, ra["id"]), "grants": sorted(ga)},
+        "b": {"code": code_b, "layer": rb["layer"], "system_locked": rb["system_locked"],
+              "assigned_users": role_assigned_user_count(conn, rb["id"]), "grants": sorted(gb)},
+        "only_a": sorted(ga - gb), "only_b": sorted(gb - ga), "shared": sorted(ga & gb),
+        "high_risk": sorted(g for g in combined if g in HIGH_RISK),
+        "sod_conflicts": sod_conflicts(combined)}
+
+
+def role_dependency(conn, tenant_code, code):
+    r = role_by_code(conn, tenant_code, code)
+    if not r:
+        raise core.ConflictError("unknown role")
+    users = role_assigned_user_count(conn, r["id"])
+    return {"code": code, "layer": r["layer"], "system_locked": bool(r["system_locked"]),
+            "assigned_users": users, "protected": bool(r["system_locked"]),
+            "can_archive": (not r["system_locked"]) and users == 0}
+
+
 def clone_role(conn, tenant_code, src_code, new_code, name, actor=None) -> int:
     """Clone a role's grants into a new tenant role (Item 6 role administration)."""
     src = role_by_code(conn, tenant_code, src_code)
@@ -393,13 +449,28 @@ def _other_active_super_admin(conn, user_id):
         " AND u.status='ACTIVE' AND u.id<>?", (user_id,)).fetchone())
 
 
-def assign_role(conn, user_id, role_id, actor=None):
+def assignment_sod_conflicts(conn, user_id, role_id):
+    """SoD conflicts that WOULD arise from adding role_id to the user (before saving)."""
+    current = effective_permissions(conn, user_id)
+    adding = effective_role_grants(conn, role_id)
+    before = {(a, b) for a, b in SOD_PAIRS if _perm_covers(current, a) and _perm_covers(current, b)}
+    combined = current | adding
+    after = sod_conflicts(combined)
+    return [c for c in after if (c["a"], c["b"]) not in before]     # only NEW conflicts
+
+
+def assign_role(conn, user_id, role_id, actor=None, allow_sod_exception=False, reason=None):
     if actor is not None:
         _guard_role_assignment(conn, actor, role_id)
+    conflicts = assignment_sod_conflicts(conn, user_id, role_id)
+    if conflicts and not allow_sod_exception:
+        raise core.ForbiddenError("separation-of-duties conflict: " +
+                                  "; ".join(c["reason"] for c in conflicts))
     conn.execute("INSERT INTO admin_user_roles(user_id,role_id) VALUES(?,?)"
                  " ON CONFLICT(user_id,role_id) DO NOTHING", (user_id, role_id))
     if actor:
-        core.audit(conn, actor, "USER_ROLE_GRANTED", "admin_user_roles", user_id, new={"role_id": role_id})
+        core.audit(conn, actor, "USER_ROLE_GRANTED", "admin_user_roles", user_id,
+                   new={"role_id": role_id, "sod_exception": bool(conflicts), "reason": reason})
     conn.commit()
 
 

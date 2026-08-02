@@ -211,8 +211,72 @@ def reparent_preview(conn, unit_id, new_parent_id):
         _assert_parent(conn, u["tenant_id"], new_parent_id)
     except core.AppError as e:
         valid = False; warnings.append(str(e))
-    return {"unit_id": unit_id, "new_parent_id": new_parent_id, "descendants": len(sub) - 1,
-            "active_assigned_users": assigned, "valid": valid, "warnings": warnings}
+    refs = [str(x) for x in sub]
+    ph2 = ",".join("?" for _ in refs)
+    cfg_keys = [r["key"] for r in conn.execute(
+        f"SELECT DISTINCT key FROM platform_config WHERE scope IN ('branch','department','team')"
+        f" AND scope_ref IN ({ph2})", tuple(refs)).fetchall()] if refs else []
+    managers = conn.execute(
+        f"SELECT COUNT(*) c FROM org_managers WHERE status='ACTIVE' AND scope_id IN ({ph2})",
+        tuple(refs)).fetchone()["c"] if refs else 0
+    return {"unit_id": unit_id, "current_parent_id": u["parent_id"], "new_parent_id": new_parent_id,
+            "descendants": len(sub) - 1, "active_assigned_users": assigned, "active_managers": managers,
+            "config_keys_in_subtree": cfg_keys, "config_impact_count": len(cfg_keys),
+            "valid": valid, "warnings": warnings}
+
+
+def _resolve_with_override(conn, key, ctx, ov_scope, ov_ref, ov_value):
+    order = [("user", ctx.get("user")), ("team", ctx.get("team")), ("department", ctx.get("department")),
+             ("branch", ctx.get("branch")), ("business_unit", ctx.get("business_unit")),
+             ("tenant", ctx.get("tenant")), ("platform", "")]
+    for scope, ref in order:
+        if ref is None:
+            continue
+        if scope == ov_scope and str(ref) == str(ov_ref or ""):
+            return {"value": str(ov_value), "scope": scope, "scope_ref": str(ref)}
+        row = conn.execute("SELECT value FROM platform_config WHERE scope=? AND scope_ref=? AND key=?",
+                          (scope, str(ref), key)).fetchone()
+        if row:
+            return {"value": row["value"], "scope": scope, "scope_ref": str(ref)}
+    return {"value": None, "scope": None, "scope_ref": None}
+
+
+def effective_config_preview(conn, key, scope, scope_ref, proposed_value, **ctx):
+    """Non-mutating preview of a proposed config override (Item 5 config viewer)."""
+    current = resolve_org_config(conn, key, **ctx)
+    proposed = _resolve_with_override(conn, key, ctx, scope, scope_ref, proposed_value)
+    valid, error = True, None
+    if any(t in key for t in ("_pct", "threshold", "_length", "_minutes", "_days")):
+        try:
+            int(str(proposed_value))
+        except Exception:
+            valid, error = False, "value must be numeric for this configuration key"
+    overrides = [dict(r) for r in conn.execute(
+        "SELECT scope,scope_ref,value,effective_to FROM platform_config WHERE key=? ORDER BY scope",
+        (key,)).fetchall()]
+    return {"key": key, "current": current, "proposed_value": str(proposed_value),
+            "proposed_scope": scope, "proposed_ref": scope_ref, "proposed_effective": proposed,
+            "changed": current.get("value") != proposed.get("value"),
+            "overrides": overrides, "valid": valid, "error": error}
+
+
+def working_calendar_conflicts(conn, calendar_id):
+    """Inherited-calendar conflict detection (Item 6 calendar administration)."""
+    resolved, source = effective_working_calendar(conn, calendar_id)
+    conflicts = []
+    ss, se = resolved.get("shift_start"), resolved.get("shift_end")
+    if ss and se and ss >= se:
+        conflicts.append({"type": "shift_inverted", "detail": f"{ss} >= {se}"})
+    bm = resolved.get("break_minutes")
+    if bm is not None and int(bm) < 0:
+        conflicts.append({"type": "invalid_break", "detail": str(bm)})
+    row = conn.execute("SELECT parent_id FROM working_calendars WHERE id=?", (calendar_id,)).fetchone()
+    if row and row["parent_id"]:
+        p = conn.execute("SELECT status FROM working_calendars WHERE id=?", (row["parent_id"],)).fetchone()
+        if p and p["status"] != "ACTIVE":
+            conflicts.append({"type": "inactive_parent_calendar", "detail": p["status"]})
+    return {"calendar_id": calendar_id, "resolved": resolved, "source": source,
+            "conflicts": conflicts, "valid": not conflicts}
 
 
 def reparent(conn, actor, unit_id, new_parent_id):

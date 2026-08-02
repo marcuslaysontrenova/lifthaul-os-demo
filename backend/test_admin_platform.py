@@ -146,7 +146,9 @@ class TestRbacCutover(Base):                                      # C-005 enforc
         self.assertTrue(core.can(actor, "booking.create"))
         self.assertFalse(core.can(actor, "quotation.approve"))
         # grant approver at runtime -> enforcement changes with NO code change
-        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "approver")["id"])
+        # (estimator+approver is a separation-of-duties conflict; use a governed exception here)
+        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "approver")["id"],
+                       allow_sod_exception=True, reason="test scenario")
         actor = self._actor(u)
         self.assertTrue(core.can(actor, "quotation.approve"))
 

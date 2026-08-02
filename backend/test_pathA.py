@@ -123,5 +123,49 @@ class TestResidualControls(Base):                               # Items 5/6 resi
             org.add_holiday(self.c, self.actor, cal, "Dup", "2027-01-01")
 
 
+class TestAdminViewers(Base):                                   # Items 1/5/6 viewers
+    def test_role_compare_and_sod_conflict_shown(self):
+        cmp = ap.compare_roles(self.c, "RGO", "estimator", "approver")
+        self.assertIn("quotation.create", cmp["only_a"])
+        self.assertIn("quotation.approve", cmp["only_b"])
+        self.assertTrue(any(c["a"] == "quotation.create" for c in cmp["sod_conflicts"]))
+
+    def test_role_dependency_protected(self):
+        dep = ap.role_dependency(self.c, "RGO", "super_platform_admin")
+        self.assertTrue(dep["protected"])
+        self.assertFalse(dep["can_archive"])
+
+    def test_sod_blocks_conflicting_assignment_with_exception(self):
+        u = self._user("sod@r")
+        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "estimator")["id"])
+        with self.assertRaises(core.ForbiddenError):
+            ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "approver")["id"])
+        ap.assign_role(self.c, u, ap.role_by_code(self.c, "RGO", "approver")["id"],
+                       allow_sod_exception=True, reason="temporary cover")   # governed exception
+        self.assertIn("quotation.approve", ap.effective_permissions(self.c, u))
+
+    def test_config_preview_is_non_mutating(self):
+        br = org.create_branch(self.c, self.actor, self.rgo, "B", "B")
+        before = org.resolve_org_config(self.c, "approval.quotation_threshold", tenant=self.rgo, branch=br)
+        pv = org.effective_config_preview(self.c, "approval.quotation_threshold", "branch", str(br),
+                                          "750000", tenant=self.rgo, branch=br)
+        self.assertEqual(pv["proposed_effective"]["value"], "750000")
+        self.assertTrue(pv["changed"])
+        after = org.resolve_org_config(self.c, "approval.quotation_threshold", tenant=self.rgo, branch=br)
+        self.assertEqual(before["value"], after["value"])           # preview did not mutate
+
+    def test_config_preview_validates_numeric(self):
+        pv = org.effective_config_preview(self.c, "approval.quotation_threshold", "platform", "",
+                                          "not-a-number", tenant=self.rgo)
+        self.assertFalse(pv["valid"])
+
+    def test_working_calendar_conflict_detection(self):
+        parent = org.create_working_calendar(self.c, self.actor, self.rgo, "P", "Parent")
+        child = org.create_working_calendar(self.c, self.actor, self.rgo, "CH", "Child", parent_id=parent)
+        self.c.execute("UPDATE working_calendars SET status='INACTIVE' WHERE id=?", (parent,)); self.c.commit()
+        wc = org.working_calendar_conflicts(self.c, child)
+        self.assertTrue(any(x["type"] == "inactive_parent_calendar" for x in wc["conflicts"]))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

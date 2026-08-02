@@ -106,6 +106,25 @@ def main():
     check(ap.effective_role_grants(conn, rid) == ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "approver")["id"]),
           "role clone copies grants on PostgreSQL")
 
+    # Item 1/6 — role comparison + SoD detection + config preview on PostgreSQL
+    cmp = ap.compare_roles(conn, "RGO", "estimator", "approver")
+    check("quotation.create" in cmp["only_a"] and "quotation.approve" in cmp["only_b"],
+          "role comparison accurate on PostgreSQL")
+    check(len(cmp["sod_conflicts"]) >= 1, "SoD conflict detected on PostgreSQL")
+    su = core.create_user(conn, "sod@ci", "Demo1234Xy", "estimator", "S")
+    ap.assign_role(conn, su, ap.role_by_code(conn, "RGO", "estimator")["id"])
+    try:
+        ap.assign_role(conn, su, ap.role_by_code(conn, "RGO", "approver")["id"])
+        check(False, "SoD-conflicting assignment must be blocked")
+    except core.ForbiddenError:
+        check(True, "SoD-conflicting assignment blocked on PostgreSQL")
+    import org
+    pv = org.effective_config_preview(conn, "approval.quotation_threshold", "tenant", "RGO", "900000", tenant="RGO")
+    before = conn.execute("SELECT value FROM platform_config WHERE key='approval.quotation_threshold' AND scope='platform'").fetchone()["value"]
+    check(pv["proposed_effective"]["value"] == "900000", "config preview computes proposed value on PostgreSQL")
+    after = conn.execute("SELECT value FROM platform_config WHERE key='approval.quotation_threshold' AND scope='platform'").fetchone()["value"]
+    check(before == after, "config preview is non-mutating on PostgreSQL")
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

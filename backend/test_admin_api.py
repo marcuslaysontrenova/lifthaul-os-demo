@@ -105,7 +105,7 @@ class TestAdminApi(unittest.TestCase):
         # create a user, grant a DB role, and read effective access
         uid = ap.create_user(server._conn, self.admin, "eff@r", "Demo1234Xy", "estimator")
         r = ap.role_by_code(server._conn, "RGO", "approver")
-        ap.assign_role(server._conn, uid, r["id"])
+        ap.assign_role(server._conn, uid, r["id"], allow_sod_exception=True, reason="test")  # est+appr = SoD
         ea = call("GET", f"/admin/users/{uid}/effective-access", {}, self.admin)
         self.assertIn("quotation.approve", ea["effective_permissions"])
         self.assertTrue(any(g["source_role"] == "approver" for g in ea["grants"]))
@@ -140,6 +140,23 @@ class TestAdminApi(unittest.TestCase):
         g = call("POST", "/admin/security/cross-access", {"target_tenant": "RGO", "reason": "audit"}, self.admin)
         self.assertIn("expires_at", g)
         call("POST", f"/admin/security/cross-access/{g['grant_id']}/terminate", {}, self.admin)
+
+    def test_admin_viewer_endpoints(self):
+        cmp = call("POST", "/admin/roles/compare", {"a": "estimator", "b": "approver"}, self.admin)
+        self.assertIn("only_a", cmp)
+        self.assertTrue(cmp["sod_conflicts"])
+        dep = call("GET", "/admin/roles/super_platform_admin/dependency", {}, self.admin)
+        self.assertTrue(dep["protected"])
+        pv = call("POST", "/admin/config/preview",
+                  {"key": "approval.quotation_threshold", "scope": "tenant", "scope_ref": str(self.tid),
+                   "value": "900000", "tenant": str(self.tid)}, self.admin)
+        self.assertEqual(pv["proposed_effective"]["value"], "900000")
+        uid = ap.create_user(server._conn, self.admin, "acc@r", "Demo1234Xy", "estimator")
+        # estimator HAS booking.create (allow) but NOT payment.verify (deny-by-default)
+        self.assertEqual(call("POST", f"/admin/users/{uid}/access-check", {"permission": "booking.create"}, self.admin)["decision"], "allow")
+        self.assertEqual(call("POST", f"/admin/users/{uid}/access-check", {"permission": "payment.verify"}, self.admin)["decision"], "deny")
+        ea = call("GET", f"/admin/users/{uid}/effective-access", {}, self.admin)
+        self.assertIn("sod_conflicts", ea)
 
     # ---- Authorization gating ---------------------------------------------
     def test_non_admin_is_forbidden(self):

@@ -364,12 +364,13 @@ def main():
     other = {"id": uB, "role": "estimator", "perms": {"form.data.view"}, "tenant_id": tB}
     check(forms.get_values(conn, other, "booking", bkA) == {}, "form-value tenant isolation on PostgreSQL")
     # historical version preservation: publish v2, old record keeps field_version 1
+    # (use tenant-A synthetic entity ids so the tenant-ownership guard is satisfied)
     v1fv = forms.get_values(conn, fa, "booking", bkA)["service_type"]["field_version"]
     nv = forms.create_version(conn, fa, "booking_form", "relabel")
     forms.validate_version(conn, fa, nv); forms.approve_version(conn, fa, nv)
     forms.publish_version(conn, fa, nv, "v2 label change")
-    forms.submit_values(conn, fa, "booking", bkB, {"service_type": "RIGGING"})
-    v2fv = forms.get_values(conn, fa, "booking", bkB)["service_type"]["field_version"]
+    forms.submit_values(conn, fa, "booking", 990002, {"service_type": "RIGGING"})   # new record under v2
+    v2fv = forms.get_values(conn, fa, "booking", 990002)["service_type"]["field_version"]
     check(v1fv == 1 and v2fv == 2 and forms.get_values(conn, fa, "booking", bkA)["service_type"]["field_version"] == 1,
           "historical field-version preserved after new publish on PostgreSQL")
     # search on a searchable field

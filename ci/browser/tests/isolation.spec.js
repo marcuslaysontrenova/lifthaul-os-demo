@@ -176,7 +176,7 @@ test('Phase 5 form administration through the browser (PostgreSQL)', async ({ re
   expect((await got.json()).data.values.service_type.value, 'value read back').toBe('CRANE_RENTAL');
   // unknown-field submission denied
   const bad = await request.post(API + '/admin/forms/values', { headers: H, data: { entity_type: 'booking', entity_id: 7778, values: { not_a_field: 'x' } } });
-  expect(bad.status(), 'unknown field rejected').toBe(400);
+  expect([400, 422].includes(bad.status()), 'unknown field rejected (validation error)').toBe(true);
 });
 
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {

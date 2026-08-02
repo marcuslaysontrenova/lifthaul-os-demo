@@ -164,6 +164,19 @@ CONFIG_PERMISSIONS = [
 ]
 for _code in CONFIG_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-3 CRM administration + master-data permissions (multi-dot codes)
+PHASE3_PERMISSIONS = [
+    "crm.admin.classification.view", "crm.admin.classification.manage",
+    "crm.admin.credit_policy.view", "crm.admin.credit_policy.manage",
+    "crm.admin.pricing.view", "crm.admin.pricing.manage",
+    "crm.admin.duplicate_rule.view", "crm.admin.duplicate_rule.manage",
+    "crm.admin.merge.execute", "crm.admin.numbering.manage",
+    "crm.admin.custom_field.view", "crm.admin.custom_field.manage",
+    "master_data.archive", "master_data.restore", "master_data.import",
+    "master_data.export", "master_data.replace", "master_data.system.manage",
+]
+for _code in PHASE3_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -186,19 +199,21 @@ ADMIN_ROLES = [
         {"tenant.*", "license.*", "integration.*", "system_config.*", "ai_admin.*",
          "workflow_admin.*", "branding.*", "security.*", "audit.*", "reporting.*",
          "master_data.*", "admin.configuration.*", "tax.policy.*",
-         "quotation.policy.approval.*", "payment.downpayment.policy.*"}),
+         "quotation.policy.approval.*", "payment.downpayment.policy.*", "crm.admin.*"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
-         "master_data.*", "system_config.view", "reporting.*", "audit.view",
+         "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",
          "admin.configuration.view", "admin.configuration.value.manage",
          "admin.configuration.override", "admin.configuration.simulate",
          "admin.configuration.history.view"}),
-    ("crm_admin",            "CRM Administrator",            3, {"crm_admin.*", "customer.*", "contact.*", "address.*"}),
+    ("crm_admin",            "CRM Administrator",            3,
+        {"crm_admin.*", "customer.*", "contact.*", "address.*", "crm.admin.*", "master_data.*"}),
     ("fleet_admin",          "Fleet Administrator",          3, {"fleet_admin.*", "equipment.*", "vehicle.*", "maintenance.*", "inspection.*"}),
     ("finance_admin",        "Finance Administrator",        3,
         {"finance_admin.*", "invoice.*", "expense.*", "payment.*", "refund.*",
          "tax.policy.*", "payment.downpayment.policy.*", "quotation.policy.approval.view",
-         "admin.configuration.financial.manage", "admin.configuration.view", "admin.configuration.simulate"}),
+         "admin.configuration.financial.manage", "admin.configuration.view", "admin.configuration.simulate",
+         "crm.admin.credit_policy.*", "crm.admin.pricing.*"}),
     ("dispatch_admin",       "Dispatch Administrator",       3, {"dispatch_admin.*", "job.read", "job.dispatch", "job.transition", "reservation.*"}),
     ("safety_admin",         "Safety Administrator",         3, {"safety.*", "incident.*"}),
 ]

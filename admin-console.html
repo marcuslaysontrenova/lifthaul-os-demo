@@ -180,6 +180,24 @@ const MENU = [
     {id:'cfg_effective', label:'Effective Configuration'},
     {id:'cfg_simulate', label:'Policy Simulation'},
   ]},
+  {sect:'CRM Administration', items:[
+    {id:'crm_classifications', label:'Customer Classifications'},
+    {id:'crm_lead_sales', label:'Lead and Sales Settings'},
+    {id:'crm_territories', label:'Territories and Ownership'},
+    {id:'crm_credit', label:'Credit and Payment Policies'},
+    {id:'crm_pricing', label:'Pricing and Agreements'},
+    {id:'crm_duplicate', label:'Duplicate and Merge Rules'},
+    {id:'crm_numbering', label:'Customer Numbering'},
+    {id:'crm_portal', label:'Portal Policies'},
+    {id:'crm_custom_fields', label:'CRM Custom Fields'},
+  ]},
+  {sect:'Master Data', items:[
+    {id:'md_operations', label:'Operations'},
+    {id:'md_finance', label:'Finance'},
+    {id:'md_geography', label:'Geography'},
+    {id:'md_documents', label:'Documents'},
+    {id:'md_communication', label:'Communication Templates'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -320,7 +338,118 @@ const SCREENS = {
   integrity: async (it,c)=>{ const d=await api('GET','/admin/governance/data-integrity');
     c.innerHTML=header(it,'Referential integrity checks.')+
       `<div class="kv"><div class="k">Overall</div><div>${d.ok?'<span style="color:var(--ok)">OK ✓</span>':'<span style="color:var(--danger)">issues found</span>'}</div>${Object.entries(d.checks).map(([k,v])=>`<div class="k">${k}</div><div>${v}</div>`).join('')}</div>`; },
+  // CRM Administration
+  crm_classifications: (it,c)=>crmDomainScreen(it,c,'CRM classification',
+    ['customer.category','customer.type','customer.industry','customer.group','customer.account_status',
+     'customer.account_rating','customer.credit_rating','customer.risk_class','customer.lifecycle',
+     'customer.strategic_indicator','contact.classification','address.type']),
+  crm_lead_sales: (it,c)=>crmDomainScreen(it,c,'Lead & sales',
+    ['lead.source','lead.qualification','opportunity.type','opportunity.source','opportunity.lost_reason','campaign.source']),
+  crm_territories: (it,c)=>crmDomainScreen(it,c,'Territory',['sales.territory']),
+  crm_portal: (it,c)=>crmDomainScreen(it,c,'Portal policy',['portal.access_policy','portal.eligibility']),
+  crm_pricing: async (it,c)=>{ const d=await api('POST','/admin/crm/pricing/search',{});
+    c.innerHTML=header(it,'Pricing policies and agreements (descriptive; does not alter quote math).',
+      `<button class="btn sm" onclick="crmPricingNew()">New pricing policy +</button>`)+
+      table(['Code','Name','Status'], d.values, r=>[r.code,r.name,pill(r.status)]); },
+  crm_credit: async (it,c)=>{ const d=await api('GET','/admin/crm/credit-policies');
+    c.innerHTML=header(it,'Effective-dated credit policies. Enforcement is governed by <code>crm.credit.enforcement</code> (default evidence-only — never mutates historical documents).',
+      `<button class="btn sm" onclick="crmCreditNew()">New credit policy +</button>`)+
+      table(['Code','Name','Credit limit','Terms','Deposit %','Restrictions','Effective to'], d.policies,
+        r=>[r.code,cell(r.name),cell(r.credit_limit),cell(r.payment_terms),cell(r.deposit_required_pct),
+            [r.booking_restriction?'booking':'',r.service_suspension?'service':'',r.overdue_restriction?'overdue':''].filter(Boolean).join(', ')||'—',cell(r.effective_to)]); },
+  crm_duplicate: async (it,c)=>{ const d=await api('GET','/admin/crm/duplicate-rules');
+    c.innerHTML=header(it,'Configurable duplicate-detection rules (advisory — never auto-merge). Merge is governed and cross-tenant blocked.',
+      `<button class="btn sm" onclick="crmDupNew()">New rule +</button> <button class="btn sm ghost" onclick="crmMergeDlg()">Merge customers…</button>`)+
+      table(['Rule','Dimension','Match type','Weight'], d.rules, r=>[r.name,r.dimension,r.match_type,r.weight]); },
+  crm_numbering: async (it,c)=>{ const d=await api('POST','/admin/crm/numbering/preview',{});
+    const cfg=d.config;
+    c.innerHTML=header(it,'Governed, concurrency-safe customer numbering.')+
+      `<div class="kv"><div class="k">Enabled</div><div>${cfg.enabled?'yes':'no'}</div><div class="k">Next number (preview)</div><div><b>${d.preview}</b></div><div class="k">Prefix</div><div>${cfg.prefix}</div><div class="k">Include year</div><div>${cfg.include_year}</div><div class="k">Padding</div><div>${cfg.padding}</div><div class="k">Reset</div><div>${cfg.reset}</div></div>`+
+      `<div class="bar" style="margin-top:14px"><input id="np" placeholder="prefix" value="${cfg.prefix}" style="max-width:120px"><input id="npad" placeholder="padding" value="${cfg.padding}" style="max-width:100px"><button class="btn sm" onclick="crmNumSave()">Save numbering</button></div>`; },
+  crm_custom_fields: async (it,c)=>{ const d=await api('POST','/admin/crm/custom-fields/search',{});
+    c.innerHTML=header(it,'Declarative CRM custom fields (no executable code in validation).',
+      `<button class="btn sm" onclick="crmCfNew()">New custom field +</button>`)+
+      table(['Entity','Code','Label','Type','Required','Status'], d.fields,
+        r=>[r.entity,r.code,r.label,r.data_type,r.required?'yes':'',pill(r.status)]); },
+  // Master Data Center
+  md_operations: (it,c)=>mdCategoryScreen(it,c,'OPERATIONS'),
+  md_finance: (it,c)=>mdCategoryScreen(it,c,'FINANCE'),
+  md_geography: (it,c)=>mdCategoryScreen(it,c,'GEOGRAPHY'),
+  md_documents: (it,c)=>mdCategoryScreen(it,c,'DOCUMENTS'),
+  md_communication: (it,c)=>mdCategoryScreen(it,c,'DOCUMENTS'),
 };
+// ---- CRM / Master-Data helper screens (every action hits a persisted API) ----
+async function crmDomainScreen(it,c,label,domains){
+  const opts=domains.map(d=>`<option value="${d}">${d}</option>`).join('');
+  c.innerHTML=header(it,label+' reference values (governed master data).',
+    `<select id="mdd" onchange="crmDomainLoad()" style="max-width:280px">${opts}</select> <button class="btn sm" onclick="crmClassNew()">New value +</button>`)+
+    `<div id="mdlist"><div class="empty">Loading…</div></div>`;
+  crmDomainLoad();
+}
+async function crmDomainLoad(){ const domain=document.getElementById('mdd').value;
+  const d=await api('POST','/admin/crm/classifications/search',{domain});
+  document.getElementById('mdlist').innerHTML=table(['Code','Name','Status','Actions'], d.values,
+    r=>[r.code,r.name,pill(r.status),
+      r.status==='ACTIVE'?`<a style="color:var(--accent);cursor:pointer" onclick="crmClassStatus(${r.id},'INACTIVE')">deactivate</a> · <a style="color:var(--accent);cursor:pointer" onclick="mdDeps(${r.id})">impact</a>`
+                         :`<a style="color:var(--accent);cursor:pointer" onclick="crmClassStatus(${r.id},'ACTIVE')">activate</a>`]); }
+async function crmClassNew(){ const domain=document.getElementById('mdd').value;
+  const code=prompt('Code (e.g. VIP):'); if(!code) return; const name=prompt('Name:')||code;
+  try{ await api('POST','/admin/crm/classifications',{domain,code,name}); crmDomainLoad(); }catch(e){ alert(e.message); } }
+async function crmClassStatus(id,status){ try{ await api('POST','/admin/crm/classifications/'+id+'/status',{status,reason:'console'}); crmDomainLoad(); }catch(e){ alert(e.message); } }
+async function mdCategoryScreen(it,c,category){
+  const d=await api('GET','/admin/master-data/domains');
+  const domains=d.domains.filter(x=>x.category===category);
+  const opts=domains.map(x=>`<option value="${x.domain}">${x.label} (${x.values})</option>`).join('');
+  c.innerHTML=header(it,category.charAt(0)+category.slice(1).toLowerCase()+' master data.',
+    `<select id="mdd" onchange="mdLoad()" style="max-width:320px">${opts}</select> <button class="btn sm" onclick="mdNew()">New value +</button> <button class="btn sm ghost" onclick="mdImportDlg()">Import…</button> <button class="btn sm ghost" onclick="mdExport()">Export</button>`)+
+    `<div id="mdlist"><div class="empty">Loading…</div></div>`;
+  mdLoad();
+}
+async function mdLoad(){ const domain=document.getElementById('mdd').value;
+  const d=await api('POST','/admin/master-data/values/search',{domain});
+  document.getElementById('mdlist').innerHTML=table(['Code','Name','Status','Actions'], d.values,
+    r=>[r.code,r.name,pill(r.status),
+      r.status==='ACTIVE'?`<a style="color:var(--accent);cursor:pointer" onclick="mdStatus(${r.id},'INACTIVE')">deactivate</a> · <a style="color:var(--accent);cursor:pointer" onclick="mdDeps(${r.id})">impact</a>`
+                         :`<a style="color:var(--accent);cursor:pointer" onclick="mdStatus(${r.id},'ACTIVE')">activate</a> · <a style="color:var(--accent);cursor:pointer" onclick="mdReplace(${r.id})">replace</a>`]); }
+async function mdNew(){ const domain=document.getElementById('mdd').value;
+  const code=prompt('Code:'); if(!code) return; const name=prompt('Name:')||code;
+  try{ await api('POST','/admin/master-data/values',{domain,code,name}); mdLoad(); }catch(e){ alert(e.message); } }
+async function mdStatus(id,status){ try{ await api('POST','/admin/master-data/values/'+id+'/status',{status,reason:'console'}); mdLoad(); }catch(e){ alert(e.message); } }
+async function mdDeps(id){ const d=await api('GET','/admin/master-data/values/'+id+'/dependencies');
+  openDlg('view','Dependency impact',`${d.value.code} — ${d.total_references} referencing record(s)`,
+    table(['Table','Column','Records'], d.references, r=>[r.table,r.column,r.records])+
+    `<p style="margin-top:10px;color:var(--muted);font-size:12px">Safe to hard-delete: ${d.safe_to_hard_delete?'yes':'no (deactivate/replace instead)'} · Replacement options: ${d.replacement_options.length}</p>`, null); }
+async function mdReplace(id){ const rid=prompt('Replacement value id:'); if(!rid) return;
+  try{ await api('POST','/admin/master-data/values/'+id+'/replace',{replacement_id:parseInt(rid),reason:'console'}); mdLoad(); }catch(e){ alert(e.message); } }
+async function mdImportDlg(){ const domain=document.getElementById('mdd').value;
+  const raw=prompt('Paste rows as code,name per line:'); if(!raw) return;
+  const rows=raw.split('\n').map(l=>{const [code,...n]=l.split(','); return {code:(code||'').trim(), name:(n.join(',')||'').trim()};}).filter(r=>r.code);
+  const dry=await api('POST','/admin/master-data/import',{domain,rows,dry_run:true});
+  if(!confirm(`Dry run: ${dry.valid} valid, ${dry.invalid} invalid, ${dry.duplicates} duplicate. Apply valid rows?`)) return;
+  await api('POST','/admin/master-data/import',{domain,rows,dry_run:false}); mdLoad(); }
+async function mdExport(){ const domain=document.getElementById('mdd').value;
+  const d=await api('POST','/admin/master-data/export',{domain});
+  openDlg('view','Export — '+domain, d.rows.length+' rows (tenant-scoped)', table(['Code','Name','Status'], d.rows, r=>[r.code,r.name,cell(r.status)]), null); }
+async function crmPricingNew(){ const code=prompt('Pricing policy code:'); if(!code) return; const name=prompt('Name:')||code;
+  try{ await api('POST','/admin/crm/pricing',{code,name}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function crmCreditNew(){ const code=prompt('Credit policy code:'); if(!code) return; const name=prompt('Name:')||code;
+  const limit=prompt('Credit limit (blank = none):'); const terms=prompt('Payment terms (e.g. NET30):');
+  try{ await api('POST','/admin/crm/credit-policies',{code,name,credit_limit:limit?parseFloat(limit):null,payment_terms:terms||null}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function crmDupNew(){ const name=prompt('Rule name:'); if(!name) return; const dim=prompt('Dimension (legal_name/email/phone/tax_id):'); if(!dim) return;
+  const mt=prompt('Match type (exact/normalized/weighted):','exact')||'exact'; const w=prompt('Weight:','1.0')||'1.0';
+  try{ await api('POST','/admin/crm/duplicate-rules',{name,dimension:dim,match_type:mt,weight:parseFloat(w)}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function crmMergeDlg(){ const s=prompt('Survivor customer id:'); const m=prompt('Merged (loser) customer id:'); if(!s||!m) return;
+  try{ const prev=await api('POST','/admin/crm/merge/preview',{survivor_id:parseInt(s),merged_id:parseInt(m)});
+    const rels=prev.relationships.map(r=>`${r.table}:${r.records}`).join(', ');
+    if(!confirm(`Merge ${prev.merged.name} into ${prev.survivor.name}? Redirects — ${rels}`)) return;
+    await api('POST','/admin/crm/merge',{survivor_id:parseInt(s),merged_id:parseInt(m),reason:'console merge'});
+    alert('Merged.'); }catch(e){ alert(e.message); } }
+async function crmNumSave(){ const prefix=document.getElementById('np').value; const padding=document.getElementById('npad').value;
+  try{ await api('POST','/admin/crm/numbering/config',{prefix,padding:parseInt(padding)}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function crmCfNew(){ const entity=prompt('Entity (customer/contact/address/lead/opportunity/booking):','customer'); if(!entity) return;
+  const code=prompt('Field code:'); if(!code) return; const label=prompt('Label:')||code;
+  const dt=prompt('Data type (text/integer/decimal/boolean/date/email/single_select):','text')||'text';
+  try{ await api('POST','/admin/crm/custom-fields',{entity,code,label,data_type:dt}); render(CURRENT); }catch(e){ alert(e.message); } }
 // generic org-unit kind screens
 ['business_unit','branch','department','team','operating_site','warehouse','service_area'].forEach(kind=>{
   SCREENS[kind] = async (it,c)=>{ const d=await api('POST','/admin/org/units/search',{kind});

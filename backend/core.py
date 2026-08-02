@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS sessions(
 CREATE TABLE IF NOT EXISTS customers(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, contact TEXT, email TEXT,
   credit_status TEXT DEFAULT 'Good', status TEXT DEFAULT 'ACTIVE',
+  customer_number TEXT, merged_into INTEGER,
   created_by INTEGER, created_at TEXT, updated_by INTEGER, updated_at TEXT,
   deleted_by INTEGER, deleted_at TEXT, deletion_reason TEXT);
 
@@ -366,6 +367,11 @@ def create_customer(conn, actor, name, contact=None, email=None):
     conn.commit()
     import tenant
     tenant.stamp(conn, actor, "customers", cur.lastrowid)   # server-derived tenant ownership
+    try:                                                    # governed customer numbering (Phase 3, additive)
+        import crm_admin
+        crm_admin.assign_customer_number(conn, actor, cur.lastrowid)
+    except Exception:
+        pass                                                # tolerant: numbering unavailable => number stays NULL
     audit(conn, actor, "create", "customer", cur.lastrowid, new={"name": name})
     conn.commit()
     return cur.lastrowid

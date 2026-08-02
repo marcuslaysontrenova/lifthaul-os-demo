@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 7   # bump when any module schema changes
+SCHEMA_VERSION = 8   # bump when any module schema changes (8 = Phase 3 master data + CRM admin)
 
 
 def _now():
@@ -73,12 +73,16 @@ def _seed_platform(conn):
     import org
     import backfill
     import config_registry
+    import masterdata
+    import crm_admin
     admin_platform.init(conn)
     config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
     admin_platform.seed(conn)
     org.init(conn)
     backfill.init(conn)
     backfill.add_tenant_columns(conn)   # operational tables carry tenant_id from the start
+    masterdata.init(conn); masterdata.seed(conn)             # Phase 3: canonical master data (platform scope)
+    crm_admin.init(conn); crm_admin.seed(conn)               # Phase 3: CRM administration (numbering/credit/dup/custom)
     return conn
 
 

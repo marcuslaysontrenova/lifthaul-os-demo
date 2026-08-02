@@ -35,8 +35,10 @@ def to_postgres_ddl(schema: str) -> str:
 
 def full_postgres_ddl() -> str:
     import core, ops, admin, catalog, admin_platform, org, backfill, config_registry
+    import masterdata, crm_admin
     parts = [core.SCHEMA, ops.OPS_SCHEMA, admin.ADMIN_SCHEMA, catalog.CATALOG_SCHEMA,
-             admin_platform.SCHEMA, org.SCHEMA, backfill.SCHEMA, config_registry.SCHEMA]
+             admin_platform.SCHEMA, org.SCHEMA, backfill.SCHEMA, config_registry.SCHEMA,
+             masterdata.SCHEMA, crm_admin.SCHEMA]   # Phase 3 (crm_admin index references customers -> after core)
     return "\n".join(to_postgres_ddl(p) for p in parts)
 
 

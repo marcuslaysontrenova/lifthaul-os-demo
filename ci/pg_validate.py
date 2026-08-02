@@ -165,6 +165,77 @@ def main():
     except core.ValidationError:
         check(True, "typed config validation rejects out-of-range on PostgreSQL")
 
+    # Phase 3 — CRM administration + master-data governance on PostgreSQL
+    import masterdata, crm_admin
+    md_actor = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    check(len(masterdata.list_values(conn, md_actor, "ops.equipment_type")) >= 1,
+          "master data seeded on PostgreSQL")
+    mdid = masterdata.create_value(conn, md_actor, "customer.category", "PGVIP", "PG VIP")
+    check(masterdata.selectable(conn, mdid), "new master-data value is selectable on PostgreSQL")
+    try:
+        masterdata.create_value(conn, md_actor, "customer.category", "PGVIP", "dup")
+        check(False, "duplicate master-data code must be blocked")
+    except core.ConflictError:
+        check(True, "duplicate master-data code blocked on PostgreSQL")
+    masterdata.set_status(conn, md_actor, mdid, "INACTIVE")
+    check(not masterdata.selectable(conn, mdid), "inactive value not selectable on PostgreSQL")
+    # replacement mapping preserves history + resolves forward
+    o1 = masterdata.create_value(conn, md_actor, "ops.vehicle_type", "OLDPM", "Old PM")
+    o2 = masterdata.create_value(conn, md_actor, "ops.vehicle_type", "NEWPM", "New PM")
+    masterdata.replace(conn, md_actor, o1, o2)
+    check(masterdata.resolve_effective(conn, o1)["code"] == "NEWPM",
+          "replacement resolves forward on PostgreSQL")
+    # governed customer numbering (concurrency-safe: distinct numbers)
+    nums = set()
+    for i in range(5):
+        ccid = core.create_customer(conn, md_actor, f"PG Num {i}")
+        nums.add(conn.execute("SELECT customer_number FROM customers WHERE id=?", (ccid,)).fetchone()["customer_number"])
+    check(len(nums) == 5 and all(n and n.startswith("CUS-") for n in nums),
+          "customer numbering unique + formatted on PostgreSQL")
+    # duplicate detection + governed merge (references redirected)
+    da = core.create_customer(conn, md_actor, "Dup Rig Inc")
+    db_ = core.create_customer(conn, md_actor, "DUP  RIG INC")
+    bmerge = core.create_booking(conn, md_actor, db_, "CRANE_RENTAL", "x", 1)
+    det = crm_admin.detect_duplicates(conn, md_actor, da)
+    check(len(det["candidates"]) >= 1, "duplicate detection finds candidate on PostgreSQL")
+    crm_admin.merge_customers(conn, md_actor, da, db_)
+    check(conn.execute("SELECT customer_id FROM bookings WHERE id=?", (bmerge,)).fetchone()["customer_id"] == da,
+          "merge redirects references on PostgreSQL")
+    check(conn.execute("SELECT status FROM customers WHERE id=?", (db_,)).fetchone()["status"] == "MERGED",
+          "merged customer preserved (status MERGED) on PostgreSQL")
+    # cross-tenant merge denied
+    other_t = core.create_customer(conn, aB, "B Tenant Cust")
+    try:
+        crm_admin.merge_customers(conn, md_actor, da, other_t)
+        check(False, "cross-tenant merge must be denied")
+    except (core.ForbiddenError, core.NotFoundError):
+        check(True, "cross-tenant merge denied on PostgreSQL")
+    # credit policy evidence-only default never blocks (no operational drift)
+    crm_admin.create_credit_policy(conn, md_actor, "PGSTRICT", "Strict", credit_limit=1, booking_restriction=True)
+    cev = crm_admin.evaluate_credit(conn, md_actor, da, "booking", amount=999999, policy_code="PGSTRICT")
+    check(cev["decision"] == "ALLOW", "credit evidence_only never blocks on PostgreSQL (no operational drift)")
+    # CRM custom field declarative validation
+    crm_admin.create_custom_field(conn, md_actor, "customer", "pg_priority", "Priority", "integer",
+                                  validation={"min": 1, "max": 5})
+    try:
+        crm_admin.set_custom_value(conn, md_actor, "customer", da, "pg_priority", "9")
+        check(False, "out-of-range custom value must be rejected")
+    except core.ValidationError:
+        check(True, "declarative custom-field validation enforced on PostgreSQL")
+    # import dry-run
+    imp = masterdata.import_values(conn, md_actor, "finance.uom", [{"code": "PGTON", "name": "Ton"}], dry_run=True)
+    check(imp["valid"] == 1 and imp["applied"] == 0, "master-data import dry-run on PostgreSQL")
+    # granular permission scoping
+    p3fa = ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "crm_admin")["id"])
+    check("crm.admin.*" in p3fa, "crm.admin.* granted to crm_admin on PostgreSQL")
+    fin = ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "finance_admin")["id"])
+    check("crm.admin.merge.execute" not in fin and "crm.admin.credit_policy.*" in fin,
+          "finance_admin scoped (credit yes, merge no) on PostgreSQL")
+    # UNEXPECTED OPERATIONAL STATUS CHANGES = 0: booking stages unaffected by master-data ops
+    stage_row = conn.execute("SELECT stage FROM bookings WHERE id=?", (bmerge,)).fetchone()
+    check(stage_row["stage"] == "REQUEST_RECEIVED", "operational booking stage unchanged (0 status drift) on PostgreSQL")
+    print("PHASE 3 CRM + MASTER DATA: PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

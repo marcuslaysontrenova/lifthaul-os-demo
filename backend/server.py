@@ -572,10 +572,115 @@ def _admin_routes():
     }
 
 
+def _phase3_routes():
+    """Phase 3 — CRM Administration + shared Master Data Center. Permission-gated, tenant-scoped,
+    audited; policy simulation/detection are non-mutating where documented."""
+    R = core.require
+    import masterdata
+    import crm_admin as crm
+
+    # ---- Master Data Center (generic governed lookups) --------------------
+    def md_domains(a, b, p):     R(a, "master_data.view");   return {"domains": masterdata.domain_catalog(_conn, a)}
+    def md_search(a, b, p):      R(a, "master_data.view");   return {"values": masterdata.list_values(_conn, a, b["domain"], include_inactive=b.get("include_inactive", True), q=b.get("q"))}
+    def md_create(a, b, p):
+        return {"id": masterdata.create_value(_conn, a, b["domain"], b["code"], b["name"],
+                description=b.get("description"), parent_id=b.get("parent_id"), sort_order=b.get("sort_order", 0),
+                status=b.get("status", "ACTIVE"), effective_from=b.get("effective_from"),
+                effective_to=b.get("effective_to"), system_protected=b.get("system_protected", False),
+                metadata=b.get("metadata"))}
+    def md_update(a, b, p):      return {"ok": masterdata.update_value(_conn, a, int(p["id"]), **{k: v for k, v in b.items()})}
+    def md_status(a, b, p):      return {"ok": masterdata.set_status(_conn, a, int(p["id"]), b["status"], reason=b.get("reason"))}
+    def md_deps(a, b, p):        R(a, "master_data.view");   return masterdata.dependencies(_conn, a, int(p["id"]))
+    def md_replace(a, b, p):     return masterdata.replace(_conn, a, int(p["id"]), int(b["replacement_id"]), reason=b.get("reason"))
+    def md_import(a, b, p):      return masterdata.import_values(_conn, a, b["domain"], b.get("rows", []), dry_run=b.get("dry_run", True))
+    def md_export(a, b, p):      return {"domain": b["domain"], "rows": masterdata.export_values(_conn, a, b["domain"])}
+
+    # ---- CRM classifications / pricing (granular crm.admin.* perms) --------
+    def crm_class_search(a, b, p): R(a, "crm.admin.classification.view");  return {"values": masterdata.list_values(_conn, a, b["domain"], include_inactive=b.get("include_inactive", True), q=b.get("q"))}
+    def crm_class_create(a, b, p): R(a, "crm.admin.classification.manage"); return {"id": masterdata.create_value(_conn, a, b["domain"], b["code"], b["name"], description=b.get("description"), sort_order=b.get("sort_order", 0))}
+    def crm_class_status(a, b, p): R(a, "crm.admin.classification.manage"); return {"ok": masterdata.set_status(_conn, a, int(p["id"]), b["status"], reason=b.get("reason"))}
+    def crm_pricing_search(a, b, p): R(a, "crm.admin.pricing.view");  return {"values": masterdata.list_values(_conn, a, "commercial.pricing_policy")}
+    def crm_pricing_create(a, b, p): R(a, "crm.admin.pricing.manage"); return {"id": masterdata.create_value(_conn, a, "commercial.pricing_policy", b["code"], b["name"], description=b.get("description"))}
+
+    # ---- Customer numbering ----------------------------------------------
+    def crm_num_preview(a, b, p):  R(a, "crm.admin.numbering.manage"); return crm.preview_number(_conn, a, branch=b.get("branch"))
+    def crm_num_config(a, b, p):
+        R(a, "crm.admin.numbering.manage")
+        for k in ("prefix", "suffix", "padding", "include_year", "include_branch", "reset", "enabled"):
+            if k in b:
+                admin_platform.set_config(_conn, "platform", "", "crm.numbering." + k, str(b[k]), actor=a)
+        return crm.preview_number(_conn, a, branch=b.get("branch"))
+
+    # ---- Duplicate detection + merge -------------------------------------
+    def crm_dup_rules(a, b, p):    return {"rules": crm.list_duplicate_rules(_conn, a)}
+    def crm_dup_rule_add(a, b, p): return {"id": crm.create_duplicate_rule(_conn, a, b["name"], b["dimension"], b.get("match_type", "exact"), b.get("weight", 1.0))}
+    def crm_detect(a, b, p):       return crm.detect_duplicates(_conn, a, int(p["id"]))
+    def crm_review(a, b, p):       return {"ok": crm.review_candidate(_conn, a, int(p["id"]), b["status"], reason=b.get("reason"))}
+    def crm_merge_preview(a, b, p): return crm.merge_preview(_conn, a, int(b["survivor_id"]), int(b["merged_id"]))
+    def crm_merge(a, b, p):        return crm.merge_customers(_conn, a, int(b["survivor_id"]), int(b["merged_id"]), reason=b.get("reason"))
+
+    # ---- Credit policy ----------------------------------------------------
+    def crm_credit_list(a, b, p):  return {"policies": crm.list_credit_policies(_conn, a)}
+    def crm_credit_add(a, b, p):
+        return {"id": crm.create_credit_policy(_conn, a, b["code"], b.get("name"), credit_limit=b.get("credit_limit"),
+                payment_terms=b.get("payment_terms"), deposit_required_pct=b.get("deposit_required_pct"),
+                credit_status=b.get("credit_status", "GOOD"), overdue_restriction=b.get("overdue_restriction", False),
+                booking_restriction=b.get("booking_restriction", False), service_suspension=b.get("service_suspension", False),
+                effective_from=b.get("effective_from"), effective_to=b.get("effective_to"))}
+    def crm_credit_eval(a, b, p):  R(a, "crm.admin.credit_policy.view"); return crm.evaluate_credit(_conn, a, int(p["id"]), b.get("action", "quotation"), amount=b.get("amount", 0), policy_code=b.get("policy_code"))
+
+    # ---- CRM custom fields ------------------------------------------------
+    def crm_cf_search(a, b, p):    return {"fields": crm.list_custom_fields(_conn, a, entity=b.get("entity"), include_inactive=b.get("include_inactive", True))}
+    def crm_cf_create(a, b, p):
+        return {"id": crm.create_custom_field(_conn, a, b["entity"], b["code"], b["label"], b["data_type"],
+                required=b.get("required", False), default_value=b.get("default_value"), validation=b.get("validation"),
+                selection_source=b.get("selection_source"), visibility=b.get("visibility", "visible"),
+                editability=b.get("editability", "editable"), sensitivity=b.get("sensitivity", "normal"),
+                searchable=b.get("searchable", False), reportable=b.get("reportable", False),
+                exportable=b.get("exportable", True), effective_from=b.get("effective_from"), effective_to=b.get("effective_to"))}
+    def crm_cf_status(a, b, p):    return {"ok": crm.set_custom_field_status(_conn, a, int(p["id"]), b["status"])}
+    def crm_cf_setval(a, b, p):    return {"ok": crm.set_custom_value(_conn, a, b["entity"], int(b["entity_id"]), b["field_code"], b.get("value"))}
+    def crm_cf_getval(a, b, p):    return {"values": crm.get_custom_values(_conn, a, b["entity"], int(b["entity_id"]))}
+
+    return {
+        ("GET", "/admin/master-data/domains"): md_domains,
+        ("POST", "/admin/master-data/values/search"): md_search,
+        ("POST", "/admin/master-data/values"): md_create,
+        ("POST", "/admin/master-data/values/:id"): md_update,
+        ("POST", "/admin/master-data/values/:id/status"): md_status,
+        ("GET", "/admin/master-data/values/:id/dependencies"): md_deps,
+        ("POST", "/admin/master-data/values/:id/replace"): md_replace,
+        ("POST", "/admin/master-data/import"): md_import,
+        ("POST", "/admin/master-data/export"): md_export,
+        ("POST", "/admin/crm/classifications/search"): crm_class_search,
+        ("POST", "/admin/crm/classifications"): crm_class_create,
+        ("POST", "/admin/crm/classifications/:id/status"): crm_class_status,
+        ("POST", "/admin/crm/pricing/search"): crm_pricing_search,
+        ("POST", "/admin/crm/pricing"): crm_pricing_create,
+        ("POST", "/admin/crm/numbering/preview"): crm_num_preview,
+        ("POST", "/admin/crm/numbering/config"): crm_num_config,
+        ("GET", "/admin/crm/duplicate-rules"): crm_dup_rules,
+        ("POST", "/admin/crm/duplicate-rules"): crm_dup_rule_add,
+        ("POST", "/admin/crm/customers/:id/detect-duplicates"): crm_detect,
+        ("POST", "/admin/crm/duplicate-candidates/:id/review"): crm_review,
+        ("POST", "/admin/crm/merge/preview"): crm_merge_preview,
+        ("POST", "/admin/crm/merge"): crm_merge,
+        ("GET", "/admin/crm/credit-policies"): crm_credit_list,
+        ("POST", "/admin/crm/credit-policies"): crm_credit_add,
+        ("POST", "/admin/crm/customers/:id/evaluate-credit"): crm_credit_eval,
+        ("POST", "/admin/crm/custom-fields/search"): crm_cf_search,
+        ("POST", "/admin/crm/custom-fields"): crm_cf_create,
+        ("POST", "/admin/crm/custom-fields/:id/status"): crm_cf_status,
+        ("POST", "/admin/crm/custom-values"): crm_cf_setval,
+        ("POST", "/admin/crm/custom-values/get"): crm_cf_getval,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
 ROUTES.update(_admin_routes())
+ROUTES.update(_phase3_routes())
 
 
 def _match(method, path):

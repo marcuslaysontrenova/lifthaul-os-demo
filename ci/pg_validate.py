@@ -360,9 +360,13 @@ def main():
     exporter["perms"] = {"form.data.export", "form.data.view"}
     exp2 = forms.export_values(conn, exporter, "booking")
     check("client_contact_private" in exp2["excluded_sensitive"], "sensitive field excluded from export on PostgreSQL")
-    # value tenant isolation
+    # value tenant isolation — cross-tenant read of a real entity is a 404 no-leak
     other = {"id": uB, "role": "estimator", "perms": {"form.data.view"}, "tenant_id": tB}
-    check(forms.get_values(conn, other, "booking", bkA) == {}, "form-value tenant isolation on PostgreSQL")
+    try:
+        forms.get_values(conn, other, "booking", bkA)
+        check(False, "cross-tenant form-value read must be denied")
+    except core.NotFoundError:
+        check(True, "form-value tenant isolation (404 no-leak) on PostgreSQL")
     # historical version preservation: publish v2, old record keeps field_version 1
     # (use tenant-A synthetic entity ids so the tenant-ownership guard is satisfied)
     v1fv = forms.get_values(conn, fa, "booking", bkA)["service_type"]["field_version"]

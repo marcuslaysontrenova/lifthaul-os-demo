@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS quotations(
   approved_by INTEGER, approved_at TEXT,
   accepted_by TEXT, accepted_at TEXT, accepted_terms_version TEXT,
   superseded INTEGER DEFAULT 0,
+  tax_snapshot TEXT, dp_snapshot TEXT, approval_snapshot TEXT,
   created_by INTEGER, created_at TEXT,
   UNIQUE(no, version));
 
@@ -128,7 +129,7 @@ CREATE TABLE IF NOT EXISTS payment_requests(
   status TEXT NOT NULL DEFAULT 'REQUEST_CREATED',
   proof TEXT,
   amount_received REAL, txn_ref TEXT, fees REAL, net REAL,
-  verified_by INTEGER, verified_at TEXT, verify_notes TEXT,
+  verified_by INTEGER, verified_at TEXT, verify_notes TEXT, dp_snapshot TEXT,
   created_by INTEGER, created_at TEXT, updated_at TEXT);
 
 CREATE TABLE IF NOT EXISTS jobs(
@@ -453,9 +454,9 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     for l in lines:                                       # server-side line validation
         if l.get("rate", 0) < 0 or l.get("qty", 1) < 0 or l.get("days", 1) < 0:
             raise ValidationError("quotation line values must not be negative")
-    dp_pct = CONFIG["downpayment_default_pct"] if dp_pct is None else dp_pct
+    requested_dp = dp_pct                                 # explicit override or None (=policy default)
     prev = _latest_quote(conn, bid)
-    if prev:  # revision -> new version, supersede previous
+    if prev:  # revision -> new version, supersede previous (recalculated with CURRENT policy)
         conn.execute("UPDATE quotations SET superseded=1, status='superseded' WHERE id=?", (prev["id"],))
         no, ver = prev["no"], prev["version"] + 1
     else:
@@ -464,16 +465,22 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     subtotal = sum(l["rate"] * l.get("qty", 1) * l.get("days", 1) for l in lines)
     discount = round(subtotal * discount_pct / 100)
     taxable = subtotal - discount
-    tax = round(taxable * CONFIG["vat_pct"] / 100)
+    import policy
+    ctx = policy.policy_context(conn, actor, b)            # tenant/org context from the authenticated actor
+    tp = policy.evaluate_tax(conn, taxable, ctx)           # governed tax policy (default == 12%)
+    tax = tp["tax"]
     total = taxable + tax
-    dp_amount = round(total * dp_pct / 100)
+    dpe = policy.evaluate_downpayment(conn, total, ctx, requested_rate=requested_dp)  # default == 30%
+    dp_pct, dp_amount = dpe["rate"], dpe["amount"]
+    ape = policy.evaluate_approval(conn, total, discount_pct, ctx)                    # default threshold 500000
     margin_pct = round((total - est_cost) / total * 100, 1) if total and est_cost else None
     cur = conn.execute(
         "INSERT INTO quotations(no,version,booking_id,status,subtotal,discount_pct,discount,tax,"
-        "total,dp_pct,dp_amount,balance,est_cost,margin_pct,created_by,created_at)"
-        " VALUES(?,?,?,'draft',?,?,?,?,?,?,?,?,?,?,?,?)",
+        "total,dp_pct,dp_amount,balance,est_cost,margin_pct,tax_snapshot,dp_snapshot,approval_snapshot,"
+        "created_by,created_at) VALUES(?,?,?,'draft',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (no, ver, bid, subtotal, discount_pct, discount, tax, total, dp_pct, dp_amount,
-         total - dp_amount, est_cost, margin_pct, actor["id"], now()))
+         total - dp_amount, est_cost, margin_pct, json.dumps(tp["snapshot"]),
+         json.dumps(dpe["snapshot"]), json.dumps(ape["snapshot"]), actor["id"], now()))
     qid = cur.lastrowid
     import tenant; tenant.stamp(conn, actor, "quotations", qid)   # inherit tenant from context
     for l in lines:
@@ -503,8 +510,14 @@ def _needs_approval(conn, q):
     cust = conn.execute(
         "SELECT c.credit_status FROM customers c JOIN bookings b ON b.customer_id=c.id WHERE b.id=?",
         (q["booking_id"],)).fetchone()
-    hold = cust and cust["credit_status"] == "On hold"
-    return q["total"] >= CONFIG["approval_amount_threshold"] or q["discount_pct"] > CONFIG["approval_discount_pct"] or hold
+    hold = bool(cust and cust["credit_status"] == "On hold")
+    # use the quotation version's PERSISTED approval snapshot (historical reproducibility);
+    # a credit hold always forces approval regardless of the amount policy
+    snap = q["approval_snapshot"] if "approval_snapshot" in q.keys() else None
+    if snap:
+        return bool(json.loads(snap).get("required")) or hold
+    import policy
+    return policy.evaluate_approval(conn, q["total"], q["discount_pct"] or 0, {})["required"] or hold
 
 
 def submit_quotation(conn, actor, qid):
@@ -586,10 +599,12 @@ def create_payment_request(conn, actor, bid, provider: PaymentProvider = None):
         raise ConflictError("payment request already exists for this booking")
     n = conn.execute("SELECT COUNT(*) c FROM payment_requests").fetchone()["c"]
     no = f"PR-{5001 + n}"
+    # derive strictly from the ACCEPTED quotation's stored values + snapshot (never current config)
+    q_dp_snap = q["dp_snapshot"] if "dp_snapshot" in q.keys() else None
     cur = conn.execute(
         "INSERT INTO payment_requests(no,booking_id,quotation_id,currency,amount_due,dp_pct,"
-        "status,created_by,created_at) VALUES(?,?,?,?,?,?, 'REQUEST_CREATED',?,?)",
-        (no, bid, q["id"], "PHP", q["dp_amount"], q["dp_pct"], actor["id"], now()))
+        "dp_snapshot,status,created_by,created_at) VALUES(?,?,?,?,?,?,?, 'REQUEST_CREATED',?,?)",
+        (no, bid, q["id"], "PHP", q["dp_amount"], q["dp_pct"], q_dp_snap, actor["id"], now()))
     prid = cur.lastrowid
     import tenant; tenant.stamp(conn, actor, "payment_requests", prid)
     _set_stage(conn, actor, b, "AWAITING_DOWNPAYMENT", "payment request created")

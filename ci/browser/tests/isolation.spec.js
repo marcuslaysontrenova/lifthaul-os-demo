@@ -43,6 +43,11 @@ test('administration viewers respond through the browser network stack (PostgreS
   const di = await request.get(API + '/admin/governance/data-integrity', { headers: H });
   const dij = (await di.json()).data;
   expect(dij.summary.not_run, 'no integrity check NOT_RUN').toBe(0);
+  // Phase 2: config definitions + policy simulation through the browser
+  const defs = await request.get(API + '/admin/config/definitions', { headers: H });
+  expect((await defs.json()).data.definitions.length, 'config definitions present').toBeGreaterThan(7);
+  const sim = await request.post(API + '/admin/config/simulate', { headers: H, data: { policy: 'tax', taxable: 600000 } });
+  expect((await sim.json()).data.tax, 'tax policy simulate == 72000').toBe(72000);
 });
 
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {

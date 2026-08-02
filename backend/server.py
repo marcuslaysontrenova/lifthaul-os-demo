@@ -384,6 +384,15 @@ def _admin_routes():
         return org.resolve_org_config(_conn, b["key"], tenant=b.get("tenant"), business_unit=b.get("business_unit"),
                                       branch=b.get("branch"), department=b.get("department"), team=b.get("team"), user=b.get("user"))
     def cfg_list(a, b, p):       R(a, "system_config.view");   return {"config": _rows(_conn.execute("SELECT scope,scope_ref,key,value,effective_to,updated_at FROM platform_config ORDER BY scope,key").fetchall())}
+    def cfg_definitions(a, b, p): R(a, "system_config.view"); import config_registry; return {"definitions": _rows(config_registry.list_definitions(_conn))}
+    def policy_simulate(a, b, p):
+        R(a, "system_config.view"); import policy       # non-mutating policy decision preview
+        ctx = {"tenant": b.get("tenant"), "business_unit": b.get("business_unit"), "branch": b.get("branch")}
+        kind = b.get("policy")
+        if kind == "tax":         return policy.evaluate_tax(_conn, float(b.get("taxable", 0)), ctx)
+        if kind == "downpayment": return policy.evaluate_downpayment(_conn, float(b.get("total", 0)), ctx, requested_rate=b.get("rate"))
+        if kind == "approval":    return policy.evaluate_approval(_conn, float(b.get("total", 0)), float(b.get("discount_pct", 0)), ctx)
+        raise core.ValidationError("policy must be tax | downpayment | approval")
     def cfg_set(a, b, p):        R(a, "system_config.manage"); admin_platform.set_config(_conn, b["scope"], b.get("scope_ref", ""), b["key"], b["value"], actor=a, effective_to=b.get("effective_to")); return {"ok": True}
 
     # ---- Governance -------------------------------------------------------
@@ -548,6 +557,8 @@ def _admin_routes():
         ("GET", "/admin/security/events"): sec_events,
         ("POST", "/admin/config/effective"): cfg_effective,
         ("GET", "/admin/config"): cfg_list,
+        ("GET", "/admin/config/definitions"): cfg_definitions,
+        ("POST", "/admin/config/simulate"): policy_simulate,
         ("POST", "/admin/config"): cfg_set,
         ("GET", "/admin/audit"): audit_trail,
         ("GET", "/admin/governance/backfill-status"): backfill_status,

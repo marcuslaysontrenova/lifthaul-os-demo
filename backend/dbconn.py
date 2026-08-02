@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 
 # Tables WITHOUT an integer `id` primary key (so we must NOT append RETURNING id).
-NO_ID_TABLES = {"sessions", "system_config", "schema_version"}
+NO_ID_TABLES = {"sessions", "system_config", "schema_version", "config_definitions"}
 
 _SQLITE_MASTER = re.compile(
     r"SELECT\s+name\s+FROM\s+sqlite_master\s+WHERE\s+type='table'\s+AND\s+name='(\w+)'",

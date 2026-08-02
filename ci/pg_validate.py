@@ -125,6 +125,29 @@ def main():
     after = conn.execute("SELECT value FROM platform_config WHERE key='approval.quotation_threshold' AND scope='platform'").fetchone()["value"]
     check(before == after, "config preview is non-mutating on PostgreSQL")
 
+    # Phase 2 — governed policies + historical reproducibility on PostgreSQL
+    import policy, config_registry
+    check(config_registry.get_definition(conn, "tax.default.rate") is not None, "config definitions seeded on PostgreSQL")
+    check(policy.evaluate_tax(conn, 600000, {})["tax"] == 72000, "tax policy default == 12% on PostgreSQL (financials unchanged)")
+    check(policy.evaluate_downpayment(conn, 672000, {})["amount"] == 201600, "downpayment default == 30% on PostgreSQL")
+    # historical reproducibility: build a quotation, change tax config, verify it is unchanged
+    pa = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    pcid = core.create_customer(conn, pa, "Policy Co")
+    pbid = core.create_booking(conn, pa, pcid, "Crane", "x", 1)
+    core.review_booking(conn, pa, pbid); core.ready_for_quotation(conn, pa, pbid)
+    pqid = core.create_quotation(conn, pa, pbid, [{"kind": "crane", "description": "x", "qty": 2, "days": 1, "rate": 300000}])
+    tot_before = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (pqid,)).fetchone()
+    ap.set_config(conn, "platform", "", "tax.default.rate", "20", actor=pa)
+    tot_after = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (pqid,)).fetchone()
+    check(tot_before["tax"] == tot_after["tax"] == 72000 and tot_before["total"] == tot_after["total"] == 672000,
+          "config change does NOT alter existing quotation on PostgreSQL (historical reproducibility)")
+    ap.set_config(conn, "platform", "", "tax.default.rate", "12", actor=pa)   # restore default
+    try:
+        ap.set_config(conn, "platform", "", "tax.default.rate", "150")
+        check(False, "out-of-range config must be rejected")
+    except core.ValidationError:
+        check(True, "typed config validation rejects out-of-range on PostgreSQL")
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

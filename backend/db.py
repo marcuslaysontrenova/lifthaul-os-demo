@@ -72,7 +72,9 @@ def _seed_platform(conn):
     import admin_platform
     import org
     import backfill
+    import config_registry
     admin_platform.init(conn)
+    config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
     admin_platform.seed(conn)
     org.init(conn)
     backfill.init(conn)

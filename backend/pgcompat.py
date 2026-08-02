@@ -34,9 +34,9 @@ def to_postgres_ddl(schema: str) -> str:
 
 
 def full_postgres_ddl() -> str:
-    import core, ops, admin, catalog, admin_platform, org, backfill
+    import core, ops, admin, catalog, admin_platform, org, backfill, config_registry
     parts = [core.SCHEMA, ops.OPS_SCHEMA, admin.ADMIN_SCHEMA, catalog.CATALOG_SCHEMA,
-             admin_platform.SCHEMA, org.SCHEMA, backfill.SCHEMA]
+             admin_platform.SCHEMA, org.SCHEMA, backfill.SCHEMA, config_registry.SCHEMA]
     return "\n".join(to_postgres_ddl(p) for p in parts)
 
 

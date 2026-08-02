@@ -91,11 +91,14 @@ PLATFORM_TENANT = 0
 
 def init(conn):
     conn.executescript(SCHEMA)
+    import config_registry; config_registry.init(conn)   # definitions table exists before any set_config
     _ensure_columns(conn, "users", {"status": "TEXT NOT NULL DEFAULT 'ACTIVE'",
                                     "last_login_at": "TEXT", "tenant_id": "INTEGER"})
     _ensure_columns(conn, "sessions", {"ip": "TEXT", "last_seen": "TEXT"})
     _ensure_columns(conn, "platform_config", {"effective_to": "TEXT"})
     _ensure_columns(conn, "audit_logs", {"correlation_id": "TEXT"})
+    _ensure_columns(conn, "quotations", {"tax_snapshot": "TEXT", "dp_snapshot": "TEXT", "approval_snapshot": "TEXT"})
+    _ensure_columns(conn, "payment_requests", {"dp_snapshot": "TEXT"})
     conn.commit()
 
 
@@ -216,6 +219,15 @@ DEFAULT_CONFIG = {
     "auth.lockout_threshold": "5",              # consecutive failures before lock (0 = off)
     "auth.lockout_window_min": "15",            # minutes the failure window spans
     "auth.mfa_policy": "optional",              # off | optional | required
+    # Phase 2 governed business policies — defaults EQUAL the pre-Phase-2 constants
+    "quotation.approval.threshold_amount": "500000",
+    "quotation.approval.discount_threshold_pct": "10",
+    "tax.default.rate": "12",
+    "tax.default.code": "VAT",
+    "tax.rounding_mode": "round",
+    "payment.downpayment.default_rate": "30",
+    "payment.downpayment.minimum_rate": "0",
+    "payment.downpayment.required": "true",
 }
 
 
@@ -555,6 +567,8 @@ _CONFIG_SCOPES = ("platform", "tenant", "business_unit", "branch", "department",
 def set_config(conn, scope, scope_ref, key, value, actor=None, effective_to=None):
     if scope not in _CONFIG_SCOPES:
         raise core.ConflictError(f"invalid config scope '{scope}'")
+    import config_registry
+    config_registry.validate(conn, key, value, scope)     # typed/range/scope validation (Phase 2)
     conn.execute("INSERT INTO platform_config(scope,scope_ref,key,value,effective_to,updated_by,updated_at)"
                  " VALUES(?,?,?,?,?,?,?)"
                  " ON CONFLICT(scope,scope_ref,key) DO UPDATE SET value=excluded.value,"

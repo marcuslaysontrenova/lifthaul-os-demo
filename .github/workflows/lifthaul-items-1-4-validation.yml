@@ -21,7 +21,7 @@ jobs:
           python -m unittest test_core test_ops test_admin test_server test_security \
             test_catalog test_phase2 test_deploy test_seed test_pgadapter \
             test_pg_portability test_admin_platform test_org test_backfill \
-            test_admin_api test_tenant_isolation test_pathA test_http_e2e
+            test_admin_api test_tenant_isolation test_pathA test_phase2_config test_http_e2e
 
   postgres-validation:
     name: PostgreSQL runtime + backup/restore

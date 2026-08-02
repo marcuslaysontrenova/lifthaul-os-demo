@@ -99,6 +99,26 @@ class TestAdminApi(unittest.TestCase):
         self.assertIn("open_remediation", st)
         self.assertIsInstance(call("GET", "/admin/governance/backfill-remediation", {}, self.admin)["remediation"], list)
 
+    def test_effective_access_from_authz_service(self):
+        # create a user, grant a DB role, and read effective access
+        uid = ap.create_user(server._conn, self.admin, "eff@r", "Demo1234Xy", "estimator")
+        r = ap.role_by_code(server._conn, "RGO", "approver")
+        ap.assign_role(server._conn, uid, r["id"])
+        ea = call("GET", f"/admin/users/{uid}/effective-access", {}, self.admin)
+        self.assertIn("quotation.approve", ea["effective_permissions"])
+        self.assertTrue(any(g["source_role"] == "approver" for g in ea["grants"]))
+
+    def test_remediation_resolve_and_cross_access(self):
+        call("POST", "/admin/governance/backfill-execute", {}, self.admin)
+        rem = call("GET", "/admin/governance/backfill-remediation", {}, self.admin)["remediation"]
+        if rem:
+            call("POST", f"/admin/governance/backfill-remediation/{rem[0]['id']}/resolve", {}, self.admin)
+        # cross-access requires target + reason; admin ('*') is permitted
+        res = call("POST", "/admin/security/cross-access", {"target_tenant": "RGO", "reason": "audit"}, self.admin)
+        self.assertTrue(res["granted"])
+        with self.assertRaises(core.ValidationError):
+            call("POST", "/admin/security/cross-access", {"target_tenant": "RGO"}, self.admin)  # no reason
+
     # ---- Authorization gating ---------------------------------------------
     def test_non_admin_is_forbidden(self):
         est = self._actor("estapi@r")

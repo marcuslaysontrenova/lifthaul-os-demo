@@ -154,9 +154,11 @@ const MENU = [
     {id:'roles', label:'Roles'},
     {id:'permissions', label:'Permissions'},
     {id:'assignments', label:'Organization Assignments'},
+    {id:'effective_access', label:'Effective Access'},
     {id:'sessions', label:'Sessions'},
     {id:'login_history', label:'Login History'},
     {id:'mfa', label:'MFA Status'},
+    {id:'sod', label:'Separation of Duties'},
   ]},
   {sect:'Calendars', items:[
     {id:'holiday_cal', label:'Holiday Calendars'},
@@ -178,7 +180,9 @@ const MENU = [
   ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
-    {id:'backfill', label:'Backfill Status'},
+    {id:'correlation_search', label:'Correlation Search'},
+    {id:'backfill_runs', label:'Backfill Runs'},
+    {id:'ambiguous', label:'Ambiguous Records'},
     {id:'integrity', label:'Data Integrity'},
   ]},
 ];
@@ -282,10 +286,26 @@ const SCREENS = {
   cfg_org: (it,c)=>cfgList(it,c,['business_unit','branch','department','team']),
   cfg_effective: async (it,c)=>{ c.innerHTML=header(it,'Resolve a configuration key down the org cascade.')+
       `<div class="bar"><input id="ck" placeholder="key e.g. approval.quotation_threshold" style="max-width:340px"><input id="cb" placeholder="branch id (optional)" style="max-width:160px"><button class="btn sm" onclick="doResolve()">Resolve</button></div><div id="cres"></div>`; },
+  // Effective access (from the real authorization service)
+  effective_access: async (it,c)=>{ const d=await api('GET','/admin/users');
+    c.innerHTML=header(it,'Pick a user to see their effective permissions, resolved by the authorization service.')+
+      table(['Email','Role','Effective access'], d.users, r=>[r.email,r.role,`<a style="color:var(--accent);cursor:pointer" onclick="showEffective(${r.id},'${r.email}')">inspect</a>`]); },
   // Governance
+  correlation_search: async (it,c)=>{ c.innerHTML=header(it,'Trace every governed write in one request by correlation ID.')+
+      `<div class="bar"><input id="cor" placeholder="correlation id (or blank for latest)" style="max-width:320px"><button class="btn sm" onclick="doCorr()">Search</button></div><div id="corres"></div>`;
+    doCorr(); },
+  backfill_runs: async (it,c)=>{ const s=await api('GET','/admin/governance/backfill-status');
+    c.innerHTML=header(it,'Tenant/organization backfill of operational records.',
+      `<button class="btn sm ghost" onclick="doBackfill('backfill-analyze','GET')">Analyze</button> <button class="btn sm ghost" onclick="doBackfill('backfill-dry-run','POST')">Dry run</button> <button class="btn sm" onclick="doBackfill('backfill-execute','POST')">Execute</button>`)+
+      `<div class="kv"><div class="k">Tenant enforced</div><div>${s.tenant_enforced?'<span style="color:var(--ok)">yes</span>':'<span style="color:var(--danger)">no</span>'}</div><div class="k">Phase</div><div>${s.phase||'-'}</div></div>`+
+      `<h3 style="margin:16px 0 8px;font-size:14px">Per-table</h3>`+table(['Table','Total','Unassigned tenant'], s.tables, r=>[r.table,r.total,r.unassigned_tenant])+`<div id="bfres"></div>`; },
+  ambiguous: async (it,c)=>{ const d=await api('GET','/admin/governance/backfill-remediation');
+    c.innerHTML=header(it,'Organization ownership that could not be inferred — resolve, never auto-assign.')+
+      table(['Table','Scope','Rows','Status','Action'], d.remediation, r=>[r.table_name,r.scope_kind,r.affected_rows,pill(r.status==='OPEN'?'INACTIVE':'ACTIVE'),
+        r.status==='OPEN'?`<a style="color:var(--accent);cursor:pointer" onclick="resolveRem(${r.id})">resolve</a>`:'—']); },
   audit: async (it,c)=>{ const d=await api('GET','/admin/audit');
     c.innerHTML=header(it,'Append-only trail of administrative actions.')+
-      table(['Time','Actor','Action','Entity','Id'], d.audit, r=>[r.ts,r.actor,r.action,r.entity,r.entity_id]); },
+      table(['Time','Actor','Action','Entity','Id','Correlation'], d.audit, r=>[r.ts,r.actor,r.action,r.entity,r.entity_id,cell(r.correlation_id)]); },
   backfill: async (it,c)=>{ const d=await api('GET','/admin/governance/backfill-status');
     c.innerHTML=header(it,'Tenant/organization backfill of operational records.')+
       `<div class="kv"><div class="k">Status</div><div><b>${d.status}</b></div><div class="k">Plan</div><div>${d.plan}</div><div class="k">Note</div><div>${d.note}</div></div>`; },
@@ -313,6 +333,17 @@ async function doResolve(){ const key=document.getElementById('ck').value.trim()
   }catch(e){ document.getElementById('cres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
 async function showAssign(uid,email){ const d=await api('GET','/admin/users/'+uid+'/assignments');
   openDlg('view','Organization assignments','User: '+email, table(['Kind','Scope id','Type','Status'], d.assignments, r=>[r.scope_kind,r.scope_id,r.assignment_type,pill(r.status)]), null); }
+async function showEffective(uid,email){ const d=await api('GET','/admin/users/'+uid+'/effective-access');
+  const body = `<p style="color:var(--muted);font-size:12px;margin-bottom:8px">Roles: ${d.roles.map(r=>r.code).join(', ')||'none'}</p>`+
+    table(['Permission','Source role','Type'], d.grants, r=>[r.permission,r.source_role,r.source]);
+  openDlg('view','Effective access','User: '+email+' — resolved by the authorization service', body, null); }
+async function doCorr(){ const cid=(document.getElementById('cor')||{}).value; const d=await api('GET','/admin/audit');
+  const rows=d.audit.filter(r=>!cid||r.correlation_id===cid);
+  const el=document.getElementById('corres'); if(el) el.innerHTML=table(['Time','Actor','Action','Entity','Id','Correlation'], rows, r=>[r.ts,r.actor,r.action,r.entity,r.entity_id,cell(r.correlation_id)]); }
+async function doBackfill(op,method){ try{ const r=await api(method,'/admin/governance/'+op); const el=document.getElementById('bfres');
+    if(el) el.innerHTML=`<div class="note" style="margin-top:12px"><b>${op}</b>: ${JSON.stringify(r).slice(0,400)}</div>`; if(op==='backfill-execute') render(CURRENT);
+  }catch(e){ alert(e.message); } }
+async function resolveRem(id){ if(!confirm('Mark this remediation resolved?')) return; try{ await api('POST','/admin/governance/backfill-remediation/'+id+'/resolve'); render(CURRENT); }catch(e){ alert(e.message); } }
 
 // ------------------------------------------------------------------ Dialog Standard
 const MODE={view:'View',edit:'Edit',approval:'Approval Required',finance:'Finance Action',dispatch:'Dispatch Action'};

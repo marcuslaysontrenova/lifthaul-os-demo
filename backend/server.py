@@ -290,6 +290,18 @@ def _admin_routes():
     def session_revoke(a, b, p): R(a, "security.manage");   admin_platform.revoke_session(_conn, b["token"], actor=a); return {"ok": True}
     def login_history(a, b, p):  R(a, "security.view");     return {"history": _rows(admin_platform.list_login_history(_conn, limit=b.get("limit", 100)))}
     def mfa_status(a, b, p):     R(a, "user_admin.view");   return {"enrolled": admin_platform.mfa_enrolled(_conn, int(p["id"]))}
+    def effective_access(a, b, p):
+        R(a, "user_admin.view")
+        uid = int(p["id"])
+        roles = _rows(admin_platform.user_roles(_conn, uid))
+        grants = []
+        for r in roles:
+            role = admin_platform.role_by_code(_conn, "RGO", r["code"])
+            if role:
+                for g in sorted(admin_platform.effective_role_grants(_conn, role["id"])):
+                    grants.append({"permission": g, "source_role": r["code"], "source": "wildcard" if g.endswith("*") else "explicit"})
+        return {"user_id": uid, "roles": roles, "grants": grants,
+                "effective_permissions": sorted(admin_platform.effective_permissions(_conn, uid))}
 
     # ---- Calendars --------------------------------------------------------
     def hol_cals(a, b, p):       R(a, "org.view");   return {"calendars": _rows(_conn.execute("SELECT * FROM holiday_calendars WHERE tenant_id=?", (_tid(),)).fetchall())}
@@ -350,6 +362,22 @@ def _admin_routes():
         R(a, "audit.view"); import backfill
         return {"remediation": _rows(_conn.execute(
             "SELECT * FROM org_backfill_remediation ORDER BY status, table_name").fetchall())}
+
+    def remediation_resolve(a, b, p):
+        R(a, "tenant.manage"); import backfill
+        backfill.resolve_remediation(_conn, a, int(p["id"])); return {"ok": True}
+
+    def cross_access(a, b, p):
+        # Governed platform cross-tenant access (Item 2.3): explicit permission + target +
+        # mandatory reason + high-severity audit with the request correlation id.
+        R(a, tenant.CROSS_ACCESS_PERMISSION)
+        if not b.get("target_tenant") or not b.get("reason"):
+            raise core.ValidationError("target_tenant and reason are required")
+        core.audit(_conn, a, "PLATFORM_CROSS_ACCESS", "tenants", 0,
+                   new={"target_tenant": b["target_tenant"], "reason": b["reason"], "severity": "HIGH"})
+        _conn.commit()
+        return {"granted": True, "target_tenant": b["target_tenant"],
+                "correlation_id": core.correlation_id(), "note": "short-lived, audited (HIGH severity)"}
     def data_integrity(a, b, p):
         R(a, "audit.view")
         orphan_assign = _conn.execute(
@@ -384,6 +412,9 @@ def _admin_routes():
         ("POST", "/admin/sessions/revoke"): session_revoke,
         ("GET", "/admin/login-history"): login_history,
         ("GET", "/admin/users/:id/mfa"): mfa_status,
+        ("GET", "/admin/users/:id/effective-access"): effective_access,
+        ("POST", "/admin/governance/backfill-remediation/:id/resolve"): remediation_resolve,
+        ("POST", "/admin/security/cross-access"): cross_access,
         ("GET", "/admin/holiday-calendars"): hol_cals,
         ("POST", "/admin/holiday-calendars"): hol_cal_create,
         ("GET", "/admin/holiday-calendars/:id/holidays"): hol_days,

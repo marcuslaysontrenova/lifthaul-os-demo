@@ -88,6 +88,7 @@ def generate_quotation_pdf(conn, actor, quotation_id, store: DocumentStore,
     q = conn.execute("SELECT * FROM quotations WHERE id=?", (quotation_id,)).fetchone()
     if not q:
         raise NotFoundError("quotation not found")
+    import tenant; tenant.guard(actor, q)                 # no cross-tenant PDF gen/download (404 no-leak)
     b = conn.execute("SELECT * FROM bookings WHERE id=?", (q["booking_id"],)).fetchone()
     cust = conn.execute("SELECT * FROM customers WHERE id=?", (b["customer_id"],)).fetchone()
     lines = conn.execute("SELECT * FROM quotation_lines WHERE quotation_id=? ORDER BY id", (quotation_id,)).fetchall()
@@ -129,6 +130,7 @@ def get_quotation_pdf(conn, actor, quotation_id, store: DocumentStore):
     q = conn.execute("SELECT * FROM quotations WHERE id=?", (quotation_id,)).fetchone()
     if not q:
         raise NotFoundError("quotation not found")
+    import tenant; tenant.guard(actor, q)                 # no cross-tenant PDF gen/download (404 no-leak)
     b = conn.execute("SELECT customer_id FROM bookings WHERE id=?", (q["booking_id"],)).fetchone()
     if actor["role"] == "customer":
         require(actor, "self.quotation.read")

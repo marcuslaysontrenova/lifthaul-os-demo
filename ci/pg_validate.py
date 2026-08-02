@@ -77,6 +77,23 @@ def main():
     except core.NotFoundError:
         check(True, "tenant isolation holds after reconnect")
 
+    # Item 5 — expiring platform cross-access on PostgreSQL
+    plat = actor_role(conn, tA, "admin", "plat@ci")
+    plat["perms"] = {"*"}
+    g = tenant.activate_cross_access(conn, plat, "HAULB", "CI audit", ttl=60)
+    check(tenant.active_cross_grant(conn, plat["id"]) is not None, "cross-access grant active on PostgreSQL")
+    conn.execute("UPDATE cross_access_grants SET expires_at='2000-01-01T00:00:00+00:00' WHERE id=?", (g["grant_id"],))
+    conn.commit()
+    check(tenant.active_cross_grant(conn, plat["id"]) is None, "cross-access denied after expiry on PostgreSQL")
+
+    # Item 6 — admin guardrail: self-elevation blocked on PostgreSQL
+    weak = {"id": plat["id"], "role": "x", "perms": {"customer.view"}}
+    appr = ap.role_by_code(conn, "RGO", "approver")
+    try:
+        ap.assign_role(conn, uB, appr["id"], actor=weak); check(False, "self-elevation must be blocked")
+    except core.ForbiddenError:
+        check(True, "self-elevation blocked on PostgreSQL")
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

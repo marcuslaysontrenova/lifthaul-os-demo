@@ -175,9 +175,10 @@ def inv_create(conn, actor, sku, name, uom="pc", reorder_point=0, warehouse=None
 def inv_move(conn, actor, item_id, kind, qty, ref=None):
     """kind: IN | OUT | ADJUST. OUT may not drive stock negative."""
     require(actor, "inventory.move")
-    it = conn.execute("SELECT qty FROM inventory_items WHERE id=?", (item_id,)).fetchone()
+    it = conn.execute("SELECT * FROM inventory_items WHERE id=?", (item_id,)).fetchone()
     if not it:
         raise NotFoundError("inventory item not found")
+    import tenant; tenant.guard(actor, it)                # no cross-tenant inventory movement
     delta = qty if kind in ("IN", "ADJUST") else -abs(qty)
     if kind == "OUT" and it["qty"] - abs(qty) < 0:
         raise ValidationError("CONTROL: insufficient stock — cannot go negative")
@@ -293,9 +294,12 @@ def safety_record(conn, actor, job_id, result, kind="toolbox", notes=None):
     require(actor, "safety.create")
     if result not in ("PASS", "FAIL"):
         raise ValidationError("result must be PASS or FAIL")
+    import tenant, ops
+    tenant.guard(actor, ops._job(conn, job_id))           # parent job must be in the actor's tenant
     cur = conn.execute("INSERT INTO safety_records(job_id,kind,result,notes,officer,ts) VALUES(?,?,?,?,?,?)",
                        (job_id, kind, result, notes, actor["id"], now()))
     conn.commit()
+    tenant.stamp(conn, actor, "safety_records", cur.lastrowid)
     audit(conn, actor, "safety.record", "safety_record", cur.lastrowid, new={"job": job_id, "result": result})
     conn.commit()
     return cur.lastrowid

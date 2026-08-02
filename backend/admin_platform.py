@@ -78,6 +78,11 @@ CREATE TABLE IF NOT EXISTS login_history(
 CREATE TABLE IF NOT EXISTS mfa_enrollments(
   id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, secret TEXT NOT NULL,
   confirmed INTEGER NOT NULL DEFAULT 0, enrolled_at TEXT, UNIQUE(user_id));
+
+CREATE TABLE IF NOT EXISTS cross_access_grants(
+  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, source_tenant INTEGER, target_tenant TEXT,
+  reason TEXT, correlation_id TEXT, activated_at TEXT, expires_at TEXT, terminated_at TEXT,
+  status TEXT NOT NULL DEFAULT 'ACTIVE');
 """
 
 # tenant_id 0 is reserved to mean "platform-global" (system role templates, platform config).
@@ -340,7 +345,44 @@ def role_by_code(conn, tenant_code, code):
                         (code, tid, PLATFORM_TENANT)).fetchone()
 
 
+def _covers(actor_perms, grant):
+    if "*" in actor_perms or grant in actor_perms:
+        return True
+    return any(p.endswith(".*") and grant.startswith(p[:-1]) for p in actor_perms)
+
+
+def _guard_role_assignment(conn, actor, role_id):
+    """Admin guardrails (Item 6): a non-platform admin may not assign platform-layer roles,
+    nor grant any permission beyond their own authority (self-elevation prevention)."""
+    perms = actor.get("perms") or core.PERMISSIONS.get(actor.get("role"), set())
+    if "*" in perms:
+        return
+    role = conn.execute("SELECT * FROM admin_roles WHERE id=?", (role_id,)).fetchone()
+    if not role:
+        raise core.ConflictError("unknown role")
+    if role["layer"] == 1:
+        raise core.ForbiddenError("only a platform administrator may assign platform-layer roles")
+    for g in effective_role_grants(conn, role_id):
+        if not _covers(perms, g):
+            raise core.ForbiddenError(f"cannot grant '{g}' beyond your own authority (self-elevation blocked)")
+
+
+def _is_super_admin(conn, user_id):
+    return bool(conn.execute(
+        "SELECT 1 FROM admin_user_roles ur JOIN admin_roles r ON r.id=ur.role_id"
+        " WHERE ur.user_id=? AND r.code='super_platform_admin'", (user_id,)).fetchone())
+
+
+def _other_active_super_admin(conn, user_id):
+    return bool(conn.execute(
+        "SELECT 1 FROM admin_user_roles ur JOIN admin_roles r ON r.id=ur.role_id"
+        " JOIN users u ON u.id=ur.user_id WHERE r.code='super_platform_admin'"
+        " AND u.status='ACTIVE' AND u.id<>?", (user_id,)).fetchone())
+
+
 def assign_role(conn, user_id, role_id, actor=None):
+    if actor is not None:
+        _guard_role_assignment(conn, actor, role_id)
     conn.execute("INSERT INTO admin_user_roles(user_id,role_id) VALUES(?,?)"
                  " ON CONFLICT(user_id,role_id) DO NOTHING", (user_id, role_id))
     if actor:
@@ -495,6 +537,8 @@ def set_status(conn, actor, user_id, status):
     old = conn.execute("SELECT status FROM users WHERE id=?", (user_id,)).fetchone()
     if not old:
         raise core.ConflictError("unknown user")
+    if status != "ACTIVE" and _is_super_admin(conn, user_id) and not _other_active_super_admin(conn, user_id):
+        raise core.ForbiddenError("cannot deactivate the last active Super Platform Administrator")
     conn.execute("UPDATE users SET status=? WHERE id=?", (status, user_id))
     if status != "ACTIVE":
         revoke_sessions(conn, user_id)                     # kill live sessions immediately

@@ -25,6 +25,8 @@ def call(method, path, body=None, actor=None):
 class TestAdminApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        import db
+        server._conn = db.connect(":memory:")     # own connection, import-order independent
         c = server._conn
         for e, r in [("adminapi@r", "admin"), ("estapi@r", "estimator")]:
             try:

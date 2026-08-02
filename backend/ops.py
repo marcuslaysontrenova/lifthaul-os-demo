@@ -476,6 +476,10 @@ def calendar(conn, actor, start=None, end=None):
     q = "SELECT j.*, b.ref booking_ref, c.name customer FROM jobs j" \
         " JOIN bookings b ON b.id=j.booking_id JOIN customers c ON c.id=j.customer_id WHERE 1=1"
     args = []
+    import tenant                                          # scope the dispatch calendar to the actor's tenant
+    frag, params = tenant.predicate(actor)
+    if frag:
+        q += frag.replace("tenant_id", "j.tenant_id"); args += list(params)
     if start:
         q += " AND (j.scheduled_at IS NULL OR j.scheduled_at >= ?)"; args.append(start)
     if end:

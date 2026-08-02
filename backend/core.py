@@ -217,9 +217,11 @@ def actor_for(conn, token) -> dict:
         raise AuthError("invalid or expired session")
     if _user_status(row) != "ACTIVE":                       # C-006: enforce mid-session deactivation
         raise AuthError("account is not active")
-    return {"id": row["id"], "role": row["role"], "email": row["email"],
-            "customer_id": row["customer_id"],
-            "tenant_id": row["tenant_id"] if "tenant_id" in row.keys() else None}
+    actor = {"id": row["id"], "role": row["role"], "email": row["email"],
+             "customer_id": row["customer_id"],
+             "tenant_id": row["tenant_id"] if "tenant_id" in row.keys() else None}
+    import tenant; tenant.enrich_cross_access(conn, actor)   # active, unexpired grant only
+    return actor
 
 
 # --------------------------------------------------------------------------- #

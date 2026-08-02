@@ -97,6 +97,8 @@ class TestTwoTenantIsolation(unittest.TestCase):
                  {"lines": [{"kind": "crane", "description": "350t", "qty": 1, "days": 2, "rate": 300000}], "est_cost": 200000}, eA)["id"]
         with self.assertRaises(core.NotFoundError):                 # B estimator has quotation.submit
             call("POST", f"/quotations/{q}/submit", {}, eB)         # but the quote is A's -> 404
+        with self.assertRaises(core.NotFoundError):                 # cross-tenant PDF blocked (no leak)
+            call("POST", f"/quotations/{q}/pdf", {}, eB)
         call("POST", f"/quotations/{q}/submit", {}, eA)
         call("POST", f"/quotations/{q}/approve", {}, apA)
         call("POST", f"/quotations/{q}/send", {}, eA)

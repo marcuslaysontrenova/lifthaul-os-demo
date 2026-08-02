@@ -283,6 +283,12 @@ def _admin_routes():
     def user_reset(a, b, p):     R(a, "user_admin.manage"); admin_platform.reset_password(_conn, a, int(p["id"]), b["password"]); return {"ok": True}
     def roles(a, b, p):          R(a, "role_admin.view");   return {"roles": _rows(admin_platform.list_roles(_conn, "RGO"))}
     def role_create(a, b, p):    R(a, "role_admin.manage"); return {"id": admin_platform.create_role(_conn, "RGO", b["code"], b["name"], layer=b.get("layer", 4), grants=set(b.get("grants", [])), actor=a)}
+    def user_assign_role(a, b, p):  # guardrails: self-elevation / platform-role restriction
+        R(a, "role_admin.manage")
+        role = admin_platform.role_by_code(_conn, "RGO", b["role"])
+        if not role:
+            raise core.ConflictError("unknown role")
+        admin_platform.assign_role(_conn, int(p["id"]), role["id"], actor=a); return {"ok": True}
     def permissions(a, b, p):    R(a, "role_admin.view");   return {"permissions": _rows(_conn.execute("SELECT code,module,action,description FROM admin_permissions ORDER BY module,action").fetchall())}
     def assignments(a, b, p):    R(a, "user_admin.view");   return {"assignments": _rows(org.user_assignments(_conn, int(p["id"])))}
     def assign(a, b, p):         R(a, "user_admin.manage"); return {"id": org.assign_user(_conn, a, _tid(), int(p["id"]), b["scope_kind"], b["scope_id"], b.get("assignment_type", "PRIMARY"), reason=b.get("reason"))}
@@ -338,10 +344,23 @@ def _admin_routes():
 
     # ---- Governance -------------------------------------------------------
     def audit_trail(a, b, p):
-        R(a, "audit.view")
+        R(a, "audit.view")                                # server-side filters (Item 7)
+        where, args = ["1=1"], []
+        for col in ("correlation_id", "action", "entity", "role"):
+            if b.get(col):
+                where.append(col + "=?"); args.append(b[col])
+        if b.get("actor") is not None:
+            where.append("actor=?"); args.append(b["actor"])
+        if b.get("entity_id") is not None:
+            where.append("entity_id=?"); args.append(b["entity_id"])
+        if b.get("start"):
+            where.append("ts>=?"); args.append(b["start"])
+        if b.get("end"):
+            where.append("ts<=?"); args.append(b["end"])
+        args.append(b.get("limit", 100))
         return {"audit": _rows(_conn.execute(
             "SELECT ts,actor,role,action,entity,entity_id,reason,correlation_id FROM audit_logs"
-            " ORDER BY id DESC LIMIT ?", (b.get("limit", 100),)).fetchall())}
+            " WHERE " + " AND ".join(where) + " ORDER BY id DESC LIMIT ?", tuple(args)).fetchall())}
     def backfill_status(a, b, p):
         R(a, "audit.view"); import backfill
         return backfill.status(_conn)
@@ -368,26 +387,48 @@ def _admin_routes():
         backfill.resolve_remediation(_conn, a, int(p["id"])); return {"ok": True}
 
     def cross_access(a, b, p):
-        # Governed platform cross-tenant access (Item 2.3): explicit permission + target +
-        # mandatory reason + high-severity audit with the request correlation id.
+        # Governed, EXPIRING platform cross-tenant access (Item 5): explicit permission +
+        # target + mandatory reason + short TTL + HIGH-severity audit + correlation id.
+        g = tenant.activate_cross_access(_conn, a, b.get("target_tenant"), b.get("reason"), b.get("ttl_seconds"))
+        g["granted"] = True
+        return g
+
+    def cross_access_terminate(a, b, p):
         R(a, tenant.CROSS_ACCESS_PERMISSION)
-        if not b.get("target_tenant") or not b.get("reason"):
-            raise core.ValidationError("target_tenant and reason are required")
-        core.audit(_conn, a, "PLATFORM_CROSS_ACCESS", "tenants", 0,
-                   new={"target_tenant": b["target_tenant"], "reason": b["reason"], "severity": "HIGH"})
-        _conn.commit()
-        return {"granted": True, "target_tenant": b["target_tenant"],
-                "correlation_id": core.correlation_id(), "note": "short-lived, audited (HIGH severity)"}
-    def data_integrity(a, b, p):
+        tenant.terminate_cross_access(_conn, a, int(p["id"])); return {"terminated": True}
+
+    def cross_access_list(a, b, p):
         R(a, "audit.view")
-        orphan_assign = _conn.execute(
+        return {"grants": _rows(_conn.execute(
+            "SELECT id,user_id,target_tenant,reason,activated_at,expires_at,terminated_at,status"
+            " FROM cross_access_grants ORDER BY id DESC LIMIT 100").fetchall())}
+    def data_integrity(a, b, p):
+        R(a, "audit.view")                                # expanded checks (Item 8)
+        import datetime
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        checks = {}
+
+        def count(sql, args=()):
+            try:
+                return _conn.execute(sql, args).fetchone()["c"]
+            except Exception:
+                return 0
+        checks["orphan_user_assignments"] = count(
             "SELECT COUNT(*) c FROM user_organization_assignments ua"
-            " LEFT JOIN users u ON u.id=ua.user_id WHERE u.id IS NULL").fetchone()["c"]
-        orphan_units = _conn.execute(
+            " LEFT JOIN users u ON u.id=ua.user_id WHERE u.id IS NULL")
+        checks["orphan_org_units"] = count(
             "SELECT COUNT(*) c FROM org_units o WHERE o.parent_id IS NOT NULL"
-            " AND NOT EXISTS (SELECT 1 FROM org_units p WHERE p.id=o.parent_id)").fetchone()["c"]
-        return {"checks": {"orphan_user_assignments": orphan_assign, "orphan_org_units": orphan_units},
-                "ok": orphan_assign == 0 and orphan_units == 0}
+            " AND NOT EXISTS (SELECT 1 FROM org_units p WHERE p.id=o.parent_id)")
+        checks["tenantless_operational_records"] = sum(
+            count("SELECT COUNT(*) c FROM " + t + " WHERE tenant_id IS NULL")
+            for t in ("customers", "bookings", "jobs", "invoices"))
+        checks["stale_active_cross_grants"] = count(
+            "SELECT COUNT(*) c FROM cross_access_grants WHERE status='ACTIVE'"
+            " AND terminated_at IS NULL AND expires_at < ?", (now_iso,))
+        checks["unresolved_remediation"] = count(
+            "SELECT COUNT(*) c FROM org_backfill_remediation WHERE status='OPEN'")
+        return {"checks": checks, "ok": all(v == 0 for v in checks.values()),
+                "executed_at": now_iso}
 
     return {
         ("GET", "/admin/org/tree"): org_tree,
@@ -413,8 +454,11 @@ def _admin_routes():
         ("GET", "/admin/login-history"): login_history,
         ("GET", "/admin/users/:id/mfa"): mfa_status,
         ("GET", "/admin/users/:id/effective-access"): effective_access,
+        ("POST", "/admin/users/:id/roles"): user_assign_role,
         ("POST", "/admin/governance/backfill-remediation/:id/resolve"): remediation_resolve,
         ("POST", "/admin/security/cross-access"): cross_access,
+        ("POST", "/admin/security/cross-access/:id/terminate"): cross_access_terminate,
+        ("GET", "/admin/security/cross-access"): cross_access_list,
         ("GET", "/admin/holiday-calendars"): hol_cals,
         ("POST", "/admin/holiday-calendars"): hol_cal_create,
         ("GET", "/admin/holiday-calendars/:id/holidays"): hol_days,

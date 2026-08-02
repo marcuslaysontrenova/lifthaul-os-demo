@@ -236,6 +236,78 @@ def main():
     check(stage_row["stage"] == "REQUEST_RECEIVED", "operational booking stage unchanged (0 status drift) on PostgreSQL")
     print("PHASE 3 CRM + MASTER DATA: PASS on PostgreSQL", flush=True)
 
+    # Phase 4 — Workflow Administration on PostgreSQL
+    import workflow as wf, wfgov
+    wa = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    d = wf.get_definition(conn, wa, "commercial.booking")
+    av = wf.active_version(conn, d["id"])
+    check(av is not None and av["status"] == "ACTIVE" and bool(av["checksum"]),
+          "seeded booking workflow is ACTIVE + checksummed on PostgreSQL")
+    # immutability
+    try:
+        wf.add_step(conn, wa, av["id"], "HACK", "TASK")
+        check(False, "must not edit an active version")
+    except core.ForbiddenError:
+        check(True, "active workflow version is immutable on PostgreSQL")
+    # simulation non-mutation + path routing
+    before_i = conn.execute("SELECT COUNT(*) c FROM workflow_instances").fetchone()["c"]
+    below = wf.simulate(conn, wa, av["id"], {"amount": 100000})
+    above = wf.simulate(conn, wa, av["id"], {"amount": 900000})
+    after_i = conn.execute("SELECT COUNT(*) c FROM workflow_instances").fetchone()["c"]
+    check(before_i == after_i, "workflow simulation is non-mutating on PostgreSQL")
+    check("APPROVAL" not in below["path"] and "APPROVAL" in above["path"],
+          "workflow simulation routes by condition on PostgreSQL")
+    # instance engine + SoD
+    iid = wf.start_instance(conn, wa, "commercial.booking", "booking", bkA)
+    wf.advance_instance(conn, wa, iid, "submit_for_review")
+    wf.advance_instance(conn, wa, iid, "send_for_approval", ctx={"amount": 900000})
+    try:
+        wf.advance_instance(conn, wa, iid, "approve", ctx={"amount": 900000}, reason="self")
+        check(False, "self-approval must be blocked")
+    except core.ForbiddenError:
+        check(True, "workflow separation-of-duties (self-approval blocked) on PostgreSQL")
+    approver = actor_role(conn, tA, "approver", "wfappr@ci")
+    approver["perms"] = {"quotation.approve", "workflow.instance.manage"}
+    res = wf.advance_instance(conn, approver, iid, "approve", ctx={"amount": 900000}, reason="ok")
+    check(res["to"] == "CONFIRMED" and res["status"] == "COMPLETED",
+          "authorized workflow approval reaches terminal on PostgreSQL")
+    # tenant isolation of instances
+    try:
+        wf.get_instance(conn, aB, iid); check(False, "cross-tenant instance read must be denied")
+    except core.NotFoundError:
+        check(True, "workflow instance tenant isolation (404 no-leak) on PostgreSQL")
+    # SLA business-hours + breach escalation
+    due = wfgov.compute_due(conn, wa, "booking_review_sla", "2026-08-03T08:00:00")
+    check(due["due_at"].startswith("2026-08-03T16:00"), "SLA business-hours calc on PostgreSQL")
+    si = wfgov.start_sla(conn, wa, iid, "booking_review_sla", "2026-01-01T08:00:00")
+    br = wfgov.check_breaches(conn, wa)
+    check(any(b["instance_id"] == iid for b in br) and len(wfgov.escalation_history(conn, wa, iid)) >= 1,
+          "SLA breach fires escalation on PostgreSQL")
+    # delegation guards
+    dgr = actor_role(conn, tA, "approver", "wfdelegator@ci")["id"] if False else core.create_user(conn, "wfdgr@ci", "Demo1234Xy", "approver", "Dgr")
+    dge = core.create_user(conn, "wfdge@ci", "Demo1234Xy", "estimator", "Dge")
+    try:
+        wfgov.create_delegation(conn, wa, dgr, dge, "approver", "commercial.booking", "2026-08-01", None)
+        check(False, "permanent delegation must be blocked")
+    except core.ValidationError:
+        check(True, "permanent delegation blocked on PostgreSQL")
+    wfgov.create_delegation(conn, wa, dgr, dge, "approver", "commercial.booking", "2026-08-01", "2099-01-01")
+    check(wfgov.active_delegation(conn, dge, tenant=tA) is not None, "active delegation resolves on PostgreSQL")
+    # future version safety: old instance stays on its version
+    nv = wf.create_version(conn, wa, "commercial.booking", "v2 rollout")
+    wf.validate_version(conn, wa, nv); wf.approve_version(conn, wa, nv)
+    wf.publish_version(conn, wa, nv, "future", effective_from="2099-01-01")
+    check(wf.get_instance(conn, wa, iid)["version_id"] == av["id"],
+          "existing instance stays on its version after a future publish on PostgreSQL")
+    # granular permissions
+    ba = ap.effective_role_grants(conn, ap.role_by_code(conn, "RGO", "business_admin")["id"])
+    check("workflow.definition.manage" in ba and "workflow.version.publish" not in ba,
+          "business_admin can design but not publish workflows on PostgreSQL")
+    # 0 operational drift: bkA real stage unaffected by the governed instance
+    check(conn.execute("SELECT stage FROM bookings WHERE id=?", (bkA,)).fetchone()["stage"] == "QUOTATION_ACCEPTED",
+          "operational booking stage unchanged by workflow engine (0 drift) on PostgreSQL")
+    print("PHASE 4 WORKFLOW ADMINISTRATION: PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

@@ -198,6 +198,18 @@ const MENU = [
     {id:'md_documents', label:'Documents'},
     {id:'md_communication', label:'Communication Templates'},
   ]},
+  {sect:'Workflows', items:[
+    {id:'wf_definitions', label:'Workflow Definitions'},
+    {id:'wf_versions', label:'Workflow Versions'},
+    {id:'wf_designer', label:'Workflow Designer'},
+    {id:'wf_matrices', label:'Approval Matrices'},
+    {id:'wf_sla', label:'SLA Rules'},
+    {id:'wf_escalations', label:'Escalations'},
+    {id:'wf_delegations', label:'Delegations'},
+    {id:'wf_simulation', label:'Simulation'},
+    {id:'wf_validation', label:'Validation Results'},
+    {id:'wf_instances', label:'Instance Monitoring'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -450,6 +462,128 @@ async function crmCfNew(){ const entity=prompt('Entity (customer/contact/address
   const code=prompt('Field code:'); if(!code) return; const label=prompt('Label:')||code;
   const dt=prompt('Data type (text/integer/decimal/boolean/date/email/single_select):','text')||'text';
   try{ await api('POST','/admin/crm/custom-fields',{entity,code,label,data_type:dt}); render(CURRENT); }catch(e){ alert(e.message); } }
+
+// ---- Phase 4 Workflow Administration screens (all actions hit persisted APIs) ----
+Object.assign(SCREENS, {
+  wf_definitions: async (it,c)=>{ const d=await api('GET','/admin/workflows');
+    c.innerHTML=header(it,'Governed, versioned workflow definitions. Published versions are immutable.',
+      `<button class="btn sm" onclick="wfNewDef()">New workflow +</button>`)+
+      table(['Code','Domain','Name','Risk','Status'], d.definitions, r=>[r.code,r.domain,r.name,r.risk_level,pill(r.status)]); },
+  wf_versions: async (it,c)=>{ const d=await api('GET','/admin/workflows');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Version lifecycle: DRAFT → VALIDATED → APPROVED → PUBLISHED/ACTIVE → RETIRED.',
+      `<select id="wfd" onchange="wfVerLoad()" style="max-width:280px">${opts}</select> <button class="btn sm" onclick="wfNewVer()">New draft version +</button>`)+
+      `<div id="wfvlist"><div class="empty">Loading…</div></div>`; wfVerLoad(); },
+  wf_designer: async (it,c)=>{ const d=await api('GET','/admin/workflows');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Design a DRAFT version — add steps, transitions, then validate/approve/publish. Active versions cannot be edited.',
+      `<select id="wfd" onchange="wfDesignLoad()" style="max-width:280px">${opts}</select>`)+
+      `<div id="wfdesign"><div class="empty">Loading…</div></div>`; wfDesignLoad(); },
+  wf_matrices: async (it,c)=>{ const d=await api('GET','/admin/workflow/matrices');
+    c.innerHTML=header(it,'Approval matrices — single/sequential/parallel/unanimous/any/majority. Separation of duties enforced.',
+      `<button class="btn sm" onclick="wfNewMatrix()">New matrix +</button>`)+
+      table(['Code','Name','Mode','Self-approval'], d.matrices, r=>[r.code,cell(r.name),r.mode,r.allow_self_approval?'allowed':'blocked']); },
+  wf_sla: async (it,c)=>{ const d=await api('GET','/admin/workflow/sla');
+    c.innerHTML=header(it,'SLA rules — business-hours aware (working + holiday calendars), warning/breach thresholds.',
+      `<button class="btn sm" onclick="wfNewSla()">New SLA +</button>`)+
+      table(['Code','Name','Duration (min)','Warning %','Escalation','Severity'], d.sla, r=>[r.code,cell(r.name),r.duration_minutes,r.warning_pct,cell(r.escalation_code),r.severity]); },
+  wf_escalations: async (it,c)=>{ const d=await api('GET','/admin/workflow/escalations');
+    c.innerHTML=header(it,'Escalation targets (user/role/manager/branch/BU/group/platform support).',
+      `<button class="btn sm" onclick="wfNewEsc()">New escalation +</button>`)+
+      table(['Code','Name','Target','Ref','Severity'], d.escalations, r=>[r.code,cell(r.name),r.target_type,cell(r.target_ref),r.severity]); },
+  wf_delegations: async (it,c)=>{ const d=await api('GET','/admin/workflow/delegations');
+    c.innerHTML=header(it,'Governed approval delegation (cross-tenant / circular / permanent blocked).',
+      `<button class="btn sm" onclick="wfNewDeleg()">New delegation +</button>`)+
+      table(['Delegator','Delegate','Role','Domain','Start','End','Active'], d.delegations, r=>[r.delegator,r.delegate,cell(r.role),cell(r.domain),cell(r.start_at),cell(r.end_at),r.active?'yes':'no']); },
+  wf_simulation: async (it,c)=>{ const d=await api('GET','/admin/workflows');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Non-mutating workflow simulation — provide a context and see the path, approvals, SLAs.')+
+      `<div class="bar"><select id="wfd" style="max-width:260px">${opts}</select><input id="wfctx" placeholder='{"amount": 900000}' style="max-width:280px"><button class="btn sm" onclick="wfSimulate()">Simulate</button></div><div id="wfsimres"></div>`; },
+  wf_validation: async (it,c)=>{ const d=await api('GET','/admin/workflows');
+    const opts=d.definitions.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Validate the latest version of a workflow (graph + reference checks).')+
+      `<div class="bar"><select id="wfd" style="max-width:260px">${opts}</select><button class="btn sm" onclick="wfValidate()">Validate latest</button></div><div id="wfvalres"></div>`; },
+  wf_instances: async (it,c)=>{ const d=await api('GET','/admin/workflow-instances');
+    c.innerHTML=header(it,'Live workflow instances (version-bound). Monitor step, SLA state, and history.',
+      `<button class="btn sm" onclick="wfStartInst()">Start instance +</button>`)+
+      table(['Id','Workflow','Version','Step','Status','Entity','Correlation'], d.instances,
+        r=>[`<a style="color:var(--accent);cursor:pointer" onclick="wfInstView(${r.id})">${r.id}</a>`,r.def_code,'v'+r.version_no,r.current_step,pill(r.status==='ACTIVE'?'ACTIVE':(r.status==='COMPLETED'?'ACTIVE':'INACTIVE')),`${r.entity_type}:${r.entity_id}`,cell(r.correlation_id)]); },
+});
+async function wfNewDef(){ const code=prompt('Workflow code (e.g. commercial.quotation):'); if(!code) return;
+  const domain=prompt('Domain:','commercial.booking')||'commercial.booking'; const name=prompt('Name:')||code;
+  try{ await api('POST','/admin/workflows',{code,domain,name}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function wfVerLoad(){ const code=document.getElementById('wfd').value; const d=await api('GET','/admin/workflows/'+encodeURIComponent(code)+'/versions');
+  document.getElementById('wfvlist').innerHTML=table(['Version','Status','Effective from','Checksum','Actions'], d.versions,
+    r=>['v'+r.version_no,pill(r.status==='ACTIVE'?'ACTIVE':'INACTIVE'),cell(r.effective_from),(r.checksum||'—').slice(0,10),
+      wfVerActions(r)]); }
+function wfVerActions(r){ const b=[];
+  if(r.status==='DRAFT') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="wfAct(${r.id},'validate')">validate</a>`);
+  if(r.status==='VALIDATED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="wfAct(${r.id},'approve')">approve</a>`);
+  if(r.status==='APPROVED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="wfPublish(${r.id})">publish</a>`);
+  if(r.status==='ACTIVE'||r.status==='PUBLISHED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="wfAct(${r.id},'retire')">retire</a>`);
+  return b.join(' · ')||'—'; }
+async function wfNewVer(){ const code=document.getElementById('wfd').value; const reason=prompt('Change reason:')||'new draft';
+  try{ await api('POST','/admin/workflows/'+encodeURIComponent(code)+'/versions',{change_reason:reason}); wfVerLoad(); }catch(e){ alert(e.message); } }
+async function wfAct(vid,act){ try{ const r=await api('POST','/admin/workflow-versions/'+vid+'/'+act,{reason:'console'});
+  if(act==='validate' && !r.ok){ alert('Validation errors:\n'+(r.errors||[]).join('\n')); } wfVerLoad(); }catch(e){ alert(e.message); } }
+async function wfPublish(vid){ const reason=prompt('Change reason (required to publish):'); if(!reason) return;
+  const eff=prompt('Effective from (YYYY-MM-DD, blank = now):','');
+  try{ await api('POST','/admin/workflow-versions/'+vid+'/publish',{change_reason:reason,effective_from:eff||null}); wfVerLoad(); }catch(e){ alert(e.message); } }
+async function wfDesignLoad(){ const code=document.getElementById('wfd').value;
+  const vers=await api('GET','/admin/workflows/'+encodeURIComponent(code)+'/versions');
+  const draft=vers.versions.filter(v=>v.status==='DRAFT').slice(-1)[0];
+  const el=document.getElementById('wfdesign');
+  if(!draft){ el.innerHTML=`<div class="note">No editable DRAFT version. Create one under Workflow Versions.</div>`; return; }
+  const g=await api('GET','/admin/workflow-versions/'+draft.id);
+  el.innerHTML=`<div class="bar"><b>Draft version #${draft.version_no}</b> (id ${draft.id}) <button class="btn sm" onclick="wfAddStep(${draft.id})">Add step +</button> <button class="btn sm" onclick="wfAddTrans(${draft.id})">Add transition +</button> <button class="btn sm ghost" onclick="wfAct(${draft.id},'validate')">Validate</button></div>`+
+    `<h3 style="margin:14px 0 6px;font-size:14px">Steps</h3>`+table(['Code','Type','Role','SLA','Terminal'], g.steps, r=>[r.code,r.step_type,cell(r.assigned_role),cell(r.sla_code),r.terminal?'yes':''])+
+    `<h3 style="margin:14px 0 6px;font-size:14px">Transitions</h3>`+table(['From','To','Action','Approval','Condition'], g.transitions, r=>[r.source_step,r.target_step,r.action,r.approval_required?'yes':'',cell(r.condition)]); }
+async function wfAddStep(vid){ const code=prompt('Step code:'); if(!code) return;
+  const t=prompt('Type (START/TASK/REVIEW/APPROVAL/TERMINAL_SUCCESS/TERMINAL_FAILURE):','TASK')||'TASK';
+  const role=prompt('Assigned role (optional):','')||null; const sla=prompt('SLA code (optional):','')||null;
+  try{ await api('POST','/admin/workflow-versions/'+vid+'/steps',{code,step_type:t,assigned_role:role,sla_code:sla}); wfDesignLoad(); }catch(e){ alert(e.message); } }
+async function wfAddTrans(vid){ const s=prompt('Source step code:'); if(!s) return; const t=prompt('Target step code:'); if(!t) return;
+  const act=prompt('Action name:'); if(!act) return; const cond=prompt('Condition JSON (optional, e.g. {"field":"amount","op":"gte","value":500000}):','');
+  const appr=confirm('Approval required for this transition?');
+  const body={source_step:s,target_step:t,action:act,approval_required:appr}; if(cond){ try{ body.condition=JSON.parse(cond); }catch(e){ alert('bad JSON'); return; } }
+  if(appr){ body.approval_matrix_code=prompt('Approval matrix code:','')||null; body.required_permission='quotation.approve'; body.reason_required=true; }
+  try{ await api('POST','/admin/workflow-versions/'+vid+'/transitions',body); wfDesignLoad(); }catch(e){ alert(e.message); } }
+async function wfNewMatrix(){ const code=prompt('Matrix code:'); if(!code) return; const name=prompt('Name:')||code;
+  const mode=prompt('Mode (single/sequential/parallel/unanimous/any/majority):','single')||'single';
+  try{ await api('POST','/admin/workflow/matrices',{code,name,mode});
+    if(confirm('Add a role approver rule now?')){ const role=prompt('Approver role:','approver')||'approver'; const dim=prompt('Dimension (optional, e.g. amount):','')||null; const val=dim?prompt('Threshold value:',''):null;
+      await api('POST','/admin/workflow/matrices/'+encodeURIComponent(code)+'/rules',{approver_type:'role',approver_ref:role,dimension:dim,op:'gte',value:val}); }
+    render(CURRENT); }catch(e){ alert(e.message); } }
+async function wfNewSla(){ const code=prompt('SLA code:'); if(!code) return; const name=prompt('Name:')||code;
+  const dur=prompt('Duration (working minutes):','480'); const esc=prompt('Escalation code (optional):','')||null;
+  try{ await api('POST','/admin/workflow/sla',{code,name,duration_minutes:parseInt(dur),escalation_code:esc}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function wfNewEsc(){ const code=prompt('Escalation code:'); if(!code) return; const name=prompt('Name:')||code;
+  const tt=prompt('Target type (role/manager/branch_manager/bu_manager/group/platform_support):','role')||'role';
+  const ref=prompt('Target ref (e.g. operations_manager):','')||null;
+  try{ await api('POST','/admin/workflow/escalations',{code,name,target_type:tt,target_ref:ref}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function wfNewDeleg(){ const dr=prompt('Delegator user id:'); if(!dr) return; const dg=prompt('Delegate user id:'); if(!dg) return;
+  const role=prompt('Role:','approver')||'approver'; const dom=prompt('Domain:','commercial.booking')||null;
+  const end=prompt('End date (YYYY-MM-DD, required):',''); if(!end){ alert('end date required'); return; }
+  try{ await api('POST','/admin/workflow/delegations',{delegator:parseInt(dr),delegate:parseInt(dg),role,domain:dom,end_at:end}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function wfSimulate(){ const code=document.getElementById('wfd').value; let ctx={}; const raw=document.getElementById('wfctx').value;
+  if(raw){ try{ ctx=JSON.parse(raw); }catch(e){ alert('bad JSON'); return; } }
+  const vers=await api('GET','/admin/workflows/'+encodeURIComponent(code)+'/versions');
+  const v=vers.versions.filter(x=>x.status==='ACTIVE').slice(-1)[0]||vers.versions.slice(-1)[0];
+  try{ const r=await api('POST','/admin/workflow-versions/'+v.id+'/simulate',{ctx});
+    document.getElementById('wfsimres').innerHTML=`<div class="kv"><div class="k">Path</div><div>${r.path.join(' → ')}</div><div class="k">Outcome</div><div><b>${r.terminal_outcome}</b></div><div class="k">Approvals required</div><div>${r.approvals_required.length}</div><div class="k">SLAs</div><div>${r.slas.map(s=>s.sla_code).join(', ')||'—'}</div></div>`;
+  }catch(e){ document.getElementById('wfsimres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
+async function wfValidate(){ const code=document.getElementById('wfd').value;
+  const vers=await api('GET','/admin/workflows/'+encodeURIComponent(code)+'/versions'); const v=vers.versions.slice(-1)[0];
+  const r=await api('POST','/admin/workflow-versions/'+v.id+'/validate',{});
+  document.getElementById('wfvalres').innerHTML=`<div class="kv"><div class="k">Result</div><div>${r.ok?'<span style="color:var(--ok)">VALID ✓</span>':'<span style="color:var(--danger)">errors</span>'}</div><div class="k">Steps</div><div>${r.steps}</div><div class="k">Transitions</div><div>${r.transitions}</div>${r.errors.map(e=>`<div class="k">error</div><div style="color:var(--danger)">${e}</div>`).join('')}</div>`; }
+async function wfStartInst(){ const code=prompt('Workflow code:','commercial.booking'); if(!code) return;
+  const et=prompt('Entity type:','booking')||'booking'; const eid=prompt('Entity id:','1');
+  try{ await api('POST','/admin/workflow-instances',{code,entity_type:et,entity_id:parseInt(eid)}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function wfInstView(id){ const d=await api('GET','/admin/workflow-instances/'+id);
+  const body=`<div class="kv"><div class="k">Workflow</div><div>${d.instance.definition_id}</div><div class="k">Step</div><div><b>${d.instance.current_step}</b></div><div class="k">Status</div><div>${d.instance.status}</div><div class="k">Correlation</div><div>${cell(d.instance.correlation_id)}</div></div>`+
+    `<h3 style="margin:12px 0 6px;font-size:14px">Transition history</h3>`+table(['From','To','Action','Actor','Result','Time'], d.history, r=>[r.from_step,r.to_step,r.action,r.actor,r.result,r.ts])+
+    (d.escalations.length?`<h3 style="margin:12px 0 6px;font-size:14px">Escalations</h3>`+table(['Escalation','Target','Reason','Time'], d.escalations, r=>[r.escalation_code,`${r.target_type}:${cell(r.target_ref)}`,cell(r.reason),r.ts]):'');
+  openDlg('view','Workflow instance #'+id,'Version-bound; transition history below', body, null); }
 // generic org-unit kind screens
 ['business_unit','branch','department','team','operating_site','warehouse','service_area'].forEach(kind=>{
   SCREENS[kind] = async (it,c)=>{ const d=await api('POST','/admin/org/units/search',{kind});

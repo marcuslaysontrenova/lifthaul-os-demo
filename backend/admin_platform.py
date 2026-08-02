@@ -177,6 +177,17 @@ PHASE3_PERMISSIONS = [
 ]
 for _code in PHASE3_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-4 workflow administration permissions (multi-dot codes)
+PHASE4_PERMISSIONS = [
+    "workflow.definition.view", "workflow.definition.manage",
+    "workflow.version.create", "workflow.version.validate", "workflow.version.approve",
+    "workflow.version.publish", "workflow.version.retire", "workflow.simulate",
+    "workflow.instance.view", "workflow.instance.manage", "workflow.instance.reassign",
+    "workflow.instance.cancel", "workflow.approval.execute", "workflow.approval.delegate",
+    "workflow.sla.manage", "workflow.escalation.manage",
+]
+for _code in PHASE4_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -199,13 +210,19 @@ ADMIN_ROLES = [
         {"tenant.*", "license.*", "integration.*", "system_config.*", "ai_admin.*",
          "workflow_admin.*", "branding.*", "security.*", "audit.*", "reporting.*",
          "master_data.*", "admin.configuration.*", "tax.policy.*",
-         "quotation.policy.approval.*", "payment.downpayment.policy.*", "crm.admin.*"}),
+         "quotation.policy.approval.*", "payment.downpayment.policy.*", "crm.admin.*",
+         "workflow.*"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",
          "admin.configuration.view", "admin.configuration.value.manage",
          "admin.configuration.override", "admin.configuration.simulate",
-         "admin.configuration.history.view"}),
+         "admin.configuration.history.view",
+         # workflow: design/validate/simulate/operate + SLA/escalation/delegation, but NOT publish/retire
+         "workflow.definition.view", "workflow.definition.manage", "workflow.version.create",
+         "workflow.version.validate", "workflow.simulate", "workflow.instance.view",
+         "workflow.instance.manage", "workflow.instance.reassign", "workflow.approval.execute",
+         "workflow.approval.delegate", "workflow.sla.manage", "workflow.escalation.manage"}),
     ("crm_admin",            "CRM Administrator",            3,
         {"crm_admin.*", "customer.*", "contact.*", "address.*", "crm.admin.*", "master_data.*"}),
     ("fleet_admin",          "Fleet Administrator",          3, {"fleet_admin.*", "equipment.*", "vehicle.*", "maintenance.*", "inspection.*"}),

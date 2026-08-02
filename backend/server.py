@@ -676,11 +676,100 @@ def _phase3_routes():
     }
 
 
+def _phase4_routes():
+    """Phase 4 — Workflow Administration: definitions/versions/designer/validation/simulation/
+    publication, instances, approval matrices, SLA, escalation, delegation. Permission-gated,
+    tenant-scoped, audited; simulation is non-mutating."""
+    import workflow as wf
+    import wfgov
+
+    # ---- Definitions & versions ------------------------------------------
+    def wf_list(a, b, p):        return {"definitions": wf.list_definitions(_conn, a)}
+    def wf_create(a, b, p):      return {"id": wf.create_definition(_conn, a, b["domain"], b["code"], b["name"], description=b.get("description"), org_scope=b.get("org_scope"), risk_level=b.get("risk_level", "medium"))}
+    def wf_versions(a, b, p):    return {"versions": wf.list_versions(_conn, a, p["code"])}
+    def wf_new_version(a, b, p): return {"id": wf.create_version(_conn, a, p["code"], change_reason=b.get("change_reason"))}
+    def wf_ver_get(a, b, p):
+        core.require(a, "workflow.definition.view")
+        vid = int(p["id"])
+        return {"steps": wf.steps(_conn, vid), "transitions": wf.transitions(_conn, vid)}
+    def wf_add_step(a, b, p):    return {"id": wf.add_step(_conn, a, int(p["id"]), b["code"], b["step_type"], name=b.get("name"), description=b.get("description"), entry_criteria=b.get("entry_criteria"), assigned_role=b.get("assigned_role"), assigned_org_scope=b.get("assigned_org_scope"), sla_code=b.get("sla_code"), escalation_code=b.get("escalation_code"), notification_rule=b.get("notification_rule"), sort_order=b.get("sort_order", 0))}
+    def wf_del_step(a, b, p):    return {"ok": wf.delete_step(_conn, a, int(p["id"]), b["code"])}
+    def wf_add_trans(a, b, p):   return {"id": wf.add_transition(_conn, a, int(p["id"]), b["source_step"], b["target_step"], b["action"], required_permission=b.get("required_permission"), required_role=b.get("required_role"), condition=b.get("condition"), approval_required=b.get("approval_required", False), approval_matrix_code=b.get("approval_matrix_code"), reason_required=b.get("reason_required", False), audit_event=b.get("audit_event"), notification=b.get("notification"), sla_effect=b.get("sla_effect"))}
+    def wf_validate(a, b, p):    return wf.validate_version(_conn, a, int(p["id"]))
+    def wf_simulate(a, b, p):    return wf.simulate(_conn, a, int(p["id"]), b.get("ctx", {}))
+    def wf_approve(a, b, p):     return {"ok": wf.approve_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def wf_reject(a, b, p):      return {"ok": wf.reject_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def wf_publish(a, b, p):     return wf.publish_version(_conn, a, int(p["id"]), b["change_reason"], effective_from=b.get("effective_from"))
+    def wf_retire(a, b, p):      return {"ok": wf.retire_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+
+    # ---- Instances -------------------------------------------------------
+    def wf_start(a, b, p):       return {"id": wf.start_instance(_conn, a, b["code"], b["entity_type"], b.get("entity_id"), org_scope=b.get("org_scope"))}
+    def wf_inst_list(a, b, p):   return {"instances": wf.list_instances(_conn, a, code=b.get("code"), status=b.get("status"))}
+    def wf_inst_get(a, b, p):    return {"instance": wf.get_instance(_conn, a, int(p["id"])), "history": wf.instance_history(_conn, a, int(p["id"])), "escalations": wfgov.escalation_history(_conn, a, int(p["id"]))}
+    def wf_advance(a, b, p):     return wf.advance_instance(_conn, a, int(p["id"]), b["action"], ctx=b.get("ctx", {}), reason=b.get("reason"))
+    def wf_reassign(a, b, p):    return {"ok": wf.reassign_instance(_conn, a, int(p["id"]), b["user_id"], role=b.get("role"), reason=b.get("reason"))}
+    def wf_cancel(a, b, p):      return {"ok": wf.cancel_instance(_conn, a, int(p["id"]), reason=b.get("reason"))}
+
+    # ---- Approval matrices / SLA / escalation / delegation ---------------
+    def wf_matrices(a, b, p):    return {"matrices": wfgov.list_matrices(_conn, a)}
+    def wf_matrix_add(a, b, p):  return {"id": wfgov.create_matrix(_conn, a, b["code"], b["name"], domain=b.get("domain"), mode=b.get("mode", "single"), allow_self_approval=b.get("allow_self_approval", False))}
+    def wf_matrix_rule(a, b, p): return {"id": wfgov.add_matrix_rule(_conn, a, p["code"], b["approver_type"], approver_ref=b.get("approver_ref"), dimension=b.get("dimension"), op=b.get("op", "gte"), value=b.get("value"), seq=b.get("seq", 0), level=b.get("level", 1))}
+    def wf_sla_list(a, b, p):
+        core.require(a, "workflow.definition.view")
+        return {"sla": _rows(_conn.execute("SELECT * FROM sla_rules ORDER BY code").fetchall())}
+    def wf_sla_add(a, b, p):     return {"id": wfgov.create_sla(_conn, a, b["code"], b["name"], b["duration_minutes"], sla_type=b.get("sla_type"), working_calendar_ref=b.get("working_calendar_ref"), holiday_calendar_ref=b.get("holiday_calendar_ref"), warning_pct=b.get("warning_pct", 80), escalation_code=b.get("escalation_code"), owner_role=b.get("owner_role"), severity=b.get("severity", "medium"))}
+    def wf_sla_due(a, b, p):
+        core.require(a, "workflow.definition.view")
+        return wfgov.compute_due(_conn, a, b["code"], b.get("start"))
+    def wf_esc_list(a, b, p):
+        core.require(a, "workflow.definition.view")
+        return {"escalations": _rows(_conn.execute("SELECT * FROM escalation_rules ORDER BY code").fetchall())}
+    def wf_esc_add(a, b, p):     return {"id": wfgov.create_escalation(_conn, a, b["code"], b["name"], b["target_type"], target_ref=b.get("target_ref"), after_minutes=b.get("after_minutes", 0), severity=b.get("severity", "medium"))}
+    def wf_deleg_list(a, b, p):  return {"delegations": wfgov.list_delegations(_conn, a)}
+    def wf_deleg_add(a, b, p):   return {"id": wfgov.create_delegation(_conn, a, int(b["delegator"]), int(b["delegate"]), b.get("role"), b.get("domain"), b.get("start_at"), b["end_at"], reason=b.get("reason"))}
+    def wf_deleg_revoke(a, b, p): return {"ok": wfgov.revoke_delegation(_conn, a, int(p["id"]), reason=b.get("reason"))}
+
+    return {
+        ("GET", "/admin/workflows"): wf_list,
+        ("POST", "/admin/workflows"): wf_create,
+        ("GET", "/admin/workflows/:code/versions"): wf_versions,
+        ("POST", "/admin/workflows/:code/versions"): wf_new_version,
+        ("GET", "/admin/workflow-versions/:id"): wf_ver_get,
+        ("POST", "/admin/workflow-versions/:id/steps"): wf_add_step,
+        ("POST", "/admin/workflow-versions/:id/steps/delete"): wf_del_step,
+        ("POST", "/admin/workflow-versions/:id/transitions"): wf_add_trans,
+        ("POST", "/admin/workflow-versions/:id/validate"): wf_validate,
+        ("POST", "/admin/workflow-versions/:id/simulate"): wf_simulate,
+        ("POST", "/admin/workflow-versions/:id/approve"): wf_approve,
+        ("POST", "/admin/workflow-versions/:id/reject"): wf_reject,
+        ("POST", "/admin/workflow-versions/:id/publish"): wf_publish,
+        ("POST", "/admin/workflow-versions/:id/retire"): wf_retire,
+        ("POST", "/admin/workflow-instances"): wf_start,
+        ("GET", "/admin/workflow-instances"): wf_inst_list,
+        ("GET", "/admin/workflow-instances/:id"): wf_inst_get,
+        ("POST", "/admin/workflow-instances/:id/advance"): wf_advance,
+        ("POST", "/admin/workflow-instances/:id/reassign"): wf_reassign,
+        ("POST", "/admin/workflow-instances/:id/cancel"): wf_cancel,
+        ("GET", "/admin/workflow/matrices"): wf_matrices,
+        ("POST", "/admin/workflow/matrices"): wf_matrix_add,
+        ("POST", "/admin/workflow/matrices/:code/rules"): wf_matrix_rule,
+        ("GET", "/admin/workflow/sla"): wf_sla_list,
+        ("POST", "/admin/workflow/sla"): wf_sla_add,
+        ("POST", "/admin/workflow/sla/due"): wf_sla_due,
+        ("GET", "/admin/workflow/escalations"): wf_esc_list,
+        ("POST", "/admin/workflow/escalations"): wf_esc_add,
+        ("GET", "/admin/workflow/delegations"): wf_deleg_list,
+        ("POST", "/admin/workflow/delegations"): wf_deleg_add,
+        ("POST", "/admin/workflow/delegations/:id/revoke"): wf_deleg_revoke,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
 ROUTES.update(_admin_routes())
 ROUTES.update(_phase3_routes())
+ROUTES.update(_phase4_routes())
 
 
 def _match(method, path):

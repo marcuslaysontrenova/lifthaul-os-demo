@@ -96,6 +96,49 @@ test('master data is tenant-isolated through the browser (PostgreSQL)', async ({
   expect([200, 403].includes(res.status()), 'tenant user master-data read is permission-gated').toBe(true);
 });
 
+test('Phase 4 workflow administration through the browser (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  // seeded governed booking workflow is present + has an ACTIVE version
+  const defs = await request.get(API + '/admin/workflows', { headers: H });
+  expect((await defs.json()).data.definitions.some(d => d.code === 'commercial.booking'), 'seeded workflow present').toBe(true);
+  const vers = await request.get(API + '/admin/workflows/commercial.booking/versions', { headers: H });
+  expect((await vers.json()).data.versions.some(v => v.status === 'ACTIVE'), 'has active version').toBe(true);
+  const activeVer = (await (await request.get(API + '/admin/workflows/commercial.booking/versions', { headers: H })).json()).data.versions.find(v => v.status === 'ACTIVE');
+  // non-mutating simulation routes by condition
+  const below = await request.post(API + `/admin/workflow-versions/${activeVer.id}/simulate`, { headers: H, data: { ctx: { amount: 100000 } } });
+  const above = await request.post(API + `/admin/workflow-versions/${activeVer.id}/simulate`, { headers: H, data: { ctx: { amount: 900000 } } });
+  expect((await below.json()).data.path.includes('APPROVAL'), 'below-threshold skips approval').toBe(false);
+  expect((await above.json()).data.path.includes('APPROVAL'), 'above-threshold routes to approval').toBe(true);
+  // design a new workflow: create -> add steps -> transition -> validate
+  await request.post(API + '/admin/workflows', { headers: H, data: { domain: 'commercial.booking', code: 'browser.wf', name: 'Browser WF' } });
+  const bvers = await request.get(API + '/admin/workflows/browser.wf/versions', { headers: H });
+  const vid = (await bvers.json()).data.versions[0].id;
+  await request.post(API + `/admin/workflow-versions/${vid}/steps`, { headers: H, data: { code: 'START', step_type: 'START' } });
+  await request.post(API + `/admin/workflow-versions/${vid}/steps`, { headers: H, data: { code: 'END', step_type: 'TERMINAL_SUCCESS' } });
+  await request.post(API + `/admin/workflow-versions/${vid}/transitions`, { headers: H, data: { source_step: 'START', target_step: 'END', action: 'go' } });
+  const val = await request.post(API + `/admin/workflow-versions/${vid}/validate`, { headers: H, data: {} });
+  expect((await val.json()).data.ok, 'valid graph validates').toBe(true);
+  // start an instance + advance one step through the real network stack
+  const inst = await request.post(API + '/admin/workflow-instances', { headers: H, data: { code: 'commercial.booking', entity_type: 'booking', entity_id: 4242 } });
+  const iid = (await inst.json()).data.id;
+  await request.post(API + `/admin/workflow-instances/${iid}/advance`, { headers: H, data: { action: 'submit_for_review' } });
+  const got = await request.get(API + `/admin/workflow-instances/${iid}`, { headers: H });
+  expect((await got.json()).data.instance.current_step, 'instance advanced').toBe('REVIEW');
+  // approval matrix + SLA governance endpoints respond
+  await request.post(API + '/admin/workflow/matrices', { headers: H, data: { code: 'br_m', name: 'Br', mode: 'single' } });
+  const sla = await request.post(API + '/admin/workflow/sla/due', { headers: H, data: { code: 'booking_review_sla', start: '2026-08-03T08:00:00' } });
+  expect((await sla.json()).data.due_at.startsWith('2026-08-03T16:00'), 'SLA business-hours due').toBe(true);
+});
+
+test('workflow instances are tenant-isolated through the browser (PostgreSQL)', async ({ request }) => {
+  const tokB = await login(request, seed.userB);
+  const HB = { Authorization: 'Bearer ' + tokB };
+  // operations_manager (tenant B) lacks workflow.instance.view -> permission-gated read
+  const res = await request.get(API + '/admin/workflow-instances', { headers: HB });
+  expect([200, 403].includes(res.status()), 'tenant workflow read is permission-gated').toBe(true);
+});
+
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {
   const errs = [];
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });

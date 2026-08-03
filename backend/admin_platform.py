@@ -249,6 +249,16 @@ PHASE8_PERMISSIONS = [
 ]
 for _code in PHASE8_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-9 AI administration permissions (multi-dot codes)
+PHASE9_PERMISSIONS = [
+    "ai.use_case.view", "ai.use_case.manage", "ai.model.view", "ai.model.manage", "ai.model.approve",
+    "ai.prompt.view", "ai.prompt.manage", "ai.prompt.validate", "ai.prompt.approve", "ai.prompt.publish",
+    "ai.prompt.retire", "ai.simulate", "ai.execute", "ai.review", "ai.review.override",
+    "ai.sensitive.execute", "ai.usage.view", "ai.cost.view", "ai.budget.manage", "ai.audit.view",
+    "ai.incident.view", "ai.incident.manage", "ai.kill_switch.manage", "ai.platform.manage",
+]
+for _code in PHASE9_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -290,7 +300,11 @@ ADMIN_ROLES = [
          "report.datasource.*", "report.definition.*", "report.version.*", "report.execute",
          "report.export", "report.schedule", "report.history.view", "report.sensitive.view",
          "report.sensitive.export", "dashboard.*", "kpi.*", "report.security.manage",
-         "report.cache.manage", "report.platform.cross_tenant"}),
+         "report.cache.manage", "report.platform.cross_tenant",
+         # Phase 9 AI administration (platform admin is the AI governance authority)
+         "ai.use_case.*", "ai.model.*", "ai.prompt.*", "ai.simulate", "ai.execute", "ai.review",
+         "ai.review.override", "ai.sensitive.execute", "ai.usage.view", "ai.cost.view",
+         "ai.budget.manage", "ai.audit.view", "ai.incident.*", "ai.kill_switch.manage", "ai.platform.manage"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",

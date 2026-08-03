@@ -254,6 +254,17 @@ const MENU = [
     {id:'rep_executions', label:'Execution History'},
     {id:'rep_integrity', label:'Reporting Integrity'},
   ]},
+  {sect:'AI Administration', items:[
+    {id:'ai_usecases', label:'Use Cases'},
+    {id:'ai_models', label:'Model Registry'},
+    {id:'ai_prompts', label:'Prompt Designer'},
+    {id:'ai_tools', label:'Tool Registry'},
+    {id:'ai_queue', label:'Review Queue'},
+    {id:'ai_usage', label:'Usage and Cost'},
+    {id:'ai_health', label:'Provider Health'},
+    {id:'ai_incidents', label:'AI Incidents'},
+    {id:'ai_killswitch', label:'Kill Switch'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -943,6 +954,69 @@ async function repNewSchedule(){ const rc=prompt('Report code:','quotation_conve
   const rcpts=(prompt('Recipients (comma-separated emails, must be authorized users in tenant):','')||'').split(',').map(x=>x.trim()).filter(Boolean);
   try{ await api('POST','/admin/reporting/schedules',{report_code:rc,frequency:freq,recipients:rcpts}); render(CURRENT); }catch(e){ alert(e.message); } }
 async function repRunSchedule(id){ try{ const r=await api('POST','/admin/reporting/schedules/'+id+'/run',{}); alert('Delivered to '+r.delivered+' recipient(s), '+r.rows+' rows.'); render(CURRENT); }catch(e){ alert(e.message); } }
+// ---- Phase 9 AI Administration screens (all actions hit persisted APIs) ----
+Object.assign(SCREENS, {
+  ai_usecases: async (it,c)=>{ const d=await api('GET','/admin/ai/use-cases');
+    c.innerHTML=header(it,'Governed AI use cases. AI is ADVISORY + human-reviewed by default; it never performs prohibited actions or auto-commits.',
+      `<button class="btn sm" onclick="aiNewUC()">New use case +</button>`)+
+      table(['Code','Name','Risk','Human review','Auto action','Enabled'], d.use_cases, r=>[r.code,cell(r.name),r.risk_level,r.human_review,r.automated_action_allowed?'<b>allowed</b>':'blocked',r.enabled?'yes':'no']); },
+  ai_models: async (it,c)=>{ const d=await api('GET','/admin/ai/models');
+    c.innerHTML=header(it,'AI model registry. Live providers are BLOCKED until owner credentials validate; the deterministic mock proves all governance.',
+      `<button class="btn sm" onclick="aiNewModel()">Register model +</button>`)+
+      table(['Provider','Model','Version','Env','Risk','Status','Actions'], d.models, r=>[r.provider,cell(r.model_id),cell(r.version),cell(r.approved_environments),r.risk_rating,pill(r.status==='APPROVED'||r.status==='ACTIVE'?'ACTIVE':'INACTIVE')+' '+r.status,
+        r.status==='DRAFT'?`<a style="color:var(--accent);cursor:pointer" onclick="aiApproveModel(${r.id})">approve</a>`:'—']); },
+  ai_prompts: async (it,c)=>{ const d=await api('GET','/admin/ai/use-cases');
+    c.innerHTML=header(it,'Prompt Designer — declarative prompt/version/output-schema (no executable code). Published versions are immutable; publication is gated on evaluation.',
+      `<button class="btn sm" onclick="aiNewPrompt()">New prompt +</button>`)+
+      `<div class="note">Create a prompt (bound to a use case), set version content + output schema, validate, evaluate, approve, publish. Use the API-driven actions from the prompt prompts.</div>`; },
+  ai_tools: async (it,c)=>{ const d=await api('GET','/admin/ai/tools');
+    c.innerHTML=header(it,'Allowlisted AI tool registry. Prohibited actions (payment/refund/delete/elevate/secret/cross-tenant/deploy) can NEVER be registered.')+
+      table(['Code','Name','Permission','Risk','Human approval','Prohibited'], d.tools, r=>[r.code,cell(r.name),cell(r.permission),r.risk,r.human_approval?'yes':'no',r.prohibited?'<b>yes</b>':'no']); },
+  ai_queue: async (it,c)=>{ const d=await api('GET','/admin/ai/review-queue');
+    c.innerHTML=header(it,'Human review queue. AI output is advisory; a human accepts / edits / rejects. Edits stay distinguishable from the model output.')+
+      table(['Exec id','Use case','Model','Prompt v','Result','Classification','Actions'], d.queue, r=>[r.id,r.use_case_code,cell(r.model_ref),cell(r.prompt_version),pill(r.result==='ADVISORY'?'ACTIVE':'INACTIVE')+' '+r.result,r.input_classification,
+        `<a style="color:var(--ok);cursor:pointer" onclick="aiReview(${r.id},'ACCEPTED')">accept</a> · <a style="color:var(--accent);cursor:pointer" onclick="aiReview(${r.id},'EDITED')">edit</a> · <a style="color:var(--danger);cursor:pointer" onclick="aiReview(${r.id},'REJECTED')">reject</a>`]); },
+  ai_usage: async (it,c)=>{ const d=await api('GET','/admin/ai/usage');
+    c.innerHTML=header(it,'AI usage + cost accounting by use case. Budgets can hard-stop new executions.',
+      `<button class="btn sm" onclick="aiSetBudget()">Set budget +</button>`)+
+      table(['Use case','Executions','Cost','Tokens'], d.by_use_case, r=>[r.use_case_code,r.n,r.cost,r.tokens]); },
+  ai_health: async (it,c)=>{ const d=await api('GET','/admin/ai/health');
+    c.innerHTML=header(it,'AI observability. Never HEALTHY until a test has run. Live provider is BLOCKED (owner credentials required).')+
+      `<div class="kv"><div class="k">Provider</div><div>${d.provider}</div><div class="k">Status</div><div><b>${d.status}</b></div><div class="k">Open incidents</div><div>${d.open_incidents}</div><div class="k">Live provider</div><div>${d.live_provider}</div></div>`; },
+  ai_incidents: async (it,c)=>{ const d=await api('GET','/admin/ai/incidents');
+    c.innerHTML=header(it,'AI incidents — prohibited-action attempts, injection, unsafe output, provider outages. Contained by default.')+
+      table(['Id','Use case','Type','Severity','Status','Contained','Detail'], d.incidents, r=>[r.id,cell(r.use_case_code),r.incident_type,r.severity,pill(r.status==='OPEN'?'INACTIVE':'ACTIVE')+' '+r.status,r.contained?'yes':'no',cell(r.detail)]); },
+  ai_killswitch: async (it,c)=>{
+    c.innerHTML=header(it,'AI kill switch — platform / tenant / use-case / provider / model / prompt-version. Immediate, fail-safe, elevated permission.',
+      `<button class="btn sm" onclick="aiKill()">Activate kill switch +</button>`)+
+      `<div class="note">Activating a kill switch immediately blocks new AI executions in scope and fails safe. Release requires ai.kill_switch.manage.</div>`; },
+});
+async function aiNewUC(){ const code=prompt('Use case code:'); if(!code) return; const name=prompt('Name:')||code;
+  const risk=prompt('Risk (low/medium/high/critical):','low')||'low';
+  const rev=prompt('Human review policy (always/below_confidence/sensitive/external/high_value/safety/none_allowed/auto_low_risk):','always')||'always';
+  try{ await api('POST','/admin/ai/use-cases',{code,name,risk_level:risk,human_review:rev}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function aiNewModel(){ const prov=prompt('Provider (mock/openai/anthropic):','mock')||'mock';
+  const mid=prompt('Model id:'); if(!mid) return; const name=prompt('Display name:')||mid;
+  const env=prompt('Approved environments (MOCK/SANDBOX/PRODUCTION):','MOCK')||'MOCK';
+  try{ await api('POST','/admin/ai/models',{provider:prov,model_id:mid,display_name:name,approved_environments:env}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function aiApproveModel(id){ try{ await api('POST','/admin/ai/models/'+id+'/approve',{}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function aiNewPrompt(){ const uc=prompt('Use case code:'); if(!uc) return; const code=prompt('Prompt code:'); if(!code) return; const name=prompt('Name:')||code;
+  try{ const r=await api('POST','/admin/ai/prompts',{code,name,use_case_code:uc});
+    const sys=prompt('System instruction:','Summarize and cite evidence. Advisory only.')||'Advisory only.';
+    const tpl=prompt('User template:','Booking: {{booking}}')||'{{input}}';
+    // fetch version id (v1) — use versions listing via a run; simplest: prompt for it
+    alert('Prompt created. Set content/validate/evaluate/publish via the prompt-version APIs (id shown in AI audit).');
+  }catch(e){ alert(e.message); } }
+async function aiReview(id,decision){ let edits=null,reason=prompt('Reason (optional):','')||'';
+  if(decision==='EDITED'){ const e=prompt('Edited summary:',''); edits={summary:e}; }
+  try{ await api('POST','/admin/ai/executions/'+id+'/review',{decision,edits,reason}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function aiSetBudget(){ const uc=prompt('Use case code (blank for tenant-wide):','')||null;
+  const lim=prompt('Cost limit (USD):','10'); const hard=confirm('Hard stop when exceeded?');
+  try{ await api('POST','/admin/ai/budgets',{limit_cost:parseFloat(lim),use_case_code:uc,hard_stop:hard}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function aiKill(){ const scope=prompt('Scope (platform/tenant/use_case/provider/model/prompt_version):','use_case')||'use_case';
+  const ref=scope==='platform'||scope==='tenant'?null:prompt('Scope ref (e.g. use case code):','');
+  const reason=prompt('Reason:','')||'manual'; if(!confirm('Activate kill switch for '+scope+'? New AI executions in scope will be blocked.')) return;
+  try{ const r=await api('POST','/admin/ai/kill-switch',{scope,scope_ref:ref,reason}); alert('Kill switch #'+r.id+' active. Release from AI audit / API.'); }catch(e){ alert(e.message); } }
 async function wfInstView(id){ const d=await api('GET','/admin/workflow-instances/'+id);
   const body=`<div class="kv"><div class="k">Workflow</div><div>${d.instance.definition_id}</div><div class="k">Step</div><div><b>${d.instance.current_step}</b></div><div class="k">Status</div><div>${d.instance.status}</div><div class="k">Correlation</div><div>${cell(d.instance.correlation_id)}</div></div>`+
     `<h3 style="margin:12px 0 6px;font-size:14px">Transition history</h3>`+table(['From','To','Action','Actor','Result','Time'], d.history, r=>[r.from_step,r.to_step,r.action,r.actor,r.result,r.ts])+

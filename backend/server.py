@@ -1067,6 +1067,71 @@ def _phase8_routes():
     }
 
 
+def _phase9_routes():
+    """Phase 9 — AI Administration: use-cases/models/prompts/tools/execute/review/budgets/incidents/
+    kill-switch/health. Permission-gated, tenant-scoped, audited; AI is advisory + human-reviewed;
+    prohibited actions denied; secrets redacted; live AI blocked."""
+    import ai_admin as ai
+
+    def uc_list(a, b, p):    return {"use_cases": ai.list_use_cases(_conn, a)}
+    def uc_create(a, b, p):  return {"id": ai.create_use_case(_conn, a, b["code"], b["name"], risk_level=b.get("risk_level", "low"), allowed_input_classes=b.get("allowed_input_classes", "PUBLIC,INTERNAL"), human_review=b.get("human_review", "always"), allowed_models=b.get("allowed_models", "mock"), cost_limit=b.get("cost_limit", 1.0), description=b.get("description"))}
+    def uc_review_policy(a, b, p): return {"ok": ai.set_review_policy(_conn, a, p["code"], b["policy"], confidence_threshold=b.get("confidence_threshold", 0.7))}
+    def m_list(a, b, p):     return {"models": ai.list_models(_conn, a)}
+    def m_register(a, b, p): return {"id": ai.register_model(_conn, a, b["provider"], b["model_id"], b["display_name"], model_type=b.get("model_type", "text"), version=b.get("version", "1"), approved_environments=b.get("approved_environments", "MOCK"), risk_rating=b.get("risk_rating", "medium"))}
+    def m_approve(a, b, p):  return {"ok": ai.approve_model(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def m_status(a, b, p):   return {"ok": ai.set_model_status(_conn, a, int(p["id"]), b["status"], reason=b.get("reason"))}
+    def pr_create(a, b, p):  return {"id": ai.create_prompt(_conn, a, b["code"], b["name"], b["use_case_code"], risk=b.get("risk", "low"), description=b.get("description"))}
+    def pr_new_ver(a, b, p): return {"id": ai.create_version(_conn, a, p["code"], change_reason=b.get("change_reason"))}
+    def pv_set(a, b, p):     return {"ok": ai.set_version_content(_conn, a, int(p["id"]), b["system_instruction"], b["user_template"], allowed_variables=b.get("allowed_variables"), output_schema=b.get("output_schema"), validation_rules=b.get("validation_rules"))}
+    def pv_validate(a, b, p): return ai.validate_version(_conn, a, int(p["id"]))
+    def pv_evaluate(a, b, p): return ai.run_evaluation(_conn, a, b["use_case_code"], int(p["id"]))
+    def pv_approve(a, b, p): return {"ok": ai.approve_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def pv_publish(a, b, p): return ai.publish_version(_conn, a, int(p["id"]), b["change_reason"], effective_from=b.get("effective_from"))
+    def tools_list(a, b, p): return {"tools": ai.list_tools(_conn, a)}
+    def tool_reg(a, b, p):   return {"ok": ai.register_tool(_conn, a, b["code"], b["name"], b["permission"], risk=b.get("risk", "low"))}
+    def ai_exec(a, b, p):    return ai.execute(_conn, a, b["use_case_code"], b["prompt_code"], b.get("input", {}), scenario=b.get("scenario", "valid"), external=b.get("external", False))
+    def ai_review(a, b, p):  return ai.review_execution(_conn, a, int(p["id"]), b["decision"], edits=b.get("edits"), reason=b.get("reason"))
+    def ai_queue(a, b, p):   return {"queue": ai.review_queue(_conn, a)}
+    def budget_set(a, b, p): return {"id": ai.set_budget(_conn, a, b["limit_cost"], scope=b.get("scope", "tenant"), use_case_code=b.get("use_case_code"), period=b.get("period", "monthly"), hard_stop=b.get("hard_stop", True))}
+    def usage(a, b, p):      return ai.usage_summary(_conn, a)
+    def health(a, b, p):     return ai.ai_health(_conn, a)
+    def inc_list(a, b, p):   return {"incidents": ai.list_incidents(_conn, a)}
+    def ks_activate(a, b, p): return {"id": ai.activate_kill_switch(_conn, a, b["scope"], scope_ref=b.get("scope_ref"), reason=b.get("reason"))}
+    def ks_release(a, b, p): return {"ok": ai.release_kill_switch(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def migration(a, b, p):
+        core.require(a, "ai.use_case.view")
+        return ai.classify_existing(_conn)
+
+    return {
+        ("GET", "/admin/ai/use-cases"): uc_list,
+        ("POST", "/admin/ai/use-cases"): uc_create,
+        ("POST", "/admin/ai/use-cases/:code/review-policy"): uc_review_policy,
+        ("GET", "/admin/ai/models"): m_list,
+        ("POST", "/admin/ai/models"): m_register,
+        ("POST", "/admin/ai/models/:id/approve"): m_approve,
+        ("POST", "/admin/ai/models/:id/status"): m_status,
+        ("POST", "/admin/ai/prompts"): pr_create,
+        ("POST", "/admin/ai/prompts/:code/versions"): pr_new_ver,
+        ("POST", "/admin/ai/prompt-versions/:id/content"): pv_set,
+        ("POST", "/admin/ai/prompt-versions/:id/validate"): pv_validate,
+        ("POST", "/admin/ai/prompt-versions/:id/evaluate"): pv_evaluate,
+        ("POST", "/admin/ai/prompt-versions/:id/approve"): pv_approve,
+        ("POST", "/admin/ai/prompt-versions/:id/publish"): pv_publish,
+        ("GET", "/admin/ai/tools"): tools_list,
+        ("POST", "/admin/ai/tools"): tool_reg,
+        ("POST", "/admin/ai/execute"): ai_exec,
+        ("POST", "/admin/ai/executions/:id/review"): ai_review,
+        ("GET", "/admin/ai/review-queue"): ai_queue,
+        ("POST", "/admin/ai/budgets"): budget_set,
+        ("GET", "/admin/ai/usage"): usage,
+        ("GET", "/admin/ai/health"): health,
+        ("GET", "/admin/ai/incidents"): inc_list,
+        ("POST", "/admin/ai/kill-switch"): ks_activate,
+        ("POST", "/admin/ai/kill-switch/:id/release"): ks_release,
+        ("GET", "/admin/ai/migration"): migration,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
@@ -1077,6 +1142,7 @@ ROUTES.update(_phase5_routes())
 ROUTES.update(_phase6_routes())
 ROUTES.update(_phase7_routes())
 ROUTES.update(_phase8_routes())
+ROUTES.update(_phase9_routes())
 
 
 def _match(method, path):

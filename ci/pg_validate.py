@@ -665,6 +665,99 @@ def main():
           "reporting migration zero drift on PostgreSQL")
     print("PHASE 8 REPORTING & DASHBOARD ADMINISTRATION: PASS on PostgreSQL", flush=True)
 
+    # Phase 9 — AI Administration (deterministic mock) on PostgreSQL
+    import ai_admin as ai, ai_provider
+    aia = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    # seeded approved mock model + allowlisted tools
+    check(any(m["provider"] == "mock" and m["status"] in ("APPROVED", "ACTIVE") for m in ai.list_models(conn, aia)),
+          "seeded approved mock AI model on PostgreSQL")
+    # governed use case + prompt lifecycle (validate -> evaluate -> approve -> publish immutable)
+    ai.create_use_case(conn, aia, "booking_assist_ci", "Booking Assist", risk_level="low",
+                       allowed_input_classes="PUBLIC,INTERNAL", human_review="always")
+    ai.set_review_policy(conn, aia, "booking_assist_ci", "always")
+    pid = ai.create_prompt(conn, aia, "ba_ci", "P", "booking_assist_ci")
+    v = conn.execute("SELECT id FROM ai_prompt_versions WHERE prompt_id=? AND version_no=1", (pid,)).fetchone()["id"]
+    ai.set_version_content(conn, aia, v, "Summarize bookings, cite evidence.", "B:{{booking}}",
+                          allowed_variables=["booking"], output_schema={"required": ["summary", "confidence"]})
+    ai.validate_version(conn, aia, v)
+    ev = ai.run_evaluation(conn, aia, "booking_assist_ci", v)
+    check(ev["passed"], "AI prompt passes evaluation on PostgreSQL")
+    ai.approve_version(conn, aia, v)
+    pub = ai.publish_version(conn, aia, v, "go")
+    check(pub["status"] == "ACTIVE" and bool(pub["checksum"]), "AI prompt published + checksummed on PostgreSQL")
+    try:
+        ai.set_version_content(conn, aia, v, "x", "y")
+        check(False, "published prompt must be immutable")
+    except core.ForbiddenError:
+        check(True, "published AI prompt version is immutable on PostgreSQL")
+    # advisory execution — never auto-commits
+    out = ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-1", "stage": "UNDER_REVIEW"}, scenario="valid")
+    check(out["result"] == "ADVISORY" and out["committed"] is False and out["human_review_required"] and out["ai_generated"],
+          "AI execution is advisory + human-reviewed + never auto-commits on PostgreSQL")
+    check(out["is_mock"] is True, "AI output labeled as mock on PostgreSQL")
+    # secret redaction (never sent)
+    outr = ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-2", "password": "x", "api_key": "sk"}, scenario="valid")
+    check("password" in outr["redacted_fields"] and "api_key" in outr["redacted_fields"],
+          "AI redacts secrets before sending on PostgreSQL")
+    # payment credentials hard-blocked
+    try:
+        ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"card_number": "4111", "cvv": "123"})
+        check(False, "raw payment credentials must be blocked")
+    except core.ForbiddenError:
+        check(True, "raw payment credentials blocked from AI on PostgreSQL")
+    # prohibited action + injection -> blocked, incident, never acts
+    outp = ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-3"}, scenario="prohibited_action")
+    check(outp["result"] == "UNSAFE_BLOCKED" and outp["committed"] is False, "prohibited AI action blocked on PostgreSQL")
+    outi = ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-4"}, scenario="injection")
+    check(outi["result"] == "UNSAFE_BLOCKED", "prompt-injection blocked on PostgreSQL")
+    check(len(ai.list_incidents(conn, aia)) >= 1, "AI incident raised for unsafe output on PostgreSQL")
+    # tool registry rejects prohibited actions
+    try:
+        ai.register_tool(conn, aia, "release_payment", "Bad", "x")
+        check(False, "prohibited tool must be rejected")
+    except core.ForbiddenError:
+        check(True, "prohibited AI tool rejected on PostgreSQL")
+    # human review (edits distinguishable)
+    ai.review_execution(conn, aia, out["execution_id"], "EDITED", edits={"summary": "human edit"}, reason="clarify")
+    check(conn.execute("SELECT edited FROM ai_reviews WHERE execution_id=?", (out["execution_id"],)).fetchone()["edited"] == 1,
+          "human edits distinguishable from AI output on PostgreSQL")
+    # budget hard stop
+    ai.set_budget(conn, aia, 0.0, use_case_code="booking_assist_ci", hard_stop=True)
+    try:
+        ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-5"}, scenario="valid")
+        check(False, "budget hard stop must deny execution")
+    except core.ForbiddenError:
+        check(True, "AI budget hard stop enforced on PostgreSQL")
+    ai.set_budget(conn, aia, 100.0, use_case_code="booking_assist_ci")
+    # kill switch
+    ks = ai.activate_kill_switch(conn, aia, "use_case", scope_ref="booking_assist_ci", reason="drill")
+    try:
+        ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-6"}, scenario="valid")
+        check(False, "kill switch must deny execution")
+    except core.ForbiddenError:
+        check(True, "AI kill switch enforced (fail-safe) on PostgreSQL")
+    ai.release_kill_switch(conn, aia, ks)
+    check(ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-7"}, scenario="valid")["result"] == "ADVISORY",
+          "AI resumes after kill-switch release on PostgreSQL")
+    # provider outage fallback
+    outo = ai.execute(conn, aia, "booking_assist_ci", "ba_ci", {"booking": "BK-8"}, scenario="provider_error")
+    check(outo["result"] == "PROVIDER_UNAVAILABLE", "AI provider outage falls back safely on PostgreSQL")
+    # live provider blocked
+    lp = ai_provider.get_provider("openai", "PRODUCTION")
+    check(lp.is_mock is False and lp.health().get("blocked") is True, "live AI provider BLOCKED without owner credentials on PostgreSQL")
+    # tenant isolation of executions
+    other = {"id": uB, "role": "admin", "perms": {"ai.review"}, "tenant_id": tB}
+    try:
+        ai.review_execution(conn, other, out["execution_id"], "ACCEPTED")
+        check(False, "cross-tenant AI review must be denied")
+    except core.NotFoundError:
+        check(True, "AI execution tenant isolation (404 no-leak) on PostgreSQL")
+    # migration zero drift + financials unchanged
+    m9 = ai.classify_existing(conn)
+    check(m9["financial_differences"] == 0 and m9["operational_status_differences"] == 0 and m9["ai_authored_record_changes"] == 0
+          and m9["existing_ai_functions"] == 0, "AI migration zero drift / no relabeling on PostgreSQL")
+    print("PHASE 9 AI ADMINISTRATION (MOCK): PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

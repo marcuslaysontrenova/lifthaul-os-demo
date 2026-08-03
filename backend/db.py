@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 13  # bump when any module schema changes (13 = Phase 8 reporting & dashboard administration)
+SCHEMA_VERSION = 14  # bump when any module schema changes (14 = Phase 9 AI administration)
 
 
 def _now():
@@ -81,6 +81,7 @@ def _seed_platform(conn):
     import settings as sysconfig
     import integrations
     import reporting
+    import ai_admin
     admin_platform.init(conn)
     config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
     admin_platform.seed(conn)
@@ -95,6 +96,7 @@ def _seed_platform(conn):
     sysconfig.init(conn); sysconfig.seed(conn)                # Phase 6: platform & system settings + modules + security floors
     integrations.init(conn); integrations.seed(conn)          # Phase 7: integration definitions/profiles/webhooks/reconciliation + Wise
     reporting.init(conn); reporting.seed(conn)                # Phase 8: governed reporting datasets + standard reports + dashboards
+    ai_admin.init(conn); ai_admin.seed(conn)                  # Phase 9: governed AI use cases/models/prompts/tools + mock provider
     return conn
 
 

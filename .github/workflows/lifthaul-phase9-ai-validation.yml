@@ -1,0 +1,142 @@
+name: LiftHaul Phase 9 AI Validation
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - 'ci/**'
+      - 'backend/ai_admin.py'
+      - 'backend/ai_provider.py'
+      - 'backend/test_phase9_ai.py'
+      - '.github/workflows/lifthaul-phase9-ai-validation.yml'
+
+jobs:
+  regression:
+    name: SQLite regression (full suite + Phase 9)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Full test suite (financial + operational + AI-authored regression + Phases 3-9)
+        working-directory: backend
+        run: |
+          python -m unittest test_core test_ops test_admin test_server test_security \
+            test_catalog test_phase2 test_deploy test_seed test_pgadapter \
+            test_pg_portability test_admin_platform test_org test_backfill \
+            test_admin_api test_tenant_isolation test_pathA test_phase2_config \
+            test_phase3_crm test_phase4_workflow test_phase5_forms test_phase6_settings \
+            test_phase7_integrations test_phase8_reporting test_phase9_ai test_http_e2e
+
+  postgres-validation:
+    name: PostgreSQL runtime + backup/restore (Phase 9)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lifthaul
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 15
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lifthaul
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install psycopg2-binary
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: PostgreSQL runtime validation (isolation + Phases 3-9 incl AI mock)
+        run: python ci/pg_validate.py
+      - name: Backup (pg_dump) and restore into a fresh database (incl. Phase 9 AI tables)
+        run: |
+          set -euo pipefail
+          PGPASSWORD=postgres pg_dump -h localhost -U postgres lifthaul > ci/backup.sql
+          test -s ci/backup.sql && echo "backup non-empty: $(wc -c < ci/backup.sql) bytes"
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE lifthaul_restore;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d lifthaul_restore -f ci/backup.sql >/dev/null
+          for t in tenants users quotations audit_logs report_definitions \
+                   ai_use_cases ai_models ai_prompts ai_prompt_versions ai_review_policies \
+                   ai_tools ai_executions ai_reviews ai_budgets ai_evaluations ai_incidents \
+                   ai_kill_switches ai_memory; do
+            s=$(PGPASSWORD=postgres psql -h localhost -U postgres -d lifthaul -tAc "SELECT COUNT(*) FROM $t")
+            d=$(PGPASSWORD=postgres psql -h localhost -U postgres -d lifthaul_restore -tAc "SELECT COUNT(*) FROM $t")
+            echo "$t: source=$s restored=$d"
+            [ "$s" = "$d" ] || { echo "COUNT MISMATCH for $t"; exit 1; }
+          done
+          echo "BACKUP/RESTORE: all counts match (incl. Phase 9 AI tables)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pg-evidence-phase9
+          path: ci/backup.sql
+
+  browser-e2e:
+    name: Literal browser E2E (Chromium on PostgreSQL, Phase 9)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lifthaul
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 15
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lifthaul
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install psycopg2-binary
+      - name: Seed two tenants on PostgreSQL (+ emit seed ids)
+        run: python ci/pg_validate.py
+      - name: Start backend on PostgreSQL
+        run: |
+          APP_ENV=development PORT=8787 CORS_ORIGINS=http://127.0.0.1:8080 \
+            python backend/server.py > ci/backend.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8787/health >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8787/health && echo "backend healthy"
+      - name: Serve frontend
+        run: python -m http.server 8080 > ci/frontend.log 2>&1 &
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install Playwright + run browser E2E (isolation + Phases 3-9)
+        working-directory: ci/browser
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+          API_BASE=http://127.0.0.1:8787 APP_BASE=http://127.0.0.1:8080 npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence-phase9
+          path: |
+            ci/artifacts/**
+            ci/backend.log
+            ci/seed_ids.json
+
+  # Optional live-AI job — validates ONLY if the owner provides a provider key as a protected secret.
+  ai-live-sandbox:
+    name: Live AI provider validation (owner credentials)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Live AI connectivity (owner-controlled; mock CI does not require this)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ] && [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "LIVE AI BLOCKED: no owner provider credential provided — skipping (mock CI is authoritative)."
+            exit 0
+          fi
+          echo "A provider key is present — owner sandbox validation would run here."
+          echo "Live AI production readiness is reported separately from mock validation."

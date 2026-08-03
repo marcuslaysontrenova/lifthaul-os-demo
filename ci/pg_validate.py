@@ -816,8 +816,6 @@ def main():
     check(saas.quota_status(conn, ta, "active_users")["remaining"] >= 0, "quota never negative on PostgreSQL")
     # reserve -> commit / release
     saas.set_quota(conn, sa, acme, "api_calls", 100, hard_limit=True)
-    print("DEBUG api_calls quota after set_quota:", saas.quota_status(conn, sa, "api_calls", tenant_id=acme),
-          "| rows:", conn.execute("SELECT tenant_id,meter_code,included_qty,consumed_qty,reserved_qty FROM quotas WHERE meter_code='api_calls'").fetchall(), flush=True)
     rv = saas.reserve_usage(conn, sa, "api_calls", 5, idem_key="rv1", tenant_id=acme)
     saas.commit_reservation(conn, sa, rv["reservation_id"])
     rv2 = saas.reserve_usage(conn, sa, "api_calls", 5, idem_key="rv2", tenant_id=acme)

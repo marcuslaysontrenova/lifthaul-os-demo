@@ -729,7 +729,7 @@ def integrity_checks(conn, actor):
         except Exception:
             no_key += 1
     add("report_without_tenant_key_or_limit", "PASS" if no_key == 0 else "FAIL", "high", f"{no_key}")
-    dup_kpi = conn.execute("SELECT code,COUNT(*) c FROM kpi_definitions GROUP BY code HAVING c>1").fetchall()
+    dup_kpi = conn.execute("SELECT code,COUNT(*) c FROM kpi_definitions GROUP BY code HAVING COUNT(*)>1").fetchall()
     add("duplicate_kpi_code", "PASS" if not dup_kpi else "FAIL", "high", f"{len(dup_kpi)}")
     denied = conn.execute("SELECT COUNT(*) c FROM report_deliveries WHERE status='DENIED_SCOPE'").fetchone()["c"]
     add("schedule_recipient_out_of_scope", "PASS" if denied == 0 else "WARNING", "medium", f"{denied} blocked deliveries")

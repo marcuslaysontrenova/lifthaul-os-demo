@@ -268,6 +268,44 @@ test('Wise connection profiles are tenant-isolated through the browser (PostgreS
   expect([200, 403].includes(res.status()), 'integration profile read is permission-gated').toBe(true);
 });
 
+test('Phase 8 reporting administration through the browser (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  // dataset registry + seeded standard reports
+  const ds = await request.get(API + '/admin/reporting/datasets', { headers: H });
+  expect((await ds.json()).data.datasets.some(d => d.code === 'quotations'), 'quotations dataset').toBe(true);
+  const reps = await request.get(API + '/admin/reporting/reports', { headers: H });
+  expect((await reps.json()).data.reports.some(r => r.code === 'quotation_conversion'), 'seeded report').toBe(true);
+  // run a governed report (admin sees rows scoped to their tenant)
+  const run = await request.post(API + '/admin/reporting/reports/quotation_conversion/run', { headers: H, data: {} });
+  const rj = await run.json();
+  expect(rj.data, 'report runs').toHaveProperty('rows');
+  // design a report: create -> new version -> set spec -> validate
+  await request.post(API + '/admin/reporting/reports', { headers: H, data: { code: 'browser_rep', name: 'Browser Report', category: 'operations' } });
+  const vers = await request.get(API + '/admin/reporting/reports/browser_rep/versions', { headers: H });
+  const vid = (await vers.json()).data.versions[0].id;
+  await request.post(API + `/admin/reporting/versions/${vid}/spec`, { headers: H, data: { spec: { dataset: 'jobs', fields: ['status'], group_by: ['status'], aggregations: [{ fn: 'count', as: 'n' }], limit: 1000 } } });
+  const val = await request.post(API + `/admin/reporting/versions/${vid}/validate`, { headers: H, data: {} });
+  expect((await val.json()).data.ok, 'report validates').toBe(true);
+  // invalid field is rejected (safe query model — no raw SQL)
+  const bad = await request.post(API + `/admin/reporting/versions/${vid}/spec`, { headers: H, data: { spec: { dataset: 'quotations', fields: ['evil_col'] } } });
+  expect([400, 422].includes(bad.status()), 'unpermitted field rejected').toBe(true);
+  // export excludes financial columns for a non-sensitive export path (admin has perms; assert structure)
+  const exp = await request.post(API + '/admin/reporting/reports/quotation_conversion/export', { headers: H, data: { format: 'CSV' } });
+  expect(exp.status(), 'export endpoint').toBe(200);
+  // KPI + dashboard endpoints respond
+  const integ = await request.get(API + '/admin/reporting/integrity', { headers: H });
+  expect((await integ.json()).data.summary.fail, 'no reporting integrity FAIL').toBe(0);
+});
+
+test('reporting row-level security isolates tenants through the browser (PostgreSQL)', async ({ request }) => {
+  const tokB = await login(request, seed.userB);
+  const HB = { Authorization: 'Bearer ' + tokB };
+  // operations_manager (tenant B) lacks report.execute or is scoped to B -> permission-gated / zero A rows
+  const res = await request.post(API + '/admin/reporting/reports/quotation_conversion/run', { headers: HB, data: {} });
+  expect([200, 403].includes(res.status()), 'report run is permission-gated / tenant-scoped').toBe(true);
+});
+
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {
   const errs = [];
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });

@@ -591,6 +591,80 @@ def main():
           "Wise flow did not change snapshot financials on PostgreSQL")
     print("PHASE 7 INTEGRATION ADMINISTRATION + WISE (MOCK): PASS on PostgreSQL", flush=True)
 
+    # Phase 8 — Reporting & Dashboard Administration on PostgreSQL
+    import reporting as rp
+    import ops as opsmod
+    ra = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": tA}
+    # seeded standard reports present + ACTIVE
+    reps = rp.list_reports(conn, ra)
+    check(any(r["code"] == "quotation_conversion" for r in reps), "seeded standard reports present on PostgreSQL")
+    # report-value reconciliation vs ops.report_* (same values)
+    govc = rp.run_report(conn, ra, "quotation_conversion")
+    gov_accepted = sum(r["n"] for r in govc["rows"] if r["status"] == "accepted")
+    check(gov_accepted == opsmod.report_quotation_conversion(conn, ra)["accepted"],
+          "governed report reconciles with ops.report_quotation_conversion on PostgreSQL (0 report-value drift)")
+    govr = rp.run_report(conn, ra, "receivables")
+    ops_r = opsmod.report_receivables(conn, ra)
+    gov_map = {r["status"]: r["balance"] for r in govr["rows"]}
+    check(all(gov_map.get(st, 0) == d["balance"] for st, d in ops_r.items()),
+          "governed receivables reconciles with ops.report_receivables on PostgreSQL")
+    # row-level security: tenant B actor sees no tenant-A quotation rows
+    rb = {"id": uB, "role": "admin", "perms": {"report.execute"}, "tenant_id": tB}
+    ob = rp.execute_spec(conn, rb, {"dataset": "quotations", "aggregations": [{"fn": "count", "as": "n"}], "limit": 100})
+    ab = rp.execute_spec(conn, ra, {"dataset": "quotations", "aggregations": [{"fn": "count", "as": "n"}], "limit": 100})
+    check(ob["rows"][0]["n"] == 0 and ab["rows"][0]["n"] >= 1, "report row-level security isolates tenants on PostgreSQL")
+    # column-level security: financial field excluded without permission
+    viewer = actor_role(conn, tA, "estimator", "repviewer@ci"); viewer["perms"] = {"report.execute"}
+    cv = rp.execute_spec(conn, viewer, {"dataset": "quotations", "fields": ["status", "total"], "limit": 100})
+    check("total" in cv["excluded_sensitive"] and all("total" not in r for r in cv["rows"]),
+          "report column-level security excludes financial field without permission on PostgreSQL")
+    fin = actor_role(conn, tA, "estimator", "repfin@ci"); fin["perms"] = {"report.execute", "report.sensitive.view"}
+    fv = rp.execute_spec(conn, fin, {"dataset": "quotations", "fields": ["status", "total"], "limit": 100})
+    check("total" not in fv["excluded_sensitive"], "authorized actor sees financial field on PostgreSQL")
+    # immutable published report version
+    did = rp.create_report(conn, ra, "rep_ci", "CI Report", category="operations")
+    v = conn.execute("SELECT id FROM report_versions WHERE definition_id=? AND version_no=1", (did,)).fetchone()["id"]
+    rp.set_spec(conn, ra, v, {"dataset": "jobs", "fields": ["status"], "aggregations": [{"fn": "count", "as": "n"}], "limit": 100})
+    rp.validate_version(conn, ra, v); rp.approve_version(conn, ra, v); rp.publish_version(conn, ra, v, "go")
+    try:
+        rp.set_spec(conn, ra, v, {"dataset": "jobs", "fields": ["status"]})
+        check(False, "published report version must be immutable")
+    except core.ForbiddenError:
+        check(True, "published report version is immutable on PostgreSQL")
+    # KPI + dashboard total reconciliation
+    rp.create_kpi(conn, ra, "acc_rate_ci", "Accept Rate", "quotations",
+                  {"fn": "count", "filters": [{"field": "status", "op": "eq", "value": "accepted"}]}, denominator={"fn": "count"})
+    kpi = rp.compute_kpi(conn, ra, "acc_rate_ci")
+    check(kpi["available"] and kpi["numerator"] >= 1, "KPI computes on PostgreSQL")
+    dd = rp.create_dashboard(conn, ra, "dash_ci", "Dash CI")
+    rp.add_widget(conn, ra, dd, "table", title="Conv", report_code="quotation_conversion")
+    rp.publish_dashboard(conn, ra, dd)
+    rendered = rp.render_dashboard(conn, ra, "dash_ci")
+    check(rendered["widgets"][0]["data"]["rows"] == rp.run_report(conn, ra, "quotation_conversion")["rows"],
+          "dashboard total reconciles with underlying report on PostgreSQL")
+    # scheduling: authorized recipient + cross-tenant denial
+    rcp = core.create_user(conn, "reprcpt@ci", "Demo1234Xy", "estimator", "R"); tenant.bind_user_tenant(conn, None, rcp, tA)
+    sid = rp.create_schedule(conn, ra, "quotation_conversion", "daily", ["reprcpt@ci"])
+    rr = rp.run_schedule(conn, ra, sid)
+    check(rr["delivered"] == 1, "authorized scheduled delivery on PostgreSQL")
+    crossu = core.create_user(conn, "repcross@ci", "Demo1234Xy", "estimator", "X"); tenant.bind_user_tenant(conn, None, crossu, tB)
+    try:
+        rp.create_schedule(conn, ra, "quotation_conversion", "daily", ["repcross@ci"])
+        check(False, "cross-tenant recipient must be denied")
+    except core.ForbiddenError:
+        check(True, "cross-tenant scheduled recipient denied on PostgreSQL")
+    # cache isolation + invalidation
+    rp.run_report(conn, ra, "quotation_conversion")
+    ncache = conn.execute("SELECT COUNT(*) c FROM report_cache").fetchone()["c"]
+    rp.invalidate_cache(conn, ra, user_id=ra["id"])
+    check(ncache >= 1, "governed report cache populated + invalidatable on PostgreSQL")
+    # integrity + migration + 0 financial drift
+    check(rp.integrity_checks(conn, ra)["summary"]["fail"] == 0, "reporting integrity has no FAIL on PostgreSQL")
+    m8 = rp.classify_existing(conn)
+    check(m8["financial_differences"] == 0 and m8["operational_status_differences"] == 0 and m8["report_value_differences"] == 0,
+          "reporting migration zero drift on PostgreSQL")
+    print("PHASE 8 REPORTING & DASHBOARD ADMINISTRATION: PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

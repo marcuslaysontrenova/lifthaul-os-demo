@@ -993,6 +993,80 @@ def _phase7_routes():
     }
 
 
+def _phase8_routes():
+    """Phase 8 — Reporting & Dashboard Administration: datasets/definitions/versions/designer/
+    validate/preview/execute/export + KPIs + dashboards + schedules + cache + integrity. Permission-
+    gated, tenant-scoped, audited; row + column security enforced; no raw SQL exposed."""
+    import reporting as rp
+
+    def ds_list(a, b, p):    return {"datasets": rp.list_datasets(_conn, a)}
+    def r_list(a, b, p):     return {"reports": rp.list_reports(_conn, a, category=b.get("category"))}
+    def r_create(a, b, p):   return {"id": rp.create_report(_conn, a, b["code"], b["name"], category=b.get("category"), description=b.get("description"), org_scope=b.get("org_scope"))}
+    def r_versions(a, b, p): return {"versions": rp.list_versions(_conn, a, p["code"])}
+    def r_new_ver(a, b, p):  return {"id": rp.create_version(_conn, a, p["code"], change_reason=b.get("change_reason"))}
+    def r_set_spec(a, b, p): return {"ok": rp.set_spec(_conn, a, int(p["id"]), b["spec"])}
+    def r_validate(a, b, p): return rp.validate_version(_conn, a, int(p["id"]))
+    def r_preview(a, b, p):  return rp.preview(_conn, a, int(p["id"]), target_tenant=b.get("target_tenant"), elevated=b.get("elevated", False))
+    def r_approve(a, b, p):  return {"ok": rp.approve_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def r_publish(a, b, p):  return rp.publish_version(_conn, a, int(p["id"]), b["change_reason"], effective_from=b.get("effective_from"))
+    def r_retire(a, b, p):   return {"ok": rp.retire_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def r_run(a, b, p):      return rp.run_report(_conn, a, p["code"], params=b.get("params"), target_tenant=b.get("target_tenant"), elevated=b.get("elevated", False), use_cache=b.get("use_cache", True))
+    def r_export(a, b, p):   return rp.export_report(_conn, a, p["code"], fmt=b.get("format", "CSV"), params=b.get("params"))
+    def r_exec_hist(a, b, p): return {"executions": rp.execution_history(_conn, a)}
+    def r_cache_inv(a, b, p): return {"ok": rp.invalidate_cache(_conn, a, user_id=b.get("user_id"), report_code=b.get("report_code"))}
+    def r_integrity(a, b, p): return rp.integrity_checks(_conn, a)
+    def r_migration(a, b, p):
+        core.require(a, "report.definition.view")
+        return rp.classify_existing(_conn)
+    # KPIs
+    def k_list(a, b, p):     return {"kpis": rp.list_kpis(_conn, a)}
+    def k_create(a, b, p):   return {"id": rp.create_kpi(_conn, a, b["code"], b["name"], b["dataset"], b["numerator"], denominator=b.get("denominator"), definition=b.get("definition"), target=b.get("target"), warning=b.get("warning"), critical=b.get("critical"), filters=b.get("filters"))}
+    def k_compute(a, b, p):  return rp.compute_kpi(_conn, a, p["code"], target_tenant=b.get("target_tenant"), elevated=b.get("elevated", False))
+    # dashboards
+    def d_list(a, b, p):     return {"dashboards": rp.list_dashboards(_conn, a)}
+    def d_create(a, b, p):   return {"id": rp.create_dashboard(_conn, a, b["code"], b["name"], role_assignment=b.get("role_assignment"))}
+    def d_add_widget(a, b, p): return {"id": rp.add_widget(_conn, a, int(p["id"]), b["widget_type"], title=b.get("title"), report_code=b.get("report_code"), kpi_code=b.get("kpi_code"), config=b.get("config"), sort_order=b.get("sort_order", 0))}
+    def d_publish(a, b, p):  return {"ok": rp.publish_dashboard(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def d_render(a, b, p):   return rp.render_dashboard(_conn, a, p["code"])
+    # schedules
+    def s_list(a, b, p):     return {"schedules": rp.list_schedules(_conn, a)}
+    def s_create(a, b, p):   return {"id": rp.create_schedule(_conn, a, b["report_code"], b["frequency"], b["recipients"], fmt=b.get("format", "CSV"), channel=b.get("channel", "in_app"), params=b.get("params"))}
+    def s_run(a, b, p):      return rp.run_schedule(_conn, a, int(p["id"]))
+    def s_deliveries(a, b, p): return {"deliveries": rp.delivery_history(_conn, a)}
+
+    return {
+        ("GET", "/admin/reporting/datasets"): ds_list,
+        ("GET", "/admin/reporting/reports"): r_list,
+        ("POST", "/admin/reporting/reports"): r_create,
+        ("GET", "/admin/reporting/reports/:code/versions"): r_versions,
+        ("POST", "/admin/reporting/reports/:code/versions"): r_new_ver,
+        ("POST", "/admin/reporting/reports/:code/run"): r_run,
+        ("POST", "/admin/reporting/reports/:code/export"): r_export,
+        ("POST", "/admin/reporting/versions/:id/spec"): r_set_spec,
+        ("POST", "/admin/reporting/versions/:id/validate"): r_validate,
+        ("POST", "/admin/reporting/versions/:id/preview"): r_preview,
+        ("POST", "/admin/reporting/versions/:id/approve"): r_approve,
+        ("POST", "/admin/reporting/versions/:id/publish"): r_publish,
+        ("POST", "/admin/reporting/versions/:id/retire"): r_retire,
+        ("GET", "/admin/reporting/executions"): r_exec_hist,
+        ("POST", "/admin/reporting/cache/invalidate"): r_cache_inv,
+        ("GET", "/admin/reporting/integrity"): r_integrity,
+        ("GET", "/admin/reporting/migration"): r_migration,
+        ("GET", "/admin/reporting/kpis"): k_list,
+        ("POST", "/admin/reporting/kpis"): k_create,
+        ("POST", "/admin/reporting/kpis/:code/compute"): k_compute,
+        ("GET", "/admin/reporting/dashboards"): d_list,
+        ("POST", "/admin/reporting/dashboards"): d_create,
+        ("POST", "/admin/reporting/dashboards/:id/widgets"): d_add_widget,
+        ("POST", "/admin/reporting/dashboards/:id/publish"): d_publish,
+        ("POST", "/admin/reporting/dashboards/:code/render"): d_render,
+        ("GET", "/admin/reporting/schedules"): s_list,
+        ("POST", "/admin/reporting/schedules"): s_create,
+        ("POST", "/admin/reporting/schedules/:id/run"): s_run,
+        ("GET", "/admin/reporting/deliveries"): s_deliveries,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
@@ -1002,6 +1076,7 @@ ROUTES.update(_phase4_routes())
 ROUTES.update(_phase5_routes())
 ROUTES.update(_phase6_routes())
 ROUTES.update(_phase7_routes())
+ROUTES.update(_phase8_routes())
 
 
 def _match(method, path):

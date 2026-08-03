@@ -242,6 +242,18 @@ const MENU = [
     {id:'int_deadletter', label:'Dead-Letter Queue'},
     {id:'int_health', label:'Provider Health'},
   ]},
+  {sect:'Reporting', items:[
+    {id:'rep_datasources', label:'Data Sources'},
+    {id:'rep_definitions', label:'Report Definitions'},
+    {id:'rep_designer', label:'Report Designer'},
+    {id:'rep_run', label:'Run Report'},
+    {id:'rep_kpis', label:'KPI Definitions'},
+    {id:'rep_dashboards', label:'Dashboards'},
+    {id:'rep_schedules', label:'Schedules'},
+    {id:'rep_deliveries', label:'Delivery History'},
+    {id:'rep_executions', label:'Execution History'},
+    {id:'rep_integrity', label:'Reporting Integrity'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -841,6 +853,96 @@ async function intWiseVerify(id){ const notes=prompt('Verification notes:','wise
 async function intReconResolve(id){ const res=prompt('Resolution (RECONCILED/MISMATCH/DUPLICATE/IGNORED):','RECONCILED')||'RECONCILED';
   try{ await api('POST','/admin/integrations/reconciliation/'+id+'/resolve',{resolution:res,reason:'console'}); render(CURRENT); }catch(e){ alert(e.message); } }
 async function intDlqReplay(id){ const reason=prompt('Replay reason:'); if(!reason) return; try{ const r=await api('POST','/admin/integrations/dead-letters/'+id+'/replay',{reason}); alert('Status: '+r.status); render(CURRENT); }catch(e){ alert(e.message); } }
+// ---- Phase 8 Reporting & Dashboard Administration screens (all actions hit persisted APIs) ----
+Object.assign(SCREENS, {
+  rep_datasources: async (it,c)=>{ const d=await api('GET','/admin/reporting/datasets');
+    c.innerHTML=header(it,'Allowlisted data-source registry. No raw SQL — reports are declarative specs. Financial/restricted fields are sensitivity-controlled.')+
+      d.datasets.map(ds=>`<h3 style="margin:14px 0 6px;font-size:14px">${ds.code} <span style="color:var(--muted);font-weight:400">(tenant key: ${ds.tenant_key||'none'}, max ${ds.max_rows})</span></h3>`+
+        table(['Field','Type','Sensitivity'], ds.fields, r=>[r.code,r.type,r.sensitivity in {RESTRICTED:1,PERSONAL_DATA:1,FINANCIAL_DATA:1,SAFETY_DATA:1}?('<b>'+r.sensitivity+'</b>'):r.sensitivity])).join(''); },
+  rep_definitions: async (it,c)=>{ const d=await api('GET','/admin/reporting/reports');
+    c.innerHTML=header(it,'Governed report definitions. Published versions are immutable + checksummed.',
+      `<button class="btn sm" onclick="repNewDef()">New report +</button>`)+
+      table(['Code','Name','Category','Status'], d.reports, r=>[r.code,cell(r.name),cell(r.category),pill(r.status)]); },
+  rep_designer: async (it,c)=>{ const d=await api('GET','/admin/reporting/reports');
+    const opts=d.reports.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Design a DRAFT version — declarative dataset/fields/filters/group/aggregation. Validate → approve → publish. No SQL editor.',
+      `<select id="rmd" onchange="repDesignLoad()" style="max-width:260px">${opts}</select>`)+
+      `<div id="rmdesign"><div class="empty">Loading…</div></div>`; repDesignLoad(); },
+  rep_run: async (it,c)=>{ const d=await api('GET','/admin/reporting/reports');
+    const opts=d.reports.map(x=>`<option value="${x.code}">${x.code}</option>`).join('');
+    c.innerHTML=header(it,'Run a published report. Row + column security applied; restricted fields excluded without permission.')+
+      `<div class="bar"><select id="rmd" style="max-width:260px">${opts}</select><button class="btn sm" onclick="repRun()">Run</button> <button class="btn sm ghost" onclick="repExport()">Export CSV</button></div><div id="rmrunres"></div>`; },
+  rep_kpis: async (it,c)=>{ const d=await api('GET','/admin/reporting/kpis');
+    c.innerHTML=header(it,'Governed KPI definitions (unique code, numerator/denominator, thresholds).',
+      `<button class="btn sm" onclick="repNewKpi()">New KPI +</button>`)+
+      table(['Code','Name','Dataset','Target','Warning','Critical','Actions'], d.kpis, r=>[r.code,cell(r.name),r.dataset,cell(r.target),cell(r.warning),cell(r.critical),
+        `<a style="color:var(--accent);cursor:pointer" onclick="repKpiCompute('${r.code}')">compute</a>`]); },
+  rep_dashboards: async (it,c)=>{ const d=await api('GET','/admin/reporting/dashboards');
+    c.innerHTML=header(it,'Governed dashboards. Widgets inherit report/KPI security; totals reconcile with the underlying report.',
+      `<button class="btn sm" onclick="repNewDash()">New dashboard +</button>`)+
+      table(['Code','Name','Status','Actions'], d.dashboards, r=>[r.code,cell(r.name),pill(r.status==='PUBLISHED'?'ACTIVE':'INACTIVE'),
+        `<a style="color:var(--accent);cursor:pointer" onclick="repDashRender('${r.code}')">render</a>`]); },
+  rep_schedules: async (it,c)=>{ const d=await api('GET','/admin/reporting/schedules');
+    c.innerHTML=header(it,'Scheduled reports. Recipients must be authorized; permissions re-evaluated at run time; cross-tenant delivery denied.',
+      `<button class="btn sm" onclick="repNewSchedule()">New schedule +</button>`)+
+      table(['Id','Report','Frequency','Recipients','Last run','Actions'], d.schedules, r=>[r.id,r.report_code,r.frequency,cell(r.recipients),cell(r.last_run),
+        `<a style="color:var(--accent);cursor:pointer" onclick="repRunSchedule(${r.id})">run now</a>`]); },
+  rep_deliveries: async (it,c)=>{ const d=await api('GET','/admin/reporting/deliveries');
+    c.innerHTML=header(it,'Delivery history — DELIVERED vs DENIED_SCOPE (out-of-scope recipients blocked at execution).')+
+      table(['Id','Report','Recipient','Format','Rows','Status','Delivered'], d.deliveries, r=>[r.id,r.report_code,cell(r.recipient),r.format,r.rows,pill(r.status==='DELIVERED'?'ACTIVE':'INACTIVE')+' '+r.status,cell(r.delivered_at)]); },
+  rep_executions: async (it,c)=>{ const d=await api('GET','/admin/reporting/executions');
+    c.innerHTML=header(it,'Execution history — duration, rows, outcome, correlation id (no report contents logged).')+
+      table(['Id','Report','v','Rows','Duration (ms)','Outcome','Correlation'], d.executions, r=>[r.id,cell(r.report_code),cell(r.report_version),r.rows,r.duration_ms,pill(r.outcome==='SUCCESS'?'ACTIVE':'INACTIVE')+' '+r.outcome,cell(r.correlation_id)]); },
+  rep_integrity: async (it,c)=>{ const d=await api('GET','/admin/reporting/integrity');
+    c.innerHTML=header(it,'Reporting integrity — reports without tenant key/limit, duplicate KPI codes, out-of-scope schedule recipients.')+
+      `<div class="note" style="border-left-color:${d.healthy?'var(--ok)':'var(--danger)'}">${d.healthy?'HEALTHY ✓':'ISSUES'} — ${d.summary.fail} fail, ${d.summary.warning} warning</div>`+
+      table(['Check','Status','Severity','Detail'], d.checks, r=>[r.check,pill(r.status==='PASS'?'ACTIVE':'INACTIVE')+' '+r.status,r.severity,cell(r.detail)]); },
+});
+async function repNewDef(){ const code=prompt('Report code:'); if(!code) return; const name=prompt('Name:')||code;
+  const cat=prompt('Category (executive/finance/operations/crm/integration/safety):','operations')||'operations';
+  try{ await api('POST','/admin/reporting/reports',{code,name,category:cat}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function repDesignLoad(){ const code=document.getElementById('rmd').value;
+  const vers=await api('GET','/admin/reporting/reports/'+encodeURIComponent(code)+'/versions');
+  const el=document.getElementById('rmdesign');
+  const draft=vers.versions.filter(v=>v.status==='DRAFT').slice(-1)[0];
+  const rows=vers.versions.map(v=>`v${v.version_no} — ${v.status} ${v.checksum?('· '+v.checksum.slice(0,10)):''} ${verActions(v)}`).join('<br>');
+  el.innerHTML=`<div class="bar"><button class="btn sm" onclick="repNewVer('${code}')">New draft version +</button>${draft?` <button class="btn sm" onclick="repSetSpec(${draft.id})">Set query spec</button> <button class="btn sm ghost" onclick="repAct(${draft.id},'validate')">Validate</button>`:''}</div><div class="kv"><div class="k">Versions</div><div>${rows}</div></div>`; }
+function verActions(v){ if(v.status==='VALIDATED') return `· <a style="color:var(--accent);cursor:pointer" onclick="repAct(${v.id},'approve')">approve</a>`;
+  if(v.status==='APPROVED') return `· <a style="color:var(--accent);cursor:pointer" onclick="repPublish(${v.id})">publish</a>`; return ''; }
+async function repNewVer(code){ const reason=prompt('Change reason:')||'new draft'; try{ await api('POST','/admin/reporting/reports/'+encodeURIComponent(code)+'/versions',{change_reason:reason}); repDesignLoad(); }catch(e){ alert(e.message); } }
+async function repSetSpec(vid){ const raw=prompt('Query spec JSON (declarative — dataset/fields/filters/group_by/aggregations/limit):','{"dataset":"jobs","fields":["status"],"group_by":["status"],"aggregations":[{"fn":"count","as":"n"}],"limit":1000}');
+  if(!raw) return; let spec; try{ spec=JSON.parse(raw); }catch(e){ alert('bad JSON'); return; }
+  try{ await api('POST','/admin/reporting/versions/'+vid+'/spec',{spec}); repDesignLoad(); }catch(e){ alert(e.message); } }
+async function repAct(vid,act){ try{ const r=await api('POST','/admin/reporting/versions/'+vid+'/'+act,{}); if(act==='validate'&&!r.ok) alert('Errors:\n'+(r.errors||[]).join('\n')); repDesignLoad(); }catch(e){ alert(e.message); } }
+async function repPublish(vid){ const reason=prompt('Change reason (required):'); if(!reason) return; try{ await api('POST','/admin/reporting/versions/'+vid+'/publish',{change_reason:reason}); repDesignLoad(); }catch(e){ alert(e.message); } }
+async function repRun(){ const code=document.getElementById('rmd').value;
+  try{ const r=await api('POST','/admin/reporting/reports/'+encodeURIComponent(code)+'/run',{});
+    document.getElementById('rmrunres').innerHTML=`<div class="note">Rows: ${r.row_count} · Excluded sensitive: ${(r.excluded_sensitive||[]).join(', ')||'none'} · ${r.cached?'(cached)':'(fresh)'}</div>`+
+      table(r.columns.filter(x=>!(r.excluded_sensitive||[]).includes(x)), r.rows, row=>r.columns.filter(x=>!(r.excluded_sensitive||[]).includes(x)).map(cx=>cell(row[cx])));
+  }catch(e){ document.getElementById('rmrunres').innerHTML=`<div class="note" style="border-left-color:var(--danger);color:var(--danger)">${e.message}</div>`; } }
+async function repExport(){ const code=document.getElementById('rmd').value;
+  try{ const r=await api('POST','/admin/reporting/reports/'+encodeURIComponent(code)+'/export',{format:'CSV'});
+    alert('Exported '+r.rows+' rows. Columns: '+r.columns.join(', ')+'\nExcluded sensitive: '+((r.excluded_sensitive||[]).join(', ')||'none')); }catch(e){ alert(e.message); } }
+async function repNewKpi(){ const code=prompt('KPI code:'); if(!code) return; const name=prompt('Name:')||code;
+  const ds=prompt('Dataset:','quotations')||'quotations';
+  const numRaw=prompt('Numerator spec JSON:','{"fn":"count","filters":[{"field":"status","op":"eq","value":"accepted"}]}'); if(!numRaw) return;
+  const denRaw=prompt('Denominator spec JSON (blank for absolute count):','{"fn":"count"}');
+  let num,den=null; try{ num=JSON.parse(numRaw); if(denRaw) den=JSON.parse(denRaw); }catch(e){ alert('bad JSON'); return; }
+  try{ await api('POST','/admin/reporting/kpis',{code,name,dataset:ds,numerator:num,denominator:den}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function repKpiCompute(code){ try{ const r=await api('POST','/admin/reporting/kpis/'+encodeURIComponent(code)+'/compute',{}); alert(code+' = '+r.value+' ('+r.status+')\nNumerator '+r.numerator+' / Denominator '+r.denominator); }catch(e){ alert(e.message); } }
+async function repNewDash(){ const code=prompt('Dashboard code:'); if(!code) return; const name=prompt('Name:')||code;
+  try{ const r=await api('POST','/admin/reporting/dashboards',{code,name});
+    if(confirm('Add a report widget now?')){ const rc=prompt('Report code:','quotation_conversion')||'quotation_conversion';
+      await api('POST','/admin/reporting/dashboards/'+r.id+'/widgets',{widget_type:'table',report_code:rc,title:rc}); }
+    if(confirm('Publish dashboard?')) await api('POST','/admin/reporting/dashboards/'+r.id+'/publish',{});
+    render(CURRENT); }catch(e){ alert(e.message); } }
+async function repDashRender(code){ try{ const r=await api('POST','/admin/reporting/dashboards/'+encodeURIComponent(code)+'/render',{});
+  alert('Dashboard "'+code+'" widgets:\n'+r.widgets.map(w=>w.title+': '+(w.available?('rows '+((w.data&&w.data.row_count)||(w.data&&w.data.value)||'?')):'unavailable')).join('\n')); }catch(e){ alert(e.message); } }
+async function repNewSchedule(){ const rc=prompt('Report code:','quotation_conversion')||'quotation_conversion';
+  const freq=prompt('Frequency (daily/weekly/monthly/quarterly):','daily')||'daily';
+  const rcpts=(prompt('Recipients (comma-separated emails, must be authorized users in tenant):','')||'').split(',').map(x=>x.trim()).filter(Boolean);
+  try{ await api('POST','/admin/reporting/schedules',{report_code:rc,frequency:freq,recipients:rcpts}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function repRunSchedule(id){ try{ const r=await api('POST','/admin/reporting/schedules/'+id+'/run',{}); alert('Delivered to '+r.delivered+' recipient(s), '+r.rows+' rows.'); render(CURRENT); }catch(e){ alert(e.message); } }
 async function wfInstView(id){ const d=await api('GET','/admin/workflow-instances/'+id);
   const body=`<div class="kv"><div class="k">Workflow</div><div>${d.instance.definition_id}</div><div class="k">Step</div><div><b>${d.instance.current_step}</b></div><div class="k">Status</div><div>${d.instance.status}</div><div class="k">Correlation</div><div>${cell(d.instance.correlation_id)}</div></div>`+
     `<h3 style="margin:12px 0 6px;font-size:14px">Transition history</h3>`+table(['From','To','Action','Actor','Result','Time'], d.history, r=>[r.from_step,r.to_step,r.action,r.actor,r.result,r.ts])+

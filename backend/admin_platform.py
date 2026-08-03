@@ -235,6 +235,20 @@ PHASE7_PERMISSIONS = [
 ]
 for _code in PHASE7_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-8 reporting & dashboard administration permissions (multi-dot codes)
+PHASE8_PERMISSIONS = [
+    "report.datasource.view", "report.datasource.manage",
+    "report.definition.view", "report.definition.manage",
+    "report.version.create", "report.version.validate", "report.version.approve",
+    "report.version.publish", "report.version.retire",
+    "report.execute", "report.export", "report.schedule", "report.history.view",
+    "report.sensitive.view", "report.sensitive.export",
+    "dashboard.view", "dashboard.manage", "dashboard.publish",
+    "kpi.view", "kpi.manage",
+    "report.security.manage", "report.cache.manage", "report.platform.cross_tenant",
+]
+for _code in PHASE8_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -271,7 +285,12 @@ ADMIN_ROLES = [
          "integration.health.*", "integration.webhook.*", "integration.polling.*",
          "integration.dead_letter.*", "integration.replay.execute", "payment.wise.*",
          "integration.email.manage", "integration.sms.manage", "integration.maps.manage",
-         "integration.accounting.manage", "integration.fx.manage"}),
+         "integration.accounting.manage", "integration.fx.manage",
+         # Phase 8 reporting & dashboard administration (platform admin is the reporting authority)
+         "report.datasource.*", "report.definition.*", "report.version.*", "report.execute",
+         "report.export", "report.schedule", "report.history.view", "report.sensitive.view",
+         "report.sensitive.export", "dashboard.*", "kpi.*", "report.security.manage",
+         "report.cache.manage", "report.platform.cross_tenant"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",

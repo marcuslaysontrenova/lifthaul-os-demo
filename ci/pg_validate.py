@@ -806,12 +806,6 @@ def main():
     saas.set_quota(conn, sa, acme, "active_users", 3, hard_limit=True)
     for i in range(3):
         saas.record_usage(conn, ta, "active_users", 1, idem_key="u" + str(i))
-    print("DEBUG active_users after loop:", conn.execute("SELECT id,tenant_id,meter_code,included_qty,consumed_qty,reserved_qty FROM quotas WHERE meter_code='active_users'").fetchall(),
-          "| events:", conn.execute("SELECT COUNT(*) c FROM usage_events WHERE meter_code='active_users'").fetchone()["c"],
-          "| exact-param lookup (acme=%r):" % acme, conn.execute("SELECT id,consumed_qty FROM quotas WHERE tenant_id=? AND meter_code=?", (acme, "active_users")).fetchone(), flush=True)
-    conn.execute("UPDATE quotas SET consumed_qty=? WHERE id=?", (99, 1)); conn.commit()
-    print("DEBUG manual UPDATE quotas id=1 -> ", conn.execute("SELECT consumed_qty FROM quotas WHERE id=?", (1,)).fetchone(), flush=True)
-    conn.execute("UPDATE quotas SET consumed_qty=? WHERE id=?", (0, 1)); conn.commit()
     dup = saas.record_usage(conn, ta, "active_users", 1, idem_key="u0")
     check(dup["idempotent"], "idempotent metering (no double count) on PostgreSQL")
     try:

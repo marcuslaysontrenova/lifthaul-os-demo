@@ -706,20 +706,25 @@ def record_usage(conn, actor, meter_code, quantity=1, idem_key=None, source="app
     # roll back the event so nothing is consumed.
     qr = conn.execute("SELECT id,included_qty,consumed_qty,reserved_qty,hard_limit,overage_allowed FROM quotas"
                       " WHERE tenant_id=? AND meter_code=?", (tid, meter_code)).fetchone()
+    st = None
     if qr:
+        qid = qr["id"]
         inc, cons, resv = (qr["included_qty"] or 0), (qr["consumed_qty"] or 0), (qr["reserved_qty"] or 0)
         remaining = inc - cons - resv
         if qr["hard_limit"] and not qr["overage_allowed"] and remaining < quantity:
             conn.execute("DELETE FROM usage_events WHERE id=?", (event_id,))   # deny: consume nothing
             conn.commit()
             raise core.ForbiddenError("quota exceeded (hard stop)")
-        conn.execute("UPDATE quotas SET consumed_qty=? WHERE id=?", (cons + quantity, qr["id"]))
+        # persist the consumption immediately (commit right after the write — no intervening statements)
+        conn.execute("UPDATE quotas SET consumed_qty=? WHERE id=?", (cons + quantity, qid))
+        conn.commit()
         if qr["overage_allowed"] and (cons + quantity) > inc:
-            _record_overage(conn, actor, tid, meter_code, (cons + quantity) - inc)
-    st = quota_status(conn, actor, meter_code, tenant_id=tid)
-    if st:
-        conn.execute("UPDATE quotas SET status=? WHERE tenant_id=? AND meter_code=?", (st["status"], tid, meter_code))
-    conn.commit()
+            _record_overage(conn, actor, tid, meter_code, (cons + quantity) - inc); conn.commit()
+        st = quota_status(conn, actor, meter_code, tenant_id=tid)
+        if st:
+            conn.execute("UPDATE quotas SET status=? WHERE id=?", (st["status"], qid)); conn.commit()
+    else:
+        conn.commit()
     return {"recorded": True, "idempotent": False, "event_id": event_id, "quota": st}
 
 
@@ -755,9 +760,10 @@ def commit_reservation(conn, actor, reservation_id):
     if not r or r["status"] != "RESERVED":
         raise core.ConflictError("reservation not open")
     qr = conn.execute("SELECT id,consumed_qty,reserved_qty FROM quotas WHERE tenant_id=? AND meter_code=?", (r["tenant_id"], r["meter_code"])).fetchone()
-    if qr:   # update by primary key (dbconn composite-WHERE UPDATE unreliable on PostgreSQL)
+    if qr:   # update by primary key + commit immediately (dbconn composite-WHERE UPDATE unreliable on PG)
         conn.execute("UPDATE quotas SET reserved_qty=?, consumed_qty=? WHERE id=?",
                      ((qr["reserved_qty"] or 0) - r["quantity"], (qr["consumed_qty"] or 0) + r["quantity"], qr["id"]))
+        conn.commit()
     conn.execute("UPDATE usage_reservations SET status='COMMITTED' WHERE id=?", (reservation_id,))
     conn.commit()
     return True
@@ -771,6 +777,7 @@ def release_reservation(conn, actor, reservation_id):
     qr = conn.execute("SELECT id,reserved_qty FROM quotas WHERE tenant_id=? AND meter_code=?", (r["tenant_id"], r["meter_code"])).fetchone()
     if qr:
         conn.execute("UPDATE quotas SET reserved_qty=? WHERE id=?", ((qr["reserved_qty"] or 0) - r["quantity"], qr["id"]))
+        conn.commit()
     conn.execute("UPDATE usage_reservations SET status='RELEASED' WHERE id=?", (reservation_id,))
     conn.commit()
     return True

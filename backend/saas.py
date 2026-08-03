@@ -381,8 +381,8 @@ def _apply_entitlements(conn, actor, s):
         if e["kind"] == "feature" and e["mode"] in ("limited", "metered") and e["quantity"] is not None:
             # seed a quota for a metered/limited feature
             meter = e["code"]
-            conn.execute("INSERT INTO quotas(tenant_id,subscription_id,meter_code,included_qty,hard_limit,"
-                         "overage_allowed,reset_date,status) VALUES(?,?,?,?,1,?,?, 'OK')"
+            conn.execute("INSERT INTO quotas(tenant_id,subscription_id,meter_code,included_qty,consumed_qty,"
+                         "reserved_qty,hard_limit,overage_allowed,reset_date,status) VALUES(?,?,?,?,0,0,1,?,?, 'OK')"
                          " ON CONFLICT(tenant_id,meter_code) DO UPDATE SET included_qty=excluded.included_qty,"
                          " subscription_id=excluded.subscription_id",
                          (s["tenant_id"], s["id"], meter, e["quantity"], 1 if e["mode"] == "metered" else 0,
@@ -653,8 +653,8 @@ def require_entitlement(conn, actor, feature_code, meter_code=None, quantity=1):
 def set_quota(conn, actor, tenant_id, meter_code, included_qty, hard_limit=True, overage_allowed=False,
               warning_pct=80):
     core.require(actor, "saas.quota.manage")
-    conn.execute("INSERT INTO quotas(tenant_id,meter_code,included_qty,hard_limit,overage_allowed,warning_pct,"
-                 "reset_date,status) VALUES(?,?,?,?,?,?,?, 'OK')"
+    conn.execute("INSERT INTO quotas(tenant_id,meter_code,included_qty,consumed_qty,reserved_qty,hard_limit,"
+                 "overage_allowed,warning_pct,reset_date,status) VALUES(?,?,?,0,0,?,?,?,?, 'OK')"
                  " ON CONFLICT(tenant_id,meter_code) DO UPDATE SET included_qty=excluded.included_qty,"
                  " hard_limit=excluded.hard_limit, overage_allowed=excluded.overage_allowed, warning_pct=excluded.warning_pct",
                  (tenant_id, meter_code, included_qty, 1 if hard_limit else 0, 1 if overage_allowed else 0,
@@ -669,14 +669,15 @@ def quota_status(conn, actor, meter_code, tenant_id=None):
     q = conn.execute("SELECT * FROM quotas WHERE tenant_id=? AND meter_code=?", (tid, meter_code)).fetchone()
     if not q:
         return None
-    remaining = q["included_qty"] - q["consumed_qty"] - q["reserved_qty"]
+    inc, cons, resv = (q["included_qty"] or 0), (q["consumed_qty"] or 0), (q["reserved_qty"] or 0)
+    remaining = inc - cons - resv
     status = "OK"
-    if q["included_qty"] and (q["consumed_qty"] + q["reserved_qty"]) >= q["included_qty"]:
+    if inc and (cons + resv) >= inc:
         status = "EXCEEDED"
-    elif q["included_qty"] and (q["consumed_qty"] + q["reserved_qty"]) >= q["included_qty"] * (q["warning_pct"] / 100.0):
+    elif inc and (cons + resv) >= inc * ((q["warning_pct"] or 80) / 100.0):
         status = "WARNING"
-    return {"meter": meter_code, "included": q["included_qty"], "consumed": q["consumed_qty"],
-            "reserved": q["reserved_qty"], "remaining": remaining, "status": status,
+    return {"meter": meter_code, "included": inc, "consumed": cons,
+            "reserved": resv, "remaining": remaining, "status": status,
             "hard_limit": bool(q["hard_limit"]), "overage_allowed": bool(q["overage_allowed"])}
 
 
@@ -705,7 +706,7 @@ def record_usage(conn, actor, meter_code, quantity=1, idem_key=None, source="app
     q = conn.execute("SELECT * FROM quotas WHERE tenant_id=? AND meter_code=?", (tid, meter_code)).fetchone()
     if q and q["hard_limit"] and not q["overage_allowed"]:
         cur2 = conn.execute("UPDATE quotas SET consumed_qty=consumed_qty+? WHERE tenant_id=? AND meter_code=? AND"
-                            " consumed_qty+reserved_qty+? <= included_qty", (quantity, tid, meter_code, quantity))
+                            " COALESCE(consumed_qty,0)+COALESCE(reserved_qty,0)+? <= COALESCE(included_qty,0)", (quantity, tid, meter_code, quantity))
         if (getattr(cur2, "rowcount", 0) or 0) == 0:
             conn.execute("DELETE FROM usage_events WHERE id=?", (event_id,))   # deny: consume nothing
             conn.commit()
@@ -731,7 +732,7 @@ def reserve_usage(conn, actor, meter_code, quantity, idem_key, tenant_id=None):
     q = conn.execute("SELECT * FROM quotas WHERE tenant_id=? AND meter_code=?", (tid, meter_code)).fetchone()
     if q and q["hard_limit"] and not q["overage_allowed"]:
         cur = conn.execute("UPDATE quotas SET reserved_qty=reserved_qty+? WHERE tenant_id=? AND meter_code=? AND"
-                           " consumed_qty+reserved_qty+? <= included_qty", (quantity, tid, meter_code, quantity))
+                           " COALESCE(consumed_qty,0)+COALESCE(reserved_qty,0)+? <= COALESCE(included_qty,0)", (quantity, tid, meter_code, quantity))
         if (getattr(cur, "rowcount", 0) or 0) == 0:
             conn.commit()
             raise core.ForbiddenError("quota exceeded (cannot reserve)")

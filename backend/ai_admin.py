@@ -506,14 +506,15 @@ def _check_and_charge_budget(conn, actor, use_case_code, est_cost, actual_cost=N
 def _rate_check(conn, actor, use_case_code, limit=60):
     window = _now()[:16]     # per-minute window (YYYY-MM-DDTHH:MM)
     tid, uid = _tenant(actor), (actor or {}).get("id")
-    row = conn.execute("SELECT count FROM ai_rate_counters WHERE tenant_id IS ? AND user_id=? AND use_case_code=? AND window_start=?",
-                       (tid, uid, use_case_code, window)).fetchone()
+    tkey = tid if tid is not None else -1                    # -1 sentinel (PostgreSQL rejects `IS <param>`)
+    row = conn.execute("SELECT count FROM ai_rate_counters WHERE tenant_id=? AND user_id=? AND use_case_code=? AND window_start=?",
+                       (tkey, uid, use_case_code, window)).fetchone()
     n = (row["count"] if row else 0) + 1
     if n > limit:
         raise core.ForbiddenError("AI rate limit exceeded")
     conn.execute("INSERT INTO ai_rate_counters(tenant_id,user_id,use_case_code,window_start,count) VALUES(?,?,?,?,1)"
                  " ON CONFLICT(tenant_id,user_id,use_case_code,window_start) DO UPDATE SET count=count+1",
-                 (tid, uid, use_case_code, window))
+                 (tkey, uid, use_case_code, window))
 
 
 def activate_kill_switch(conn, actor, scope, scope_ref=None, reason=None):

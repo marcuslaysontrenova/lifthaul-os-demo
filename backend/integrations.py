@@ -482,7 +482,8 @@ def dead_letter(conn, actor, provider_code, operation, failure_category, safe_er
     if failure_category not in FAILURE_CATEGORIES:
         failure_category = "unknown_provider_response"
     existing = conn.execute("SELECT * FROM integration_dead_letters WHERE provider_code=? AND operation=? AND"
-                            " entity_ref IS ? AND status='OPEN'", (provider_code, operation, entity_ref)).fetchone()
+                            " COALESCE(entity_ref,'')=COALESCE(?,'') AND status='OPEN'",
+                            (provider_code, operation, entity_ref)).fetchone()
     if existing:
         conn.execute("UPDATE integration_dead_letters SET attempts=attempts+1, last_failure_at=?, safe_error=? WHERE id=?",
                      (_now(), safe_error, existing["id"]))

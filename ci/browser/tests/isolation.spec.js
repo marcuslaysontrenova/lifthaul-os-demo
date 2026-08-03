@@ -285,11 +285,15 @@ test('Phase 8 reporting administration through the browser (PostgreSQL)', async 
   const vers = await request.get(API + '/admin/reporting/reports/browser_rep/versions', { headers: H });
   const vid = (await vers.json()).data.versions[0].id;
   await request.post(API + `/admin/reporting/versions/${vid}/spec`, { headers: H, data: { spec: { dataset: 'jobs', fields: ['status'], group_by: ['status'], aggregations: [{ fn: 'count', as: 'n' }], limit: 1000 } } });
+  // invalid field is rejected on a fresh DRAFT (safe query model — no raw SQL, only allowlisted fields)
+  await request.post(API + '/admin/reporting/reports', { headers: H, data: { code: 'browser_bad', name: 'Bad', category: 'operations' } });
+  const bvers = await request.get(API + '/admin/reporting/reports/browser_bad/versions', { headers: H });
+  const bvid = (await bvers.json()).data.versions[0].id;
+  const bad = await request.post(API + `/admin/reporting/versions/${bvid}/spec`, { headers: H, data: { spec: { dataset: 'quotations', fields: ['evil_col'] } } });
+  expect([400, 422].includes(bad.status()), 'unpermitted field rejected').toBe(true);
+  // now validate the good report
   const val = await request.post(API + `/admin/reporting/versions/${vid}/validate`, { headers: H, data: {} });
   expect((await val.json()).data.ok, 'report validates').toBe(true);
-  // invalid field is rejected (safe query model — no raw SQL)
-  const bad = await request.post(API + `/admin/reporting/versions/${vid}/spec`, { headers: H, data: { spec: { dataset: 'quotations', fields: ['evil_col'] } } });
-  expect([400, 422].includes(bad.status()), 'unpermitted field rejected').toBe(true);
   // export excludes financial columns for a non-sensitive export path (admin has perms; assert structure)
   const exp = await request.post(API + '/admin/reporting/reports/quotation_conversion/export', { headers: H, data: { format: 'CSV' } });
   expect(exp.status(), 'export endpoint').toBe(200);

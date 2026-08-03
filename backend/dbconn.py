@@ -49,6 +49,12 @@ class _Cur:
         self._c = cur
         self.lastrowid = lastrowid
 
+    @property
+    def rowcount(self):
+        # proxy the real psycopg2 cursor rowcount so INSERT ... ON CONFLICT DO NOTHING / UPDATE / DELETE
+        # callers see the true affected-row count (was silently 0 before, breaking idempotency checks).
+        return self._c.rowcount
+
     def fetchone(self):
         return self._c.fetchone()
 

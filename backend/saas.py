@@ -686,20 +686,9 @@ def record_usage(conn, actor, meter_code, quantity=1, idem_key=None, source="app
     core.require(actor, "saas.usage.manage")
     tid = tenant_id if tenant_id is not None else _tenant(actor)
     idem = idem_key or _hash({"m": meter_code, "e": entity_ref, "t": _now()})
-    q = conn.execute("SELECT * FROM quotas WHERE tenant_id=? AND meter_code=?", (tid, meter_code)).fetchone()
-    charged = False
-    if q and q["hard_limit"] and not q["overage_allowed"]:
-        # ATOMIC guard: only consume if it stays within the included quantity (no negative remaining)
-        cur = conn.execute("UPDATE quotas SET consumed_qty=consumed_qty+? WHERE tenant_id=? AND meter_code=? AND"
-                           " consumed_qty+reserved_qty+? <= included_qty", (quantity, tid, meter_code, quantity))
-        if (getattr(cur, "rowcount", 0) or 0) == 0:
-            conn.commit()
-            raise core.ForbiddenError("quota exceeded (hard stop)")
-        charged = True
-    elif q:
-        conn.execute("UPDATE quotas SET consumed_qty=consumed_qty+? WHERE tenant_id=? AND meter_code=?", (quantity, tid, meter_code))
-        charged = True
-    # IDEMPOTENCY via the unique (tenant_id, idem_key) constraint — robust on SQLite + PostgreSQL.
+    # STEP 1 — claim the idempotency slot FIRST via the unique (tenant_id, idem_key) constraint. This is
+    # authoritative on SQLite + PostgreSQL, so a duplicate is caught even under concurrency. A duplicate
+    # never touches the quota (no double count).
     sub = conn.execute("SELECT id FROM subscriptions WHERE tenant_id=? ORDER BY id DESC LIMIT 1", (tid,)).fetchone()
     cur = conn.execute("INSERT INTO usage_events(tenant_id,subscription_id,meter_code,quantity,unit,source,entity_ref,"
                        "idem_key,correlation_id,ts) VALUES(?,?,?,?, 'count', ?,?,?,?,?)"
@@ -707,20 +696,29 @@ def record_usage(conn, actor, meter_code, quantity=1, idem_key=None, source="app
                        (tid, sub["id"] if sub else None, meter_code, quantity, source, entity_ref, idem,
                         core.correlation_id(), _now()))
     if (getattr(cur, "rowcount", 0) or 0) == 0:
-        # duplicate idem_key -> no double count; compensate the quota we optimistically charged
-        if charged:
-            conn.execute("UPDATE quotas SET consumed_qty=consumed_qty-? WHERE tenant_id=? AND meter_code=?", (quantity, tid, meter_code))
-        conn.commit()
         existing = conn.execute("SELECT id FROM usage_events WHERE tenant_id=? AND idem_key=?", (tid, idem)).fetchone()
+        conn.commit()
         return {"recorded": False, "idempotent": True, "event_id": existing["id"] if existing else None}
-    # genuinely new event: record overage where allowed
-    if q and q["overage_allowed"] and (q["consumed_qty"] + quantity) > q["included_qty"]:
-        _record_overage(conn, actor, tid, meter_code, (q["consumed_qty"] + quantity) - q["included_qty"])
+    event_id = cur.lastrowid
+    # STEP 2 — genuinely new event: enforce the ATOMIC quota guard (no negative remaining). If over the
+    # hard limit, roll back the event so nothing is consumed.
+    q = conn.execute("SELECT * FROM quotas WHERE tenant_id=? AND meter_code=?", (tid, meter_code)).fetchone()
+    if q and q["hard_limit"] and not q["overage_allowed"]:
+        cur2 = conn.execute("UPDATE quotas SET consumed_qty=consumed_qty+? WHERE tenant_id=? AND meter_code=? AND"
+                            " consumed_qty+reserved_qty+? <= included_qty", (quantity, tid, meter_code, quantity))
+        if (getattr(cur2, "rowcount", 0) or 0) == 0:
+            conn.execute("DELETE FROM usage_events WHERE id=?", (event_id,))   # deny: consume nothing
+            conn.commit()
+            raise core.ForbiddenError("quota exceeded (hard stop)")
+    elif q:
+        conn.execute("UPDATE quotas SET consumed_qty=consumed_qty+? WHERE tenant_id=? AND meter_code=?", (quantity, tid, meter_code))
+        if q["overage_allowed"] and (q["consumed_qty"] + quantity) > q["included_qty"]:
+            _record_overage(conn, actor, tid, meter_code, (q["consumed_qty"] + quantity) - q["included_qty"])
     st = quota_status(conn, actor, meter_code, tenant_id=tid)
     if st:
         conn.execute("UPDATE quotas SET status=? WHERE tenant_id=? AND meter_code=?", (st["status"], tid, meter_code))
     conn.commit()
-    return {"recorded": True, "idempotent": False, "event_id": cur.lastrowid, "quota": st}
+    return {"recorded": True, "idempotent": False, "event_id": event_id, "quota": st}
 
 
 def reserve_usage(conn, actor, meter_code, quantity, idem_key, tenant_id=None):

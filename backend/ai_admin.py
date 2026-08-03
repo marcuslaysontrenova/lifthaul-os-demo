@@ -513,7 +513,8 @@ def _rate_check(conn, actor, use_case_code, limit=60):
     if n > limit:
         raise core.ForbiddenError("AI rate limit exceeded")
     conn.execute("INSERT INTO ai_rate_counters(tenant_id,user_id,use_case_code,window_start,count) VALUES(?,?,?,?,1)"
-                 " ON CONFLICT(tenant_id,user_id,use_case_code,window_start) DO UPDATE SET count=count+1",
+                 " ON CONFLICT(tenant_id,user_id,use_case_code,window_start)"
+                 " DO UPDATE SET count=ai_rate_counters.count+1",   # qualify: 'count' is ambiguous on PostgreSQL
                  (tkey, uid, use_case_code, window))
 
 

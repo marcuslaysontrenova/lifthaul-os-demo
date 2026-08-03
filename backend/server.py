@@ -1132,6 +1132,98 @@ def _phase9_routes():
     }
 
 
+def _phase10_routes():
+    """Phase 10 — SaaS commercial layer: products/plans/subscriptions/provisioning/entitlements/usage/
+    quotas/billing/promotions/marketplace. Permission-gated (RBAC) + entitlement-aware; tenant-scoped;
+    audited; immutable plan/billing snapshots."""
+    import saas
+
+    def prod_list(a, b, p):  return {"products": saas.list_products(_conn, a)}
+    def prod_create(a, b, p): return {"id": saas.create_product(_conn, a, b["code"], b["name"], market=b.get("market", "PH"), currency=b.get("currency", "PHP"), description=b.get("description"))}
+    def plan_list(a, b, p):  return {"plans": saas.list_plans(_conn, a)}
+    def plan_create(a, b, p): return {"id": saas.create_plan(_conn, a, b["product_code"], b["code"], b["name"], description=b.get("description"))}
+    def plan_versions(a, b, p): return {"versions": saas.plan_versions(_conn, a, p["code"])}
+    def plan_new_ver(a, b, p): return {"id": saas.create_plan_version(_conn, a, p["code"], change_reason=b.get("change_reason"))}
+    def pv_set(a, b, p):     return {"ok": saas.set_plan_version(_conn, a, int(p["id"]), base_price=b.get("base_price"), billing_frequency=b.get("billing_frequency"), trial_days=b.get("trial_days"), minimum_term_months=b.get("minimum_term_months"), overage_model=b.get("overage_model"))}
+    def pv_ent(a, b, p):     return {"id": saas.add_entitlement(_conn, a, int(p["id"]), b["kind"], b["code"], mode=b.get("mode", "included"), quantity=b.get("quantity"))}
+    def pv_validate(a, b, p): return saas.validate_plan_version(_conn, a, int(p["id"]))
+    def pv_approve(a, b, p): return {"ok": saas.approve_plan_version(_conn, a, int(p["id"]), reason=b.get("reason"))}
+    def pv_publish(a, b, p): return saas.publish_plan_version(_conn, a, int(p["id"]), b["change_reason"], effective_from=b.get("effective_from"))
+    # subscriptions + provisioning
+    def sub_list(a, b, p):   return {"subscriptions": saas.list_subscriptions(_conn, a)}
+    def sub_create(a, b, p): return {"id": saas.create_subscription(_conn, a, int(b["tenant_id"]), b["product_code"], b["plan_code"], commercial_evidence=b.get("commercial_evidence"), source=b.get("source", "direct"))}
+    def sub_activate(a, b, p): return saas.activate_subscription(_conn, a, int(p["id"]))
+    def sub_trial(a, b, p):  return saas.start_trial(_conn, a, int(p["id"]), trial_days=b.get("trial_days", 14))
+    def sub_upgrade(a, b, p): return saas.upgrade_subscription(_conn, a, int(p["id"]), b["plan_code"], immediate=b.get("immediate", True))
+    def sub_dg_impact(a, b, p): return saas.downgrade_impact(_conn, a, int(p["id"]), b["plan_code"])
+    def sub_downgrade(a, b, p): return saas.downgrade_subscription(_conn, a, int(p["id"]), b["plan_code"], reason=b.get("reason"))
+    def sub_renew(a, b, p):  return saas.renew_subscription(_conn, a, int(p["id"]))
+    def sub_suspend(a, b, p): return saas.suspend_subscription(_conn, a, int(p["id"]), b["reason"], mode=b.get("mode", "new_transactions_blocked"))
+    def sub_reactivate(a, b, p): return saas.reactivate_subscription(_conn, a, int(p["id"]), reason=b.get("reason"))
+    def sub_terminate(a, b, p): return saas.terminate_subscription(_conn, a, int(p["id"]), reason=b.get("reason"))
+    def provision(a, b, p):  return saas.provision_tenant(_conn, a, b["tenant_code"], b["legal_name"], b["product_code"], b["plan_code"], b["admin_email"], commercial_evidence=b.get("commercial_evidence"))
+    # entitlement / usage / quota / billing
+    def ent_check(a, b, p):  return saas.check_entitlement(_conn, a, b["feature_code"], meter_code=b.get("meter_code"), quantity=b.get("quantity", 1))
+    def quota_set(a, b, p):  return {"ok": saas.set_quota(_conn, a, int(b["tenant_id"]), b["meter_code"], b["included_qty"], hard_limit=b.get("hard_limit", True), overage_allowed=b.get("overage_allowed", False))}
+    def quota_get(a, b, p):
+        core.require(a, "saas.quota.view")
+        return {"quota": saas.quota_status(_conn, a, b["meter_code"], tenant_id=b.get("tenant_id"))}
+    def usage_record(a, b, p): return saas.record_usage(_conn, a, b["meter_code"], quantity=b.get("quantity", 1), idem_key=b.get("idem_key"), source=b.get("source", "app"), entity_ref=b.get("entity_ref"), tenant_id=b.get("tenant_id"))
+    def usage_sum(a, b, p):  return saas.usage_summary(_conn, a)
+    def billing_gen(a, b, p): return saas.generate_billing_evidence(_conn, a, int(b["subscription_id"]), b["period_start"], b["period_end"], addons=b.get("addons", 0), discount=b.get("discount", 0), credit=b.get("credit", 0))
+    def billing_list(a, b, p): return {"evidence": saas.list_billing_evidence(_conn, a)}
+    # promotions / exceptions / marketplace / health
+    def promo_create(a, b, p): return {"id": saas.create_promotion(_conn, a, b["code"], b["discount_type"], b["discount_amount"], allowed_plans=b.get("allowed_plans"), ends_at=b.get("ends_at"), usage_limit=b.get("usage_limit"), approver=b.get("approver"))}
+    def promo_redeem(a, b, p): return saas.redeem_promotion(_conn, a, b["code"], int(b["subscription_id"]))
+    def exc_create(a, b, p): return {"id": saas.create_exception(_conn, a, int(b["tenant_id"]), b["kind"], b.get("scope_ref"), b["reason"], b["ends_at"], b["approver"])}
+    def fee_create(a, b, p): return {"version": saas.create_fee_policy(_conn, a, b["code"], b["fee_type"], b["fee_value"], min_fee=b.get("min_fee", 0), max_fee=b.get("max_fee"))}
+    def mkt_txn(a, b, p):    return saas.record_marketplace_transaction(_conn, a, int(b["tenant_id"]), b["booking_ref"], b["gross_value"], b["carrier_amount"], b["fee_policy_code"])
+    def health(a, b, p):     return saas.customer_health(_conn, a, tenant_id=b.get("tenant_id"))
+    def migration(a, b, p):
+        core.require(a, "saas.subscription.view")
+        return saas.classify_existing(_conn)
+
+    return {
+        ("GET", "/admin/saas/products"): prod_list,
+        ("POST", "/admin/saas/products"): prod_create,
+        ("GET", "/admin/saas/plans"): plan_list,
+        ("POST", "/admin/saas/plans"): plan_create,
+        ("GET", "/admin/saas/plans/:code/versions"): plan_versions,
+        ("POST", "/admin/saas/plans/:code/versions"): plan_new_ver,
+        ("POST", "/admin/saas/plan-versions/:id/set"): pv_set,
+        ("POST", "/admin/saas/plan-versions/:id/entitlements"): pv_ent,
+        ("POST", "/admin/saas/plan-versions/:id/validate"): pv_validate,
+        ("POST", "/admin/saas/plan-versions/:id/approve"): pv_approve,
+        ("POST", "/admin/saas/plan-versions/:id/publish"): pv_publish,
+        ("GET", "/admin/saas/subscriptions"): sub_list,
+        ("POST", "/admin/saas/subscriptions"): sub_create,
+        ("POST", "/admin/saas/subscriptions/:id/activate"): sub_activate,
+        ("POST", "/admin/saas/subscriptions/:id/trial"): sub_trial,
+        ("POST", "/admin/saas/subscriptions/:id/upgrade"): sub_upgrade,
+        ("POST", "/admin/saas/subscriptions/:id/downgrade-impact"): sub_dg_impact,
+        ("POST", "/admin/saas/subscriptions/:id/downgrade"): sub_downgrade,
+        ("POST", "/admin/saas/subscriptions/:id/renew"): sub_renew,
+        ("POST", "/admin/saas/subscriptions/:id/suspend"): sub_suspend,
+        ("POST", "/admin/saas/subscriptions/:id/reactivate"): sub_reactivate,
+        ("POST", "/admin/saas/subscriptions/:id/terminate"): sub_terminate,
+        ("POST", "/admin/saas/provision"): provision,
+        ("POST", "/admin/saas/entitlement-check"): ent_check,
+        ("POST", "/admin/saas/quotas"): quota_set,
+        ("POST", "/admin/saas/quotas/status"): quota_get,
+        ("POST", "/admin/saas/usage"): usage_record,
+        ("GET", "/admin/saas/usage"): usage_sum,
+        ("POST", "/admin/saas/billing"): billing_gen,
+        ("GET", "/admin/saas/billing"): billing_list,
+        ("POST", "/admin/saas/promotions"): promo_create,
+        ("POST", "/admin/saas/promotions/redeem"): promo_redeem,
+        ("POST", "/admin/saas/exceptions"): exc_create,
+        ("POST", "/admin/saas/fee-policies"): fee_create,
+        ("POST", "/admin/saas/marketplace/transactions"): mkt_txn,
+        ("POST", "/admin/saas/customer-health"): health,
+        ("GET", "/admin/saas/migration"): migration,
+    }
+
+
 ROUTES = _routes()
 ROUTES.update(_ops_routes())
 ROUTES.update(_phase2_routes())
@@ -1143,6 +1235,7 @@ ROUTES.update(_phase6_routes())
 ROUTES.update(_phase7_routes())
 ROUTES.update(_phase8_routes())
 ROUTES.update(_phase9_routes())
+ROUTES.update(_phase10_routes())
 
 
 def _match(method, path):

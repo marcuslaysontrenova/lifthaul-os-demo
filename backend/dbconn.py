@@ -20,7 +20,8 @@ import re
 # Tables WITHOUT an integer `id` primary key (so we must NOT append RETURNING id).
 NO_ID_TABLES = {"sessions", "system_config", "schema_version", "config_definitions",
                 "setting_definitions", "modules",   # Phase 6: key/code-keyed, id-less
-                "ai_tools"}                          # Phase 9: code-keyed, id-less
+                "ai_tools",                          # Phase 9: code-keyed, id-less
+                "usage_meters"}                      # Phase 10: code-keyed, id-less
 
 _SQLITE_MASTER = re.compile(
     r"SELECT\s+name\s+FROM\s+sqlite_master\s+WHERE\s+type='table'\s+AND\s+name='(\w+)'",

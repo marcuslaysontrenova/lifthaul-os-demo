@@ -758,6 +758,103 @@ def main():
           and m9["existing_ai_functions"] == 0, "AI migration zero drift / no relabeling on PostgreSQL")
     print("PHASE 9 AI ADMINISTRATION (MOCK): PASS on PostgreSQL", flush=True)
 
+    # Phase 10 — SaaS commercial layer on PostgreSQL
+    import saas
+    sa = {"id": plat["id"], "role": "admin", "perms": {"*"}, "tenant_id": None}
+    sa2 = actor_role(conn, tA, "admin", "saasappr@ci"); sa2["perms"] = {"*"}; sa2["tenant_id"] = None
+    # product + immutable plan version + entitlements
+    saas.create_product(conn, sa, "lifthaul", "LiftHaul OS")
+    pid = saas.create_plan(conn, sa, "lifthaul", "starter", "Starter")
+    pv = conn.execute("SELECT id FROM plan_versions WHERE plan_id=? AND version_no=1", (pid,)).fetchone()["id"]
+    saas.set_plan_version(conn, sa, pv, base_price=5000, trial_days=14)
+    saas.add_entitlement(conn, sa, pv, "module", "crm", "included")
+    saas.add_entitlement(conn, sa, pv, "module", "booking", "included")
+    saas.add_entitlement(conn, sa, pv, "feature", "active_users", "limited", quantity=3)
+    saas.add_entitlement(conn, sa, pv, "module", "ai_assistance", "excluded")
+    saas.validate_plan_version(conn, sa, pv); saas.approve_plan_version(conn, sa2, pv)
+    pub = saas.publish_plan_version(conn, sa, pv, "go live")
+    check(pub["status"] == "ACTIVE" and bool(pub["checksum"]), "SaaS plan published + checksummed on PostgreSQL")
+    try:
+        saas.set_plan_version(conn, sa, pv, base_price=9999)
+        check(False, "published plan must be immutable")
+    except core.ForbiddenError:
+        check(True, "published plan version is immutable on PostgreSQL")
+    # provisioning (idempotent + fail-closed)
+    r = saas.provision_tenant(conn, sa, "ACMECI", "Acme CI", "lifthaul", "starter", "admin@acmeci", commercial_evidence="SOW-CI")
+    r2 = saas.provision_tenant(conn, sa, "ACMECI", "Acme CI", "lifthaul", "starter", "admin@acmeci", commercial_evidence="SOW-CI")
+    check(r["status"] == "ACTIVATED" and r2["tenant_id"] == r["tenant_id"], "tenant provisioning idempotent + activated on PostgreSQL")
+    try:
+        saas.provision_tenant(conn, sa, "FAILCI", "Fail CI", "lifthaul", "starter", "admin@failci", commercial_evidence="X", force_fail_step="activate")
+        check(False, "fail-closed provisioning must raise")
+    except core.ConflictError:
+        tfail = ap.get_tenant(conn, "FAILCI")
+        na = conn.execute("SELECT COUNT(*) c FROM subscriptions WHERE tenant_id=? AND status='ACTIVE'", (tfail["id"],)).fetchone()["c"]
+        check(tfail["status"] != "ACTIVE" and na == 0, "failed provisioning leaves no partial activation on PostgreSQL")
+    acme = r["tenant_id"]
+    ta = {"id": 900, "role": "admin", "perms": {"*"}, "tenant_id": acme}
+    # entitlement enforcement (RBAC AND entitlement)
+    check(saas.check_entitlement(conn, ta, "crm")["allowed"] and
+          saas.check_entitlement(conn, ta, "ai_assistance")["denial_category"] == "feature_not_included",
+          "entitlement enforcement (included vs excluded) on PostgreSQL")
+    weak = {"id": 901, "role": "x", "perms": {"customer.view"}, "tenant_id": acme}   # has entitlement, lacks RBAC
+    try:
+        saas.record_usage(conn, weak, "active_users", 1, idem_key="rbacci")
+        check(False, "entitlement must not replace RBAC")
+    except core.ForbiddenError:
+        check(True, "entitlement does not replace RBAC (permission still required) on PostgreSQL")
+    # atomic quota + idempotent metering
+    saas.set_quota(conn, sa, acme, "active_users", 3, hard_limit=True)
+    for i in range(3):
+        saas.record_usage(conn, ta, "active_users", 1, idem_key="u" + str(i))
+    dup = saas.record_usage(conn, ta, "active_users", 1, idem_key="u0")
+    check(dup["idempotent"], "idempotent metering (no double count) on PostgreSQL")
+    try:
+        saas.record_usage(conn, ta, "active_users", 1, idem_key="u9")
+        check(False, "quota hard stop must deny")
+    except core.ForbiddenError:
+        check(True, "atomic quota hard stop enforced on PostgreSQL")
+    check(saas.quota_status(conn, ta, "active_users")["remaining"] >= 0, "quota never negative on PostgreSQL")
+    # reserve -> commit / release
+    saas.set_quota(conn, sa, acme, "api_calls", 100, hard_limit=True)
+    rv = saas.reserve_usage(conn, sa, "api_calls", 5, idem_key="rv1", tenant_id=acme)
+    saas.commit_reservation(conn, sa, rv["reservation_id"])
+    rv2 = saas.reserve_usage(conn, sa, "api_calls", 5, idem_key="rv2", tenant_id=acme)
+    saas.release_reservation(conn, sa, rv2["reservation_id"])
+    check(saas.quota_status(conn, sa, "api_calls", tenant_id=acme)["reserved"] == 0, "reserve/commit/release atomic on PostgreSQL")
+    # immutable billing evidence with Phase-2 tax
+    be = saas.generate_billing_evidence(conn, sa, r["subscription_id"], "2026-08-01", "2026-08-31")
+    check(be["subtotal"] == 5000 and be["tax"] == 600 and be["total"] == 5600, "SaaS billing uses Phase-2 tax on PostgreSQL")
+    check(saas.generate_billing_evidence(conn, sa, r["subscription_id"], "2026-08-01", "2026-08-31").get("idempotent"),
+          "billing evidence immutable (not recalculated) on PostgreSQL")
+    # suspension -> entitlement denied -> reactivation
+    saas.suspend_subscription(conn, sa, r["subscription_id"], "nonpayment")
+    check(saas.check_entitlement(conn, ta, "crm")["denial_category"] == "subscription_inactive",
+          "suspended subscription denies entitlement on PostgreSQL")
+    saas.reactivate_subscription(conn, sa, r["subscription_id"])
+    check(saas.check_entitlement(conn, ta, "crm")["allowed"], "reactivation restores entitlement on PostgreSQL")
+    # termination preserves legal-hold data
+    import settings as sysc
+    sysc.set_retention(conn, ta, "documents", 365, legal_hold=True)
+    term = saas.terminate_subscription(conn, sa, r["subscription_id"])
+    check(term["data_preserved"] and term["legal_hold"], "termination preserves legal-hold data on PostgreSQL")
+    # marketplace immutable fee/payout snapshot
+    saas.create_fee_policy(conn, sa, "pct10", "percentage", 10, min_fee=50)
+    mt = saas.record_marketplace_transaction(conn, sa, acme, "BK-CI", 10000, 9000, "pct10")
+    check(mt["platform_fee"] == 1000 and mt["carrier_payout"] == 8000, "marketplace fee/payout snapshot on PostgreSQL")
+    # promotion self-approval blocked
+    try:
+        saas.create_promotion(conn, sa, "SELFCI", "percentage", 10, approver=sa["id"])
+        check(False, "self-approved discount must be blocked")
+    except core.ForbiddenError:
+        check(True, "self-approved discount blocked (SoD) on PostgreSQL")
+    # migration zero drift + freight financials unchanged
+    m10 = saas.classify_existing(conn)
+    check(m10["financial_differences"] == 0 and m10["entitlement_losses"] == 0 and m10["tenant_access_changes"] == 0
+          and m10["fabricated_contracts"] == 0, "SaaS migration zero drift / no fabrication on PostgreSQL")
+    fin = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (wq,)).fetchone()
+    check(fin["tax"] == 72000 and fin["total"] == 672000, "SaaS layer did not change freight financials on PostgreSQL")
+    print("PHASE 10 SAAS COMMERCIAL LAYER: PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

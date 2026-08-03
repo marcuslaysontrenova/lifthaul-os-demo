@@ -259,6 +259,19 @@ PHASE9_PERMISSIONS = [
 ]
 for _code in PHASE9_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+# Granular Phase-10 SaaS commercial permissions (multi-dot codes)
+PHASE10_PERMISSIONS = [
+    "saas.product.view", "saas.product.manage", "saas.plan.view", "saas.plan.manage",
+    "saas.plan.approve", "saas.plan.publish", "saas.subscription.view", "saas.subscription.manage",
+    "saas.subscription.activate", "saas.subscription.suspend", "saas.subscription.reactivate",
+    "saas.subscription.terminate", "saas.entitlement.view", "saas.entitlement.manage",
+    "saas.entitlement.override", "saas.usage.view", "saas.usage.manage", "saas.quota.view",
+    "saas.quota.manage", "saas.billing.view", "saas.billing.generate", "saas.billing.approve",
+    "saas.pricing.view", "saas.pricing.manage", "saas.discount.manage",
+    "saas.tenant.provision", "saas.tenant.activate", "saas.tenant.decommission",
+]
+for _code in PHASE10_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
 
 # --------------------------------------------------------------------------- #
@@ -304,7 +317,11 @@ ADMIN_ROLES = [
          # Phase 9 AI administration (platform admin is the AI governance authority)
          "ai.use_case.*", "ai.model.*", "ai.prompt.*", "ai.simulate", "ai.execute", "ai.review",
          "ai.review.override", "ai.sensitive.execute", "ai.usage.view", "ai.cost.view",
-         "ai.budget.manage", "ai.audit.view", "ai.incident.*", "ai.kill_switch.manage", "ai.platform.manage"}),
+         "ai.budget.manage", "ai.audit.view", "ai.incident.*", "ai.kill_switch.manage", "ai.platform.manage",
+         # Phase 10 SaaS commercial layer (platform admin is the commercial authority)
+         "saas.product.*", "saas.plan.*", "saas.subscription.*", "saas.entitlement.*", "saas.usage.*",
+         "saas.quota.*", "saas.billing.*", "saas.pricing.*", "saas.discount.manage",
+         "saas.tenant.provision", "saas.tenant.activate", "saas.tenant.decommission"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",

@@ -350,6 +350,49 @@ test('AI administration is tenant-isolated through the browser (PostgreSQL)', as
   expect([200, 403].includes(res.status()), 'AI use-case read is permission-gated').toBe(true);
 });
 
+test('Phase 10 SaaS commercial layer through the browser (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  // product + plan + version + entitlements + publish (immutable)
+  await request.post(API + '/admin/saas/products', { headers: H, data: { code: 'br_prod', name: 'Br Product' } });
+  const prods = await request.get(API + '/admin/saas/products', { headers: H });
+  expect((await prods.json()).data.products.some(p => p.code === 'br_prod'), 'product created').toBe(true);
+  await request.post(API + '/admin/saas/plans', { headers: H, data: { product_code: 'br_prod', code: 'br_starter', name: 'Br Starter' } });
+  const vers = await request.get(API + '/admin/saas/plans/br_starter/versions', { headers: H });
+  const vid = (await vers.json()).data.versions[0].id;
+  await request.post(API + `/admin/saas/plan-versions/${vid}/set`, { headers: H, data: { base_price: 5000, trial_days: 14 } });
+  await request.post(API + `/admin/saas/plan-versions/${vid}/entitlements`, { headers: H, data: { kind: 'module', code: 'crm', mode: 'included' } });
+  await request.post(API + `/admin/saas/plan-versions/${vid}/entitlements`, { headers: H, data: { kind: 'feature', code: 'active_users', mode: 'limited', quantity: 3 } });
+  const val = await request.post(API + `/admin/saas/plan-versions/${vid}/validate`, { headers: H, data: {} });
+  expect((await val.json()).data.ok, 'plan validates').toBe(true);
+  // invalid negative price is rejected on a fresh draft
+  await request.post(API + '/admin/saas/plans', { headers: H, data: { product_code: 'br_prod', code: 'br_bad', name: 'Bad' } });
+  const bvers = await request.get(API + '/admin/saas/plans/br_bad/versions', { headers: H });
+  const bvid = (await bvers.json()).data.versions[0].id;
+  const badPrice = await request.post(API + `/admin/saas/plan-versions/${bvid}/set`, { headers: H, data: { base_price: -5 } });
+  expect([400, 422].includes(badPrice.status()), 'negative price rejected').toBe(true);
+  // provision a tenant (idempotent, fail-closed)
+  await request.post(API + `/admin/saas/plan-versions/${vid}/approve`, { headers: H, data: {} });
+  await request.post(API + `/admin/saas/plan-versions/${vid}/publish`, { headers: H, data: { change_reason: 'go' } });
+  const prov = await request.post(API + '/admin/saas/provision', { headers: H, data: { tenant_code: 'BRTEN', legal_name: 'Br Ten', product_code: 'br_prod', plan_code: 'br_starter', admin_email: 'admin@brten', commercial_evidence: 'SOW-BR' } });
+  const pj = await prov.json();
+  expect(pj.data.status, 'tenant provisioned').toBe('ACTIVATED');
+  // immutable billing evidence
+  const bill = await request.post(API + '/admin/saas/billing', { headers: H, data: { subscription_id: pj.data.subscription_id, period_start: '2026-08-01', period_end: '2026-08-31' } });
+  const bj = await bill.json();
+  expect([bj.data.subtotal, bj.data.tax, bj.data.total]).toEqual([5000, 600, 5600]);
+  // subscriptions listing + usage endpoint respond
+  const subs = await request.get(API + '/admin/saas/subscriptions', { headers: H });
+  expect(subs.status(), 'subscriptions endpoint').toBe(200);
+});
+
+test('SaaS subscriptions are tenant-isolated through the browser (PostgreSQL)', async ({ request }) => {
+  const tokB = await login(request, seed.userB);
+  const HB = { Authorization: 'Bearer ' + tokB };
+  const res = await request.get(API + '/admin/saas/subscriptions', { headers: HB });
+  expect([200, 403].includes(res.status()), 'SaaS subscription read is permission-gated').toBe(true);
+});
+
 test('admin console renders live PostgreSQL data in a real browser', async ({ page }) => {
   const errs = [];
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });

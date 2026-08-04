@@ -929,6 +929,89 @@ def main():
     check(integ["overall"] in ("PASS", "WARNING", "FAIL", "BLOCKED"), "marketplace integrity checks execute on PostgreSQL")
     print("MARKETPLACE FOUNDATION + ONBOARDING (INCREMENT 2): PASS on PostgreSQL", flush=True)
 
+    # ---------------------------------------------------------------- #
+    # Marketplace Increment 3: booking / pricing / matching / offers / assignment
+    # ---------------------------------------------------------------- #
+    import marketplace_matching as mm
+    # fresh active shipper + carrier + vehicle + driver (the Inc2 carrier was suspended above)
+    sh = mo.create_shipper_application(conn, mkc, "CORPORATION", "CI Shipper", registration_type="SEC",
+                                       registration_number="CI-SHIP-1", registered_address="Makati",
+                                       contract_accepted=1, privacy_accepted=1)
+    mo.submit_shipper(conn, mkc, sh); mo.verify_shipper(conn, mkv, sh)
+    for dt in ("BUSINESS_REGISTRATION", "TAX_REGISTRATION"):
+        d = mo.upload_document(conn, mkc, dt, "SHIPPER", sh, expiry_date="2027-01-01"); mo.verify_document(conn, mkv, d)
+    mo.activate_shipper(conn, mka, sh)
+    c3 = mo.create_carrier_application(conn, mkc, "FLEET_OPERATOR", "CI Haulers 3", registration_type="SEC",
+                                       registration_number="CI-CARR-3", operating_address="M", preferred_lanes=["CAVITE"])
+    mo.submit_carrier(conn, mkc, c3); mo.verify_carrier(conn, mkv, c3)
+    for dt in ("BUSINESS_REGISTRATION", "TAX_REGISTRATION", "AUTHORITY_TO_OPERATE", "INSURANCE"):
+        d = mo.upload_document(conn, mkc, dt, "CARRIER", c3, expiry_date="2027-01-01"); mo.verify_document(conn, mkv, d)
+    mo.activate_carrier(conn, mka, c3)
+    v3 = mo.register_vehicle(conn, mkc, c3, "truck_6w", "CI-PLATE-3"); mo.verify_vehicle(conn, mkv, v3)
+    for dt in ("VEHICLE_REGISTRATION", "INSURANCE"):
+        d = mo.upload_document(conn, mkc, dt, "VEHICLE", v3, expiry_date="2027-01-01"); mo.verify_document(conn, mkv, d)
+    mo.activate_vehicle(conn, mka, v3)
+    d3 = mo.register_driver(conn, mkc, c3, "CI Driver 3", licence_expiry="2027-01-01", authorized_categories=["truck_6w"])
+    mo.verify_driver(conn, mkv, d3); mo.activate_driver(conn, mka, d3)
+    # MM-CAV lane is ACTIVE (activated in the Inc2 block). Full booking lifecycle:
+    bk = mm.create_booking(conn, mkc, sh, "general", "METRO_MANILA", "CAVITE", weight_kg=5000, volume_cbm=10,
+                           pickup_address="A", delivery_address="B")
+    check(mm.validate_booking(conn, mkv, bk)["status"] == "VALIDATED", "marketplace booking validation on PostgreSQL")
+    check("cargo_prohibited" in mm.validate_booking(conn, mkv, mm.create_booking(
+        conn, mkc, sh, "prohibited", "METRO_MANILA", "CAVITE", weight_kg=100, pickup_address="A", delivery_address="B"))["blockers"],
+        "prohibited-cargo booking blocked on PostgreSQL")
+    mm.select_pricing_mode(conn, mkv, bk)
+    pr = mm.price_booking(conn, mkv, bk)
+    check(pr["tax"] == round(pr["subtotal"] * 0.12) and pr["total"] == round(pr["subtotal"] + pr["tax"], 2),
+          "pricing uses Phase-2 tax on PostgreSQL")
+    check(pr["platform_fee"] == round(pr["subtotal"] * 0.10, 2), "platform fee snapshot on PostgreSQL")
+    # immutable snapshot: rate change does not alter the issued price
+    conn.execute("UPDATE mkt_rate_cards SET rate=99999 WHERE component='base'"); conn.commit()
+    check(mm.get_pricing_snapshot(conn, mkv, pr["snapshot_id"])["total"] == pr["total"],
+          "pricing snapshot immutable on PostgreSQL")
+    cand = mm.generate_candidates(conn, mka, bk)
+    check(len(cand["candidates"]) == 1 and "factors" in cand["candidates"][0], "deterministic candidate ranking on PostgreSQL")
+    bc = mm.create_broadcast(conn, mka, bk, wave=1)
+    check(len(bc["targets"]) == 1, "controlled broadcast wave-1 on PostgreSQL")
+    check(int(list(mm.create_broadcast(conn, mka, bk, wave=1)["suppressed"].keys())[0]) == c3, "broadcast dedup on PostgreSQL")
+    off = mm.submit_offer(conn, mkc, bk, c3, 4800, vehicle_id=v3, driver_id=d3)
+    check(off["status"] == "VALID", "carrier offer validated on PostgreSQL")
+    mm.evaluate_offers(conn, mkv, bk)
+    try:
+        mm.select_offer(conn, mkc, bk, off["offer_id"]); check(False, "carrier must not select its own offer")
+    except PermissionError:
+        check(True, "offer selection separation of duties on PostgreSQL")
+    mm.select_offer(conn, mkv, bk, off["offer_id"], model="MANAGED_SELECTION")
+    asg = mm.create_assignment(conn, mka, bk)
+    conf = mm.confirm_assignment(conn, mkc, asg["assignment_id"])
+    check(conf["status"] == "PAYMENT_REQUIRED" and conf["trip_active"] is False, "assignment is PAYMENT-GATED (no trip activation) on PostgreSQL")
+    # high-value assignment approval SoD
+    bk2 = mm.create_booking(conn, mkc, sh, "general", "METRO_MANILA", "CAVITE", weight_kg=5000, volume_cbm=10,
+                            pickup_address="A", delivery_address="B")
+    mm.validate_booking(conn, mkv, bk2); mm.select_pricing_mode(conn, mkv, bk2); mm.price_booking(conn, mkv, bk2)
+    mm.generate_candidates(conn, mka, bk2); mm.create_broadcast(conn, mka, bk2, wave=1)
+    off2 = mm.submit_offer(conn, mkc, bk2, c3, 600000, vehicle_id=v3, driver_id=d3)["offer_id"]
+    mm.select_offer(conn, mkv, bk2, off2); asg2 = mm.create_assignment(conn, mka, bk2)
+    check(asg2["approval_required"], "high-value assignment requires approval on PostgreSQL")
+    try:
+        mm.approve_assignment(conn, mka, asg2["assignment_id"]); check(False, "assigner must not approve")
+    except PermissionError:
+        check(True, "assignment approval SoD on PostgreSQL")
+    mm.approve_assignment(conn, mkv, asg2["assignment_id"])
+    check(mm.confirm_assignment(conn, mkc, asg2["assignment_id"])["status"] == "PAYMENT_REQUIRED", "approved high-value assignment confirmable on PostgreSQL")
+    # tenant isolation on bookings
+    try:
+        mm.validate_booking(conn, mkB, bk); check(False, "cross-tenant booking must 404")
+    except core.NotFoundError:
+        check(True, "marketplace booking tenant-isolated on PostgreSQL")
+    # migration + integrity + freight drift
+    mig3 = mm.classify_existing(conn)
+    check(all(v == 0 for v in mig3["invariants"].values()), "matching migration zero drift on PostgreSQL")
+    check(mm.run_integrity(conn, mka)["overall"] in ("PASS", "WARNING", "FAIL", "BLOCKED"), "matching integrity checks execute on PostgreSQL")
+    fin3 = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (wq,)).fetchone()
+    check(fin3["tax"] == 72000 and fin3["total"] == 672000, "matching layer did not change freight financials on PostgreSQL")
+    print("MARKETPLACE MATCHING/PRICING (INCREMENT 3): PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

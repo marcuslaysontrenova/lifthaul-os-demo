@@ -442,3 +442,19 @@ test('marketplace deterministic eligibility denies prohibited cargo through the 
     expect(d.blocked).toBe('cargo_prohibited');
   }
 });
+
+test('marketplace matching endpoints respond through the browser network stack (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  // permission-gated commercial endpoints: reachable through the browser, authorized or cleanly denied
+  for (const path of ['/admin/marketplace/bookings', '/admin/marketplace/queues',
+                      '/admin/marketplace/assignments', '/admin/marketplace/matching-integrity']) {
+    const r = await request.get(API + path, { headers: H });
+    expect([200, 403].includes(r.status()), 'matching endpoint permission-gated: ' + path).toBe(true);
+  }
+  // when authorized, integrity reports a governed status and queues expose the demand/supply buckets
+  const integ = await request.get(API + '/admin/marketplace/matching-integrity', { headers: H });
+  if (integ.status() === 200) {
+    expect(['NOT_RUN', 'PASS', 'WARNING', 'FAIL', 'BLOCKED']).toContain((await integ.json()).data.overall);
+  }
+});

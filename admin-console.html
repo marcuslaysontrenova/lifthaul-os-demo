@@ -287,7 +287,13 @@ const MENU = [
     {id:'mkt_documents', label:'Compliance Documents'},
     {id:'mkt_cases', label:'Verification Queues'},
     {id:'mkt_eligibility', label:'Eligibility Tester'},
+    {id:'mkt_bookings', label:'Bookings'},
+    {id:'mkt_rate_cards', label:'Rate Cards'},
+    {id:'mkt_offers', label:'Offers'},
+    {id:'mkt_assignments', label:'Assignments'},
+    {id:'mkt_queues', label:'Marketplace Queues'},
     {id:'mkt_integrity', label:'Marketplace Integrity'},
+    {id:'mkt_matching_integrity', label:'Matching Integrity'},
   ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
@@ -1130,6 +1136,33 @@ Object.assign(SCREENS, {
     c.innerHTML=header(it,'Marketplace integrity — statuses NOT_RUN/PASS/WARNING/FAIL/BLOCKED. Overall: '+d.overall)+
       table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
 });
+// ---- Increment 3: booking / pricing / matching / offers / assignment screens ----
+Object.assign(SCREENS, {
+  mkt_bookings: async (it,c)=>{ const d=await api('GET','/admin/marketplace/bookings');
+    c.innerHTML=header(it,'Marketplace bookings. Validate → price → match → broadcast → offers → select → assign. ASSIGNED stays PAYMENT-GATED (no trip activation).')+
+      table(['Id','Shipper','Cargo','Route','Vehicle req','Pricing','Status'], d.bookings,
+        r=>[r.id,r.shipper_id,cell(r.cargo_code),cell((r.origin_zone||'')+'→'+(r.dest_zone||'')),cell(r.requested_vehicle_category),cell(r.pricing_mode),pill(mktBkPill(r.status))+' '+r.status]); },
+  mkt_rate_cards: async (it,c)=>{ const d=await api('GET','/admin/marketplace/bookings'); // reuse; rate cards are read-only reference here
+    c.innerHTML=header(it,'Governed rate components drive deterministic pricing. Pricing snapshots are immutable once issued.')+
+      `<div class="note">Rate cards (base / distance / surcharges / platform fee) are seeded governed reference. Every issued price persists an immutable snapshot; later rate changes never alter an existing offer or accepted booking.</div>`; },
+  mkt_offers: async (it,c)=>{ const d=await api('GET','/admin/marketplace/offers');
+    c.innerHTML=header(it,'Carrier offers and bids. Validation confirms carrier/vehicle/driver eligibility, window, and price floor. The cheapest offer never auto-wins.')+
+      table(['Id','Booking','Carrier','Vehicle','Amount','Bid','Status'], d.offers,
+        r=>[r.id,r.booking_id,r.carrier_id,cell(r.vehicle_id),cell(r.amount),r.is_bid?'yes':'—',pill(mktOfferPill(r.status))+' '+r.status]); },
+  mkt_assignments: async (it,c)=>{ const d=await api('GET','/admin/marketplace/assignments');
+    c.innerHTML=header(it,'Assignments — governed, SoD-approved, and PAYMENT-GATED. No trip activation in this increment; funds never move here.')+
+      table(['Id','Booking','Carrier','Vehicle','Driver','Payout','Payment req','Status'], d.assignments,
+        r=>[r.id,r.booking_id,r.carrier_id,cell(r.vehicle_id),cell(r.driver_id),cell(r.carrier_payout),cell(r.payment_requirement),pill(mktAsgPill(r.status))+' '+r.status]); },
+  mkt_queues: async (it,c)=>{ const d=await api('GET','/admin/marketplace/queues');
+    const rows=Object.keys(d).map(k=>({queue:k.replace(/_/g,' '),count:d[k]}));
+    c.innerHTML=header(it,'Demand & supply operational queues.')+table(['Queue','Count'], rows, r=>[cell(r.queue),r.count]); },
+  mkt_matching_integrity: async (it,c)=>{ const d=await api('GET','/admin/marketplace/matching-integrity');
+    c.innerHTML=header(it,'Matching & pricing integrity — overall: '+d.overall)+
+      table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
+});
+function mktBkPill(s){ return (s==='ASSIGNED')?'ACTIVE':(s==='CANCELLED'||s==='REJECTED'||s==='EXPIRED')?'INACTIVE':'DRAFT'; }
+function mktOfferPill(s){ return (s==='SELECTED'||s==='VALID'||s==='SHORTLISTED')?'ACTIVE':(s==='REJECTED'||s==='EXPIRED'||s==='INVALID'||s==='WITHDRAWN')?'INACTIVE':'DRAFT'; }
+function mktAsgPill(s){ return (s==='PAYMENT_REQUIRED'||s==='CONFIRMED')?'ACTIVE':(s==='CANCELLED'||s==='EXPIRED'||s==='REASSIGNMENT_REQUIRED')?'INACTIVE':'DRAFT'; }
 function mktPill(s){ return (s==='ACTIVE'||s==='VERIFIED'||s==='APPROVED')?'ACTIVE':(s==='REJECTED'||s==='EXPIRED'||s==='SUSPENDED')?'INACTIVE':'DRAFT'; }
 function mktShipperActions(r){ const b=[];
   if(r.status==='APPLICATION'||r.status==='PROFILE_INCOMPLETE') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="mktAct('shippers',${r.id},'submit')">submit</a>`);

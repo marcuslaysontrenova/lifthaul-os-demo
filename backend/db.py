@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 17  # bump when any module schema changes (17 = Marketplace Inc.2: onboarding + compliance + eligibility)
+SCHEMA_VERSION = 18  # bump when any module schema changes (18 = Marketplace Inc.3: booking/pricing/matching/offers/assignment)
 
 
 def _now():
@@ -85,6 +85,7 @@ def _seed_platform(conn):
     import saas
     import marketplace
     import marketplace_onboarding
+    import marketplace_matching
     admin_platform.init(conn)
     config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
     admin_platform.seed(conn)
@@ -103,6 +104,7 @@ def _seed_platform(conn):
     saas.init(conn); saas.seed(conn)                          # Phase 10: SaaS product catalog + subscriptions + entitlements + metering
     marketplace.init(conn); marketplace.seed(conn)            # Marketplace foundation: cargo/vehicle taxonomy + eligibility + lanes
     marketplace_onboarding.init(conn); marketplace_onboarding.seed(conn)  # Marketplace Inc.2: shipper/carrier/vehicle/driver onboarding + compliance
+    marketplace_matching.init(conn); marketplace_matching.seed(conn)     # Marketplace Inc.3: booking/pricing/matching/offers/assignment
     return conn
 
 

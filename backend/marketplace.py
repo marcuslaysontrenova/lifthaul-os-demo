@@ -580,13 +580,13 @@ _CARGO = [
 # recommended pilot corridors (blueprint §15): Metro Manila + CALABARZON + Bulacan/Pampanga.
 # Seeded as ASSESSING (demand-capture only, promises NOTHING) — activation is earned.
 _LANES = [
-    ("MM-MM", "LUZON", "LUZON", "METRO_MANILA", "METRO_MANILA", "NCR core"),
-    ("MM-CAV", "LUZON", "LUZON", "METRO_MANILA", "CAVITE", "CALABARZON"),
-    ("MM-LAG", "LUZON", "LUZON", "METRO_MANILA", "LAGUNA", "CALABARZON"),
-    ("MM-BAT", "LUZON", "LUZON", "METRO_MANILA", "BATANGAS", "CALABARZON"),
-    ("MM-RIZ", "LUZON", "LUZON", "METRO_MANILA", "RIZAL", "CALABARZON"),
-    ("MM-BUL", "LUZON", "LUZON", "METRO_MANILA", "BULACAN", "Central Luzon"),
-    ("MM-PAM", "LUZON", "LUZON", "METRO_MANILA", "PAMPANGA", "Central Luzon"),
+    ("MM-MM", "LUZON", "LUZON", "METRO_MANILA", "METRO_MANILA", "NCR core", 15),
+    ("MM-CAV", "LUZON", "LUZON", "METRO_MANILA", "CAVITE", "CALABARZON", 35),
+    ("MM-LAG", "LUZON", "LUZON", "METRO_MANILA", "LAGUNA", "CALABARZON", 45),
+    ("MM-BAT", "LUZON", "LUZON", "METRO_MANILA", "BATANGAS", "CALABARZON", 110),
+    ("MM-RIZ", "LUZON", "LUZON", "METRO_MANILA", "RIZAL", "CALABARZON", 30),
+    ("MM-BUL", "LUZON", "LUZON", "METRO_MANILA", "BULACAN", "Central Luzon", 40),
+    ("MM-PAM", "LUZON", "LUZON", "METRO_MANILA", "PAMPANGA", "Central Luzon", 75),
 ]
 
 
@@ -601,7 +601,7 @@ def seed(conn, actor=None):
             cid = create_cargo_type(conn, a, code, name, cc, **flags)
             set_cargo_status(conn, a, cid, "ACTIVE")
     if not conn.execute("SELECT 1 FROM mkt_lanes LIMIT 1").fetchone():
-        for code, og, dg, oz, dz, corr in _LANES:
-            lid = create_lane(conn, a, code, og, dg, oz, dz, corridor=corr)
+        for code, og, dg, oz, dz, corr, dist in _LANES:
+            lid = create_lane(conn, a, code, og, dg, oz, dz, corridor=corr, distance_km=dist)
             assess_lane(conn, a, lid, status="ASSESSING")
     conn.commit()

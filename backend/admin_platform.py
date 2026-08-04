@@ -290,6 +290,18 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.driver.activate", "marketplace.driver.suspend",
     "marketplace.compliance.view", "marketplace.compliance.manage", "marketplace.compliance.verify",
     "marketplace.compliance.override", "marketplace.eligibility.test",
+    # Increment 3: booking / pricing / matching / broadcast / offers / bidding / assignment
+    "marketplace.booking.view", "marketplace.booking.create", "marketplace.booking.manage",
+    "marketplace.booking.validate", "marketplace.booking.cancel",
+    "marketplace.pricing.view", "marketplace.pricing.manage", "marketplace.pricing.simulate",
+    "marketplace.pricing.override", "marketplace.pricing.approve",
+    "marketplace.matching.view", "marketplace.matching.execute", "marketplace.ranking.manage",
+    "marketplace.broadcast.view", "marketplace.broadcast.manage", "marketplace.broadcast.execute",
+    "marketplace.offer.view", "marketplace.offer.create", "marketplace.offer.manage",
+    "marketplace.offer.evaluate", "marketplace.offer.select",
+    "marketplace.bid.view", "marketplace.bid.manage", "marketplace.bid.participate",
+    "marketplace.assignment.view", "marketplace.assignment.create", "marketplace.assignment.approve",
+    "marketplace.assignment.confirm", "marketplace.assignment.cancel", "marketplace.assignment.reassign",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

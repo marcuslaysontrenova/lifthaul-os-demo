@@ -1353,6 +1353,68 @@ def _marketplace_routes():
 ROUTES.update(_marketplace_routes())
 
 
+def _marketplace_matching_routes():
+    """Increment 3 — booking / pricing / matching / broadcast / offers / bidding / evaluation /
+    selection / assignment. RBAC-gated; tenant-scoped; audited; SoD-enforced; PAYMENT-GATED (no trip
+    activation); pricing snapshots immutable; hard denials not overridable by ranking."""
+    import marketplace_matching as mm
+
+    def bk_create(a, b, p): return {"id": mm.create_booking(_conn, a, int(b["shipper_id"]), b["cargo_code"], b["origin_zone"], b["dest_zone"], **{k: v for k, v in b.items() if k not in ("shipper_id", "cargo_code", "origin_zone", "dest_zone")})}
+    def bk_list(a, b, p):   return {"bookings": mm.list_bookings(_conn, a, status=b.get("status"))}
+    def bk_validate(a, b, p): return mm.validate_booking(_conn, a, int(p["id"]))
+    def bk_vreq(a, b, p):
+        core.require(a, "marketplace.booking.view"); return mm.vehicle_requirement(_conn, int(p["id"]))
+    def bk_cancel(a, b, p): return mm.cancel_booking(_conn, a, int(p["id"]), b.get("party", "operations"), b.get("reason", ""))
+    def pr_mode(a, b, p):   return mm.select_pricing_mode(_conn, a, int(p["id"]), override=b.get("override"), reason=b.get("reason"))
+    def pr_price(a, b, p):  return mm.price_booking(_conn, a, int(p["id"]), vehicle_category=b.get("vehicle_category"))
+    def pr_snap(a, b, p):   return mm.get_pricing_snapshot(_conn, a, int(p["id"]), client_view=b.get("client_view", False))
+    def mt_candidates(a, b, p): return mm.generate_candidates(_conn, a, int(p["id"]))
+    def bc_create(a, b, p): return mm.create_broadcast(_conn, a, int(p["id"]), wave=b.get("wave", 1))
+    def of_submit(a, b, p): return mm.submit_offer(_conn, a, int(b["booking_id"]), int(b["carrier_id"]), b["amount"], vehicle_id=b.get("vehicle_id"), driver_id=b.get("driver_id"), **{k: v for k, v in b.items() if k not in ("booking_id", "carrier_id", "amount", "vehicle_id", "driver_id")})
+    def of_list(a, b, p):   return {"offers": mm.list_offers(_conn, a, booking_id=b.get("booking_id"))}
+    def of_withdraw(a, b, p): return mm.withdraw_offer(_conn, a, int(p["id"]))
+    def of_evaluate(a, b, p): return mm.evaluate_offers(_conn, a, int(p["id"]))
+    def of_select(a, b, p): return mm.select_offer(_conn, a, int(b["booking_id"]), int(b["offer_id"]), model=b.get("model", "MANAGED_SELECTION"))
+    def as_create(a, b, p): return mm.create_assignment(_conn, a, int(b["booking_id"]))
+    def as_list(a, b, p):   return {"assignments": mm.list_assignments(_conn, a, status=b.get("status"))}
+    def as_approve(a, b, p): return mm.approve_assignment(_conn, a, int(p["id"]))
+    def as_confirm(a, b, p): return mm.confirm_assignment(_conn, a, int(p["id"]), decision=b.get("decision", "accept"))
+    def as_sub(a, b, p):    return mm.request_substitution(_conn, a, int(p["id"]), new_vehicle_id=b.get("vehicle_id"), new_driver_id=b.get("driver_id"))
+    def queues(a, b, p):    return mm.marketplace_queues(_conn, a)
+    def integrity(a, b, p): return mm.run_integrity(_conn, a)
+    def migration(a, b, p):
+        core.require(a, "marketplace.booking.view"); return mm.classify_existing(_conn)
+
+    return {
+        ("GET", "/admin/marketplace/bookings"): bk_list,
+        ("POST", "/admin/marketplace/bookings"): bk_create,
+        ("POST", "/admin/marketplace/bookings/:id/validate"): bk_validate,
+        ("GET", "/admin/marketplace/bookings/:id/vehicle-requirement"): bk_vreq,
+        ("POST", "/admin/marketplace/bookings/:id/cancel"): bk_cancel,
+        ("POST", "/admin/marketplace/bookings/:id/pricing-mode"): pr_mode,
+        ("POST", "/admin/marketplace/bookings/:id/price"): pr_price,
+        ("GET", "/admin/marketplace/pricing-snapshots/:id"): pr_snap,
+        ("POST", "/admin/marketplace/bookings/:id/candidates"): mt_candidates,
+        ("POST", "/admin/marketplace/bookings/:id/broadcast"): bc_create,
+        ("POST", "/admin/marketplace/offers"): of_submit,
+        ("GET", "/admin/marketplace/offers"): of_list,
+        ("POST", "/admin/marketplace/offers/:id/withdraw"): of_withdraw,
+        ("POST", "/admin/marketplace/bookings/:id/evaluate-offers"): of_evaluate,
+        ("POST", "/admin/marketplace/offers/select"): of_select,
+        ("POST", "/admin/marketplace/assignments"): as_create,
+        ("GET", "/admin/marketplace/assignments"): as_list,
+        ("POST", "/admin/marketplace/assignments/:id/approve"): as_approve,
+        ("POST", "/admin/marketplace/assignments/:id/confirm"): as_confirm,
+        ("POST", "/admin/marketplace/assignments/:id/substitute"): as_sub,
+        ("GET", "/admin/marketplace/queues"): queues,
+        ("GET", "/admin/marketplace/matching-integrity"): integrity,
+        ("GET", "/admin/marketplace/matching-migration"): migration,
+    }
+
+
+ROUTES.update(_marketplace_matching_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

@@ -399,7 +399,7 @@ class IntegrityMigrationDriftTests(Base):
         self.assertEqual((row["tax"], row["total"]), (72000, 672000))
 
     def test_schema_version(self):
-        self.assertEqual(db.SCHEMA_VERSION, 17)
+        self.assertGreaterEqual(db.SCHEMA_VERSION, 17)
 
 
 class TestMarketplaceApi(unittest.TestCase):

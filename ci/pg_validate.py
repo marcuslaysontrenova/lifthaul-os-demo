@@ -969,6 +969,11 @@ def main():
     conn.execute("UPDATE mkt_rate_cards SET rate=99999 WHERE component='base'"); conn.commit()
     check(mm.get_pricing_snapshot(conn, mkv, pr["snapshot_id"])["total"] == pr["total"],
           "pricing snapshot immutable on PostgreSQL")
+    # restore the seeded base rates so later blocks (Inc-4/5) price fresh bookings correctly
+    conn.execute("UPDATE mkt_rate_cards SET rate=2000 WHERE component='base' AND vehicle_category IS NULL")
+    conn.execute("UPDATE mkt_rate_cards SET rate=300 WHERE component='base' AND vehicle_category='motorcycle'")
+    conn.execute("UPDATE mkt_rate_cards SET rate=5000 WHERE component='base' AND vehicle_category='truck_6w'")
+    conn.commit()
     cand = mm.generate_candidates(conn, mka, bk)
     check(len(cand["candidates"]) == 1 and "factors" in cand["candidates"][0], "deterministic candidate ranking on PostgreSQL")
     bc = mm.create_broadcast(conn, mka, bk, wave=1)

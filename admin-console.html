@@ -295,6 +295,16 @@ const MENU = [
     {id:'mkt_integrity', label:'Marketplace Integrity'},
     {id:'mkt_matching_integrity', label:'Matching Integrity'},
   ]},
+  {sect:'Marketplace Finance', items:[
+    {id:'fin_payment_reqs', label:'Payment Requirements'},
+    {id:'fin_release_instructions', label:'Release Instructions'},
+    {id:'fin_payouts', label:'Carrier Payouts'},
+    {id:'fin_disputes', label:'Disputes'},
+    {id:'fin_refunds', label:'Refunds'},
+    {id:'fin_queues', label:'Finance Queues'},
+    {id:'fin_integrity', label:'Financial Integrity'},
+    {id:'fin_live_status', label:'Live Payment Status'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -1160,6 +1170,44 @@ Object.assign(SCREENS, {
     c.innerHTML=header(it,'Matching & pricing integrity — overall: '+d.overall)+
       table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
 });
+// ---- Increment 4: Marketplace Finance screens (protected payment / release / payout / disputes / refunds) ----
+Object.assign(SCREENS, {
+  fin_payment_reqs: async (it,c)=>{ const d=await api('GET','/admin/marketplace/payment-requirements');
+    c.innerHTML=header(it,'Protected-payment requirements. Amounts come from the immutable assignment snapshot — never recalculated. Live settlement is fail-closed.')+
+      table(['Id','Booking','Assignment','Carrier','Required','Funded','Released','Frozen','Provider','Status'], d.payment_requirements,
+        r=>[r.id,r.booking_id,r.assignment_id,r.carrier_id,cell(r.protected_amount_required),cell(r.funded_amount),cell(r.released_amount),cell(r.frozen_amount),cell(r.provider),pill(finPRPill(r.status))+' '+r.status]); },
+  fin_release_instructions: async (it,c)=>{ const d=await api('GET','/admin/marketplace/release-instructions');
+    c.innerHTML=header(it,'Release instructions — idempotent, SoD-approved (requester ≠ approver), and blocked during any active freeze.')+
+      table(['Id','Payment req','Carrier','Payout','Platform fee','Provider ref','Status'], d.release_instructions,
+        r=>[r.id,r.payment_requirement_id,r.carrier_id,cell(r.payout_amount),cell(r.platform_fee),cell(r.provider_instruction_reference),pill(finRelPill(r.status))+' '+r.status]); },
+  fin_payouts: async (it,c)=>{ const d=await api('GET','/admin/marketplace/payouts');
+    c.innerHTML=header(it,'Carrier payout snapshots — immutable; never recalculated with current fee configuration.')+
+      table(['Id','Payment req','Carrier','Gross','Commission','Tax','Net payout','Provider ref','Status'], d.payouts,
+        r=>[r.id,r.payment_requirement_id,r.carrier_id,cell(r.gross_value),cell(r.platform_commission),cell(r.tax),cell(r.net_payout),cell(r.provider_beneficiary_reference),pill(finPayoutPill(r.status))+' '+r.status]); },
+  fin_disputes: async (it,c)=>{ const d=await api('GET','/admin/marketplace/disputes');
+    c.innerHTML=header(it,'Disputes freeze affected unreleased funds and stop automatic release. The party that opened a dispute may not resolve it. AI never decides liability.')+
+      table(['Id','Payment req','Type','Opener','Amount','Outcome','Status'], d.disputes,
+        r=>[r.id,r.payment_requirement_id,cell(r.dispute_type),cell(r.opener_party),cell(r.amount),cell(r.resolution_outcome),pill(finDisputePill(r.status))+' '+r.status]); },
+  fin_refunds: async (it,c)=>{ const d=await api('GET','/admin/marketplace/refunds');
+    c.innerHTML=header(it,'Refunds — SoD-approved, idempotent, and never marked completed before provider confirmation.')+
+      table(['Id','Payment req','Reason','Amount','Provider ref','Status'], d.refunds,
+        r=>[r.id,r.payment_requirement_id,cell(r.reason),cell(r.amount),cell(r.provider_reference),pill(finRefundPill(r.status))+' '+r.status]); },
+  fin_queues: async (it,c)=>{ const d=await api('GET','/admin/marketplace/finance-queues');
+    const rows=Object.keys(d).map(k=>({queue:k.replace(/_/g,' '),count:d[k]}));
+    c.innerHTML=header(it,'Financial operations queues.')+table(['Queue','Count'], rows, r=>[cell(r.queue),r.count]); },
+  fin_integrity: async (it,c)=>{ const d=await api('GET','/admin/marketplace/finance-integrity');
+    c.innerHTML=header(it,'Financial integrity — overall: '+d.overall)+
+      table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
+  fin_live_status: async (it,c)=>{ const d=await api('GET','/admin/marketplace/protected-payment-live-status');
+    c.innerHTML=header(it,'Live protected-payment provider status. Mock is deterministic; live settlement is fail-closed until a licensed partner is selected + validated.')+
+      `<div class="note"><b>Mock:</b> ${cell(d.mock)}<br><b>Live protected payment:</b> ${pill(d.live_protected_payment==='BLOCKED'?'INACTIVE':'ACTIVE')} ${d.live_protected_payment}<br><b>Reason:</b> ${cell(d.reason)}</div>`+
+      `<div class="wrap" style="padding:12px"><b>Owner actions to unblock live settlement:</b><ul>${(d.owner_actions||[]).map(x=>`<li>${cell(x)}</li>`).join('')}</ul></div>`; },
+});
+function finPRPill(s){ return (s==='PROTECTED'||s==='RELEASED')?'ACTIVE':(s==='DISPUTED'||s==='FAILED'||s==='CANCELLED'||s==='EXPIRED')?'INACTIVE':'DRAFT'; }
+function finRelPill(s){ return (s==='COMPLETED'||s==='APPROVED')?'ACTIVE':(s==='FAILED'||s==='CANCELLED'||s==='REVERSED')?'INACTIVE':'DRAFT'; }
+function finPayoutPill(s){ return (s==='PAID')?'ACTIVE':(s==='FAILED'||s==='REVERSED'||s==='FROZEN'||s==='CANCELLED')?'INACTIVE':'DRAFT'; }
+function finDisputePill(s){ return (s==='RESOLVED')?'ACTIVE':(s==='CLOSED'||s==='REJECTED')?'INACTIVE':'DRAFT'; }
+function finRefundPill(s){ return (s==='COMPLETED')?'ACTIVE':(s==='FAILED'||s==='CANCELLED'||s==='REVERSED')?'INACTIVE':'DRAFT'; }
 function mktBkPill(s){ return (s==='ASSIGNED')?'ACTIVE':(s==='CANCELLED'||s==='REJECTED'||s==='EXPIRED')?'INACTIVE':'DRAFT'; }
 function mktOfferPill(s){ return (s==='SELECTED'||s==='VALID'||s==='SHORTLISTED')?'ACTIVE':(s==='REJECTED'||s==='EXPIRED'||s==='INVALID'||s==='WITHDRAWN')?'INACTIVE':'DRAFT'; }
 function mktAsgPill(s){ return (s==='PAYMENT_REQUIRED'||s==='CONFIRMED')?'ACTIVE':(s==='CANCELLED'||s==='EXPIRED'||s==='REASSIGNMENT_REQUIRED')?'INACTIVE':'DRAFT'; }

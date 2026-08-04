@@ -1012,6 +1012,73 @@ def main():
     check(fin3["tax"] == 72000 and fin3["total"] == 672000, "matching layer did not change freight financials on PostgreSQL")
     print("MARKETPLACE MATCHING/PRICING (INCREMENT 3): PASS on PostgreSQL", flush=True)
 
+    # ---------------------------------------------------------------- #
+    # Marketplace Increment 4: protected payment / release / payout / disputes / refunds
+    # ---------------------------------------------------------------- #
+    import marketplace_payments as mp
+    fin = {"id": 9201, "role": "ops", "perms": {"*"}, "tenant_id": tA}   # finance reconciler
+    # the Inc3 block confirmed assignment `asg` for booking `bk`; build its protected-payment lifecycle
+    prq = mp.create_payment_requirement(conn, mka, asg["assignment_id"])
+    prsnap = conn.execute("SELECT total FROM mkt_pricing_snapshots s JOIN mkt_assignments a ON a.pricing_snapshot_id=s.id WHERE a.id=?", (asg["assignment_id"],)).fetchone()
+    check(prq["protected_amount_required"] == prsnap["total"], "payment requirement from immutable snapshot on PostgreSQL")
+    check(mp.create_payment_requirement(conn, mka, asg["assignment_id"]).get("idempotent"), "payment requirement duplicate-prevented on PostgreSQL")
+    check("****" in mp.funding_instructions(conn, mka, prq["id"])["masked_account"], "funding instructions masked on PostgreSQL")
+    # partial funding -> gate blocked; full protected -> READY_FOR_TRIP_ACTIVATION (never trip-active)
+    mp.record_funding_event(conn, fin, prq["id"], "partial")
+    check(mp.trip_activation_gate(conn, mka, prq["id"])["eligible"] is False, "trip gate fail-closed on partial funding on PostgreSQL")
+    mp.record_funding_event(conn, fin, prq["id"], "full")
+    g4 = mp.trip_activation_gate(conn, mka, prq["id"])
+    check(g4["result"] == "READY_FOR_TRIP_ACTIVATION" and g4["trip_active"] is False, "trip gate READY (no trip activation) on PostgreSQL")
+    check(mp.record_funding_event(conn, fin, prq["id"], "full")["reconciliation"] == "DUPLICATE", "duplicate funding event detected on PostgreSQL")
+    # release requires delivery evidence; then SoD approve; then payout snapshot
+    check(mp.evaluate_release(conn, mka, prq["id"])["release_eligible"] is False, "release blocked before delivery on PostgreSQL")
+    mp.submit_milestone(conn, mkv, prq["id"], "DELIVERY_CONFIRMED"); mp.submit_milestone(conn, mkv, prq["id"], "CLIENT_ACCEPTED")
+    check(mp.evaluate_release(conn, mka, prq["id"])["release_eligible"] is True, "release eligible after evidence on PostgreSQL")
+    ri = mp.create_release_instruction(conn, mkc, prq["id"])
+    try:
+        mp.approve_release(conn, mkc, ri["release_instruction_id"]); check(False, "self-approval must be blocked")
+    except PermissionError:
+        check(True, "release self-approval blocked (SoD) on PostgreSQL")
+    mp.approve_release(conn, mkv, ri["release_instruction_id"])
+    rres = mp.submit_release(conn, mka, ri["release_instruction_id"])
+    check(rres["status"] == "COMPLETED", "release submitted to provider on PostgreSQL")
+    po = conn.execute("SELECT * FROM mkt_payouts WHERE id=?", (rres["payout_id"],)).fetchone()
+    check(po["status"] == "PAID" and po["provider_beneficiary_reference"] is not None, "carrier payout snapshot on PostgreSQL")
+    # a second transaction: dispute freeze -> release blocked -> partial resolution (SoD)
+    prq2 = mp.create_payment_requirement(conn, mka, asg2["assignment_id"])
+    mp.record_funding_event(conn, fin, prq2["id"], "full")
+    d4 = mp.open_dispute(conn, mkc, prq2["id"], "cargo_damage", "shipper")
+    check(d4["status"] == "FUNDS_FROZEN" and d4["frozen_amount"] > 0, "dispute freezes funds on PostgreSQL")
+    mp.submit_milestone(conn, mkv, prq2["id"], "DELIVERY_CONFIRMED"); mp.submit_milestone(conn, mkv, prq2["id"], "CLIENT_ACCEPTED")
+    check(mp.evaluate_release(conn, mka, prq2["id"])["release_eligible"] is False, "release blocked during freeze on PostgreSQL")
+    try:
+        mp.resolve_dispute(conn, mkc, d4["dispute_id"], "FULL_RELEASE_TO_CARRIER"); check(False, "dispute opener must not resolve")
+    except PermissionError:
+        check(True, "dispute self-resolution blocked (SoD) on PostgreSQL")
+    mp.resolve_dispute(conn, mkv, d4["dispute_id"], "PARTIAL_RELEASE_AND_PARTIAL_REFUND", released=1000, refunded=1000, liability="shared")
+    check(conn.execute("SELECT frozen_amount FROM mkt_payment_requirements WHERE id=?", (prq2["id"],)).fetchone()["frozen_amount"] == 0, "dispute resolution lifts freeze on PostgreSQL")
+    # refund SoD + idempotency
+    rf = mp.request_refund(conn, mkc, prq2["id"], "dispute outcome", 500, idem_key="CIRF-1")
+    check(mp.request_refund(conn, mkc, prq2["id"], "dispute outcome", 500, idem_key="CIRF-1").get("idempotent"), "refund idempotent on PostgreSQL")
+    try:
+        mp.approve_refund(conn, mkc, rf["refund_id"]); check(False, "refund self-approval must be blocked")
+    except PermissionError:
+        check(True, "refund self-approval blocked (SoD) on PostgreSQL")
+    mp.approve_refund(conn, mkv, rf["refund_id"])
+    check(mp.submit_refund(conn, mka, rf["refund_id"])["status"] == "COMPLETED", "refund completes with provider confirmation on PostgreSQL")
+    # chargeback + live boundary + integrity + migration
+    check(mp.record_funding_event(conn, fin, prq2["id"], "chargeback")["reconciliation"] == "CHARGEBACK", "chargeback detected on PostgreSQL")
+    try:
+        mp.provider("WISE").funding_instructions({"protected_amount_required": 1, "currency": "PHP"}); check(False, "live provider must be blocked")
+    except core.ForbiddenError:
+        check(True, "live protected-payment provider fail-closed on PostgreSQL")
+    check(mp.run_integrity(conn, mka)["overall"] in ("PASS", "WARNING", "FAIL", "BLOCKED"), "protected-payment integrity checks execute on PostgreSQL")
+    mig4 = mp.classify_existing(conn)
+    check(all(v == 0 for v in mig4["invariants"].values()), "protected-payment migration zero drift on PostgreSQL")
+    fin4 = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (wq,)).fetchone()
+    check(fin4["tax"] == 72000 and fin4["total"] == 672000, "protected-payment layer did not change freight financials on PostgreSQL")
+    print("MARKETPLACE PROTECTED PAYMENT (INCREMENT 4): PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

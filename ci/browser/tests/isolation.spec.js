@@ -458,3 +458,24 @@ test('marketplace matching endpoints respond through the browser network stack (
     expect(['NOT_RUN', 'PASS', 'WARNING', 'FAIL', 'BLOCKED']).toContain((await integ.json()).data.overall);
   }
 });
+
+test('marketplace protected-payment endpoints respond through the browser network stack (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  for (const path of ['/admin/marketplace/payment-requirements', '/admin/marketplace/finance-queues',
+                      '/admin/marketplace/disputes', '/admin/marketplace/refunds',
+                      '/admin/marketplace/payouts', '/admin/marketplace/finance-integrity']) {
+    const r = await request.get(API + path, { headers: H });
+    expect([200, 403].includes(r.status()), 'finance endpoint permission-gated: ' + path).toBe(true);
+  }
+  // live protected-payment must report BLOCKED (fail-closed) when reachable
+  const live = await request.get(API + '/admin/marketplace/protected-payment-live-status', { headers: H });
+  expect([200, 403].includes(live.status())).toBe(true);
+  if (live.status() === 200) {
+    expect((await live.json()).data.live_protected_payment).toBe('BLOCKED');
+  }
+  const integ = await request.get(API + '/admin/marketplace/finance-integrity', { headers: H });
+  if (integ.status() === 200) {
+    expect(['NOT_RUN', 'PASS', 'WARNING', 'FAIL', 'BLOCKED']).toContain((await integ.json()).data.overall);
+  }
+});

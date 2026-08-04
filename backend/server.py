@@ -1415,6 +1415,75 @@ def _marketplace_matching_routes():
 ROUTES.update(_marketplace_matching_routes())
 
 
+def _marketplace_payment_routes():
+    """Increment 4 — Protected Payment & Conditional Release. Provider-neutral; RBAC-gated; tenant-
+    scoped; audited; SoD-enforced; idempotent; fail-closed (funds never move without protected evidence;
+    live provider blocked). Amounts come from immutable assignment snapshots."""
+    import marketplace_payments as mp
+
+    def pr_create(a, b, p): return mp.create_payment_requirement(_conn, a, int(b["assignment_id"]), provider_name=b.get("provider", "MOCK"), idem_key=b.get("idem_key"))
+    def pr_list(a, b, p):   return {"payment_requirements": mp.list_payment_requirements(_conn, a, status=b.get("status"))}
+    def pr_instr(a, b, p):  return mp.funding_instructions(_conn, a, int(p["id"]))
+    def fund_event(a, b, p): return mp.record_funding_event(_conn, a, int(p["id"]), scenario=b.get("scenario", "full"), idem_key=b.get("idem_key"))
+    def fund_status(a, b, p):
+        core.require(a, "marketplace.payment.view"); return mp.funding_status(_conn, int(p["id"]))
+    def gate(a, b, p):      return mp.trip_activation_gate(_conn, a, int(p["id"]))
+    def rp_publish(a, b, p): return mp.publish_release_policy(_conn, a, b["code"], b["release_model"], b["milestones"], **{k: v for k, v in b.items() if k not in ("code", "release_model", "milestones")})
+    def milestone(a, b, p): return mp.submit_milestone(_conn, a, int(p["id"]), b["milestone_code"], source=b.get("source", "mock"), mock=b.get("mock", True))
+    def rel_eval(a, b, p):  return mp.evaluate_release(_conn, a, int(p["id"]))
+    def rel_create(a, b, p): return mp.create_release_instruction(_conn, a, int(p["id"]), idem_key=b.get("idem_key"))
+    def rel_list(a, b, p):  return {"release_instructions": mp.list_release_instructions(_conn, a, status=b.get("status"))}
+    def rel_approve(a, b, p): return mp.approve_release(_conn, a, int(p["id"]))
+    def rel_submit(a, b, p): return mp.submit_release(_conn, a, int(p["id"]), scenario=b.get("scenario"))
+    def payout_list(a, b, p): return {"payouts": mp.list_payouts(_conn, a, status=b.get("status"))}
+    def disp_open(a, b, p): return mp.open_dispute(_conn, a, int(b["payment_requirement_id"]), b["dispute_type"], b["opener_party"], amount=b.get("amount"))
+    def disp_list(a, b, p): return {"disputes": mp.list_disputes(_conn, a, status=b.get("status"))}
+    def disp_resolve(a, b, p): return mp.resolve_dispute(_conn, a, int(p["id"]), b["outcome"], released=b.get("released", 0), refunded=b.get("refunded", 0), liability=b.get("liability"), findings=b.get("findings"))
+    def refund_req(a, b, p): return mp.request_refund(_conn, a, int(b["payment_requirement_id"]), b["reason"], b["amount"], idem_key=b.get("idem_key"))
+    def refund_list(a, b, p): return {"refunds": mp.list_refunds(_conn, a, status=b.get("status"))}
+    def refund_approve(a, b, p): return mp.approve_refund(_conn, a, int(p["id"]))
+    def refund_submit(a, b, p): return mp.submit_refund(_conn, a, int(p["id"]), scenario=b.get("scenario"))
+    def replay(a, b, p):    return mp.replay_deadletter(_conn, a, int(p["id"]))
+    def queues(a, b, p):    return mp.finance_queues(_conn, a)
+    def integrity(a, b, p): return mp.run_integrity(_conn, a)
+    def migration(a, b, p):
+        core.require(a, "marketplace.payment.view"); return mp.classify_existing(_conn)
+    def live(a, b, p):
+        core.require(a, "marketplace.payment.view"); return mp.live_status(_conn, a)
+
+    return {
+        ("GET", "/admin/marketplace/payment-requirements"): pr_list,
+        ("POST", "/admin/marketplace/payment-requirements"): pr_create,
+        ("GET", "/admin/marketplace/payment-requirements/:id/funding-instructions"): pr_instr,
+        ("POST", "/admin/marketplace/payment-requirements/:id/funding-event"): fund_event,
+        ("GET", "/admin/marketplace/payment-requirements/:id/funding-status"): fund_status,
+        ("GET", "/admin/marketplace/payment-requirements/:id/activation-gate"): gate,
+        ("POST", "/admin/marketplace/release-policies"): rp_publish,
+        ("POST", "/admin/marketplace/payment-requirements/:id/milestone"): milestone,
+        ("GET", "/admin/marketplace/payment-requirements/:id/release-evaluation"): rel_eval,
+        ("POST", "/admin/marketplace/payment-requirements/:id/release-instruction"): rel_create,
+        ("GET", "/admin/marketplace/release-instructions"): rel_list,
+        ("POST", "/admin/marketplace/release-instructions/:id/approve"): rel_approve,
+        ("POST", "/admin/marketplace/release-instructions/:id/submit"): rel_submit,
+        ("GET", "/admin/marketplace/payouts"): payout_list,
+        ("POST", "/admin/marketplace/disputes"): disp_open,
+        ("GET", "/admin/marketplace/disputes"): disp_list,
+        ("POST", "/admin/marketplace/disputes/:id/resolve"): disp_resolve,
+        ("POST", "/admin/marketplace/refunds"): refund_req,
+        ("GET", "/admin/marketplace/refunds"): refund_list,
+        ("POST", "/admin/marketplace/refunds/:id/approve"): refund_approve,
+        ("POST", "/admin/marketplace/refunds/:id/submit"): refund_submit,
+        ("POST", "/admin/marketplace/deadletter/:id/replay"): replay,
+        ("GET", "/admin/marketplace/finance-queues"): queues,
+        ("GET", "/admin/marketplace/finance-integrity"): integrity,
+        ("GET", "/admin/marketplace/payment-migration"): migration,
+        ("GET", "/admin/marketplace/protected-payment-live-status"): live,
+    }
+
+
+ROUTES.update(_marketplace_payment_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

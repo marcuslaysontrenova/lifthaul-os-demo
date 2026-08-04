@@ -302,6 +302,18 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.bid.view", "marketplace.bid.manage", "marketplace.bid.participate",
     "marketplace.assignment.view", "marketplace.assignment.create", "marketplace.assignment.approve",
     "marketplace.assignment.confirm", "marketplace.assignment.cancel", "marketplace.assignment.reassign",
+    # Increment 4: protected payment / release / payout / refund / dispute / freeze / reconciliation
+    "marketplace.payment.view", "marketplace.payment.create", "marketplace.payment.reconcile",
+    "marketplace.payment.verify", "marketplace.payment.override",
+    "marketplace.release.view", "marketplace.release.evaluate", "marketplace.release.create",
+    "marketplace.release.approve", "marketplace.release.submit",
+    "marketplace.payout.view", "marketplace.payout.manage", "marketplace.payout.approve",
+    "marketplace.refund.view", "marketplace.refund.request", "marketplace.refund.approve", "marketplace.refund.submit",
+    "marketplace.dispute.view", "marketplace.dispute.create", "marketplace.dispute.manage",
+    "marketplace.dispute.resolve", "marketplace.dispute.override",
+    "marketplace.freeze.view", "marketplace.freeze.create", "marketplace.freeze.approve", "marketplace.freeze.release",
+    "marketplace.reconciliation.view", "marketplace.reconciliation.manage",
+    "marketplace.finance.integrity.view", "marketplace.finance.integrity.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

@@ -273,6 +273,17 @@ PHASE10_PERMISSIONS = [
 for _code in PHASE10_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 
+# Marketplace foundation (Nationwide Marketplace program, increment 1): governed cargo/vehicle
+# taxonomy + lane coverage. lane.activate is deliberately separate from lane.manage so activation
+# (the "promise service" gate) can be held under separation of duties from lane assessment.
+MARKETPLACE_PERMISSIONS = [
+    "marketplace.vehicle.view", "marketplace.vehicle.manage",
+    "marketplace.cargo.view", "marketplace.cargo.manage",
+    "marketplace.lane.view", "marketplace.lane.manage", "marketplace.lane.activate",
+]
+for _code in MARKETPLACE_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
+
 
 # --------------------------------------------------------------------------- #
 # System roles  (global templates, tenant_id = PLATFORM, system_locked = 1)
@@ -321,7 +332,9 @@ ADMIN_ROLES = [
          # Phase 10 SaaS commercial layer (platform admin is the commercial authority)
          "saas.product.*", "saas.plan.*", "saas.subscription.*", "saas.entitlement.*", "saas.usage.*",
          "saas.quota.*", "saas.billing.*", "saas.pricing.*", "saas.discount.manage",
-         "saas.tenant.provision", "saas.tenant.activate", "saas.tenant.decommission"}),
+         "saas.tenant.provision", "saas.tenant.activate", "saas.tenant.decommission",
+         # Marketplace foundation (platform admin is the marketplace-catalog + lane authority)
+         "marketplace.vehicle.*", "marketplace.cargo.*", "marketplace.lane.*"}),
     ("business_admin",       "Business Administrator",       2,
         {"org.*", "user_admin.*", "role_admin.*", "permission_admin.*", "crm_admin.*",
          "master_data.*", "crm.admin.*", "system_config.view", "reporting.*", "audit.view",

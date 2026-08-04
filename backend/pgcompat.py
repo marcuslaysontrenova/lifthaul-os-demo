@@ -41,6 +41,7 @@ def full_postgres_ddl() -> str:
     import reporting
     import ai_admin
     import saas
+    import marketplace
     parts = [core.SCHEMA, ops.OPS_SCHEMA, admin.ADMIN_SCHEMA, catalog.CATALOG_SCHEMA,
              admin_platform.SCHEMA, org.SCHEMA, backfill.SCHEMA, config_registry.SCHEMA,
              masterdata.SCHEMA, crm_admin.SCHEMA,   # Phase 3 (crm_admin index references customers -> after core)
@@ -50,7 +51,8 @@ def full_postgres_ddl() -> str:
              integrations.SCHEMA,                   # Phase 7 integration administration + Wise
              reporting.SCHEMA,                      # Phase 8 reporting & dashboard administration
              ai_admin.SCHEMA,                       # Phase 9 AI administration
-             saas.SCHEMA]                           # Phase 10 SaaS commercial layer
+             saas.SCHEMA,                           # Phase 10 SaaS commercial layer
+             marketplace.SCHEMA]                    # Marketplace foundation: taxonomy + eligibility + lanes
     return "\n".join(to_postgres_ddl(p) for p in parts)
 
 

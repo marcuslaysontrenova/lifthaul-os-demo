@@ -479,3 +479,19 @@ test('marketplace protected-payment endpoints respond through the browser networ
     expect(['NOT_RUN', 'PASS', 'WARNING', 'FAIL', 'BLOCKED']).toContain((await integ.json()).data.overall);
   }
 });
+
+test('marketplace trip-execution endpoints respond through the browser network stack (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  for (const path of ['/admin/marketplace/trips', '/admin/marketplace/operations-dashboard',
+                      '/admin/marketplace/trip-exceptions', '/admin/marketplace/trip-integrity']) {
+    const r = await request.get(API + path, { headers: H });
+    expect([200, 403].includes(r.status()), 'trip endpoint permission-gated: ' + path).toBe(true);
+  }
+  // live GPS provider must report BLOCKED (fail-closed) when reachable
+  const live = await request.get(API + '/admin/marketplace/gps-live-status', { headers: H });
+  expect([200, 403].includes(live.status())).toBe(true);
+  if (live.status() === 200) {
+    expect((await live.json()).data.live_gps).toBe('BLOCKED');
+  }
+});

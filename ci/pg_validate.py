@@ -1079,6 +1079,61 @@ def main():
     check(fin4["tax"] == 72000 and fin4["total"] == 672000, "protected-payment layer did not change freight financials on PostgreSQL")
     print("MARKETPLACE PROTECTED PAYMENT (INCREMENT 4): PASS on PostgreSQL", flush=True)
 
+    # ---------------------------------------------------------------- #
+    # Marketplace Increment 5 (core): trip execution / GPS / geofence / proof-of-delivery
+    # (reuses the Inc-3 active shipper `sh` + carrier `c3` + vehicle `v3` + driver `d3`; MM-CAV active)
+    # ---------------------------------------------------------------- #
+    import marketplace_trips as mt
+    bk5 = mm.create_booking(conn, mkc, sh, "general", "METRO_MANILA", "CAVITE", weight_kg=5000, volume_cbm=10,
+                            pickup_address="A", delivery_address="B")
+    mm.validate_booking(conn, mkv, bk5); mm.select_pricing_mode(conn, mkv, bk5); mm.price_booking(conn, mkv, bk5)
+    mm.generate_candidates(conn, mka, bk5); mm.create_broadcast(conn, mka, bk5, wave=1)
+    off5 = mm.submit_offer(conn, mkc, bk5, c3, 4800, vehicle_id=v3, driver_id=d3)["offer_id"]
+    mm.select_offer(conn, mkv, bk5, off5); asg5 = mm.create_assignment(conn, mka, bk5); mm.confirm_assignment(conn, mkc, asg5["assignment_id"])
+    pr5 = mp.create_payment_requirement(conn, mka, asg5["assignment_id"])
+    tr5 = mt.create_trip(conn, mkc, asg5["assignment_id"])
+    tid5 = tr5["trip_id"]
+    # trip activation is fail-closed on the Inc-4 protected-funding gate
+    try:
+        mt.activate_trip(conn, mka, tid5); check(False, "trip must not activate before protected funding")
+    except ValueError:
+        check(True, "trip activation fail-closed on payment gate on PostgreSQL")
+    mp.record_funding_event(conn, fin, pr5["id"], "full")
+    check(mt.activate_trip(conn, mka, tid5)["status"] == "ACTIVATED", "trip activates after protected funding on PostgreSQL")
+    for st in ("EN_ROUTE_PICKUP", "ARRIVED_PICKUP", "LOADING", "LOADED", "DEPARTED", "IN_TRANSIT"):
+        mt.advance_trip(conn, mkc, tid5, st)
+    ping = mt.record_gps_ping(conn, mkc, tid5, progress=0.5)
+    check(0 <= ping["progress_pct"] <= 100 and ping["eta"], "GPS ping updates progress/ETA on PostgreSQL")
+    gf5 = mt.define_geofence(conn, mka, "DEST5", "DESTINATION", 14.4791, 120.8969, radius_m=100000)
+    mt.record_gps_ping(conn, mkc, tid5, progress=1.0)
+    check(mt.evaluate_geofence(conn, mkc, tid5, gf5)["event"] == "ENTER", "geofence ENTER event on PostgreSQL")
+    for st in ("ARRIVED_DESTINATION", "UNLOADING", "DELIVERED"):
+        mt.advance_trip(conn, mkc, tid5, st)
+    try:
+        mt.advance_trip(conn, mkc, tid5, "POD_SUBMITTED"); check(False, "POD required before POD_SUBMITTED")
+    except ValueError:
+        check(True, "proof of delivery required before POD_SUBMITTED on PostgreSQL")
+    mt.submit_proof(conn, mkc, tid5, "POD", evidence_types=["photo", "signature"], signature_ref="sig", gps_lat=14.48, gps_lng=120.9)
+    mt.advance_trip(conn, mkc, tid5, "POD_SUBMITTED"); mt.accept_delivery(conn, mkc, tid5); mt.advance_trip(conn, mkc, tid5, "COMPLETED")
+    # the milestone bridge unlocked Increment-4 conditional release
+    check(mp.evaluate_release(conn, mka, pr5["id"])["release_eligible"] is True, "trip delivery evidence unlocks Inc-4 release on PostgreSQL")
+    # live GPS fail-closed + integrity + migration + freight drift
+    try:
+        mt.gps_provider("GOOGLE").position({}, 0.5); check(False, "live GPS must be blocked")
+    except core.ForbiddenError:
+        check(True, "live GPS provider fail-closed on PostgreSQL")
+    check(mt.run_integrity(conn, mka)["overall"] in ("PASS", "WARNING", "FAIL", "BLOCKED"), "trip integrity checks execute on PostgreSQL")
+    mig5 = mt.classify_existing(conn)
+    check(all(v == 0 for v in mig5["invariants"].values()), "trip migration zero drift on PostgreSQL")
+    fin5 = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (wq,)).fetchone()
+    check(fin5["tax"] == 72000 and fin5["total"] == 672000, "trip layer did not change freight financials on PostgreSQL")
+    # tenant isolation
+    try:
+        mt.activate_trip(conn, mkB, tid5); check(False, "cross-tenant trip access must 404")
+    except (core.NotFoundError, ValueError):
+        check(True, "trip tenant-isolated on PostgreSQL")
+    print("MARKETPLACE TRIP EXECUTION (INCREMENT 5 CORE): PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

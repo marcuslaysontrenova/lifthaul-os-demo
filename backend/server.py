@@ -1484,6 +1484,63 @@ def _marketplace_payment_routes():
 ROUTES.update(_marketplace_payment_routes())
 
 
+def _marketplace_trip_routes():
+    """Increment 5 (core) — trip execution / GPS / geofence / proof-of-delivery. RBAC-gated; tenant-
+    scoped; audited. Activation is fail-closed on the Increment-4 protected-funding gate; delivery
+    evidence bridges to Increment-4 release; live GPS providers are fail-closed."""
+    import marketplace_trips as mt
+
+    def tr_create(a, b, p): return mt.create_trip(_conn, a, int(b["assignment_id"]), gps_provider_name=b.get("gps_provider", "MOCK"), **{k: v for k, v in b.items() if k not in ("assignment_id", "gps_provider")})
+    def tr_list(a, b, p):   return {"trips": mt.list_trips(_conn, a, status=b.get("status"))}
+    def tr_activate(a, b, p): return mt.activate_trip(_conn, a, int(p["id"]))
+    def tr_advance(a, b, p): return mt.advance_trip(_conn, a, int(p["id"]), b["to_status"], note=b.get("note"), gps=b.get("gps"))
+    def tr_cancel(a, b, p): return mt.cancel_trip(_conn, a, int(p["id"]), b.get("reason", ""))
+    def tr_timeline(a, b, p): return {"timeline": mt.trip_timeline(_conn, a, int(p["id"]))}
+    def tr_eta(a, b, p):
+        core.require(a, "marketplace.trip.view"); return mt.eta(_conn, int(p["id"]))
+    def gps_ping(a, b, p):  return mt.record_gps_ping(_conn, a, int(p["id"]), progress=b.get("progress"), lat=b.get("lat"), lng=b.get("lng"))
+    def gps_crumbs(a, b, p): return {"breadcrumb": mt.breadcrumb(_conn, a, int(p["id"]))}
+    def gf_define(a, b, p): return {"id": mt.define_geofence(_conn, a, b["code"], b["kind"], b["center_lat"], b["center_lng"], radius_m=b.get("radius_m", 500), expected_by=b.get("expected_by"))}
+    def gf_eval(a, b, p):   return mt.evaluate_geofence(_conn, a, int(b["trip_id"]), int(b["geofence_id"]))
+    def pod_submit(a, b, p): return mt.submit_proof(_conn, a, int(p["id"]), b["kind"], evidence_types=b.get("evidence_types"), status=b.get("status", "SUBMITTED"), **{k: v for k, v in b.items() if k not in ("kind", "evidence_types", "status")})
+    def deliver_accept(a, b, p): return mt.accept_delivery(_conn, a, int(p["id"]))
+    def exc_open(a, b, p):  return mt.open_exception(_conn, a, int(b["trip_id"]), b["exception_type"], severity=b.get("severity", "MEDIUM"), description=b.get("description"))
+    def exc_list(a, b, p):  return {"exceptions": mt.list_exceptions(_conn, a, status=b.get("status"))}
+    def exc_resolve(a, b, p): return mt.resolve_exception(_conn, a, int(p["id"]), b["resolution"])
+    def dash(a, b, p):      return mt.operations_dashboard(_conn, a)
+    def integrity(a, b, p): return mt.run_integrity(_conn, a)
+    def migration(a, b, p):
+        core.require(a, "marketplace.trip.view"); return mt.classify_existing(_conn)
+    def gps_live(a, b, p):
+        core.require(a, "marketplace.trip.view"); return mt.gps_live_status()
+
+    return {
+        ("GET", "/admin/marketplace/trips"): tr_list,
+        ("POST", "/admin/marketplace/trips"): tr_create,
+        ("POST", "/admin/marketplace/trips/:id/activate"): tr_activate,
+        ("POST", "/admin/marketplace/trips/:id/advance"): tr_advance,
+        ("POST", "/admin/marketplace/trips/:id/cancel"): tr_cancel,
+        ("GET", "/admin/marketplace/trips/:id/timeline"): tr_timeline,
+        ("GET", "/admin/marketplace/trips/:id/eta"): tr_eta,
+        ("POST", "/admin/marketplace/trips/:id/gps-ping"): gps_ping,
+        ("GET", "/admin/marketplace/trips/:id/breadcrumb"): gps_crumbs,
+        ("POST", "/admin/marketplace/geofences"): gf_define,
+        ("POST", "/admin/marketplace/geofences/evaluate"): gf_eval,
+        ("POST", "/admin/marketplace/trips/:id/proof"): pod_submit,
+        ("POST", "/admin/marketplace/trips/:id/accept-delivery"): deliver_accept,
+        ("POST", "/admin/marketplace/trip-exceptions"): exc_open,
+        ("GET", "/admin/marketplace/trip-exceptions"): exc_list,
+        ("POST", "/admin/marketplace/trip-exceptions/:id/resolve"): exc_resolve,
+        ("GET", "/admin/marketplace/operations-dashboard"): dash,
+        ("GET", "/admin/marketplace/trip-integrity"): integrity,
+        ("GET", "/admin/marketplace/trip-migration"): migration,
+        ("GET", "/admin/marketplace/gps-live-status"): gps_live,
+    }
+
+
+ROUTES.update(_marketplace_trip_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

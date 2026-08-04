@@ -314,6 +314,10 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.freeze.view", "marketplace.freeze.create", "marketplace.freeze.approve", "marketplace.freeze.release",
     "marketplace.reconciliation.view", "marketplace.reconciliation.manage",
     "marketplace.finance.integrity.view", "marketplace.finance.integrity.manage",
+    # Increment 5: trip execution / GPS / geofence / proof-of-delivery / exceptions
+    "marketplace.trip.view", "marketplace.trip.manage", "marketplace.trip.activate", "marketplace.trip.execute",
+    "marketplace.gps.ingest", "marketplace.geofence.manage",
+    "marketplace.pod.submit", "marketplace.pod.verify", "marketplace.exception.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

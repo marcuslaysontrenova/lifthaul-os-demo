@@ -45,6 +45,7 @@ def full_postgres_ddl() -> str:
     import marketplace_onboarding
     import marketplace_matching
     import marketplace_payments
+    import marketplace_trips
     parts = [core.SCHEMA, ops.OPS_SCHEMA, admin.ADMIN_SCHEMA, catalog.CATALOG_SCHEMA,
              admin_platform.SCHEMA, org.SCHEMA, backfill.SCHEMA, config_registry.SCHEMA,
              masterdata.SCHEMA, crm_admin.SCHEMA,   # Phase 3 (crm_admin index references customers -> after core)
@@ -58,7 +59,8 @@ def full_postgres_ddl() -> str:
              marketplace.SCHEMA,                    # Marketplace foundation: taxonomy + eligibility + lanes
              marketplace_onboarding.SCHEMA,         # Marketplace Inc.2: onboarding + compliance + queues
              marketplace_matching.SCHEMA,           # Marketplace Inc.3: booking/pricing/matching/offers/assignment
-             marketplace_payments.SCHEMA]           # Marketplace Inc.4: protected payment/release/payout/disputes/refunds
+             marketplace_payments.SCHEMA,           # Marketplace Inc.4: protected payment/release/payout/disputes/refunds
+             marketplace_trips.SCHEMA]              # Marketplace Inc.5: trip execution/GPS/geofence/POD
     return "\n".join(to_postgres_ddl(p) for p in parts)
 
 

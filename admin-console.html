@@ -295,6 +295,13 @@ const MENU = [
     {id:'mkt_integrity', label:'Marketplace Integrity'},
     {id:'mkt_matching_integrity', label:'Matching Integrity'},
   ]},
+  {sect:'Trip Execution', items:[
+    {id:'trip_ops_dashboard', label:'Operations Dashboard'},
+    {id:'trip_list', label:'Trips'},
+    {id:'trip_exceptions', label:'Trip Exceptions'},
+    {id:'trip_integrity', label:'Trip Integrity'},
+    {id:'trip_gps_status', label:'GPS Live Status'},
+  ]},
   {sect:'Marketplace Finance', items:[
     {id:'fin_payment_reqs', label:'Payment Requirements'},
     {id:'fin_release_instructions', label:'Release Instructions'},
@@ -1170,6 +1177,29 @@ Object.assign(SCREENS, {
     c.innerHTML=header(it,'Matching & pricing integrity — overall: '+d.overall)+
       table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
 });
+// ---- Increment 5 (core): Trip Execution screens (trip state machine / GPS / geofence / POD) ----
+Object.assign(SCREENS, {
+  trip_ops_dashboard: async (it,c)=>{ const d=await api('GET','/admin/marketplace/operations-dashboard');
+    const rows=Object.keys(d).map(k=>({metric:k.replace(/_/g,' '),count:d[k]}));
+    c.innerHTML=header(it,'Live operational execution snapshot. A trip activates only when Increment-4 protected funding is confirmed; delivery evidence unlocks conditional release.')+
+      table(['Metric','Count'], rows, r=>[cell(r.metric),r.count]); },
+  trip_list: async (it,c)=>{ const d=await api('GET','/admin/marketplace/trips');
+    c.innerHTML=header(it,'Trips — governed, audited state machine (CREATED→ACTIVATED→…→DELIVERED→POD_SUBMITTED→CLIENT_ACCEPTED→COMPLETED). GPS + ETA are deterministic mock; live GPS is fail-closed.')+
+      table(['Id','Booking','Carrier','Vehicle','Driver','Progress %','ETA','Deviation','Status'], d.trips,
+        r=>[r.id,r.booking_id,r.carrier_id,cell(r.vehicle_id),cell(r.driver_id),cell(r.progress_pct),cell(r.eta),r.deviation?'⚠':'—',pill(tripPill(r.status))+' '+r.status]); },
+  trip_exceptions: async (it,c)=>{ const d=await api('GET','/admin/marketplace/trip-exceptions');
+    c.innerHTML=header(it,'Trip exceptions — late / accident / breakdown / cargo damage / weather / port delay, governed and audited.')+
+      table(['Id','Trip','Type','Severity','Status','Resolution'], d.exceptions,
+        r=>[r.id,r.trip_id,cell(r.exception_type),cell(r.severity),pill(r.status==='RESOLVED'?'ACTIVE':'DRAFT')+' '+r.status,cell(r.resolution)]); },
+  trip_integrity: async (it,c)=>{ const d=await api('GET','/admin/marketplace/trip-integrity');
+    c.innerHTML=header(it,'Trip-execution integrity — overall: '+d.overall)+
+      table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
+  trip_gps_status: async (it,c)=>{ const d=await api('GET','/admin/marketplace/gps-live-status');
+    c.innerHTML=header(it,'GPS/maps provider status. Deterministic mock is verified; live GPS is fail-closed until an owner-provisioned provider key is validated.')+
+      `<div class="note"><b>Mock:</b> ${cell(d.mock)}<br><b>Live GPS:</b> ${pill(d.live_gps==='BLOCKED'?'INACTIVE':'ACTIVE')} ${d.live_gps}<br><b>Reason:</b> ${cell(d.reason)}</div>`+
+      `<div class="wrap" style="padding:12px"><b>Owner actions to enable live GPS:</b><ul>${(d.owner_actions||[]).map(x=>`<li>${cell(x)}</li>`).join('')}</ul></div>`; },
+});
+function tripPill(s){ return (s==='COMPLETED'||s==='CLIENT_ACCEPTED'||s==='DELIVERED')?'ACTIVE':(s==='CANCELLED'||s==='EXCEPTION')?'INACTIVE':'DRAFT'; }
 // ---- Increment 4: Marketplace Finance screens (protected payment / release / payout / disputes / refunds) ----
 Object.assign(SCREENS, {
   fin_payment_reqs: async (it,c)=>{ const d=await api('GET','/admin/marketplace/payment-requirements');

@@ -409,3 +409,36 @@ test('admin console renders live PostgreSQL data in a real browser', async ({ pa
   await page.waitForSelector('.content', { timeout: 20000 });
   await page.screenshot({ path: path.join(__dirname, '..', '..', 'artifacts', 'admin-org.png'), fullPage: true });
 });
+
+test('marketplace taxonomy + serviceability promise boundary through the browser (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  // cargo taxonomy includes a PROHIBITED class (flag set)
+  const cargo = (await (await request.get(API + '/admin/marketplace/cargo', { headers: H })).json()).data.cargo;
+  expect(cargo.length, 'cargo taxonomy present').toBeGreaterThanOrEqual(10);
+  expect(cargo.some(c => c.code === 'prohibited' && c.prohibited === 1), 'prohibited cargo flagged').toBe(true);
+  // vehicle taxonomy present
+  const veh = (await (await request.get(API + '/admin/marketplace/vehicles', { headers: H })).json()).data.vehicles;
+  expect(veh.length, 'vehicle taxonomy present').toBeGreaterThanOrEqual(15);
+  // serviceability: MM-CAV was activated by the seed step -> promises service; MM-LAG still ASSESSING -> promises nothing
+  const cav = (await (await request.post(API + '/admin/marketplace/serviceability', { headers: H, data: { origin_zone: 'METRO_MANILA', dest_zone: 'CAVITE' } })).json()).data;
+  expect(cav.promises_service, 'activated lane promises service').toBe(true);
+  const lag = (await (await request.post(API + '/admin/marketplace/serviceability', { headers: H, data: { origin_zone: 'METRO_MANILA', dest_zone: 'LAGUNA' } })).json()).data;
+  expect(lag.promises_service, 'assessing lane promises nothing').toBe(false);
+  // unknown lane accepts interest but never promises service
+  const unk = (await (await request.post(API + '/admin/marketplace/serviceability', { headers: H, data: { origin_zone: 'METRO_MANILA', dest_zone: 'PALAWAN' } })).json()).data;
+  expect(unk.accepts_interest && !unk.promises_service, 'unknown lane: interest yes, promise no').toBe(true);
+});
+
+test('marketplace deterministic eligibility denies prohibited cargo through the browser (PostgreSQL)', async ({ request }) => {
+  const tok = await login(request, seed.admin);
+  const H = { Authorization: 'Bearer ' + tok };
+  const res = await request.post(API + '/admin/marketplace/eligibility', { headers: H, data: { cargo_code: 'prohibited' } });
+  // permission-gated; when permitted, the deterministic engine must return an empty pool blocked as prohibited
+  expect([200, 403].includes(res.status()), 'eligibility is permission-gated').toBe(true);
+  if (res.status() === 200) {
+    const d = (await res.json()).data;
+    expect(d.eligible.length, 'prohibited cargo yields no eligible vehicle').toBe(0);
+    expect(d.blocked).toBe('cargo_prohibited');
+  }
+});

@@ -279,7 +279,17 @@ for _code in PHASE10_PERMISSIONS:
 MARKETPLACE_PERMISSIONS = [
     "marketplace.vehicle.view", "marketplace.vehicle.manage",
     "marketplace.cargo.view", "marketplace.cargo.manage",
-    "marketplace.lane.view", "marketplace.lane.manage", "marketplace.lane.activate",
+    "marketplace.lane.view", "marketplace.lane.manage", "marketplace.lane.activate", "marketplace.lane.assess",
+    # Increment 2: participant onboarding + compliance + eligibility (verify/activate held separately for SoD)
+    "marketplace.shipper.application.view", "marketplace.shipper.application.manage",
+    "marketplace.shipper.verify", "marketplace.shipper.activate", "marketplace.shipper.suspend",
+    "marketplace.carrier.application.view", "marketplace.carrier.application.manage",
+    "marketplace.carrier.verify", "marketplace.carrier.activate", "marketplace.carrier.suspend",
+    "marketplace.vehicle.verify", "marketplace.vehicle.activate", "marketplace.vehicle.suspend",
+    "marketplace.driver.view", "marketplace.driver.manage", "marketplace.driver.verify",
+    "marketplace.driver.activate", "marketplace.driver.suspend",
+    "marketplace.compliance.view", "marketplace.compliance.manage", "marketplace.compliance.verify",
+    "marketplace.compliance.override", "marketplace.eligibility.test",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

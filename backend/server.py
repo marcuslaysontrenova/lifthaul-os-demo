@@ -1238,6 +1238,121 @@ ROUTES.update(_phase9_routes())
 ROUTES.update(_phase10_routes())
 
 
+def _marketplace_routes():
+    """Nationwide Marketplace program — foundation (cargo/vehicle taxonomy, eligibility, lanes) +
+    Increment 2 (shipper/carrier/vehicle/driver onboarding, compliance, verification queues,
+    compliance-aware candidate pool, integrity, migration). RBAC-gated; tenant-scoped; audited;
+    fail-closed activation; no self-verify/self-activate; hard denials not overridable by ranking."""
+    import marketplace as mkt
+    import marketplace_onboarding as mo
+
+    # --- foundation: cargo / vehicle / lanes / eligibility ---
+    def cargo_list(a, b, p):   return {"cargo": mkt.list_cargo_types(_conn, active_only=b.get("active_only", False))}
+    def veh_list(a, b, p):     return {"vehicles": mkt.list_vehicle_categories(_conn, active_only=b.get("active_only", False))}
+    def elig_vehicles(a, b, p):
+        core.require(a, "marketplace.eligibility.test")
+        return mkt.eligible_vehicles(_conn, b["cargo_code"], weight_kg=b.get("weight_kg"), volume_cbm=b.get("volume_cbm"), dims=b.get("dims"))
+    def lane_list(a, b, p):    return {"lanes": mkt.list_lanes(_conn, status=b.get("status"))}
+    def lane_service(a, b, p): return mkt.serviceability(_conn, b["origin_zone"], b["dest_zone"])
+    def lane_create(a, b, p):  return {"id": mkt.create_lane(_conn, a, b["code"], b["origin_group"], b["dest_group"], b["origin_zone"], b["dest_zone"], corridor=b.get("corridor"))}
+    def lane_assess(a, b, p):  return mkt.assess_lane(_conn, a, int(p["id"]), **{k: v for k, v in b.items()})
+    def lane_status(a, b, p):  return mkt.lane_activation_status(_conn, int(p["id"]))
+    def lane_activate(a, b, p): return {"ok": mkt.activate_lane(_conn, a, int(p["id"]), target=b.get("target", "ACTIVE"), note=b.get("note"))}
+
+    # --- shipper ---
+    def sh_create(a, b, p):    return {"id": mo.create_shipper_application(_conn, a, b["applicant_type"], b["legal_name"], **{k: v for k, v in b.items() if k not in ("applicant_type", "legal_name")})}
+    def sh_submit(a, b, p):    return mo.submit_shipper(_conn, a, int(p["id"]))
+    def sh_verify(a, b, p):    return mo.verify_shipper(_conn, a, int(p["id"]))
+    def sh_activate(a, b, p):  return mo.activate_shipper(_conn, a, int(p["id"]))
+    def sh_suspend(a, b, p):   return mo.suspend_shipper(_conn, a, int(p["id"]), b.get("reason", ""))
+    def sh_list(a, b, p):      return {"shippers": mo.list_shippers(_conn, a, status=b.get("status"))}
+
+    # --- carrier ---
+    def ca_create(a, b, p):    return {"id": mo.create_carrier_application(_conn, a, b["carrier_type"], b["legal_name"], **{k: v for k, v in b.items() if k not in ("carrier_type", "legal_name")})}
+    def ca_submit(a, b, p):    return mo.submit_carrier(_conn, a, int(p["id"]))
+    def ca_verify(a, b, p):    return mo.verify_carrier(_conn, a, int(p["id"]))
+    def ca_activate(a, b, p):  return mo.activate_carrier(_conn, a, int(p["id"]))
+    def ca_suspend(a, b, p):   return mo.suspend_carrier(_conn, a, int(p["id"]), b.get("reason", ""))
+    def ca_list(a, b, p):      return {"carriers": mo.list_carriers(_conn, a, status=b.get("status"))}
+
+    # --- vehicle / driver ---
+    def ve_create(a, b, p):    return {"id": mo.register_vehicle(_conn, a, int(b["carrier_id"]), b["category_code"], b["plate_number"], **{k: v for k, v in b.items() if k not in ("carrier_id", "category_code", "plate_number")})}
+    def ve_verify(a, b, p):    return mo.verify_vehicle(_conn, a, int(p["id"]))
+    def ve_activate(a, b, p):  return mo.activate_vehicle(_conn, a, int(p["id"]))
+    def ve_status(a, b, p):    return mo.set_vehicle_status(_conn, a, int(p["id"]), b["status"], reason=b.get("reason"))
+    def ve_list(a, b, p):      return {"vehicles": mo.list_vehicles(_conn, a, carrier_id=b.get("carrier_id"), status=b.get("status"))}
+    def dr_create(a, b, p):    return {"id": mo.register_driver(_conn, a, int(b["carrier_id"]), b["full_name"], **{k: v for k, v in b.items() if k not in ("carrier_id", "full_name")})}
+    def dr_verify(a, b, p):    return mo.verify_driver(_conn, a, int(p["id"]))
+    def dr_activate(a, b, p):  return mo.activate_driver(_conn, a, int(p["id"]))
+    def dr_list(a, b, p):      return {"drivers": mo.list_drivers(_conn, a, carrier_id=b.get("carrier_id"))}
+
+    # --- documents / compliance / queues / eligibility / integrity / migration ---
+    def doc_upload(a, b, p):   return {"id": mo.upload_document(_conn, a, b["document_type"], b["subject_type"], int(b["subject_id"]), **{k: v for k, v in b.items() if k not in ("document_type", "subject_type", "subject_id")})}
+    def doc_verify(a, b, p):   return mo.verify_document(_conn, a, int(p["id"]))
+    def doc_reject(a, b, p):   return mo.reject_document(_conn, a, int(p["id"]), b.get("reason", ""))
+    def doc_list(a, b, p):     return {"documents": mo.list_documents(_conn, a, subject_type=b.get("subject_type"), subject_id=b.get("subject_id"), expiring_before=b.get("expiring_before"))}
+    def doc_expiry(a, b, p):
+        core.require(a, "marketplace.compliance.manage")
+        return mo.detect_expired_documents(_conn, a, as_of=b.get("as_of"))
+    def comp_eval(a, b, p):
+        core.require(a, "marketplace.compliance.view")
+        return mo.evaluate_compliance(_conn, b["subject_type"], int(b["subject_id"]))
+    def comp_override(a, b, p): return {"id": mo.override_compliance(_conn, a, b["subject_type"], int(b["subject_id"]), b["reason"], b["expires_at"])}
+    def case_list(a, b, p):    return {"cases": mo.list_cases(_conn, a, case_type=b.get("case_type"), status=b.get("status"))}
+    def pool(a, b, p):         return mo.candidate_pool(_conn, a, b["cargo_code"], b["origin_zone"], b["dest_zone"], weight_kg=b.get("weight_kg"), volume_cbm=b.get("volume_cbm"), dims=b.get("dims"), require_driver=b.get("require_driver", True))
+    def integrity(a, b, p):    return mo.run_integrity(_conn, a)
+    def migration(a, b, p):
+        core.require(a, "marketplace.compliance.view")
+        return mo.classify_existing(_conn)
+
+    return {
+        ("GET", "/admin/marketplace/cargo"): cargo_list,
+        ("GET", "/admin/marketplace/vehicles"): veh_list,
+        ("POST", "/admin/marketplace/eligibility"): elig_vehicles,
+        ("GET", "/admin/marketplace/lanes"): lane_list,
+        ("POST", "/admin/marketplace/lanes"): lane_create,
+        ("POST", "/admin/marketplace/serviceability"): lane_service,
+        ("POST", "/admin/marketplace/lanes/:id/assess"): lane_assess,
+        ("GET", "/admin/marketplace/lanes/:id/activation-status"): lane_status,
+        ("POST", "/admin/marketplace/lanes/:id/activate"): lane_activate,
+        ("GET", "/admin/marketplace/shippers"): sh_list,
+        ("POST", "/admin/marketplace/shippers"): sh_create,
+        ("POST", "/admin/marketplace/shippers/:id/submit"): sh_submit,
+        ("POST", "/admin/marketplace/shippers/:id/verify"): sh_verify,
+        ("POST", "/admin/marketplace/shippers/:id/activate"): sh_activate,
+        ("POST", "/admin/marketplace/shippers/:id/suspend"): sh_suspend,
+        ("GET", "/admin/marketplace/carriers"): ca_list,
+        ("POST", "/admin/marketplace/carriers"): ca_create,
+        ("POST", "/admin/marketplace/carriers/:id/submit"): ca_submit,
+        ("POST", "/admin/marketplace/carriers/:id/verify"): ca_verify,
+        ("POST", "/admin/marketplace/carriers/:id/activate"): ca_activate,
+        ("POST", "/admin/marketplace/carriers/:id/suspend"): ca_suspend,
+        ("GET", "/admin/marketplace/carrier-vehicles"): ve_list,
+        ("POST", "/admin/marketplace/carrier-vehicles"): ve_create,
+        ("POST", "/admin/marketplace/carrier-vehicles/:id/verify"): ve_verify,
+        ("POST", "/admin/marketplace/carrier-vehicles/:id/activate"): ve_activate,
+        ("POST", "/admin/marketplace/carrier-vehicles/:id/status"): ve_status,
+        ("GET", "/admin/marketplace/drivers"): dr_list,
+        ("POST", "/admin/marketplace/drivers"): dr_create,
+        ("POST", "/admin/marketplace/drivers/:id/verify"): dr_verify,
+        ("POST", "/admin/marketplace/drivers/:id/activate"): dr_activate,
+        ("GET", "/admin/marketplace/documents"): doc_list,
+        ("POST", "/admin/marketplace/documents"): doc_upload,
+        ("POST", "/admin/marketplace/documents/:id/verify"): doc_verify,
+        ("POST", "/admin/marketplace/documents/:id/reject"): doc_reject,
+        ("POST", "/admin/marketplace/documents/detect-expiry"): doc_expiry,
+        ("POST", "/admin/marketplace/compliance/evaluate"): comp_eval,
+        ("POST", "/admin/marketplace/compliance/override"): comp_override,
+        ("GET", "/admin/marketplace/verification-cases"): case_list,
+        ("POST", "/admin/marketplace/candidate-pool"): pool,
+        ("GET", "/admin/marketplace/integrity"): integrity,
+        ("GET", "/admin/marketplace/migration"): migration,
+    }
+
+
+ROUTES.update(_marketplace_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

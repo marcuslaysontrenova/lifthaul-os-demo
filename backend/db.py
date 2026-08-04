@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 16  # bump when any module schema changes (16 = Marketplace foundation: cargo/vehicle taxonomy, eligibility, lanes)
+SCHEMA_VERSION = 17  # bump when any module schema changes (17 = Marketplace Inc.2: onboarding + compliance + eligibility)
 
 
 def _now():
@@ -84,6 +84,7 @@ def _seed_platform(conn):
     import ai_admin
     import saas
     import marketplace
+    import marketplace_onboarding
     admin_platform.init(conn)
     config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
     admin_platform.seed(conn)
@@ -101,6 +102,7 @@ def _seed_platform(conn):
     ai_admin.init(conn); ai_admin.seed(conn)                  # Phase 9: governed AI use cases/models/prompts/tools + mock provider
     saas.init(conn); saas.seed(conn)                          # Phase 10: SaaS product catalog + subscriptions + entitlements + metering
     marketplace.init(conn); marketplace.seed(conn)            # Marketplace foundation: cargo/vehicle taxonomy + eligibility + lanes
+    marketplace_onboarding.init(conn); marketplace_onboarding.seed(conn)  # Marketplace Inc.2: shipper/carrier/vehicle/driver onboarding + compliance
     return conn
 
 

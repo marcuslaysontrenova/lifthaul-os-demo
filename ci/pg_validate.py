@@ -855,6 +855,80 @@ def main():
     check(fin["tax"] == 72000 and fin["total"] == 672000, "SaaS layer did not change freight financials on PostgreSQL")
     print("PHASE 10 SAAS COMMERCIAL LAYER: PASS on PostgreSQL", flush=True)
 
+    # ---------------------------------------------------------------- #
+    # Nationwide Marketplace foundation + Increment 2 (onboarding/compliance/eligibility)
+    # ---------------------------------------------------------------- #
+    import marketplace as mkt
+    import marketplace_onboarding as mo
+    mkc = {"id": 9101, "role": "ops", "perms": {"*"}, "tenant_id": tA}   # creator/assessor
+    mkv = {"id": 9102, "role": "ops", "perms": {"*"}, "tenant_id": tA}   # verifier/approver
+    mka = {"id": 9103, "role": "ops", "perms": {"*"}, "tenant_id": tA}   # activator
+    mkB = {"id": 9104, "role": "ops", "perms": {"*"}, "tenant_id": tB}   # other tenant
+    check(len(mkt.list_vehicle_categories(conn, active_only=True)) >= 15, "marketplace vehicle taxonomy persists on PostgreSQL")
+    check(len(mkt.list_cargo_types(conn, active_only=True)) >= 10, "marketplace cargo taxonomy persists on PostgreSQL")
+    check(mkt.eligible_vehicles(conn, "prohibited")["blocked"] == "cargo_prohibited", "prohibited cargo -> no eligible vehicle on PostgreSQL")
+    chilled = mkt.eligible_vehicles(conn, "perishable_chilled", weight_kg=500, volume_cbm=2)["eligible"]
+    check(bool(chilled) and all(v["refrigerated"] for v in chilled), "refrigeration gate on PostgreSQL")
+    check(mkt.eligible_vehicles(conn, "hazardous", weight_kg=100, volume_cbm=1)["eligible"] == [], "hazmat gate (no compliant vehicle) on PostgreSQL")
+    heavy = mkt.eligible_vehicles(conn, "general", weight_kg=9000, volume_cbm=0)["eligible"]
+    check(all(v["payload_kg"] >= 9000 for v in heavy), "payload gate on PostgreSQL")
+    check(mkt.serviceability(conn, "METRO_MANILA", "PALAWAN")["promises_service"] is False, "unknown lane never promises service on PostgreSQL")
+    lane = [l for l in mkt.list_lanes(conn) if l["code"] == "MM-CAV"][0]
+    check(mkt.serviceability(conn, "METRO_MANILA", "CAVITE")["promises_service"] is False, "ASSESSING lane promises nothing on PostgreSQL")
+    mkt.assess_lane(conn, mkc, lane["id"], verified_carriers=5, backup_capacity=1, price_model_validated=1,
+                    ops_support=1, payment_capable=1, dispute_process=1, monitoring=1)
+    try:
+        mkt.activate_lane(conn, mkc, lane["id"]); check(False, "assessor must not approve own lane")
+    except PermissionError:
+        check(True, "lane activation separation of duties on PostgreSQL")
+    mkt.activate_lane(conn, mkv, lane["id"], target="ACTIVE")
+    check(mkt.serviceability(conn, "METRO_MANILA", "CAVITE")["promises_service"] is True, "lane activates only after all criteria + SoD on PostgreSQL")
+    cid = mo.create_carrier_application(conn, mkc, "FLEET_OPERATOR", "CI Haulers", registration_type="SEC",
+                                        registration_number="CI-CARR-1", operating_address="Manila")
+    mo.submit_carrier(conn, mkc, cid)
+    try:
+        mo.verify_carrier(conn, mkc, cid); check(False, "self-verify must be blocked")
+    except PermissionError:
+        check(True, "carrier no self-verification on PostgreSQL")
+    mo.verify_carrier(conn, mkv, cid)
+    try:
+        mo.activate_carrier(conn, mka, cid); check(False, "activation must fail closed without evidence")
+    except ValueError:
+        check(True, "carrier activation fails closed without evidence on PostgreSQL")
+    for dt in ("BUSINESS_REGISTRATION", "TAX_REGISTRATION", "AUTHORITY_TO_OPERATE", "INSURANCE"):
+        d = mo.upload_document(conn, mkc, dt, "CARRIER", cid, expiry_date="2027-01-01")
+        mo.verify_document(conn, mkv, d)
+    try:
+        mo.activate_carrier(conn, mkv, cid); check(False, "verifier must not self-activate")
+    except PermissionError:
+        check(True, "carrier no self-activation on PostgreSQL")
+    mo.activate_carrier(conn, mka, cid)
+    try:
+        mo.verify_carrier(conn, mkB, cid); check(False, "cross-tenant marketplace access must 404")
+    except core.NotFoundError:
+        check(True, "tenant A marketplace config isolated from tenant B on PostgreSQL")
+    vid = mo.register_vehicle(conn, mkc, cid, "truck_6w", "CI-PLATE-1")
+    mo.verify_vehicle(conn, mkv, vid)
+    for dt in ("VEHICLE_REGISTRATION", "INSURANCE"):
+        d = mo.upload_document(conn, mkc, dt, "VEHICLE", vid, expiry_date="2027-01-01")
+        mo.verify_document(conn, mkv, d)
+    mo.activate_vehicle(conn, mka, vid)
+    did = mo.register_driver(conn, mkc, cid, "CI Driver", licence_expiry="2027-01-01", authorized_categories=["truck_6w"])
+    mo.verify_driver(conn, mkv, did); mo.activate_driver(conn, mka, did)
+    pool = mo.candidate_pool(conn, mka, "general", "METRO_MANILA", "CAVITE", weight_kg=5000, volume_cbm=10)
+    check(len(pool["candidates"]) == 1, "compliance-aware candidate pool on PostgreSQL")
+    mo.suspend_carrier(conn, mka, cid, "audit")
+    pool2 = mo.candidate_pool(conn, mka, "general", "METRO_MANILA", "CAVITE", weight_kg=5000, volume_cbm=10)
+    check(pool2["candidates"] == [] and any(x["vehicle_id"] == vid for x in pool2["excluded"]),
+          "hard compliance denial not overridable by ranking on PostgreSQL")
+    mig = mo.classify_existing(conn)
+    check(all(v == 0 for v in mig["invariants"].values()), "marketplace onboarding migration zero drift on PostgreSQL")
+    finm = conn.execute("SELECT tax,total FROM quotations WHERE id=?", (wq,)).fetchone()
+    check(finm["tax"] == 72000 and finm["total"] == 672000, "marketplace layer did not change freight financials on PostgreSQL")
+    integ = mo.run_integrity(conn, mka)
+    check(integ["overall"] in ("PASS", "WARNING", "FAIL", "BLOCKED"), "marketplace integrity checks execute on PostgreSQL")
+    print("MARKETPLACE FOUNDATION + ONBOARDING (INCREMENT 2): PASS on PostgreSQL", flush=True)
+
     # emit seed ids for the literal-browser E2E job
     core.create_user(conn, "admin@ci", "Demo1234Xy", "admin", "CI Admin")
     import json

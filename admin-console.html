@@ -276,6 +276,19 @@ const MENU = [
     {id:'saas_promotions', label:'Promotions'},
     {id:'saas_health', label:'Customer Health'},
   ]},
+  {sect:'Marketplace', items:[
+    {id:'mkt_cargo', label:'Cargo Taxonomy'},
+    {id:'mkt_vehicles', label:'Vehicle Taxonomy'},
+    {id:'mkt_lanes', label:'Lanes and Coverage'},
+    {id:'mkt_shippers', label:'Shipper Applications'},
+    {id:'mkt_carriers', label:'Carrier Applications'},
+    {id:'mkt_carrier_vehicles', label:'Vehicles'},
+    {id:'mkt_drivers', label:'Drivers'},
+    {id:'mkt_documents', label:'Compliance Documents'},
+    {id:'mkt_cases', label:'Verification Queues'},
+    {id:'mkt_eligibility', label:'Eligibility Tester'},
+    {id:'mkt_integrity', label:'Marketplace Integrity'},
+  ]},
   {sect:'Governance', items:[
     {id:'audit', label:'Audit Trail'},
     {id:'correlation_search', label:'Correlation Search'},
@@ -1065,6 +1078,84 @@ Object.assign(SCREENS, {
     c.innerHTML=header(it,'Customer health — deterministic metrics. AI must not autonomously suspend or terminate a customer.',
       `<button class="btn sm" onclick="saasHealth()">Assess tenant</button>`)+`<div id="shres"></div>`; },
 });
+// ---- Nationwide Marketplace screens (foundation + onboarding; all actions hit persisted APIs) ----
+Object.assign(SCREENS, {
+  mkt_cargo: async (it,c)=>{ const d=await api('GET','/admin/marketplace/cargo');
+    c.innerHTML=header(it,'Governed cargo taxonomy. PROHIBITED cargo can never enter an eligible pool.')+
+      table(['Code','Name','Class','Refrigerated','Oversized','Hazardous','Prohibited','Status'], d.cargo,
+        r=>[r.code,cell(r.name),cell(r.cargo_class),r.refrigerated?'yes':'—',r.oversized?'yes':'—',r.hazardous?'yes':'—',r.prohibited?'YES':'—',pill(r.status)]); },
+  mkt_vehicles: async (it,c)=>{ const d=await api('GET','/admin/marketplace/vehicles');
+    c.innerHTML=header(it,'Governed vehicle taxonomy with capabilities (payload/volume/opening dims/refrigeration/lifting/port).')+
+      table(['Code','Name','Group','Payload kg','Volume cbm','Refrigerated','Lifting','Status'], d.vehicles,
+        r=>[r.code,cell(r.name),cell(r.class_group),r.payload_kg,r.volume_cbm,r.refrigerated?'yes':'—',r.lifting_capable?'yes':'—',pill(r.status)]); },
+  mkt_lanes: async (it,c)=>{ const d=await api('GET','/admin/marketplace/lanes');
+    c.innerHTML=header(it,'Lane coverage + serviceability. A lane PROMISES service only when PILOT/ACTIVE; inactive lanes accept interest but promise nothing.')+
+      table(['Code','Origin','Dest','Corridor','Sea leg','Verified carriers','Status'], d.lanes,
+        r=>[r.code,cell(r.origin_zone),cell(r.dest_zone),cell(r.corridor),r.requires_sea_leg?'yes':'—',r.verified_carriers,pill(r.status)]); },
+  mkt_shippers: async (it,c)=>{ const d=await api('GET','/admin/marketplace/shippers');
+    c.innerHTML=header(it,'Shipper onboarding. Activation fails closed until mandatory evidence is verified; no self-verify / no self-activate.',
+      `<button class="btn sm" onclick="mktNewShipper()">New shipper +</button>`)+
+      table(['Id','Legal name','Type','Registration','Status','Actions'], d.shippers,
+        r=>[r.id,cell(r.legal_name),cell(r.applicant_type),cell(r.registration_number),pill(mktPill(r.status))+' '+r.status,mktShipperActions(r)]); },
+  mkt_carriers: async (it,c)=>{ const d=await api('GET','/admin/marketplace/carriers');
+    c.innerHTML=header(it,'Carrier onboarding. Open registration is never automatic activation.',
+      `<button class="btn sm" onclick="mktNewCarrier()">New carrier +</button>`)+
+      table(['Id','Legal name','Type','Registration','Status','Actions'], d.carriers,
+        r=>[r.id,cell(r.legal_name),cell(r.carrier_type),cell(r.registration_number),pill(mktPill(r.status))+' '+r.status,mktCarrierActions(r)]); },
+  mkt_carrier_vehicles: async (it,c)=>{ const d=await api('GET','/admin/marketplace/carrier-vehicles');
+    c.innerHTML=header(it,'Carrier vehicles linked to the governed taxonomy. Only ACTIVE + compliant vehicles enter the eligible pool.')+
+      table(['Id','Carrier','Category','Plate','Payload kg','Status'], d.vehicles,
+        r=>[r.id,r.carrier_id,cell(r.category_code),cell(r.plate_number),r.payload_kg,pill(mktPill(r.status))+' '+r.status]); },
+  mkt_drivers: async (it,c)=>{ const d=await api('GET','/admin/marketplace/drivers');
+    c.innerHTML=header(it,'Driver onboarding. Assignment is blocked on expired licence, suspension, carrier mismatch, or missing vehicle authorization.')+
+      table(['Id','Carrier','Name','Licence expiry','Status'], d.drivers,
+        r=>[r.id,r.carrier_id,cell(r.full_name),cell(r.licence_expiry),pill(mktPill(r.status))+' '+r.status]); },
+  mkt_documents: async (it,c)=>{ const d=await api('GET','/admin/marketplace/documents');
+    c.innerHTML=header(it,'Compliance documents + expiry. Expired required documents remove the participant from eligibility WITHOUT deleting history.',
+      `<button class="btn sm" onclick="mktDetectExpiry()">Detect expiry now</button>`)+
+      table(['Id','Type','Subject','Subject id','Expiry','Status'], d.documents,
+        r=>[r.id,cell(r.document_type),cell(r.subject_type),r.subject_id,cell(r.expiry_date),pill(mktPill(r.status))+' '+r.status]); },
+  mkt_cases: async (it,c)=>{ const d=await api('GET','/admin/marketplace/verification-cases');
+    c.innerHTML=header(it,'Verification work queues — priority / risk / owner / SLA / correlation.')+
+      table(['Id','Type','Subject','Subject id','Priority','Due','Status'], d.cases,
+        r=>[r.id,cell(r.case_type),cell(r.subject_type),r.subject_id,cell(r.priority),cell(r.due_at),pill(r.status)]); },
+  mkt_eligibility: async (it,c)=>{
+    c.innerHTML=header(it,'Deterministic eligibility tester — computed BEFORE any AI ranking. Prohibited cargo yields no vehicle.')+
+      `<div class="wrap" style="padding:12px">
+        <input id="meCargo" placeholder="cargo code (e.g. general, perishable_chilled, prohibited)" style="min-width:340px"/>
+        <input id="meW" placeholder="weight kg" style="max-width:120px"/>
+        <input id="meV" placeholder="volume cbm" style="max-width:120px"/>
+        <button class="btn sm" onclick="mktElig()">Test eligibility</button></div><div id="meRes"></div>`; },
+  mkt_integrity: async (it,c)=>{ const d=await api('GET','/admin/marketplace/integrity');
+    c.innerHTML=header(it,'Marketplace integrity — statuses NOT_RUN/PASS/WARNING/FAIL/BLOCKED. Overall: '+d.overall)+
+      table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
+});
+function mktPill(s){ return (s==='ACTIVE'||s==='VERIFIED'||s==='APPROVED')?'ACTIVE':(s==='REJECTED'||s==='EXPIRED'||s==='SUSPENDED')?'INACTIVE':'DRAFT'; }
+function mktShipperActions(r){ const b=[];
+  if(r.status==='APPLICATION'||r.status==='PROFILE_INCOMPLETE') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="mktAct('shippers',${r.id},'submit')">submit</a>`);
+  if(r.status==='DOCUMENT_REVIEW'||r.status==='VERIFICATION_REQUIRED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="mktAct('shippers',${r.id},'verify')">verify</a>`);
+  if(r.status==='APPROVED'||r.status==='CONDITIONALLY_APPROVED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="mktAct('shippers',${r.id},'activate')">activate</a>`);
+  if(r.status==='ACTIVE') b.push(`<a style="color:var(--warn);cursor:pointer" onclick="mktSuspend('shippers',${r.id})">suspend</a>`);
+  return b.join(' · ')||'—'; }
+function mktCarrierActions(r){ const b=[];
+  if(r.status==='APPLICATION'||r.status==='PROFILE_INCOMPLETE') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="mktAct('carriers',${r.id},'submit')">submit</a>`);
+  if(r.status==='DOCUMENT_REVIEW'||r.status==='VERIFICATION_REQUIRED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="mktAct('carriers',${r.id},'verify')">verify</a>`);
+  if(r.status==='APPROVED'||r.status==='CONDITIONALLY_APPROVED') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="mktAct('carriers',${r.id},'activate')">activate</a>`);
+  if(r.status==='ACTIVE') b.push(`<a style="color:var(--warn);cursor:pointer" onclick="mktSuspend('carriers',${r.id})">suspend</a>`);
+  return b.join(' · ')||'—'; }
+async function mktAct(kind,id,action){ try{ await api('POST',`/admin/marketplace/${kind}/${id}/${action}`,{}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function mktSuspend(kind,id){ const reason=prompt('Suspension reason'); if(!reason) return; try{ await api('POST',`/admin/marketplace/${kind}/${id}/suspend`,{reason}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function mktNewShipper(){ const legal_name=prompt('Legal name'); if(!legal_name) return;
+  try{ await api('POST','/admin/marketplace/shippers',{applicant_type:'CORPORATION',legal_name,registration_type:'SEC',registration_number:'SEC-'+Date.now(),registered_address:'—',contract_accepted:1,privacy_accepted:1}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function mktNewCarrier(){ const legal_name=prompt('Legal name'); if(!legal_name) return;
+  try{ await api('POST','/admin/marketplace/carriers',{carrier_type:'FLEET_OPERATOR',legal_name,registration_type:'SEC',registration_number:'SEC-'+Date.now(),operating_address:'—'}); render(CURRENT); }catch(e){ alert(e.message); } }
+async function mktDetectExpiry(){ try{ const r=await api('POST','/admin/marketplace/documents/detect-expiry',{}); alert('Expired documents flagged: '+r.count); render(CURRENT); }catch(e){ alert(e.message); } }
+async function mktElig(){ const cargo_code=document.getElementById('meCargo').value.trim(); if(!cargo_code) return;
+  const weight_kg=parseFloat(document.getElementById('meW').value)||null, volume_cbm=parseFloat(document.getElementById('meV').value)||null;
+  try{ const d=await api('POST','/admin/marketplace/eligibility',{cargo_code,weight_kg,volume_cbm});
+    document.getElementById('meRes').innerHTML = d.blocked ? `<div class="note">Blocked: ${d.blocked} — no eligible vehicle.</div>`
+      : table(['Code','Name','Payload kg','Volume cbm'], d.eligible, r=>[r.code,cell(r.name),r.payload_kg,r.volume_cbm]); }
+  catch(e){ document.getElementById('meRes').innerHTML=`<div class="note">${e.message}</div>`; } }
 function saasSubActions(r){ const b=[];
   if(r.status==='DRAFT'||r.status==='PENDING_ACTIVATION') b.push(`<a style="color:var(--accent);cursor:pointer" onclick="saasSubAct(${r.id},'activate')">activate</a>`);
   if(r.status==='ACTIVE'||r.status==='TRIAL') b.push(`<a style="color:var(--warn);cursor:pointer" onclick="saasSubSuspend(${r.id})">suspend</a> · <a style="color:var(--accent);cursor:pointer" onclick="saasSubAct(${r.id},'renew')">renew</a>`);

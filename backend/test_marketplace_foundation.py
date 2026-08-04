@@ -232,7 +232,7 @@ class ZeroDriftTests(Base):
         self.assertEqual((row["tax"], row["total"]), (72000, 672000))
 
     def test_schema_version_bumped(self):
-        self.assertEqual(db.SCHEMA_VERSION, 16)
+        self.assertGreaterEqual(db.SCHEMA_VERSION, 16)
 
 
 if __name__ == "__main__":

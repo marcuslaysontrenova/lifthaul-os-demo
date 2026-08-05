@@ -97,6 +97,9 @@ def _routes():
     def get_booking(actor, body, p):
         return core.get_booking(_conn, actor, int(p["id"]))
 
+    def update_booking(actor, body, p):
+        return core.update_booking(_conn, actor, int(p["id"]), body)
+
     def review(actor, body, p):
         core.review_booking(_conn, actor, int(p["id"])); return {"ok": True}
 
@@ -108,11 +111,26 @@ def _routes():
                                             body.get("discount_pct", 0), body.get("dp_pct"),
                                             body.get("est_cost", 0))}
 
+    def get_quote(actor, body, p):
+        return core.get_quotation(_conn, actor, int(p["id"]))
+
+    def update_quote(actor, body, p):
+        return core.update_quotation_draft(
+            _conn, actor, int(p["id"]), body.get("lines"), body.get("discount_pct"),
+            body.get("dp_pct"), body.get("est_cost"),
+        )
+
     def submit_quote(actor, body, p):
         return {"status": core.submit_quotation(_conn, actor, int(p["id"]))}
 
     def approve_quote(actor, body, p):
-        core.approve_quotation(_conn, actor, int(p["id"])); return {"ok": True}
+        core.approve_quotation(_conn, actor, int(p["id"]), body.get("comment"), body.get("override_reason")); return {"ok": True}
+
+    def return_quote(actor, body, p):
+        core.return_quotation(_conn, actor, int(p["id"]), body.get("reason"), body.get("override_reason")); return {"ok": True}
+
+    def reject_quote(actor, body, p):
+        core.reject_quotation(_conn, actor, int(p["id"]), body.get("reason"), body.get("override_reason")); return {"ok": True}
 
     def send_quote(actor, body, p):
         core.send_quotation(_conn, actor, int(p["id"])); return {"ok": True}
@@ -146,11 +164,16 @@ def _routes():
         ("POST", "/customers"): create_customer,
         ("POST", "/bookings"): create_booking,
         ("GET", "/bookings/:id"): get_booking,
+        ("PATCH", "/bookings/:id"): update_booking,
         ("POST", "/bookings/:id/review"): review,
         ("POST", "/bookings/:id/ready"): ready,
         ("POST", "/bookings/:id/quotation"): create_quote,
+        ("GET", "/quotations/:id"): get_quote,
+        ("PATCH", "/quotations/:id"): update_quote,
         ("POST", "/quotations/:id/submit"): submit_quote,
         ("POST", "/quotations/:id/approve"): approve_quote,
+        ("POST", "/quotations/:id/return"): return_quote,
+        ("POST", "/quotations/:id/reject"): reject_quote,
         ("POST", "/quotations/:id/send"): send_quote,
         ("POST", "/quotations/:id/accept"): accept_quote,
         ("POST", "/bookings/:id/payment-request"): pay_request,
@@ -277,14 +300,14 @@ def _admin_routes():
     def profile_set(a, b, p):    R(a, "org.manage"); org.upsert_company_profile(_conn, a, _tid(), **{k: v for k, v in b.items()}); return {"ok": True}
 
     # ---- People & Access --------------------------------------------------
-    def users(a, b, p):          R(a, "user_admin.view");   return {"users": _rows(admin_platform.list_users(_conn))}
+    def users(a, b, p):          R(a, "user_admin.view");   return {"users": _rows(admin_platform.list_users(_conn, actor=a))}
     def user_create(a, b, p):    R(a, "user_admin.manage"); return {"id": admin_platform.create_user(_conn, a, b["email"], b["password"], b["role"], b.get("name"))}
     def user_status(a, b, p):    R(a, "user_admin.manage"); admin_platform.set_status(_conn, a, int(p["id"]), b["status"]); return {"ok": True}
     def user_reset(a, b, p):     R(a, "user_admin.manage"); admin_platform.reset_password(_conn, a, int(p["id"]), b["password"]); return {"ok": True}
     def roles(a, b, p):          R(a, "role_admin.view");   return {"roles": _rows(admin_platform.list_roles(_conn, "RGO"))}
     def role_create(a, b, p):    R(a, "role_admin.manage"); return {"id": admin_platform.create_role(_conn, "RGO", b["code"], b["name"], layer=b.get("layer", 4), grants=set(b.get("grants", [])), actor=a)}
     def user_assign_role(a, b, p):  # guardrails: self-elevation / platform-role restriction
-        R(a, "role_admin.manage")
+        R(a, "user_admin.assign_roles")
         role = admin_platform.role_by_code(_conn, "RGO", b["role"])
         if not role:
             raise core.ConflictError("unknown role")

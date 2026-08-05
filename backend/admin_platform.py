@@ -146,6 +146,17 @@ for _a in ("view", "record", "manage"):
     _perm("safety", _a)
 for _a in ("view", "post", "approve", "export"):
     _perm("finance", _a)
+BOOKING_QUOTATION_PERMISSIONS = [
+    "booking.edit_draft", "booking.revise_returned", "booking.submit", "booking.cancel",
+    "booking.delete_draft", "booking.attachment.manage", "booking.print", "booking.audit.view",
+    "quotation.edit_draft", "quotation.revise_returned", "quotation.cancel",
+    "quotation.delete_draft", "quotation.reject", "quotation.return",
+    "quotation.customer_price.view", "quotation.carrier_cost.view",
+    "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
+    "quotation.approve.exceptional", "user_admin.assign_roles", "role_admin.assign_privileged",
+]
+for _code in BOOKING_QUOTATION_PERMISSIONS:
+    CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
 # Administration modules (Platform 1)
 for _mod in ("tenant", "license", "org", "user_admin", "role_admin", "permission_admin",
              "workflow_admin", "crm_admin", "fleet_admin", "finance_admin", "dispatch_admin",
@@ -390,11 +401,31 @@ ADMIN_ROLES = [
          "form.field.view", "form.field.manage", "form.field.option.manage",
          "form.field.validation.manage", "form.field.visibility.manage",
          "form.data.view", "form.data.edit", "form.data.export"}),
+    ("executive",            "Executive View",               2,
+        {"booking.read", "booking.view", "booking.audit.view", "quotation.read", "quotation.view",
+         "quotation.customer_price.view", "quotation.carrier_cost.view", "quotation.platform_fee.view",
+         "quotation.margin.view", "quotation.audit.view", "quotation.approve.exceptional",
+         "payment.read", "finance.view", "reporting.view", "audit.view", "job.read",
+         "customer.read", "fleet.view", "safety.view"}),
+    ("user_administrator",   "User Administrator",           3,
+        {"user_admin.view", "user_admin.manage", "user_admin.assign_roles", "role_admin.view",
+         "security.view", "org.view"}),
+    ("booking_quotation_administrator", "Booking & Quotation Administrator", 3,
+        {"customer.read", "booking.create", "booking.read", "booking.view", "booking.review",
+         "booking.ready", "booking.edit_draft", "booking.revise_returned", "booking.submit",
+         "booking.cancel", "booking.delete_draft", "booking.attachment.manage", "booking.export",
+         "booking.print", "booking.audit.view", "quotation.create", "quotation.read", "quotation.view",
+         "quotation.edit_draft", "quotation.revise", "quotation.revise_returned", "quotation.submit",
+         "quotation.cancel", "quotation.delete_draft", "quotation.export", "quotation.print",
+         "quotation.audit.view", "quotation.customer_price.view"}),
     ("crm_admin",            "CRM Administrator",            3,
         {"crm_admin.*", "customer.*", "contact.*", "address.*", "crm.admin.*", "master_data.*"}),
     ("fleet_admin",          "Fleet Administrator",          3, {"fleet_admin.*", "equipment.*", "vehicle.*", "maintenance.*", "inspection.*"}),
     ("finance_admin",        "Finance Administrator",        3,
         {"finance_admin.*", "invoice.*", "expense.*", "payment.*", "refund.*",
+         "booking.read", "booking.view", "quotation.read", "quotation.view",
+         "quotation.customer_price.view", "quotation.carrier_cost.view",
+         "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
          "tax.policy.*", "payment.downpayment.policy.*", "quotation.policy.approval.view",
          "admin.configuration.financial.manage", "admin.configuration.view", "admin.configuration.simulate",
          "crm.admin.credit_policy.*", "crm.admin.pricing.*"}),
@@ -542,10 +573,21 @@ def create_role(conn, tenant_code, code, name, layer=4, grants=None, actor=None)
 # submit+verify by design, so that pair is NOT listed); super-admins ('*') are exempt.
 SOD_PAIRS = [
     ("quotation.create", "quotation.approve"),      # estimator vs approver
+    ("quotation.edit_draft", "quotation.approve"),
+    ("quotation.revise_returned", "quotation.approve"),
     ("user_admin.manage", "audit.manage"),          # user admin vs audit admin
 ]
 HIGH_RISK = {"quotation.approve", "payment.verify", "expense.approve", "*",
-             "tenant.manage", "role_admin.manage", "user_admin.manage", "security.manage"}
+             "tenant.manage", "role_admin.manage", "role_admin.assign_privileged",
+             "user_admin.manage", "security.manage"}
+PRIVILEGED_ROLE_CODES = {
+    "super_platform_admin", "platform_admin", "super_admin", "executive",
+}
+USER_ADMIN_ASSIGNABLE_ROLE_CODES = {
+    "booking_quotation_administrator", "approver", "finance_admin", "finance",
+    "operations_manager", "estimator", "dispatcher", "fleet_manager", "safety_officer",
+    "mechanic", "driver", "operator", "operational_user", "customer",
+}
 
 
 def _perm_covers(perms, action):
@@ -656,13 +698,18 @@ def _guard_role_assignment(conn, actor, role_id):
     """Admin guardrails (Item 6): a non-platform admin may not assign platform-layer roles,
     nor grant any permission beyond their own authority (self-elevation prevention)."""
     perms = actor.get("perms") or core.PERMISSIONS.get(actor.get("role"), set())
-    if "*" in perms:
-        return
     role = conn.execute("SELECT * FROM admin_roles WHERE id=?", (role_id,)).fetchone()
     if not role:
         raise core.ConflictError("unknown role")
+    if role["code"] in PRIVILEGED_ROLE_CODES and not _perm_covers(perms, "role_admin.assign_privileged"):
+        raise core.ForbiddenError("assigning Super Administrator, platform, or executive roles requires additional approval")
+    if "*" in perms:
+        return
     if role["layer"] == 1:
         raise core.ForbiddenError("only a platform administrator may assign platform-layer roles")
+    if (_perm_covers(perms, "user_admin.assign_roles")
+            and role["code"] in USER_ADMIN_ASSIGNABLE_ROLE_CODES):
+        return
     for g in effective_role_grants(conn, role_id):
         if not _covers(perms, g):
             raise core.ForbiddenError(f"cannot grant '{g}' beyond your own authority (self-elevation blocked)")
@@ -693,6 +740,18 @@ def assignment_sod_conflicts(conn, user_id, role_id):
 
 def assign_role(conn, user_id, role_id, actor=None, allow_sod_exception=False, reason=None):
     if actor is not None:
+        target = conn.execute("SELECT id,tenant_id FROM users WHERE id=?", (user_id,)).fetchone()
+        if not target:
+            raise core.ConflictError("unknown user")
+        perms = actor.get("perms") or core.PERMISSIONS.get(actor.get("role"), set())
+        actor_tenant = actor.get("tenant_id")
+        if actor_tenant is not None and target["tenant_id"] != actor_tenant and "*" not in perms:
+            raise core.ForbiddenError("user administrators may manage only users in their own tenant")
+        already = conn.execute(
+            "SELECT 1 FROM admin_user_roles WHERE user_id=? AND role_id=?", (user_id, role_id)
+        ).fetchone()
+        if actor.get("id") == user_id and not already and "*" not in perms:
+            raise core.ForbiddenError("self-assignment of additional roles is prohibited")
         _guard_role_assignment(conn, actor, role_id)
     conflicts = assignment_sod_conflicts(conn, user_id, role_id)
     if conflicts and not allow_sod_exception:
@@ -838,17 +897,37 @@ STATUSES = {"ACTIVE", "SUSPENDED", "LOCKED", "DEACTIVATED"}
 def create_user(conn, actor, email, password, role, name=None, tenant_code="RGO", customer_id=None) -> int:
     """Invite/create a user AND assign the matching system role so DB-RBAC governs them."""
     validate_password(conn, password, tenant=tenant_code)          # C-007 policy
+    tenant = get_tenant(conn, tenant_code)
+    if not tenant:
+        raise core.ConflictError("unknown tenant")
+    perms = (actor or {}).get("perms") or core.PERMISSIONS.get((actor or {}).get("role"), set())
+    if actor and actor.get("tenant_id") is not None and actor.get("tenant_id") != tenant["id"] and "*" not in perms:
+        raise core.ForbiddenError("user administrators may create users only in their own tenant")
     uid = core.create_user(conn, email, password, role, name, customer_id)
+    conn.execute("UPDATE users SET tenant_id=? WHERE id=?", (tenant["id"], uid))
     r = role_by_code(conn, tenant_code, role)
     if r:
-        assign_role(conn, uid, r["id"])
+        assign_role(conn, uid, r["id"], actor=actor)
     if actor:
         core.audit(conn, actor, "USER_INVITED", "users", uid, new={"email": email, "role": role})
     conn.commit()
     return uid
 
 
+def _guard_user_scope(conn, actor, user_id):
+    if actor is None or actor.get("tenant_id") is None:
+        return
+    if "*" in actor.get("perms", set()):
+        return
+    row = conn.execute("SELECT tenant_id FROM users WHERE id=?", (user_id,)).fetchone()
+    if not row:
+        raise core.ConflictError("unknown user")
+    if row["tenant_id"] != actor.get("tenant_id"):
+        raise core.ForbiddenError("user administrators may manage only users in their own tenant")
+
+
 def set_status(conn, actor, user_id, status):
+    _guard_user_scope(conn, actor, user_id)
     status = status.upper()
     if status not in STATUSES:
         raise core.ConflictError(f"invalid user status '{status}'")
@@ -875,6 +954,7 @@ def deactivate_user(conn, actor, uid): set_status(conn, actor, uid, "DEACTIVATED
 
 def reset_password(conn, actor, user_id, new_password):
     """Admin-initiated password reset: set a new hash and revoke all sessions."""
+    _guard_user_scope(conn, actor, user_id)
     if not conn.execute("SELECT 1 FROM users WHERE id=?", (user_id,)).fetchone():
         raise core.ConflictError("unknown user")
     validate_password(conn, new_password)                          # C-007 policy
@@ -891,7 +971,13 @@ def revoke_sessions(conn, user_id) -> int:
     return getattr(cur, "rowcount", 0) or 0
 
 
-def list_users(conn):
+def list_users(conn, actor=None):
+    perms = (actor or {}).get("perms") or core.PERMISSIONS.get((actor or {}).get("role"), set())
+    if actor is not None and actor.get("tenant_id") is not None and "*" not in perms:
+        return conn.execute(
+            "SELECT id,email,role,name,status,last_login_at,created_at FROM users WHERE tenant_id=? ORDER BY id",
+            (actor.get("tenant_id"),),
+        ).fetchall()
     return conn.execute("SELECT id,email,role,name,status,last_login_at,created_at"
                         " FROM users ORDER BY id").fetchall()
 

@@ -234,10 +234,38 @@ PERMISSIONS = {
     "admin": {"*"},
     "owner": {"*"},
     "operations_manager": {"customer.*", "booking.*", "quotation.read", "job.*", "payment.read"},
-    "estimator": {"customer.read", "booking.create", "booking.read", "booking.review", "booking.ready",
-                  "quotation.create", "quotation.revise", "quotation.submit", "quotation.read"},
-    "approver": {"quotation.read", "quotation.approve", "booking.read"},
+    "estimator": {"customer.read", "booking.create", "booking.read", "booking.view",
+                  "booking.review", "booking.ready", "booking.edit_draft",
+                  "booking.revise_returned", "booking.submit", "booking.attachment.manage",
+                  "booking.print", "booking.audit.view", "quotation.create", "quotation.edit_draft",
+                  "quotation.revise", "quotation.revise_returned", "quotation.submit", "quotation.read",
+                  "quotation.view", "quotation.customer_price.view", "quotation.print",
+                  "quotation.audit.view"},
+    "booking_quotation_administrator": {
+        "customer.read", "booking.create", "booking.read", "booking.view", "booking.review",
+        "booking.ready", "booking.edit_draft", "booking.revise_returned", "booking.submit",
+        "booking.cancel", "booking.delete_draft", "booking.attachment.manage", "booking.export",
+        "booking.print", "booking.audit.view", "quotation.create", "quotation.read", "quotation.view",
+        "quotation.edit_draft", "quotation.revise", "quotation.revise_returned", "quotation.submit",
+        "quotation.cancel", "quotation.delete_draft", "quotation.export", "quotation.print",
+        "quotation.audit.view", "quotation.customer_price.view"},
+    "approver": {"quotation.read", "quotation.view", "quotation.approve", "quotation.reject",
+                 "quotation.return", "quotation.customer_price.view", "quotation.carrier_cost.view",
+                 "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
+                 "quotation.print", "booking.read", "booking.view", "booking.audit.view"},
     "finance": {"payment.*", "quotation.read", "booking.read", "customer.read"},
+    "finance_admin": {"payment.*", "finance.*", "quotation.read", "quotation.view", "booking.read",
+                      "booking.view", "customer.read", "quotation.customer_price.view",
+                      "quotation.carrier_cost.view", "quotation.platform_fee.view",
+                      "quotation.margin.view", "quotation.audit.view"},
+    "executive": {"booking.read", "booking.view", "booking.audit.view", "quotation.read",
+                  "quotation.view", "quotation.customer_price.view", "quotation.carrier_cost.view",
+                  "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
+                  "quotation.approve.exceptional", "payment.read", "finance.view", "reporting.view",
+                  "audit.view", "job.read", "customer.read", "fleet.view", "safety.view"},
+    "user_administrator": {"user_admin.view", "user_admin.manage", "user_admin.assign_roles",
+                           "role_admin.view", "security.view", "org.view"},
+    "operational_user": {"booking.read", "booking.view", "job.read", "customer.read"},
     "dispatcher": {"job.read", "job.dispatch", "booking.read"},
     "customer": {"self.booking.create", "self.booking.read", "self.quotation.read",
                  "self.quotation.accept", "self.quotation.decline", "self.payment.read",
@@ -410,6 +438,36 @@ def get_booking(conn, actor, bid):
     return dict(b)
 
 
+def update_booking(conn, actor, bid, changes):
+    """Update operational booking fields while the record is editable.
+
+    Approval-pending and later records are deliberately locked. An approver must
+    return the transaction before an encoder can revise it.
+    """
+    b = _booking(conn, bid, actor)
+    returned = b["stage"] == "REVISION_REQUESTED"
+    require(actor, "booking.revise_returned" if returned else "booking.edit_draft")
+    editable = {
+        "REQUEST_RECEIVED", "UNDER_REVIEW", "INFORMATION_REQUIRED", "READY_FOR_QUOTATION",
+        "QUOTATION_IN_PROGRESS", "REVISION_REQUESTED",
+    }
+    if b["stage"] not in editable:
+        raise ConflictError("booking is locked; return it for revision before editing")
+    allowed = {"service", "cargo", "weight", "from_loc", "to_loc", "date", "estimator"}
+    patch = {k: v for k, v in (changes or {}).items() if k in allowed}
+    if not patch:
+        raise ValidationError("no editable booking fields supplied")
+    old = {k: b[k] for k in patch}
+    sets = ",".join(f"{k}=?" for k in patch)
+    conn.execute(
+        f"UPDATE bookings SET {sets}, updated_by=?, updated_at=? WHERE id=?",
+        tuple(patch.values()) + (actor["id"], now(), bid),
+    )
+    audit(conn, actor, "booking.material_revision", "booking", bid, old=old, new=patch)
+    conn.commit()
+    return get_booking(conn, actor, bid)
+
+
 _BOOKING_FLOW = {
     "REQUEST_RECEIVED": {"UNDER_REVIEW"},
     "UNDER_REVIEW": {"INFORMATION_REQUIRED", "READY_FOR_QUOTATION", "DECLINED", "CANCELLED"},
@@ -451,8 +509,11 @@ def ready_for_quotation(conn, actor, bid):
 def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_cost=0):
     """lines: [{kind,description,qty,days,rate}]. Creates version 1 (or a new
     version if revising). Never overwrites a sent quotation."""
-    require(actor, "quotation.create")
     b = _booking(conn, bid, actor)                        # booking must be in the actor's tenant
+    if b["stage"] == "REVISION_REQUESTED":
+        require(actor, "quotation.revise_returned")
+    else:
+        require(actor, "quotation.create")
     if b["stage"] not in ("READY_FOR_QUOTATION", "REVISION_REQUESTED", "QUOTATION_IN_PROGRESS"):
         raise ConflictError("booking is not ready for quotation")
     if not lines:
@@ -498,7 +559,8 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     if b["stage"] == "READY_FOR_QUOTATION" or b["stage"] == "REVISION_REQUESTED":
         conn.execute("UPDATE bookings SET stage='QUOTATION_IN_PROGRESS' WHERE id=?", (bid,))
     conn.commit()
-    audit(conn, actor, "quotation.create", "quotation", qid, new={"no": no, "version": ver, "total": total})
+    audit(conn, actor, "quotation.material_revision" if prev else "quotation.create", "quotation", qid,
+          new={"no": no, "version": ver, "total": total})
     conn.commit()
     return qid
 
@@ -510,6 +572,100 @@ def _quote(conn, qid, actor=None):
     if actor is not None:
         import tenant; tenant.guard(actor, r)             # cross-tenant -> 404 (no leak)
     return r
+
+
+def _require_either(actor, *actions):
+    if not any(can(actor, action) for action in actions):
+        require(actor, actions[0])
+
+
+def get_quotation(conn, actor, qid):
+    """Return a tenant-scoped quotation with field-level financial redaction."""
+    _require_either(actor, "quotation.read", "quotation.view")
+    q = dict(_quote(conn, qid, actor))
+    lines = [dict(row) for row in conn.execute(
+        "SELECT id,kind,description,qty,days,rate,amount FROM quotation_lines WHERE quotation_id=? ORDER BY id",
+        (qid,),
+    ).fetchall()]
+    redacted = []
+    if not can(actor, "quotation.customer_price.view"):
+        for key in ("subtotal", "discount_pct", "discount", "tax", "total", "dp_pct", "dp_amount", "balance"):
+            q[key] = None
+        for line in lines:
+            line["rate"] = None
+            line["amount"] = None
+        redacted.append("customer_price")
+    if not can(actor, "quotation.carrier_cost.view"):
+        q["est_cost"] = None
+        redacted.append("carrier_cost")
+    if not can(actor, "quotation.margin.view"):
+        q["margin_pct"] = None
+        redacted.append("margin")
+    q["platform_fee"] = None
+    if not can(actor, "quotation.platform_fee.view"):
+        redacted.append("platform_fee")
+    q["lines"] = lines
+    q["redacted_fields"] = redacted
+    return q
+
+
+def update_quotation_draft(conn, actor, qid, lines=None, discount_pct=None,
+                           dp_pct=None, est_cost=None):
+    """Materially revise a draft/returned quotation with full recalculation and audit."""
+    q = _quote(conn, qid, actor)
+    returned = q["status"] in ("revision", "returned", "rejected")
+    require(actor, "quotation.revise_returned" if returned else "quotation.edit_draft")
+    if q["status"] not in ("draft", "revision", "returned", "rejected"):
+        raise ConflictError("only a draft or returned quotation may be revised")
+    rows = lines if lines is not None else [dict(row) for row in conn.execute(
+        "SELECT kind,description,qty,days,rate FROM quotation_lines WHERE quotation_id=? ORDER BY id",
+        (qid,),
+    ).fetchall()]
+    if not rows:
+        raise ValidationError("quotation needs at least one line")
+    for line in rows:
+        if line.get("rate", 0) < 0 or line.get("qty", 1) < 0 or line.get("days", 1) < 0:
+            raise ValidationError("quotation line values must not be negative")
+    disc = q["discount_pct"] if discount_pct is None else discount_pct
+    requested_dp = q["dp_pct"] if dp_pct is None else dp_pct
+    cost = q["est_cost"] if est_cost is None else est_cost
+    subtotal = sum(line["rate"] * line.get("qty", 1) * line.get("days", 1) for line in rows)
+    discount = round(subtotal * disc / 100)
+    taxable = subtotal - discount
+    b = _booking(conn, q["booking_id"], actor)
+    import policy
+    ctx = policy.policy_context(conn, actor, b)
+    tp = policy.evaluate_tax(conn, taxable, ctx)
+    tax = tp["tax"]
+    total = taxable if tp["inclusive"] else taxable + tax
+    dpe = policy.evaluate_downpayment(conn, total, ctx, requested_rate=requested_dp)
+    ape = policy.evaluate_approval(conn, total, disc, ctx)
+    margin_pct = round((total - cost) / total * 100, 1) if total and cost else None
+    old = {"subtotal": q["subtotal"], "discount_pct": q["discount_pct"], "total": q["total"],
+           "dp_pct": q["dp_pct"], "est_cost": q["est_cost"]}
+    conn.execute(
+        "UPDATE quotations SET status='draft',subtotal=?,discount_pct=?,discount=?,tax=?,total=?,"
+        "dp_pct=?,dp_amount=?,balance=?,est_cost=?,margin_pct=?,tax_snapshot=?,dp_snapshot=?,"
+        "approval_snapshot=? WHERE id=?",
+        (subtotal, disc, discount, tax, total, dpe["rate"], dpe["amount"], total - dpe["amount"],
+         cost, margin_pct, json.dumps(tp["snapshot"]), json.dumps(dpe["snapshot"]),
+         json.dumps(ape["snapshot"]), qid),
+    )
+    conn.execute("DELETE FROM quotation_lines WHERE quotation_id=?", (qid,))
+    for line in rows:
+        amount = line["rate"] * line.get("qty", 1) * line.get("days", 1)
+        conn.execute(
+            "INSERT INTO quotation_lines(quotation_id,kind,description,qty,days,rate,amount) VALUES(?,?,?,?,?,?,?)",
+            (qid, line.get("kind"), line.get("description"), line.get("qty", 1),
+             line.get("days", 1), line["rate"], amount),
+        )
+    conn.execute("UPDATE bookings SET stage='QUOTATION_IN_PROGRESS',updated_by=?,updated_at=? WHERE id=?",
+                 (actor["id"], now(), q["booking_id"]))
+    audit(conn, actor, "quotation.material_revision", "quotation", qid, old=old,
+          new={"subtotal": subtotal, "discount_pct": disc, "total": total,
+               "dp_pct": dpe["rate"], "est_cost": cost})
+    conn.commit()
+    return get_quotation(conn, actor, qid)
 
 
 def _needs_approval(conn, q):
@@ -544,16 +700,84 @@ def submit_quotation(conn, actor, qid):
     return _quote(conn, qid)["status"]
 
 
-def approve_quotation(conn, actor, qid):
-    require(actor, "quotation.approve")
+def approve_quotation(conn, actor, qid, comment=None, override_reason=None):
+    q = _quote(conn, qid, actor)
+    if can(actor, "quotation.approve"):
+        pass
+    elif can(actor, "quotation.approve.exceptional") and q["total"] >= CONFIG["approval_amount_threshold"]:
+        pass
+    else:
+        require(actor, "quotation.approve")
+    if q["status"] != "pending_approval":
+        raise ConflictError("quotation is not pending approval")
+    if CONFIG["separation_of_duties"]:
+        _governed_review_override(conn, actor, q, "approve", override_reason)
+    conn.execute("UPDATE quotations SET status='approved', approved_by=?, approved_at=? WHERE id=?",
+                 (actor["id"], now(), qid))
+    audit(conn, actor, "quotation.approve", "quotation", qid,
+          new={"status": "approved"}, reason=str(comment).strip() if comment else None)
+    conn.commit()
+
+
+def _transaction_maker_ids(conn, q):
+    """All users who created or materially revised the booking/quotation."""
+    makers = {q["created_by"]} if q["created_by"] is not None else set()
+    b = _booking(conn, q["booking_id"])
+    if b["created_by"] is not None:
+        makers.add(b["created_by"])
+    rows = conn.execute(
+        """SELECT actor FROM audit_logs
+           WHERE actor IS NOT NULL AND (
+             (entity='quotation' AND entity_id=? AND action IN ('quotation.create','quotation.material_revision'))
+             OR (entity='booking' AND entity_id=? AND action IN ('booking.create','booking.material_revision'))
+           )""",
+        (q["id"], q["booking_id"]),
+    ).fetchall()
+    makers.update(row["actor"] for row in rows)
+    return makers
+
+
+def _governed_review_override(conn, actor, q, action, override_reason=None):
+    privileged = actor.get("role") in ("super_admin", "super_platform_admin")
+    is_maker = actor["id"] in _transaction_maker_ids(conn, q)
+    if is_maker and not privileged:
+        raise ForbiddenError("separation of duties: a creator or material reviser may not review this transaction")
+    if privileged:
+        if not override_reason or not str(override_reason).strip():
+            raise ValidationError("governed Super Administrator override reason is required")
+        audit(conn, actor, "quotation.governed_override", "quotation", q["id"],
+              new={"action": action}, reason=str(override_reason).strip())
+
+
+def return_quotation(conn, actor, qid, reason, override_reason=None):
+    require(actor, "quotation.return")
     q = _quote(conn, qid, actor)
     if q["status"] != "pending_approval":
         raise ConflictError("quotation is not pending approval")
-    if CONFIG["separation_of_duties"] and q["created_by"] == actor["id"]:
-        raise ForbiddenError("separation of duties: you may not approve your own quotation")
-    conn.execute("UPDATE quotations SET status='approved', approved_by=?, approved_at=? WHERE id=?",
-                 (actor["id"], now(), qid))
-    audit(conn, actor, "quotation.approve", "quotation", qid, new={"status": "approved"})
+    if not reason or not str(reason).strip():
+        raise ValidationError("return reason is required")
+    if CONFIG["separation_of_duties"]:
+        _governed_review_override(conn, actor, q, "return", override_reason)
+    conn.execute("UPDATE quotations SET status='returned' WHERE id=?", (qid,))
+    conn.execute("UPDATE bookings SET stage='REVISION_REQUESTED' WHERE id=?", (q["booking_id"],))
+    audit(conn, actor, "quotation.return", "quotation", qid,
+          new={"status": "returned"}, reason=str(reason).strip())
+    conn.commit()
+
+
+def reject_quotation(conn, actor, qid, reason, override_reason=None):
+    require(actor, "quotation.reject")
+    q = _quote(conn, qid, actor)
+    if q["status"] != "pending_approval":
+        raise ConflictError("quotation is not pending approval")
+    if not reason or not str(reason).strip():
+        raise ValidationError("rejection reason is required")
+    if CONFIG["separation_of_duties"]:
+        _governed_review_override(conn, actor, q, "reject", override_reason)
+    conn.execute("UPDATE quotations SET status='rejected' WHERE id=?", (qid,))
+    conn.execute("UPDATE bookings SET stage='REVISION_REQUESTED' WHERE id=?", (q["booking_id"],))
+    audit(conn, actor, "quotation.reject", "quotation", qid,
+          new={"status": "rejected"}, reason=str(reason).strip())
     conn.commit()
 
 

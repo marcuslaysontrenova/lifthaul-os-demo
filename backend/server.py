@@ -117,12 +117,13 @@ def _routes():
     def rate_catalog(actor, body, p):
         """Equipment catalog for the quotation builder. internal_cost is redacted unless the
         actor may view carrier cost — the master selling rate is always visible to quoters."""
-        import rates
+        import rates, tenant
         core._require_either(actor, "quotation.read", "quotation.view")
         show_cost = core.can(actor, "quotation.carrier_cost.view")
+        frag, params = tenant.predicate(actor)             # own-tenant + global rate cards only
         out = []
         for r in _conn.execute("SELECT * FROM rate_cards WHERE status='ACTIVE' AND superseded=0"
-                               " ORDER BY equipment_code").fetchall():
+                               + frag + " ORDER BY equipment_code", params).fetchall():
             d = {"equipment_code": r["equipment_code"], "equipment_name": r["equipment_name"],
                  "service_type": r["service_type"], "billing_unit": r["billing_unit"],
                  "standard_rate": r["standard_rate"], "min_rate": r["min_rate"],
@@ -138,7 +139,8 @@ def _routes():
         import rates, policy
         core._require_either(actor, "quotation.read", "quotation.view")
         code = body.get("equipment_code")
-        card = rates.resolve_rate(_conn, code, customer_id=body.get("customer_id")) if code else None
+        card = rates.resolve_rate(_conn, code, customer_id=body.get("customer_id"),
+                                  tenant_id=actor.get("tenant_id")) if code else None
         standard_rate = body.get("standard_rate")
         if standard_rate is None:
             standard_rate = card["standard_rate"] if card else body.get("quoted_rate", 0)

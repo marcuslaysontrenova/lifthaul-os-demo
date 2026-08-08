@@ -580,9 +580,10 @@ def _price_lines(conn, actor, rows, ctx, customer_id=None):
                                 rates.DEFAULT_REASON_THRESHOLD_PCT)
     disc_thr, _ = policy._num(conn, "quotation.approval.discount_threshold_pct", ctx, 10)
     processed, est_cost_sum, any_internal, max_var, overrides = [], 0.0, False, 0.0, []
+    actor_tenant = (actor or {}).get("tenant_id")
     for l in rows:
         code = l.get("equipment_code")
-        card = rates.resolve_rate(conn, code, customer_id=customer_id) if code else None
+        card = rates.resolve_rate(conn, code, customer_id=customer_id, tenant_id=actor_tenant) if code else None
         standard_rate = l.get("standard_rate")
         if standard_rate is None:
             standard_rate = card["standard_rate"] if card else l.get("rate", 0)

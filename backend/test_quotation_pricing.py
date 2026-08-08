@@ -280,5 +280,42 @@ class RestartPersistenceTests(unittest.TestCase):
                 pass   # Windows may hold the handle briefly; temp file is harmless
 
 
+class RateCardTenantIsolationTests(unittest.TestCase):
+    """A tenant must never resolve or list another tenant's custom rate card (Item 1 gap
+    introduced by the pricing subsystem — closed here)."""
+    def setUp(self):
+        self.c = db.connect(":memory:")
+        self.sup = {"id": 0, "role": "super_admin", "perms": {"*"}, "tenant_id": None}
+        self.tA = admin_platform.create_tenant(self.c, "RCA", "Rate Tenant A")
+        self.tB = admin_platform.create_tenant(self.c, "RCB", "Rate Tenant B")
+        self.finA = self._finance("fa@rc", self.tA)
+        self.finB = self._finance("fb@rc", self.tB)
+
+    def _finance(self, email, tid):
+        import tenant
+        uid = core.create_user(self.c, email, "demo1234", "finance_admin", "Fin")
+        tenant.bind_user_tenant(self.c, None, uid, tid)
+        a = core.actor_for(self.c, core.login(self.c, email, "demo1234"))
+        return admin_platform.apply_rbac(self.c, a)
+
+    def test_tenant_cannot_resolve_or_list_other_tenants_rate_card(self):
+        # same equipment code, different tenant-specific standard rates
+        rates.create_rate_card(self.c, self.finA, "SHARED-CODE", "Crane A", 90000, internal_cost=60000)
+        rates.create_rate_card(self.c, self.finB, "SHARED-CODE", "Crane B", 50000, internal_cost=30000)
+        cardA = rates.resolve_rate(self.c, "SHARED-CODE", tenant_id=self.tA)
+        cardB = rates.resolve_rate(self.c, "SHARED-CODE", tenant_id=self.tB)
+        self.assertEqual(cardA["standard_rate"], 90000)          # A resolves ONLY A's card
+        self.assertEqual(cardB["standard_rate"], 50000)          # B resolves ONLY B's card
+        # list is tenant-scoped: A never sees B's SHARED-CODE card
+        codesA = [(r["equipment_code"], r["standard_rate"]) for r in rates.list_rate_cards(self.c, self.finA)]
+        self.assertIn(("SHARED-CODE", 90000), codesA)
+        self.assertNotIn(("SHARED-CODE", 50000), codesA)
+
+    def test_global_seed_cards_visible_to_all_tenants(self):
+        # NULL-tenant seeded catalog remains shared (single-tenant/legacy compatible)
+        self.assertIsNotNone(rates.resolve_rate(self.c, "CRANE-100T", tenant_id=self.tA))
+        self.assertIsNotNone(rates.resolve_rate(self.c, "CRANE-100T", tenant_id=self.tB))
+
+
 if __name__ == "__main__":
     unittest.main()

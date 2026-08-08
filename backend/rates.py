@@ -32,20 +32,25 @@ DEFAULT_APPROVAL_VARIANCE_PCT = 15.0   # |variance| at/above this REQUIRES addit
 # --------------------------------------------------------------------------- #
 # Master rate catalog (effective-dated, versioned)
 # --------------------------------------------------------------------------- #
-def resolve_rate(conn, equipment_code, on_date=None, customer_id=None, branch=None):
+def resolve_rate(conn, equipment_code, on_date=None, customer_id=None, branch=None, tenant_id=None):
     """Resolve the governing rate card for an equipment code.
 
     Preference order (most specific wins): customer-specific override → branch → general.
     Within a tier the latest ACTIVE, non-superseded version whose effective window covers
     ``on_date`` is chosen. Returns a dict or None.
+
+    Tenant isolation: when ``tenant_id`` is supplied, only that tenant's cards and global
+    (NULL-tenant) cards are eligible — a tenant can never resolve another tenant's rate.
     """
     on_date = on_date or core.now()
-    rows = conn.execute(
-        "SELECT * FROM rate_cards WHERE equipment_code=? AND status='ACTIVE' AND superseded=0"
-        " AND (effective_from IS NULL OR effective_from<=?)"
-        " AND (effective_to IS NULL OR effective_to>=?)",
-        (equipment_code, on_date, on_date),
-    ).fetchall()
+    sql = ("SELECT * FROM rate_cards WHERE equipment_code=? AND status='ACTIVE' AND superseded=0"
+           " AND (effective_from IS NULL OR effective_from<=?)"
+           " AND (effective_to IS NULL OR effective_to>=?)")
+    args = [equipment_code, on_date, on_date]
+    if tenant_id is not None:
+        sql += " AND (tenant_id=? OR tenant_id IS NULL)"
+        args.append(tenant_id)
+    rows = conn.execute(sql, tuple(args)).fetchall()
 
     def tier(r):
         if customer_id is not None and r["customer_id"] == customer_id:
@@ -142,11 +147,18 @@ def archive_rate_card(conn, actor, rate_card_id):
 
 def list_rate_cards(conn, actor, include_history=False):
     core.require(actor, "crm.admin.pricing.view")
+    import tenant
+    where = [] if include_history else ["superseded=0", "status='ACTIVE'"]
+    frag, params = tenant.predicate(actor)                 # tenant scope (own + global NULL rows)
     sql = "SELECT * FROM rate_cards"
-    if not include_history:
-        sql += " WHERE superseded=0 AND status='ACTIVE'"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+        if frag:
+            sql += frag
+    elif frag:
+        sql += " WHERE 1=1" + frag
     sql += " ORDER BY equipment_code, version DESC"
-    return [dict(r) for r in conn.execute(sql).fetchall()]
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
 # --------------------------------------------------------------------------- #

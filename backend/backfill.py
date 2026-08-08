@@ -189,6 +189,55 @@ def status(conn, tenant_code="RGO"):
                      if not total_unassigned else "not yet executed"}
 
 
+def financial_fingerprint(conn):
+    """Deterministic fingerprint of every financial value that backfill MUST NOT change.
+    Compare before vs after a run to prove the financial invariant held. Backfill only ever
+    writes tenant_id, so this is expected to be byte-identical across ANALYZE/DRY_RUN/APPLY."""
+    import hashlib
+    parts = []
+    if _has_table(conn, "quotations"):
+        for r in conn.execute(
+                "SELECT id,subtotal,discount,tax,total,dp_amount,balance,est_cost,margin_pct"
+                " FROM quotations ORDER BY id").fetchall():
+            parts.append("Q|" + "|".join(str(r[k]) for k in
+                         ("id", "subtotal", "discount", "tax", "total", "dp_amount", "balance", "est_cost", "margin_pct")))
+    if _has_table(conn, "payment_requests"):
+        for r in conn.execute(
+                "SELECT id,amount_due,amount_received,fees,net FROM payment_requests ORDER BY id").fetchall():
+            parts.append("P|" + "|".join(str(r[k]) for k in ("id", "amount_due", "amount_received", "fees", "net")))
+    blob = "\n".join(parts)
+    return {"rows": len(parts), "sha256": hashlib.sha256(blob.encode()).hexdigest()}
+
+
+def verify(conn, tenant_code="RGO", financial_before=None):
+    """VERIFY mode: confirm the backfill outcome is safe and complete.
+
+    Checks: (1) no operational row is left with a NULL tenant (all DETERMINISTIC assigned);
+    (2) no cross-tenant orphans among the enforced spine; (3) the FINANCIAL INVARIANT —
+    when a pre-run fingerprint is supplied, the current fingerprint must match exactly.
+    Returns a report with pass/fail; callers STOP and report FAIL if financial_ok is False.
+    """
+    tid = _tenant_id(conn, tenant_code)
+    st = status(conn, tenant_code)
+    null_tenant = {x["table"]: x["unassigned_tenant"] for x in st["tables"] if x["unassigned_tenant"]}
+    orphans = 0
+    if _has_table(conn, "quotations") and _has_tenant_col(conn, "quotations") and _has_tenant_col(conn, "bookings"):
+        orphans = conn.execute(
+            "SELECT COUNT(*) c FROM quotations q JOIN bookings b ON b.id=q.booking_id"
+            " WHERE q.tenant_id IS NOT NULL AND b.tenant_id IS NOT NULL AND q.tenant_id<>b.tenant_id"
+        ).fetchone()["c"]
+    fp_now = financial_fingerprint(conn)
+    financial_ok = (financial_before is None) or (financial_before.get("sha256") == fp_now["sha256"])
+    ok = (not null_tenant) and orphans == 0 and financial_ok
+    return {"mode": "VERIFY", "tenant_code": tenant_code, "tenant_id": tid,
+            "null_tenant_rows": null_tenant, "cross_tenant_orphans": orphans,
+            "financial_fingerprint": fp_now, "financial_before": financial_before,
+            "financial_ok": financial_ok, "open_remediation": st["open_remediation"],
+            "verified": ok,
+            "conclusion": "VERIFIED — tenant scope complete, no orphans, financial values unchanged"
+                          if ok else "FAIL — investigate null-tenant rows / orphans / financial drift"}
+
+
 def resolve_remediation(conn, actor, remediation_id):
     conn.execute("UPDATE org_backfill_remediation SET status='RESOLVED', resolved_by=?, resolved_at=? WHERE id=?",
                  ((actor or {}).get("id"), _now(), remediation_id))

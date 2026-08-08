@@ -533,6 +533,10 @@ def _admin_routes():
         R(a, "tenant.manage"); import backfill
         return backfill.execute(_conn, a)
 
+    def backfill_verify(a, b, p):
+        R(a, "audit.view"); import backfill
+        return backfill.verify(_conn, financial_before=b.get("financial_before"))
+
     def backfill_remediation(a, b, p):
         R(a, "audit.view"); import backfill
         return {"remediation": _rows(_conn.execute(
@@ -669,6 +673,7 @@ def _admin_routes():
         ("GET", "/admin/governance/backfill-status"): backfill_status,
         ("GET", "/admin/governance/backfill-analyze"): backfill_analyze,
         ("POST", "/admin/governance/backfill-dry-run"): backfill_dry_run,
+        ("POST", "/admin/governance/backfill-verify"): backfill_verify,
         ("POST", "/admin/governance/backfill-execute"): backfill_execute,
         ("GET", "/admin/governance/backfill-remediation"): backfill_remediation,
         ("GET", "/admin/governance/data-integrity"): data_integrity,

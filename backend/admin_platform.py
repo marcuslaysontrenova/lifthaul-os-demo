@@ -498,6 +498,11 @@ DEFAULT_CONFIG = {
     "numbering.quotation.prefix": "QN",
     "numbering.job.prefix": "JO",
     "numbering.invoice.prefix": "INV",
+    # Protected-payment LIVE-FUNDS hard boundary (W9). Live custody stays OFF until BOTH external
+    # prerequisites are documented as approved. Enforced centrally in marketplace_payments.
+    "payments.live_protected_funds_enabled": "false",
+    "payments.legal_operating_model_approved": "false",
+    "payments.licensed_provider_active": "false",
 }
 
 

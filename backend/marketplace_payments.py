@@ -31,6 +31,7 @@ import json
 
 import core
 import tenant
+import admin_platform
 
 # --------------------------------------------------------------------------- #
 PR_STATUSES = ("DRAFT", "PAYMENT_REQUIRED", "FUNDING_INSTRUCTIONS_READY", "PENDING_FUNDING",
@@ -324,8 +325,33 @@ def _idem_done(conn, actor, key, result_ref):
 # --------------------------------------------------------------------------- #
 # 3. Payment requirement (amounts come from the immutable assignment snapshot)
 # --------------------------------------------------------------------------- #
+def live_funds_enabled(conn):
+    """The single authority on whether LIVE protected funds may move. TRUE only when the flag AND
+    both external prerequisites (approved PH legal operating model + active licensed provider) are
+    all set. Defaults to FALSE — technology enforces the boundary; it does not decide the law."""
+    def g(key):
+        try:
+            v, _ = admin_platform.resolve_config(conn, key)
+            return str(v).lower() == "true"
+        except Exception:
+            return False
+    return (g("payments.live_protected_funds_enabled")
+            and g("payments.legal_operating_model_approved")
+            and g("payments.licensed_provider_active"))
+
+
+def _assert_live_allowed(conn, provider_name):
+    """A non-MOCK (live) rail may only be engaged when live_funds_enabled() is TRUE. Otherwise the
+    request is refused before any provider call — no live custody by accident or by config drift."""
+    if (provider_name or "MOCK").upper() != "MOCK" and not live_funds_enabled(conn):
+        raise core.ForbiddenError(
+            "LIVE protected-funds are disabled (LIVE_PROTECTED_FUNDS_ENABLED=false). Requires an "
+            "approved PH legal operating model AND an active licensed provider. No funds move.")
+
+
 def create_payment_requirement(conn, actor, assignment_id, provider_name="MOCK", idem_key=None):
     core.require(actor, "marketplace.payment.create")
+    _assert_live_allowed(conn, provider_name)              # W9 hard boundary
     asg = _guarded(conn, actor, "mkt_assignments", assignment_id)
     if asg["status"] not in ("PENDING_CONFIRMATION", "CONFIRMED", "PAYMENT_REQUIRED"):
         raise ValueError("assignment must be confirmed/payment-required before a payment requirement")
@@ -908,8 +934,10 @@ def classify_existing(conn, actor=None):
 
 
 def live_status(conn=None, actor=None):
+    enabled = live_funds_enabled(conn) if conn is not None else False
     return {"mock": "VERIFIED (deterministic)",
-            "live_protected_payment": "BLOCKED",
+            "LIVE_PROTECTED_FUNDS_ENABLED": enabled,
+            "live_protected_payment": "ENABLED" if enabled else "BLOCKED",
             "reason": "requires owner-selected licensed PH payment/safeguarding partner + credentials + real validation",
             "owner_actions": ["select + contract a licensed protected-payment/safeguarding partner (B3)",
                               "confirm the Philippine legal operating model (B4)",

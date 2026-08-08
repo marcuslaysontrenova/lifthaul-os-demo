@@ -29,17 +29,28 @@ production infrastructure) are outstanding.
 | Prod config fail-closed | **PASS** | `server.validate_config()` exits(2) on missing APP_SECRET/DATABASE_URL/CORS_ORIGINS |
 | LIVE_PROTECTED_FUNDS_ENABLED | **OFF (enforced)** | central `live_funds_enabled()` requires flag + legal + licensed provider |
 
-## Environment-blocked (owner infrastructure — prepared, not executed here)
+## Browser E2E — EXECUTED (application level, live backend)
 
-This build environment has **no Docker, no PostgreSQL, no browser host**. The following are packaged
-and ready (`Dockerfile`, `docker-compose.yml`, `requirements.txt`, `.env.example`, `GO_LIVE_RUNBOOK.md`)
-but must run on the owner's infrastructure:
+`BROWSER_E2E_EVIDENCE.md`: the SPA was served over real HTTP and driven in an automated browser
+against a live backend. Confirmed live: JS + CORS + cross-origin fetch; admin login (441 perms);
+**Finance Administrator** persona (Bookings hidden, Finance/Quotations/Invoices visible);
+**Admin → Trust & Compliance** screens render live (KYB, payout approvals, disputes, claims,
+integrity); pricing preview server-authoritative (tampered value ignored, margin 32.76%); rate
+catalog; marketplace trust gate denies an unverified carrier. **Browser E2E = PASS.**
+
+## Still requires a PostgreSQL server (owner infrastructure)
+
+This host has **psycopg2 installed** and the code is PostgreSQL-portable (`test_pg_portability.py`
+green), but **no PostgreSQL server, no Docker**, and a system-wide install needs admin/UAC (not
+performed — a durable change to the owner's machine). Packaged and ready (`Dockerfile`,
+`docker-compose.yml`, `requirements.txt`, `.env.example`, `GO_LIVE_RUNBOOK.md`):
 
 - **PostgreSQL live E2E** (W4) — `docker compose up --build`, migrate, /health+/ready, run the spine.
-- **Browser E2E** (W5) — persona walkthroughs against the running PG-backed app.
-- **PostgreSQL backup/restore** (W6) — same cycle against the real database.
+- **PostgreSQL-backed browser E2E** (W5) — the same (now-passing) browser flows with `DATABASE_URL`
+  pointed at PostgreSQL.
+- **PostgreSQL backup/restore** (W6) — the SQLite cycle is proven; repeat against the real database.
 
-Code-level PostgreSQL portability is guarded and green (`test_pg_portability.py`).
+One command closes all three on any host with PostgreSQL: point `DATABASE_URL` at it and re-run.
 
 ## Owner-controlled remaining actions (genuinely external)
 

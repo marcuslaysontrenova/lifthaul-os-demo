@@ -111,6 +111,8 @@ def _seed_platform(conn):
     marketplace_trips.init(conn); marketplace_trips.seed(conn)           # Marketplace Inc.5: trip execution/GPS/geofence/proof-of-delivery
     import marketplace_trust
     marketplace_trust.init(conn); marketplace_trust.seed(conn)           # Trust: KYB verification/fraud/trust-score/eligibility gate
+    import marketplace_trust_closure
+    marketplace_trust_closure.init(conn); marketplace_trust_closure.seed(conn)  # Trust closure: driver/vehicle/payout/dispute/claims + release gate
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

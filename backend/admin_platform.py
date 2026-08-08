@@ -308,6 +308,10 @@ MARKETPLACE_PERMISSIONS = [
     # Trust / KYB / fraud / trust-score layer:
     "marketplace.kyb.view", "marketplace.kyb.manage",
     "marketplace.fraud.view", "marketplace.fraud.manage", "marketplace.trust.view",
+    # Trust closure: driver qualification / vehicle legality / payout security / disputes / claims:
+    "marketplace.driver.qualify", "marketplace.vehicle.legality",
+    "marketplace.payout.manage", "marketplace.payout.approve",
+    "marketplace.dispute.manage", "marketplace.claim.manage", "marketplace.claim.view",
     # Increment 3: booking / pricing / matching / broadcast / offers / bidding / assignment
     "marketplace.booking.view", "marketplace.booking.create", "marketplace.booking.manage",
     "marketplace.booking.validate", "marketplace.booking.cancel",

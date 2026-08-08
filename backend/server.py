@@ -1712,7 +1712,88 @@ def _marketplace_trust_routes():
     }
 
 
+def _marketplace_closure_routes():
+    import marketplace_trust_closure as tc
+
+    def qual_record(a, b, p): return {"id": tc.record_qualification(_conn, a, int(b["driver_id"]),
+                                      b["equipment_type"], b["qualification_type"], b.get("certificate_number"),
+                                      b.get("issuer"), b.get("issued_at"), b.get("expires_at"), b.get("evidence"))}
+    def qual_verify(a, b, p): return {"decision": tc.verify_qualification(_conn, a, int(p["id"]),
+                                      b["decision"], b.get("source"), b.get("evidence"))}
+    def driver_gate(a, b, p): core.require(a, "marketplace.driver.qualify"); return tc.driver_assignment_gate(
+                                      _conn, int(b["driver_id"]), b.get("vehicle_id"), b.get("equipment_type"))
+    def veh_record(a, b, p):  return {"id": tc.record_vehicle_legality(_conn, a, int(b["vehicle_id"]),
+                                      **{k: v for k, v in b.items() if k != "vehicle_id"})}
+    def veh_verify(a, b, p):  return {"decision": tc.verify_vehicle_legality(_conn, a, int(p["id"]),
+                                      b["decision"], b.get("source"))}
+    def veh_gate(a, b, p):    core.require(a, "marketplace.vehicle.legality"); return tc.vehicle_legality_gate(
+                                      _conn, int(b["vehicle_id"]), b.get("required_capacity_kg"))
+    def payout_submit(a, b, p): return {"id": tc.submit_payout_account(_conn, a, int(b["carrier_id"]),
+                                      b.get("beneficiary_name"), b.get("entity_name"), b.get("provider_reference"),
+                                      b.get("account_number"), b.get("cooling_hours"))}
+    def payout_approve(a, b, p): return {"status": tc.approve_payout_account(_conn, a, int(p["id"]),
+                                      b.get("beneficiary_verified", True), b.get("mfa_ok", False))}
+    def payout_check(a, b, p):  core.require(a, "marketplace.payout.manage"); return tc.payout_allowed(
+                                      _conn, int(b["payout_account_id"]), b.get("amount", 0))
+    def disp_open(a, b, p):   return {"id": tc.open_dispute(_conn, a, int(b["booking_id"]), int(b["carrier_id"]),
+                                      b.get("amount_disputed"), b.get("reason"), b.get("trip_id"),
+                                      b.get("payment_requirement_id"), b.get("client_ref"))}
+    def disp_advance(a, b, p): return {"status": tc.advance_dispute(_conn, a, int(p["id"]), b["to_status"],
+                                      b.get("evidence"), b.get("reviewer"))}
+    def disp_resolve(a, b, p): return {"outcome": tc.resolve_dispute(_conn, a, int(p["id"]), b["outcome"],
+                                      b.get("decision_reason"), b.get("financial_outcome"))}
+    def claim_open(a, b, p):  return {"id": tc.open_claim(_conn, a, b["claim_type"], b.get("claimant"),
+                                      b.get("trip_id"), b.get("carrier_id"), b.get("driver_id"), b.get("vehicle_id"),
+                                      b.get("incident_ref"), b.get("claimed_amount"), b.get("insurer"),
+                                      b.get("policy_reference"), b.get("evidence"))}
+    def claim_advance(a, b, p): return {"status": tc.advance_claim(_conn, a, int(p["id"]), b["to_status"],
+                                      b.get("approved_amount"), b.get("settlement"), b.get("reserve"))}
+    def claim_list(a, b, p):  core.require(a, "marketplace.claim.view"); return {"claims": _rows(_conn.execute(
+                                      "SELECT * FROM mkt_claims" + tenant.predicate(a)[0] + " ORDER BY id DESC",
+                                      tenant.predicate(a)[1]).fetchall())}
+    def disp_list(a, b, p):   core.require(a, "marketplace.dispute.manage"); return {"disputes": _rows(_conn.execute(
+                                      "SELECT * FROM mkt_trust_disputes" + tenant.predicate(a)[0] + " ORDER BY id DESC",
+                                      tenant.predicate(a)[1]).fetchall())}
+    def payout_list(a, b, p): core.require(a, "marketplace.payout.approve"); return {"accounts": _rows(_conn.execute(
+                                      "SELECT id,carrier_id,beneficiary_name,entity_name,account_masked,status,"
+                                      "verification_status,cooling_until FROM mkt_payout_accounts" +
+                                      tenant.predicate(a)[0] + " ORDER BY id DESC", tenant.predicate(a)[1]).fetchall())}
+    def risk_limit(a, b, p):  core.require(a, "marketplace.trust.view"); return tc.carrier_risk_limit(_conn, int(p["id"]))
+    def rel_gate(a, b, p):    core.require(a, "marketplace.trust.view"); return tc.release_gate(_conn,
+                                      int(b["booking_id"]), int(b["carrier_id"]),
+                                      funding_confirmed=b.get("funding_confirmed", False),
+                                      funds_protected=b.get("funds_protected", False),
+                                      milestone_verified=b.get("milestone_verified", False),
+                                      pod_ok=b.get("pod_ok", False), payout_account_id=b.get("payout_account_id"),
+                                      job_value=b.get("job_value"), approvals_complete=b.get("approvals_complete", True))
+    def integrity2(a, b, p):  core.require(a, "marketplace.payout.approve"); return tc.run_integrity(_conn)
+
+    return {
+        ("POST", "/admin/marketplace/qualifications"): qual_record,
+        ("POST", "/admin/marketplace/qualifications/:id/verify"): qual_verify,
+        ("POST", "/admin/marketplace/driver-gate"): driver_gate,
+        ("POST", "/admin/marketplace/vehicle-legality"): veh_record,
+        ("POST", "/admin/marketplace/vehicle-legality/:id/verify"): veh_verify,
+        ("POST", "/admin/marketplace/vehicle-gate"): veh_gate,
+        ("POST", "/admin/marketplace/payout-accounts"): payout_submit,
+        ("POST", "/admin/marketplace/payout-accounts/:id/approve"): payout_approve,
+        ("POST", "/admin/marketplace/payout-accounts/search"): payout_list,
+        ("POST", "/admin/marketplace/payout-check"): payout_check,
+        ("POST", "/admin/marketplace/trust-disputes"): disp_open,
+        ("POST", "/admin/marketplace/trust-disputes/:id/advance"): disp_advance,
+        ("POST", "/admin/marketplace/trust-disputes/:id/resolve"): disp_resolve,
+        ("POST", "/admin/marketplace/trust-disputes/search"): disp_list,
+        ("POST", "/admin/marketplace/claims"): claim_open,
+        ("POST", "/admin/marketplace/claims/:id/advance"): claim_advance,
+        ("POST", "/admin/marketplace/claims/search"): claim_list,
+        ("GET", "/admin/marketplace/carrier-risk-limit/:id"): risk_limit,
+        ("POST", "/admin/marketplace/release-gate"): rel_gate,
+        ("GET", "/admin/marketplace/payout-integrity"): integrity2,
+    }
+
+
 ROUTES.update(_marketplace_trust_routes())
+ROUTES.update(_marketplace_closure_routes())
 
 
 def _match(method, path):

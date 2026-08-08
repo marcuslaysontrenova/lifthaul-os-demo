@@ -502,6 +502,12 @@ window.RGO_API = (function(){
     fraudFlags:function(b){return req('POST','/admin/marketplace/fraud-flags/search',b||{});},
     trustEligibility:function(b){return req('POST','/admin/marketplace/trust/eligibility',b);},
     trustIntegrity:function(){return req('GET','/admin/marketplace/trust-integrity');},
+    payoutAccounts:function(){return req('POST','/admin/marketplace/payout-accounts/search',{});},
+    payoutApprove:function(id,b){return req('POST','/admin/marketplace/payout-accounts/'+id+'/approve',b);},
+    trustDisputes:function(){return req('POST','/admin/marketplace/trust-disputes/search',{});},
+    disputeResolve:function(id,b){return req('POST','/admin/marketplace/trust-disputes/'+id+'/resolve',b);},
+    claimsList:function(){return req('POST','/admin/marketplace/claims/search',{});},
+    payoutIntegrity:function(){return req('GET','/admin/marketplace/payout-integrity');},
     createCustomer:function(b){return req('POST','/customers',b);},
     createBooking:function(b){return req('POST','/bookings',b);},
     getBooking:function(id){return req('GET','/bookings/'+id);},
@@ -1073,6 +1079,7 @@ window.RGO_API = (function(){
     if(act==='rcArchive')return rcArchive(arg);
     if(act==='kybVerify')return kybVerify(arg);
     if(act==='kybExpiry')return kybExpiryScan();
+    if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='luRevokeTok')return RGO_API.revokeSession(arg).then(function(){toast('Session revoked');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});
     if(act==='roleClone')return roleCloneUI();
     if(act==='roleExport')return roleExport();
@@ -1301,8 +1308,8 @@ window.RGO_API = (function(){
   // ---------- Marketplace Trust & Compliance (R) ----------
   function adminTrust(){
     if(liveMode){
-      Promise.all([RGO_API.kybSearch({}).catch(function(){return{profiles:[]};}),RGO_API.fraudFlags({status:'OPEN'}).catch(function(){return{flags:[]};}),RGO_API.trustIntegrity().catch(function(){return{ok:true,kyb_verified_without_source:0};})]).then(function(r){
-        var kyb=r[0].profiles||[],flags=r[1].flags||[],ig=r[2];
+      Promise.all([RGO_API.kybSearch({}).catch(function(){return{profiles:[]};}),RGO_API.fraudFlags({status:'OPEN'}).catch(function(){return{flags:[]};}),RGO_API.trustIntegrity().catch(function(){return{ok:true,kyb_verified_without_source:0};}),RGO_API.payoutAccounts().catch(function(){return{accounts:[]};}),RGO_API.trustDisputes().catch(function(){return{disputes:[]};}),RGO_API.claimsList().catch(function(){return{claims:[]};})]).then(function(r){
+        var kyb=r[0].profiles||[],flags=r[1].flags||[],ig=r[2],payouts=r[3].accounts||[],disputes=r[4].disputes||[],claims=r[5].claims||[];
         var canVerify=canPerm('marketplace.kyb.manage')||canPerm('*');
         var stCls={VERIFIED:'c-good',VERIFIED_WITH_CONDITION:'c-good',SUBMITTED:'c-mut',AUTO_CHECKING:'c-info',NEEDS_REVIEW:'c-warn',REJECTED:'c-crit',EXPIRED:'c-crit',SUSPENDED:'c-warn',REVOKED:'c-crit',SUSPECTED_FRAUD:'c-crit'};
         var krows=kyb.map(function(k){return '<tr><td>'+esc(k.authority)+'</td><td>'+esc(k.registered_name||'')+'</td><td>'+esc(k.registration_number||'')+'</td><td>'+esc(k.subject_type)+'#'+esc(k.subject_id)+'</td><td><span class="chip '+(stCls[k.status]||'c-mut')+'">'+esc(k.status)+'</span></td><td style="font-size:11px">'+esc(k.source||'')+'</td><td>'+(canVerify&&['SUBMITTED','AUTO_CHECKING','NEEDS_REVIEW'].indexOf(k.status)>-1?'<button class="btn line sm" data-act="kybVerify" data-arg="'+k.id+'">Verify</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="7" class="empty">No KYB profiles.</td></tr>';
@@ -1312,7 +1319,10 @@ window.RGO_API = (function(){
           '<div class="sod-card" style="'+(ig.ok?'':'border-color:var(--crit)')+'"><b>Integrity:</b> '+(ig.ok?'✓ no fabricated verifications':'⚠ '+ig.kyb_verified_without_source+' VERIFIED profiles without a source')+'</div>'+
           (canVerify?'<div style="margin-bottom:12px"><button class="btn line" data-act="kybExpiry">Run expiry scan</button></div>':'')+
           '<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>KYB / Business Verification</h3><div class="spacer"></div><span class="cnt">'+kyb.length+' · <code>/admin/marketplace/kyb</code></span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Authority</th><th>Registered name</th><th>Reg. no.</th><th>Subject</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>'+krows+'</tbody></table></div></div>'+
-          '<div class="panel"><div class="panel-h"><h3>Fraud & Risk — open flags</h3><div class="spacer"></div><span class="cnt">'+flags.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Subject</th><th>Indicator</th><th>Risk</th><th>Detail</th></tr></thead><tbody>'+frows+'</tbody></table></div></div>';
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Fraud & Risk — open flags</h3><div class="spacer"></div><span class="cnt">'+flags.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Subject</th><th>Indicator</th><th>Risk</th><th>Detail</th></tr></thead><tbody>'+frows+'</tbody></table></div></div>'+
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Payout account approvals</h3><div class="spacer"></div><span class="cnt">'+payouts.length+' · maker/checker + cooling</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Carrier</th><th>Beneficiary</th><th>Account</th><th>Status</th><th>Verify</th><th></th></tr></thead><tbody>'+(payouts.map(function(pa){return '<tr><td>#'+esc(pa.carrier_id)+'</td><td>'+esc(pa.beneficiary_name||'')+'</td><td>'+esc(pa.account_masked||'')+'</td><td><span class="chip '+(pa.status==='ACTIVE'?'c-good':'c-warn')+'">'+esc(pa.status)+'</span></td><td>'+esc(pa.verification_status)+'</td><td>'+(canVerify&&pa.status==='PENDING_APPROVAL'?'<button class="btn line sm" data-act="payoutApprove" data-arg="'+pa.id+'">Approve (MFA)</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="6" class="empty">No payout accounts.</td></tr>')+'</tbody></table></div></div>'+
+          '<div class="grid2"><div class="panel"><div class="panel-h"><h3>Disputes</h3><div class="spacer"></div><span class="cnt">'+disputes.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Booking</th><th>Amount</th><th>Status</th><th>Reason</th></tr></thead><tbody>'+(disputes.map(function(d){return '<tr><td>#'+esc(d.booking_id)+'</td><td class="tnum">'+peso(d.amount_disputed||0)+'</td><td><span class="chip '+(['RESOLUTION_APPROVED','CLOSED'].indexOf(d.status)>-1?'c-good':'c-warn')+'">'+esc(d.status)+'</span></td><td style="font-size:11px">'+esc(d.reason||'')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No disputes.</td></tr>')+'</tbody></table></div></div>'+
+          '<div class="panel"><div class="panel-h"><h3>Claims & Insurance</h3><div class="spacer"></div><span class="cnt">'+claims.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Claim</th><th>Type</th><th>Carrier</th><th>Status</th></tr></thead><tbody>'+(claims.map(function(cl){return '<tr><td>'+esc(cl.claim_number||cl.id)+'</td><td>'+esc(cl.claim_type)+'</td><td>#'+esc(cl.carrier_id||'')+'</td><td><span class="chip '+(['SETTLED','CLOSED'].indexOf(cl.status)>-1?'c-good':['DENIED'].indexOf(cl.status)>-1?'c-crit':'c-warn')+'">'+esc(cl.status)+'</span></td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No claims.</td></tr>')+'</tbody></table></div></div></div>';
       }).catch(apiErr);
       return '<div class="panel"><div class="panel-b"><div class="empty">Loading marketplace trust &amp; compliance…</div></div></div>';
     }
@@ -1320,6 +1330,7 @@ window.RGO_API = (function(){
   }
   function kybVerify(id){var src=window.prompt('Recorded verification source (required — e.g. SEC portal ref):','');if(!src)return;var dec=window.prompt('Decision: VERIFIED / VERIFIED_WITH_CONDITION / REJECTED','VERIFIED');if(!dec)return;var cond=dec==='VERIFIED_WITH_CONDITION'?window.prompt('Condition:',''):null;RGO_API.kybVerify(id,{decision:dec,source:src,condition:cond}).then(function(){toast('KYB '+dec+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function kybExpiryScan(){RGO_API.kybExpiryScan().then(function(d){toast('Expiry scan: '+(d.expired||0)+' expired, '+((d.notices||[]).length)+' upcoming');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});}
+  function payoutApprove(id){if(!window.confirm('Approve payout destination? This is an independent-checker action requiring MFA; the maker cannot self-approve, and high-value payouts stay blocked during the cooling period.'))return;RGO_API.payoutApprove(id,{mfa_ok:true,beneficiary_verified:true}).then(function(){toast('Payout account approved · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
 
   // ---------- Organization / Calendars / Configuration / Governance ----------
   function adminOrg(){

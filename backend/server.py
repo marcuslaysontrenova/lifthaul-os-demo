@@ -1767,6 +1767,29 @@ def _marketplace_closure_routes():
                                       pod_ok=b.get("pod_ok", False), payout_account_id=b.get("payout_account_id"),
                                       job_value=b.get("job_value"), approvals_complete=b.get("approvals_complete", True))
     def integrity2(a, b, p):  core.require(a, "marketplace.payout.approve"); return tc.run_integrity(_conn)
+    def settlement_integrity(a, b, p):
+        core.require(a, "marketplace.payment.view") if core.can(a, "marketplace.payment.view") else core.require(a, "marketplace.trust.view")
+        rows = _rows(_conn.execute(
+            "SELECT id,carrier_id,gross_value,carrier_amount,platform_fee,payment_fee,tax,"
+            "protected_amount_required,funded_amount,released_amount,refunded_amount,status"
+            " FROM mkt_payment_requirements" + tenant.predicate(a)[0] + " ORDER BY id DESC",
+            tenant.predicate(a)[1]).fetchall())
+        out, all_balanced = [], True
+        for r in rows:
+            funded = r["funded_amount"] or 0
+            released = r["released_amount"] or 0
+            refunded = r["refunded_amount"] or 0
+            fees = (r["platform_fee"] or 0) + (r["payment_fee"] or 0)
+            remaining = max(0.0, round(funded - released - refunded - fees, 2))
+            rec = tc.reconcile_ledger(funded, released, refunded, remaining, fees)
+            all_balanced = all_balanced and rec["balanced"]
+            out.append({"id": r["id"], "carrier_id": r["carrier_id"], "funded": funded,
+                        "protected": r["protected_amount_required"], "released": released,
+                        "refunded": refunded, "fees": fees, "carrier_payable": r["carrier_amount"],
+                        "remaining_protected": remaining, "difference": rec["difference"],
+                        "balanced": rec["balanced"], "status": r["status"]})
+        return {"requirements": out, "all_balanced": all_balanced,
+                "note": "difference must be 0 before a settlement can close"}
 
     return {
         ("POST", "/admin/marketplace/qualifications"): qual_record,
@@ -1789,6 +1812,7 @@ def _marketplace_closure_routes():
         ("GET", "/admin/marketplace/carrier-risk-limit/:id"): risk_limit,
         ("POST", "/admin/marketplace/release-gate"): rel_gate,
         ("GET", "/admin/marketplace/payout-integrity"): integrity2,
+        ("GET", "/admin/marketplace/settlement-integrity"): settlement_integrity,
     }
 
 

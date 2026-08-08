@@ -109,6 +109,9 @@ def _seed_platform(conn):
     marketplace_matching.init(conn); marketplace_matching.seed(conn)     # Marketplace Inc.3: booking/pricing/matching/offers/assignment
     marketplace_payments.init(conn); marketplace_payments.seed(conn)     # Marketplace Inc.4: protected payment/release/payout/disputes/refunds
     marketplace_trips.init(conn); marketplace_trips.seed(conn)           # Marketplace Inc.5: trip execution/GPS/geofence/proof-of-delivery
+    import core, rates
+    core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
+    rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)
     return conn
 
 

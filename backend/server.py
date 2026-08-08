@@ -114,6 +114,52 @@ def _routes():
     def get_quote(actor, body, p):
         return core.get_quotation(_conn, actor, int(p["id"]))
 
+    def rate_catalog(actor, body, p):
+        """Equipment catalog for the quotation builder. internal_cost is redacted unless the
+        actor may view carrier cost — the master selling rate is always visible to quoters."""
+        import rates
+        core._require_either(actor, "quotation.read", "quotation.view")
+        show_cost = core.can(actor, "quotation.carrier_cost.view")
+        out = []
+        for r in _conn.execute("SELECT * FROM rate_cards WHERE status='ACTIVE' AND superseded=0"
+                               " ORDER BY equipment_code").fetchall():
+            d = {"equipment_code": r["equipment_code"], "equipment_name": r["equipment_name"],
+                 "service_type": r["service_type"], "billing_unit": r["billing_unit"],
+                 "standard_rate": r["standard_rate"], "min_rate": r["min_rate"],
+                 "currency": r["currency"], "version": r["version"],
+                 "internal_cost": r["internal_cost"] if show_cost else None}
+            out.append(d)
+        return {"catalog": out}
+
+    def price_preview(actor, body, p):
+        """Server-side authoritative pricing preview for a line (the UI must treat this as truth).
+        Resolves the standard rate from the catalog, computes subtotal/gross-profit/margin, and
+        reports variance + whether an override reason / approval will be required."""
+        import rates, policy
+        core._require_either(actor, "quotation.read", "quotation.view")
+        code = body.get("equipment_code")
+        card = rates.resolve_rate(_conn, code, customer_id=body.get("customer_id")) if code else None
+        standard_rate = body.get("standard_rate")
+        if standard_rate is None:
+            standard_rate = card["standard_rate"] if card else body.get("quoted_rate", 0)
+        quoted_rate = body.get("quoted_rate", standard_rate)
+        internal_cost = body.get("internal_cost")
+        if internal_cost is None:
+            internal_cost = card["internal_cost"] if (card and card["internal_cost"] is not None) else 0
+        priced = rates.price_line(quoted_rate, body.get("qty", 1), body.get("days", 1),
+                                  body.get("discount_pct", 0), internal_cost)
+        var = rates.variance(standard_rate, quoted_rate)
+        show_cost = core.can(actor, "quotation.carrier_cost.view")
+        show_margin = core.can(actor, "quotation.margin.view")
+        return {"standard_rate": standard_rate, "quoted_rate": quoted_rate,
+                "billing_unit": (card["billing_unit"] if card else body.get("billing_unit", "day")),
+                "subtotal": priced["subtotal"], "discount": priced["discount"],
+                "internal_cost": internal_cost if show_cost else None,
+                "gross_profit": priced["gross_profit"] if show_margin else None,
+                "margin_percent": priced["margin_percent"] if show_margin else None,
+                "variance": var, "reason_required": var["abs_pct"] >= rates.DEFAULT_REASON_THRESHOLD_PCT,
+                "below_min_rate": bool(card and card["min_rate"] is not None and quoted_rate < card["min_rate"])}
+
     def update_quote(actor, body, p):
         return core.update_quotation_draft(
             _conn, actor, int(p["id"]), body.get("lines"), body.get("discount_pct"),
@@ -159,8 +205,22 @@ def _routes():
         core.require(actor, "booking.read")
         return {"audit": core.list_audit(_conn, "booking", int(p["id"]))}
 
+    def me_perms(actor, body, p):
+        """Authenticated effective-permissions payload — the single authority the frontend gates on
+        (no duplicate RBAC engine in JS). Resolves wildcards to concrete granted codes."""
+        cat = [r["code"] for r in _conn.execute("SELECT code FROM admin_permissions").fetchall()]
+        granted = sorted([c for c in cat if core.can(actor, c)])
+        fin = {"customer_price": core.can(actor, "quotation.customer_price.view"),
+               "carrier_cost": core.can(actor, "quotation.carrier_cost.view"),
+               "platform_fee": core.can(actor, "quotation.platform_fee.view"),
+               "margin": core.can(actor, "quotation.margin.view")}
+        return {"user": actor.get("email") or actor.get("name"), "role": actor.get("role"),
+                "is_super": ("*" in (actor.get("perms") or set())),
+                "permissions": granted, "financial": fin}
+
     return {
         ("POST", "/login"): login,
+        ("GET", "/me/permissions"): me_perms,
         ("POST", "/customers"): create_customer,
         ("POST", "/bookings"): create_booking,
         ("GET", "/bookings/:id"): get_booking,
@@ -169,6 +229,8 @@ def _routes():
         ("POST", "/bookings/:id/ready"): ready,
         ("POST", "/bookings/:id/quotation"): create_quote,
         ("GET", "/quotations/:id"): get_quote,
+        ("GET", "/rate-catalog"): rate_catalog,
+        ("POST", "/quotations/price-preview"): price_preview,
         ("PATCH", "/quotations/:id"): update_quote,
         ("POST", "/quotations/:id/submit"): submit_quote,
         ("POST", "/quotations/:id/approve"): approve_quote,
@@ -315,6 +377,19 @@ def _admin_routes():
                                    allow_sod_exception=b.get("allow_sod_exception", False),
                                    reason=b.get("reason")); return {"ok": True}
     def permissions(a, b, p):    R(a, "role_admin.view");   return {"permissions": _rows(_conn.execute("SELECT code,module,action,description FROM admin_permissions ORDER BY module,action").fetchall())}
+    def roles_matrix(a, b, p):
+        """One-shot aggregation powering the Roles & Permissions matrix UI: each role with its
+        effective grants, assigned-user count, protected flag, layer, and its own SoD conflicts."""
+        R(a, "role_admin.view")
+        out = []
+        for r in _rows(admin_platform.list_roles(_conn, "RGO")):
+            role = admin_platform.role_by_code(_conn, "RGO", r["code"])
+            grants = sorted(admin_platform.effective_role_grants(_conn, role["id"])) if role else []
+            out.append({"code": r["code"], "name": r["name"], "layer": r["layer"],
+                        "protected": bool(r.get("system_locked")),
+                        "assigned_users": admin_platform.role_assigned_user_count(_conn, role["id"]) if role else 0,
+                        "grants": grants, "sod_conflicts": admin_platform.sod_conflicts(set(grants))})
+        return {"roles": out}
     def role_clone(a, b, p):     R(a, "role_admin.manage"); return {"id": admin_platform.clone_role(_conn, "RGO", p["code"], b["new_code"], b["name"], actor=a)}
     def reparent_preview(a, b, p): R(a, "org.view");         return org.reparent_preview(_conn, int(p["id"]), b.get("new_parent_id"))
     def config_history(a, b, p):
@@ -325,6 +400,7 @@ def _admin_routes():
         if key:
             sql += " AND new_value LIKE ?"; args.append('%"key": "' + key + '"%')
         return {"history": _rows(_conn.execute(sql + " ORDER BY id DESC LIMIT 100", tuple(args)).fetchall())}
+    def user_audit_trail(a, b, p):  R(a, "user_admin.view");   return {"audit": _rows(admin_platform.user_audit(_conn, int(p["id"]), limit=int(b.get("limit", 100))))}
     def assignments(a, b, p):    R(a, "user_admin.view");   return {"assignments": _rows(org.user_assignments(_conn, int(p["id"])))}
     def assign(a, b, p):         R(a, "user_admin.manage"); return {"id": org.assign_user(_conn, a, _tid(), int(p["id"]), b["scope_kind"], b["scope_id"], b.get("assignment_type", "PRIMARY"), reason=b.get("reason"))}
     def sessions(a, b, p):       R(a, "security.view");     return {"sessions": _rows(admin_platform.list_sessions(_conn))}
@@ -552,6 +628,7 @@ def _admin_routes():
         ("GET", "/admin/roles"): roles,
         ("POST", "/admin/roles"): role_create,
         ("GET", "/admin/permissions"): permissions,
+        ("GET", "/admin/roles/matrix"): roles_matrix,
         ("POST", "/admin/roles/:code/clone"): role_clone,
         ("POST", "/admin/roles/compare"): role_compare,
         ("GET", "/admin/roles/:code/dependency"): role_dependency,
@@ -562,6 +639,7 @@ def _admin_routes():
         ("GET", "/admin/config/history"): config_history,
         ("GET", "/admin/users/:id/assignments"): assignments,
         ("POST", "/admin/users/:id/assignments"): assign,
+        ("GET", "/admin/users/:id/audit"): user_audit_trail,
         ("GET", "/admin/sessions"): sessions,
         ("POST", "/admin/sessions/revoke"): session_revoke,
         ("GET", "/admin/login-history"): login_history,
@@ -624,6 +702,24 @@ def _phase3_routes():
     def crm_class_status(a, b, p): R(a, "crm.admin.classification.manage"); return {"ok": masterdata.set_status(_conn, a, int(p["id"]), b["status"], reason=b.get("reason"))}
     def crm_pricing_search(a, b, p): R(a, "crm.admin.pricing.view");  return {"values": masterdata.list_values(_conn, a, "commercial.pricing_policy")}
     def crm_pricing_create(a, b, p): R(a, "crm.admin.pricing.manage"); return {"id": masterdata.create_value(_conn, a, "commercial.pricing_policy", b["code"], b["name"], description=b.get("description"))}
+    def rate_cards_list(a, b, p):
+        import rates
+        return {"rate_cards": rates.list_rate_cards(_conn, a, include_history=bool(b.get("include_history")))}
+    def rate_card_create(a, b, p):
+        import rates
+        return {"id": rates.create_rate_card(
+            _conn, a, b["equipment_code"], b.get("equipment_name"), b["standard_rate"],
+            service_type=b.get("service_type"), billing_unit=b.get("billing_unit", "day"),
+            min_rate=b.get("min_rate"), internal_cost=b.get("internal_cost"),
+            currency=b.get("currency", "PHP"), branch=b.get("branch"), region=b.get("region"),
+            customer_id=b.get("customer_id"), effective_from=b.get("effective_from"),
+            effective_to=b.get("effective_to"))}
+    def rate_card_update(a, b, p):
+        import rates
+        return {"id": rates.update_rate_card(_conn, a, int(p["id"]), **{k: v for k, v in b.items()})}
+    def rate_card_archive(a, b, p):
+        import rates
+        rates.archive_rate_card(_conn, a, int(p["id"])); return {"ok": True}
 
     # ---- Customer numbering ----------------------------------------------
     def crm_num_preview(a, b, p):  R(a, "crm.admin.numbering.manage"); return crm.preview_number(_conn, a, branch=b.get("branch"))
@@ -680,6 +776,10 @@ def _phase3_routes():
         ("POST", "/admin/crm/classifications/:id/status"): crm_class_status,
         ("POST", "/admin/crm/pricing/search"): crm_pricing_search,
         ("POST", "/admin/crm/pricing"): crm_pricing_create,
+        ("GET", "/admin/crm/rate-cards"): rate_cards_list,
+        ("POST", "/admin/crm/rate-cards"): rate_card_create,
+        ("POST", "/admin/crm/rate-cards/:id"): rate_card_update,
+        ("POST", "/admin/crm/rate-cards/:id/archive"): rate_card_archive,
         ("POST", "/admin/crm/numbering/preview"): crm_num_preview,
         ("POST", "/admin/crm/numbering/config"): crm_num_config,
         ("GET", "/admin/crm/duplicate-rules"): crm_dup_rules,

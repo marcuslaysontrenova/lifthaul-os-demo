@@ -147,6 +147,7 @@ for _a in ("view", "record", "manage"):
 for _a in ("view", "post", "approve", "export"):
     _perm("finance", _a)
 BOOKING_QUOTATION_PERMISSIONS = [
+    "booking.edit", "booking.edit_operational", "booking.edit_commercial",
     "booking.edit_draft", "booking.revise_returned", "booking.submit", "booking.cancel",
     "booking.delete_draft", "booking.attachment.manage", "booking.print", "booking.audit.view",
     "quotation.edit_draft", "quotation.revise_returned", "quotation.cancel",
@@ -154,6 +155,9 @@ BOOKING_QUOTATION_PERMISSIONS = [
     "quotation.customer_price.view", "quotation.carrier_cost.view",
     "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
     "quotation.approve.exceptional", "user_admin.assign_roles", "role_admin.assign_privileged",
+    # Quotation pricing subsystem — field-level edit + governed override controls:
+    "quotation.customer_price.edit", "quotation.carrier_cost.edit",
+    "quotation.rate.override", "quotation.discount.override",
 ]
 for _code in BOOKING_QUOTATION_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
@@ -412,19 +416,21 @@ ADMIN_ROLES = [
          "security.view", "org.view"}),
     ("booking_quotation_administrator", "Booking & Quotation Administrator", 3,
         {"customer.read", "booking.create", "booking.read", "booking.view", "booking.review",
-         "booking.ready", "booking.edit_draft", "booking.revise_returned", "booking.submit",
+         "booking.ready", "booking.edit", "booking.edit_operational", "booking.edit_commercial",
+         "booking.edit_draft", "booking.revise_returned", "booking.submit",
          "booking.cancel", "booking.delete_draft", "booking.attachment.manage", "booking.export",
          "booking.print", "booking.audit.view", "quotation.create", "quotation.read", "quotation.view",
          "quotation.edit_draft", "quotation.revise", "quotation.revise_returned", "quotation.submit",
          "quotation.cancel", "quotation.delete_draft", "quotation.export", "quotation.print",
-         "quotation.audit.view", "quotation.customer_price.view"}),
+         "quotation.audit.view", "quotation.customer_price.view",
+         "quotation.customer_price.edit", "quotation.rate.override", "quotation.discount.override"}),
     ("crm_admin",            "CRM Administrator",            3,
         {"crm_admin.*", "customer.*", "contact.*", "address.*", "crm.admin.*", "master_data.*"}),
     ("fleet_admin",          "Fleet Administrator",          3, {"fleet_admin.*", "equipment.*", "vehicle.*", "maintenance.*", "inspection.*"}),
     ("finance_admin",        "Finance Administrator",        3,
         {"finance_admin.*", "invoice.*", "expense.*", "payment.*", "refund.*",
          "booking.read", "booking.view", "quotation.read", "quotation.view",
-         "quotation.customer_price.view", "quotation.carrier_cost.view",
+         "quotation.customer_price.view", "quotation.carrier_cost.view", "quotation.carrier_cost.edit",
          "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
          "tax.policy.*", "payment.downpayment.policy.*", "quotation.policy.approval.view",
          "admin.configuration.financial.manage", "admin.configuration.view", "admin.configuration.simulate",

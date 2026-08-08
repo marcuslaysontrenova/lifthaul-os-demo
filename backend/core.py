@@ -119,7 +119,31 @@ CREATE TABLE IF NOT EXISTS quotations(
 
 CREATE TABLE IF NOT EXISTS quotation_lines(
   id INTEGER PRIMARY KEY, quotation_id INTEGER NOT NULL REFERENCES quotations(id),
-  kind TEXT, description TEXT, qty REAL, days REAL, rate REAL, amount REAL);
+  kind TEXT, description TEXT, qty REAL, days REAL, rate REAL, amount REAL,
+  -- Pricing subsystem (LiftHaul quotation rate/override enhancement):
+  equipment_code TEXT, billing_unit TEXT DEFAULT 'day',
+  standard_rate REAL, quoted_rate REAL, internal_cost REAL,
+  discount_pct REAL DEFAULT 0, line_tax REAL, subtotal REAL,
+  gross_profit REAL, margin_percent REAL,
+  rate_source TEXT DEFAULT 'catalog', rate_version INTEGER,
+  override_reason TEXT, created_by INTEGER, updated_by INTEGER,
+  created_at TEXT, updated_at TEXT);
+
+-- Governed, effective-dated master rate catalog. Never overwrite a historical rate:
+-- edits create a new version and supersede the prior row. quoted_rate on a quotation
+-- line is independent and never mutates this master.
+CREATE TABLE IF NOT EXISTS rate_cards(
+  id INTEGER PRIMARY KEY, tenant_id INTEGER,
+  equipment_code TEXT NOT NULL, equipment_name TEXT, service_type TEXT,
+  billing_unit TEXT NOT NULL DEFAULT 'day',
+  standard_rate REAL NOT NULL, min_rate REAL, internal_cost REAL,
+  currency TEXT NOT NULL DEFAULT 'PHP', branch TEXT, region TEXT,
+  customer_id INTEGER,
+  version INTEGER NOT NULL DEFAULT 1,
+  effective_from TEXT, effective_to TEXT,
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  superseded INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER, created_at TEXT);
 
 CREATE TABLE IF NOT EXISTS payment_requests(
   id INTEGER PRIMARY KEY, no TEXT UNIQUE NOT NULL,
@@ -156,7 +180,35 @@ def connect(path: str = ":memory:") -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate_pricing(conn)
+    try:
+        import rates
+        rates.seed_default_rate_cards(conn)          # governed baseline catalog (idempotent)
+    except Exception:
+        pass
     return conn
+
+
+# Idempotent column adds for DBs created before the pricing subsystem. CREATE TABLE
+# IF NOT EXISTS never adds columns to an existing table, so persistent/file DBs need this
+# on every reconnect — that is what makes rate/override/margin data survive a restart.
+_PRICING_COLS = [
+    ("equipment_code", "TEXT"), ("billing_unit", "TEXT DEFAULT 'day'"),
+    ("standard_rate", "REAL"), ("quoted_rate", "REAL"), ("internal_cost", "REAL"),
+    ("discount_pct", "REAL DEFAULT 0"), ("line_tax", "REAL"), ("subtotal", "REAL"),
+    ("gross_profit", "REAL"), ("margin_percent", "REAL"),
+    ("rate_source", "TEXT DEFAULT 'catalog'"), ("rate_version", "INTEGER"),
+    ("override_reason", "TEXT"), ("created_by", "INTEGER"), ("updated_by", "INTEGER"),
+    ("created_at", "TEXT"), ("updated_at", "TEXT"),
+]
+
+
+def _migrate_pricing(conn):
+    existing = {r["name"] for r in conn.execute("PRAGMA table_info(quotation_lines)").fetchall()}
+    for name, decl in _PRICING_COLS:
+        if name not in existing:
+            conn.execute(f"ALTER TABLE quotation_lines ADD COLUMN {name} {decl}")
+    conn.commit()
 
 
 # --------------------------------------------------------------------------- #
@@ -240,7 +292,8 @@ PERMISSIONS = {
                   "booking.print", "booking.audit.view", "quotation.create", "quotation.edit_draft",
                   "quotation.revise", "quotation.revise_returned", "quotation.submit", "quotation.read",
                   "quotation.view", "quotation.customer_price.view", "quotation.print",
-                  "quotation.audit.view"},
+                  "quotation.audit.view", "quotation.customer_price.edit",
+                  "quotation.rate.override", "quotation.discount.override"},
     "booking_quotation_administrator": {
         "customer.read", "booking.create", "booking.read", "booking.view", "booking.review",
         "booking.ready", "booking.edit_draft", "booking.revise_returned", "booking.submit",
@@ -248,7 +301,8 @@ PERMISSIONS = {
         "booking.print", "booking.audit.view", "quotation.create", "quotation.read", "quotation.view",
         "quotation.edit_draft", "quotation.revise", "quotation.revise_returned", "quotation.submit",
         "quotation.cancel", "quotation.delete_draft", "quotation.export", "quotation.print",
-        "quotation.audit.view", "quotation.customer_price.view"},
+        "quotation.audit.view", "quotation.customer_price.view",
+        "quotation.customer_price.edit", "quotation.rate.override", "quotation.discount.override"},
     "approver": {"quotation.read", "quotation.view", "quotation.approve", "quotation.reject",
                  "quotation.return", "quotation.customer_price.view", "quotation.carrier_cost.view",
                  "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
@@ -256,8 +310,9 @@ PERMISSIONS = {
     "finance": {"payment.*", "quotation.read", "booking.read", "customer.read"},
     "finance_admin": {"payment.*", "finance.*", "quotation.read", "quotation.view", "booking.read",
                       "booking.view", "customer.read", "quotation.customer_price.view",
-                      "quotation.carrier_cost.view", "quotation.platform_fee.view",
-                      "quotation.margin.view", "quotation.audit.view"},
+                      "quotation.carrier_cost.view", "quotation.carrier_cost.edit",
+                      "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
+                      "crm.admin.pricing.view", "crm.admin.pricing.manage"},
     "executive": {"booking.read", "booking.view", "booking.audit.view", "quotation.read",
                   "quotation.view", "quotation.customer_price.view", "quotation.carrier_cost.view",
                   "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
@@ -453,10 +508,17 @@ def update_booking(conn, actor, bid, changes):
     }
     if b["stage"] not in editable:
         raise ConflictError("booking is locked; return it for revision before editing")
-    allowed = {"service", "cargo", "weight", "from_loc", "to_loc", "date", "estimator"}
+    OPERATIONAL_FIELDS = {"service", "cargo", "weight", "from_loc", "to_loc", "date", "estimator"}
+    COMMERCIAL_FIELDS = {"customer_id"}   # customer/contact reference is a commercial linkage
+    allowed = OPERATIONAL_FIELDS | COMMERCIAL_FIELDS
     patch = {k: v for k, v in (changes or {}).items() if k in allowed}
     if not patch:
         raise ValidationError("no editable booking fields supplied")
+    # field-level authorization — operational vs commercial fields require distinct grants
+    if patch.keys() & OPERATIONAL_FIELDS:
+        require(actor, "booking.edit_operational")
+    if patch.keys() & COMMERCIAL_FIELDS:
+        require(actor, "booking.edit_commercial")
     old = {k: b[k] for k in patch}
     sets = ",".join(f"{k}=?" for k in patch)
     conn.execute(
@@ -506,6 +568,84 @@ def ready_for_quotation(conn, actor, bid):
     _set_stage(conn, actor, _booking(conn, bid, actor), "READY_FOR_QUOTATION")
 
 
+def _price_lines(conn, actor, rows, ctx, customer_id=None):
+    """Authoritative per-line pricing + governed override enforcement. Returns processed line
+    rows (with every computed money field) plus aggregates the quotation layer consumes.
+
+    Legacy-shaped lines ({kind,description,qty,days,rate}) pass through unchanged: standard==quoted
+    so there is no override and no internal cost, exactly matching pre-subsystem behaviour.
+    """
+    import rates, policy
+    reason_thr, _ = policy._num(conn, "quotation.rate_override.reason_threshold_pct", ctx,
+                                rates.DEFAULT_REASON_THRESHOLD_PCT)
+    disc_thr, _ = policy._num(conn, "quotation.approval.discount_threshold_pct", ctx, 10)
+    processed, est_cost_sum, any_internal, max_var, overrides = [], 0.0, False, 0.0, []
+    for l in rows:
+        code = l.get("equipment_code")
+        card = rates.resolve_rate(conn, code, customer_id=customer_id) if code else None
+        standard_rate = l.get("standard_rate")
+        if standard_rate is None:
+            standard_rate = card["standard_rate"] if card else l.get("rate", 0)
+        quoted_rate = l.get("quoted_rate")
+        if quoted_rate is None:
+            quoted_rate = l.get("rate") if l.get("rate") is not None else standard_rate
+        internal_cost = l.get("internal_cost")
+        client_set_cost = internal_cost is not None
+        if internal_cost is None:
+            internal_cost = card["internal_cost"] if (card and card["internal_cost"] is not None) else 0
+        if client_set_cost or (card and card["internal_cost"] is not None):
+            any_internal = True
+        qty = l.get("qty", 1) or 1
+        days = l.get("days", 1) or 1
+        disc = l.get("discount_pct", 0) or 0
+        var = rates.variance(standard_rate, quoted_rate)
+        if var["amount"] != 0:                                   # rate override → governed control
+            require(actor, rates.PERM_RATE_OVERRIDE)
+            if card and card["min_rate"] is not None and quoted_rate < card["min_rate"]:
+                raise ValidationError("quoted_rate is below the governed minimum rate")
+            if var["abs_pct"] >= reason_thr and not (l.get("override_reason") or "").strip():
+                raise ValidationError("override reason required: quoted rate varies materially from standard")
+        if disc and disc > disc_thr:                             # discount beyond policy → override perm
+            require(actor, rates.PERM_DISCOUNT_OVERRIDE)
+        if client_set_cost and card and card["internal_cost"] is not None \
+                and round(internal_cost, 2) != round(card["internal_cost"], 2):
+            require(actor, rates.PERM_COST_EDIT)                 # editing internal cost is finance-gated
+        priced = rates.price_line(quoted_rate, qty, days, disc, internal_cost)
+        est_cost_sum += priced["internal_total"]
+        max_var = max(max_var, var["abs_pct"])
+        source = "override" if var["amount"] != 0 else ("catalog" if card else "manual")
+        processed.append({
+            "kind": l.get("kind"),
+            "description": l.get("description") or (card["equipment_name"] if card else None),
+            "equipment_code": code,
+            "billing_unit": l.get("billing_unit") or (card["billing_unit"] if card else "day"),
+            "qty": qty, "days": days, "standard_rate": standard_rate, "quoted_rate": quoted_rate,
+            "internal_cost": internal_cost, "discount_pct": disc, "subtotal": priced["subtotal"],
+            "gross_profit": priced["gross_profit"], "margin_percent": priced["margin_percent"],
+            "rate": quoted_rate, "amount": priced["subtotal"], "rate_source": source,
+            "rate_version": (card["version"] if card else None), "override_reason": l.get("override_reason")})
+        if var["amount"] != 0:
+            overrides.append({"equipment_code": code, "standard_rate": standard_rate,
+                              "quoted_rate": quoted_rate, "variance_amount": var["amount"],
+                              "variance_pct": var["pct"], "reason": l.get("override_reason"),
+                              "changed_by": actor["id"], "changed_at": now()})
+    return {"lines": processed, "subtotal": round(sum(r["subtotal"] for r in processed), 2),
+            "est_cost": round(est_cost_sum, 2), "any_internal": any_internal,
+            "max_variance_pct": max_var, "overrides": overrides}
+
+
+def _insert_priced_line(conn, actor, qid, r):
+    conn.execute(
+        "INSERT INTO quotation_lines(quotation_id,kind,description,qty,days,rate,amount,"
+        "equipment_code,billing_unit,standard_rate,quoted_rate,internal_cost,discount_pct,subtotal,"
+        "gross_profit,margin_percent,rate_source,rate_version,override_reason,created_by,updated_by,"
+        "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (qid, r["kind"], r["description"], r["qty"], r["days"], r["rate"], r["amount"],
+         r["equipment_code"], r["billing_unit"], r["standard_rate"], r["quoted_rate"], r["internal_cost"],
+         r["discount_pct"], r["subtotal"], r["gross_profit"], r["margin_percent"], r["rate_source"],
+         r["rate_version"], r["override_reason"], actor["id"], actor["id"], now(), now()))
+
+
 def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_cost=0):
     """lines: [{kind,description,qty,days,rate}]. Creates version 1 (or a new
     version if revising). Never overwrites a sent quotation."""
@@ -519,7 +659,9 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     if not lines:
         raise ValidationError("quotation needs at least one line")
     for l in lines:                                       # server-side line validation
-        if l.get("rate", 0) < 0 or l.get("qty", 1) < 0 or l.get("days", 1) < 0:
+        if l.get("rate", 0) < 0 or l.get("qty", 1) < 0 or l.get("days", 1) < 0 \
+                or (l.get("quoted_rate") or 0) < 0 or (l.get("standard_rate") or 0) < 0 \
+                or (l.get("internal_cost") or 0) < 0:
             raise ValidationError("quotation line values must not be negative")
     requested_dp = dp_pct                                 # explicit override or None (=policy default)
     prev = _latest_quote(conn, bid)
@@ -529,18 +671,22 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     else:
         n = conn.execute("SELECT COUNT(*) c FROM quotations").fetchone()["c"]
         no, ver = f"QN-{3001 + n}", 1
-    subtotal = sum(l["rate"] * l.get("qty", 1) * l.get("days", 1) for l in lines)
-    discount = round(subtotal * discount_pct / 100)
-    taxable = subtotal - discount
     import policy
     ctx = policy.policy_context(conn, actor, b)            # tenant/org context from the authenticated actor
+    priced = _price_lines(conn, actor, lines, ctx, customer_id=b["customer_id"])  # authoritative line math + override governance
+    subtotal = priced["subtotal"]                          # server-side truth; any client total is ignored
+    if priced["any_internal"]:
+        est_cost = priced["est_cost"]                      # internal cost sourced from lines/catalog
+    discount = round(subtotal * discount_pct / 100)
+    taxable = subtotal - discount
     tp = policy.evaluate_tax(conn, taxable, ctx)           # governed tax policy (default == 12% exclusive)
     tax = tp["tax"]
     total = taxable if tp["inclusive"] else taxable + tax  # inclusive => tax already embedded in the price
     dpe = policy.evaluate_downpayment(conn, total, ctx, requested_rate=requested_dp)  # default == 30%
     dp_pct, dp_amount = dpe["rate"], dpe["amount"]
-    ape = policy.evaluate_approval(conn, total, discount_pct, ctx)                    # default threshold 500000
     margin_pct = round((total - est_cost) / total * 100, 1) if total and est_cost else None
+    ape = policy.evaluate_approval(conn, total, discount_pct, ctx,
+                                   rate_variance_pct=priced["max_variance_pct"], margin_pct=margin_pct)
     cur = conn.execute(
         "INSERT INTO quotations(no,version,booking_id,status,subtotal,discount_pct,discount,tax,"
         "total,dp_pct,dp_amount,balance,est_cost,margin_pct,tax_snapshot,dp_snapshot,approval_snapshot,"
@@ -550,14 +696,13 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
          json.dumps(dpe["snapshot"]), json.dumps(ape["snapshot"]), actor["id"], now()))
     qid = cur.lastrowid
     import tenant; tenant.stamp(conn, actor, "quotations", qid)   # inherit tenant from context
-    for l in lines:
-        amt = l["rate"] * l.get("qty", 1) * l.get("days", 1)
-        conn.execute("INSERT INTO quotation_lines(quotation_id,kind,description,qty,days,rate,amount)"
-                     " VALUES(?,?,?,?,?,?,?)",
-                     (qid, l.get("kind"), l.get("description"), l.get("qty", 1), l.get("days", 1),
-                      l["rate"], amt))
+    for r in priced["lines"]:
+        _insert_priced_line(conn, actor, qid, r)
     if b["stage"] == "READY_FOR_QUOTATION" or b["stage"] == "REVISION_REQUESTED":
         conn.execute("UPDATE bookings SET stage='QUOTATION_IN_PROGRESS' WHERE id=?", (bid,))
+    for ov in priced["overrides"]:                         # record every rate override with full lineage
+        audit(conn, actor, "quotation.rate_override", "quotation", qid,
+              new={**ov, "approval_required": ape["required"], "approval_status": "pending" if ape["required"] else "not_required"})
     conn.commit()
     audit(conn, actor, "quotation.material_revision" if prev else "quotation.create", "quotation", qid,
           new={"no": no, "version": ver, "total": total})
@@ -584,7 +729,9 @@ def get_quotation(conn, actor, qid):
     _require_either(actor, "quotation.read", "quotation.view")
     q = dict(_quote(conn, qid, actor))
     lines = [dict(row) for row in conn.execute(
-        "SELECT id,kind,description,qty,days,rate,amount FROM quotation_lines WHERE quotation_id=? ORDER BY id",
+        "SELECT id,kind,description,qty,days,rate,amount,equipment_code,billing_unit,standard_rate,"
+        "quoted_rate,internal_cost,discount_pct,subtotal,gross_profit,margin_percent,rate_source,"
+        "rate_version,override_reason FROM quotation_lines WHERE quotation_id=? ORDER BY id",
         (qid,),
     ).fetchall()]
     redacted = []
@@ -592,14 +739,19 @@ def get_quotation(conn, actor, qid):
         for key in ("subtotal", "discount_pct", "discount", "tax", "total", "dp_pct", "dp_amount", "balance"):
             q[key] = None
         for line in lines:
-            line["rate"] = None
-            line["amount"] = None
+            for key in ("rate", "amount", "standard_rate", "quoted_rate", "subtotal"):
+                line[key] = None
         redacted.append("customer_price")
     if not can(actor, "quotation.carrier_cost.view"):
         q["est_cost"] = None
+        for line in lines:                                   # internal/vendor cost never leaks
+            line["internal_cost"] = None
         redacted.append("carrier_cost")
     if not can(actor, "quotation.margin.view"):
         q["margin_pct"] = None
+        for line in lines:
+            line["gross_profit"] = None
+            line["margin_percent"] = None
         redacted.append("margin")
     q["platform_fee"] = None
     if not can(actor, "quotation.platform_fee.view"):
@@ -618,29 +770,35 @@ def update_quotation_draft(conn, actor, qid, lines=None, discount_pct=None,
     if q["status"] not in ("draft", "revision", "returned", "rejected"):
         raise ConflictError("only a draft or returned quotation may be revised")
     rows = lines if lines is not None else [dict(row) for row in conn.execute(
-        "SELECT kind,description,qty,days,rate FROM quotation_lines WHERE quotation_id=? ORDER BY id",
+        "SELECT kind,description,qty,days,rate,equipment_code,billing_unit,standard_rate,quoted_rate,"
+        "internal_cost,discount_pct,override_reason FROM quotation_lines WHERE quotation_id=? ORDER BY id",
         (qid,),
     ).fetchall()]
     if not rows:
         raise ValidationError("quotation needs at least one line")
     for line in rows:
-        if line.get("rate", 0) < 0 or line.get("qty", 1) < 0 or line.get("days", 1) < 0:
+        if line.get("rate", 0) < 0 or line.get("qty", 1) < 0 or line.get("days", 1) < 0 \
+                or (line.get("quoted_rate") or 0) < 0 or (line.get("internal_cost") or 0) < 0:
             raise ValidationError("quotation line values must not be negative")
     disc = q["discount_pct"] if discount_pct is None else discount_pct
     requested_dp = q["dp_pct"] if dp_pct is None else dp_pct
     cost = q["est_cost"] if est_cost is None else est_cost
-    subtotal = sum(line["rate"] * line.get("qty", 1) * line.get("days", 1) for line in rows)
-    discount = round(subtotal * disc / 100)
-    taxable = subtotal - discount
     b = _booking(conn, q["booking_id"], actor)
     import policy
     ctx = policy.policy_context(conn, actor, b)
+    priced = _price_lines(conn, actor, rows, ctx, customer_id=b["customer_id"])  # authoritative recompute
+    subtotal = priced["subtotal"]
+    if priced["any_internal"]:
+        cost = priced["est_cost"]
+    discount = round(subtotal * disc / 100)
+    taxable = subtotal - discount
     tp = policy.evaluate_tax(conn, taxable, ctx)
     tax = tp["tax"]
     total = taxable if tp["inclusive"] else taxable + tax
     dpe = policy.evaluate_downpayment(conn, total, ctx, requested_rate=requested_dp)
-    ape = policy.evaluate_approval(conn, total, disc, ctx)
     margin_pct = round((total - cost) / total * 100, 1) if total and cost else None
+    ape = policy.evaluate_approval(conn, total, disc, ctx,
+                                   rate_variance_pct=priced["max_variance_pct"], margin_pct=margin_pct)
     old = {"subtotal": q["subtotal"], "discount_pct": q["discount_pct"], "total": q["total"],
            "dp_pct": q["dp_pct"], "est_cost": q["est_cost"]}
     conn.execute(
@@ -652,13 +810,11 @@ def update_quotation_draft(conn, actor, qid, lines=None, discount_pct=None,
          json.dumps(ape["snapshot"]), qid),
     )
     conn.execute("DELETE FROM quotation_lines WHERE quotation_id=?", (qid,))
-    for line in rows:
-        amount = line["rate"] * line.get("qty", 1) * line.get("days", 1)
-        conn.execute(
-            "INSERT INTO quotation_lines(quotation_id,kind,description,qty,days,rate,amount) VALUES(?,?,?,?,?,?,?)",
-            (qid, line.get("kind"), line.get("description"), line.get("qty", 1),
-             line.get("days", 1), line["rate"], amount),
-        )
+    for r in priced["lines"]:
+        _insert_priced_line(conn, actor, qid, r)
+    for ov in priced["overrides"]:
+        audit(conn, actor, "quotation.rate_override", "quotation", qid,
+              new={**ov, "approval_required": ape["required"], "approval_status": "pending" if ape["required"] else "not_required"})
     conn.execute("UPDATE bookings SET stage='QUOTATION_IN_PROGRESS',updated_by=?,updated_at=? WHERE id=?",
                  (actor["id"], now(), q["booking_id"]))
     audit(conn, actor, "quotation.material_revision", "quotation", qid, old=old,

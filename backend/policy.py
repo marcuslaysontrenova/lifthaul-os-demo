@@ -86,20 +86,30 @@ def evaluate_downpayment(conn, total, ctx, requested_rate=None):
     return {"required": required, "rate": rate, "amount": amount, "snapshot": snap}
 
 
-def evaluate_approval(conn, total, discount_pct, ctx):
+def evaluate_approval(conn, total, discount_pct, ctx, rate_variance_pct=0, margin_pct=None):
+    """Governed approval gate. Escalates on any configured trigger: quotation total, discount %,
+    quoted-rate variance vs standard, or thin margin. All thresholds resolve through the config
+    cascade (no hardcoded permanent commercial thresholds)."""
     threshold, r = _num(conn, "quotation.approval.threshold_amount", ctx, 500000)
     disc_thr, _ = _num(conn, "quotation.approval.discount_threshold_pct", ctx, 10)
+    var_thr, _ = _num(conn, "quotation.approval.rate_variance_threshold_pct", ctx, 15)
+    margin_floor, _ = _num(conn, "quotation.approval.min_margin_pct", ctx, 0)
     reasons = []
     if total >= threshold:
         reasons.append(f"total {total} >= threshold {threshold}")
     if (discount_pct or 0) > disc_thr:
         reasons.append(f"discount {discount_pct}% > {disc_thr}%")
+    if (rate_variance_pct or 0) >= var_thr:
+        reasons.append(f"rate variance {rate_variance_pct}% >= {var_thr}%")
+    if margin_pct is not None and margin_floor and margin_pct < margin_floor:
+        reasons.append(f"margin {margin_pct}% < floor {margin_floor}%")
     required = bool(reasons)
     snap = {"consumer": "approval", "policy_key": "quotation.approval.threshold_amount",
             "required": required, "threshold_applied": threshold, "discount_threshold": disc_thr,
-            "required_approver_role": "approver", "source_scope": r["scope"],
-            "source_ref": r["scope_ref"], "reasons": reasons, "evaluated_at": _now(),
-            "definition_version": 1}
+            "rate_variance_threshold": var_thr, "rate_variance_pct": rate_variance_pct,
+            "margin_floor": margin_floor, "required_approver_role": "approver",
+            "source_scope": r["scope"], "source_ref": r["scope_ref"], "reasons": reasons,
+            "evaluated_at": _now(), "definition_version": 2}
     return {"required": required, "threshold": threshold, "reasons": reasons,
             "required_approver_role": "approver", "snapshot": snap}
 

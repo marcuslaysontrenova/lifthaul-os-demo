@@ -463,6 +463,38 @@ window.RGO_API = (function(){
     setBase:function(b){base=b; try{localStorage.setItem('rgo_api_base',b);}catch(e){}},
     login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('rgo_api_token',token);}catch(e){} return d;});},
     logout:function(){token=null; try{localStorage.removeItem('rgo_api_token');}catch(e){}},
+    /* authoritative effective-permission payload — the frontend gates on THIS, not a JS engine */
+    myPermissions:function(){return req('GET','/me/permissions');},
+    /* user administration (Gap 3) — paths match backend/server.py route table exactly */
+    listUsers:function(){return req('GET','/admin/users');},
+    createUserAcct:function(b){return req('POST','/admin/users',b);},
+    setUserStatus:function(id,b){return req('POST','/admin/users/'+id+'/status',b);},
+    resetUserPw:function(id,b){return req('POST','/admin/users/'+id+'/reset-password',b);},
+    assignUserRole:function(id,b){return req('POST','/admin/users/'+id+'/roles',b);},
+    listSessions:function(){return req('GET','/admin/sessions');},
+    revokeSession:function(tok){return req('POST','/admin/sessions/revoke',{token:tok});},
+    effectiveAccess:function(id){return req('GET','/admin/users/'+id+'/effective-access');},
+    mfaStatus:function(id){return req('GET','/admin/users/'+id+'/mfa');},
+    loginHistory:function(){return req('GET','/admin/login-history');},
+    userAssignments:function(id){return req('GET','/admin/users/'+id+'/assignments');},
+    assignScope:function(id,b){return req('POST','/admin/users/'+id+'/assignments',b);},
+    userAudit:function(id){return req('GET','/admin/users/'+id+'/audit');},
+    orgTree:function(){return req('GET','/admin/org/tree');},
+    orgUnits:function(b){return req('POST','/admin/org/units/search',b||{});},
+    holidayCalendars:function(){return req('GET','/admin/holiday-calendars');},
+    workingCalendars:function(){return req('GET','/admin/working-calendars');},
+    configList:function(){return req('GET','/admin/config');},
+    auditTrail:function(){return req('GET','/admin/audit');},
+    roleDependency:function(code){return req('GET','/admin/roles/'+code+'/dependency');},
+    createRoleApi:function(b){return req('POST','/admin/roles',b);},
+    /* role & permission administration (Gap 4) */
+    listRoles:function(){return req('GET','/admin/roles');},
+    rolesMatrix:function(){return req('GET','/admin/roles/matrix');},
+    createRole:function(b){return req('POST','/admin/roles',b);},
+    cloneRole:function(code,b){return req('POST','/admin/roles/'+code+'/clone',b);},
+    compareRoles:function(b){return req('POST','/admin/roles/compare',b);},
+    listPermissions:function(){return req('GET','/admin/permissions');},
+    configHistory:function(){return req('GET','/admin/config/history');},
     createCustomer:function(b){return req('POST','/customers',b);},
     createBooking:function(b){return req('POST','/bookings',b);},
     getBooking:function(id){return req('GET','/bookings/'+id);},
@@ -472,6 +504,13 @@ window.RGO_API = (function(){
     createQuotation:function(id,b){return req('POST','/bookings/'+id+'/quotation',b);},
     getQuotation:function(id){return req('GET','/quotations/'+id);},
     updateQuotation:function(id,b){return req('PATCH','/quotations/'+id,b);},
+    /* quotation pricing subsystem */
+    rateCatalog:function(){return req('GET','/rate-catalog');},
+    pricePreview:function(b){return req('POST','/quotations/price-preview',b);},
+    listRateCards:function(){return req('GET','/admin/crm/rate-cards');},
+    createRateCard:function(b){return req('POST','/admin/crm/rate-cards',b);},
+    updateRateCard:function(id,b){return req('POST','/admin/crm/rate-cards/'+id,b);},
+    archiveRateCard:function(id){return req('POST','/admin/crm/rate-cards/'+id+'/archive');},
     submitQuotation:function(id){return req('POST','/quotations/'+id+'/submit');},
     approveQuotation:function(id,b){return req('POST','/quotations/'+id+'/approve',b||{});},
     returnQuotation:function(id,b){return req('POST','/quotations/'+id+'/return',b);},
@@ -503,7 +542,7 @@ window.RGO_API = (function(){
   var ROLE_DEFS={
     booking_admin:{label:'Booking & Quotation Administrator',actor:'encoder-1',name:'Ana Mendoza',initials:'AM',perms:['dashboard.view','booking.view','booking.create','booking.edit_draft','booking.revise_returned','booking.submit','booking.cancel','booking.delete_draft','booking.attachment.manage','booking.export','booking.print','booking.audit.view','quotation.view','quotation.create','quotation.edit_draft','quotation.revise_returned','quotation.submit','quotation.cancel','quotation.delete_draft','quotation.export','quotation.print','quotation.audit.view','quotation.customer_price.view','customer.view','customer.edit']},
     approver:{label:'Approver',actor:'approver-1',name:'Paolo Reyes',initials:'PR',perms:['dashboard.view','booking.view','booking.audit.view','booking.attachment.manage','quotation.view','quotation.approve','quotation.reject','quotation.return','quotation.export','quotation.print','quotation.audit.view','quotation.customer_price.view','quotation.carrier_cost.view','quotation.platform_fee.view','quotation.margin.view']},
-    finance_admin:{label:'Finance Administrator',actor:'finance-1',name:'Felicia Lim',initials:'FL',perms:['dashboard.view','booking.view','quotation.view','quotation.customer_price.view','quotation.carrier_cost.view','quotation.platform_fee.view','quotation.margin.view','invoice.view','invoice.manage','finance.view','finance.manage','reports.view']},
+    finance_admin:{label:'Finance Administrator',actor:'finance-1',name:'Felicia Lim',initials:'FL',perms:['dashboard.view','quotation.view','quotation.customer_price.view','quotation.carrier_cost.view','quotation.platform_fee.view','quotation.margin.view','invoice.view','invoice.manage','finance.view','finance.manage','reports.view']},
     executive:{label:'Executive View',actor:'exec-1',name:'Elena Cruz',initials:'EC',perms:['dashboard.view','booking.view','booking.audit.view','quotation.view','quotation.audit.view','quotation.customer_price.view','quotation.carrier_cost.view','quotation.platform_fee.view','quotation.margin.view','quotation.approve.exceptional','operations.view','customer.view','assets.view','permits.view','invoice.view','finance.view','reports.view','risk.view','enterprise.view']},
     user_admin:{label:'User Administrator',actor:'useradmin-1',name:'Uri Santos',initials:'US',perms:['dashboard.view','users.view','users.manage','users.assign_business_roles','auth.status.view']},
     super_admin:{label:'Super Administrator',actor:'super-1',name:'Sofia Tan',initials:'ST',perms:['*']},
@@ -512,9 +551,24 @@ window.RGO_API = (function(){
   var MATRIX_PERMS=[
     ['View','booking.view'],['Create','booking.create'],['Edit Draft','booking.edit_draft'],['Revise Returned Record','booking.revise_returned'],['Submit for Approval','booking.submit'],['Cancel','booking.cancel'],['Delete Draft','booking.delete_draft'],['View Customer Price','quotation.customer_price.view'],['View Carrier Cost','quotation.carrier_cost.view'],['View Platform Fee','quotation.platform_fee.view'],['View Margin','quotation.margin.view'],['Approve','quotation.approve'],['Reject','quotation.reject'],['Return for Revision','quotation.return'],['Export','quotation.export'],['Print','quotation.print'],['View Audit History','quotation.audit.view']
   ];
-  var MODULE_PERMS={dashboard:['dashboard.view'],bookings:['booking.view'],quotes:['quotation.view'],jobs:['operations.view'],dispatch:['operations.view'],customers:['customer.view'],fleet:['assets.view'],maintenance:['assets.view'],fleetmap:['assets.view'],drivers:['operations.view'],permits:['permits.view'],invoices:['invoice.view'],finance:['finance.view'],reports:['reports.view'],access:['users.view']};
+  // Each module lists the demo perm AND its real backend-catalog equivalent(s), so nav gating works
+  // identically in mock mode (ROLE_DEFS) and live mode (/me/permissions) without a second engine.
+  // The Bookings queue gates on booking.audit.view (workflow participation) — deliberately NOT
+  // booking.view, which Finance retains for financial joins. This keeps the operational Booking
+  // queue out of Finance's navigation while preserving her backend read access, per CTO direction.
+  // Finance gates on codes Finance actually resolves (payment.read / finance_admin.manage), since the
+  // backend finance_admin role expresses finance authority through those, not a bare finance.view.
+  var MODULE_PERMS={dashboard:['dashboard.view'],bookings:['booking.audit.view'],quotes:['quotation.view'],jobs:['operations.view','job.read'],dispatch:['operations.view','job.read'],customers:['customer.view'],fleet:['assets.view','fleet.view'],maintenance:['assets.view','fleet.view'],fleetmap:['assets.view','fleet.view'],drivers:['operations.view','job.read'],permits:['permits.view','safety.view'],invoices:['invoice.view','payment.read'],finance:['finance.view','payment.read','finance_admin.manage'],reports:['reports.view','reporting.view'],access:['users.view','user_admin.view','role_admin.view']};
   var roleCode='booking_admin',role=ROLE_DEFS.booking_admin.label,currentActor={id:ROLE_DEFS.booking_admin.actor,name:ROLE_DEFS.booking_admin.name};
-  function canPerm(p,code){var d=ROLE_DEFS[code||roleCode];return !!(d&&(d.perms.indexOf('*')>-1||d.perms.indexOf(p)>-1));}
+  // Backend-authoritative permission payload (GET /me/permissions). When set, the UI gates on THIS —
+  // never on a JS role engine. ROLE_DEFS is only the offline-demo fallback. livePerms==null => mock mode.
+  var livePerms=null;      // array of granted permission codes resolved by the backend
+  var liveMode=false;      // true once authenticated against a real backend
+  function canPerm(p,code){
+    // Asking about the CURRENT actor while connected: the backend payload is the sole authority.
+    if(!code && liveMode && livePerms){ return livePerms.indexOf('*')>-1 || livePerms.indexOf(p)>-1; }
+    var d=ROLE_DEFS[code||roleCode];return !!(d&&(d.perms.indexOf('*')>-1||d.perms.indexOf(p)>-1));
+  }
   function canAny(ps,code){return (ps||[]).some(function(p){return canPerm(p,code)});}
   function financialValue(p,n){return canPerm(p)?peso(n):'<span class="restricted" title="Restricted by role">🔒 Restricted</span>';}
   function requirePerm(p,msg){if(canPerm(p))return true;toast(msg||'You are not authorized for this action');return false;}
@@ -692,7 +746,30 @@ window.RGO_API = (function(){
   // ---------- SHELL / NAV ----------
   function applyRoleUI(){var d=ROLE_DEFS[roleCode];role=d.label;currentActor={id:d.actor,name:d.name};$('#roleBadge').textContent=d.label;$('#userName').textContent=d.name;$('#userAvatar').textContent=d.initials;document.querySelectorAll('.nav[data-mod]').forEach(function(n){n.style.display=canAny(MODULE_PERMS[n.dataset.mod]||[])?'flex':'none';});var reset=$('[data-act="resetDemo"]');if(reset)reset.style.display=roleCode==='super_admin'?'inline-flex':'none';}
   $('#demoRole').addEventListener('change',function(){var d=ROLE_DEFS[this.value];$('#u').value=d.actor;});
-  $('#loginForm').addEventListener('submit',function(e){e.preventDefault();roleCode=$('#demoRole').value;applyRoleUI();showScreen('dash');views._bf=roleCode==='approver'?'PENDING_INTERNAL_APPROVAL':'all';var landing=roleCode==='user_admin'?'access':roleCode==='approver'?'bookings':roleCode==='finance_admin'?'finance':'dashboard';go(landing);badges();});
+  function enterApp(){showScreen('dash');views._bf=roleCode==='approver'?'PENDING_INTERNAL_APPROVAL':'all';
+    var isFinance=(canPerm('finance.view')||canPerm('payment.read')||canPerm('finance_admin.manage'))&&!canPerm('booking.audit.view');
+    var landing=(canPerm('users.view')||canPerm('user_admin.view'))?'access':canPerm('quotation.approve')?'bookings':isFinance?'finance':'dashboard';
+    go(landing);badges();}
+  function demoLogin(){liveMode=false;livePerms=null;roleCode=$('#demoRole').value;applyRoleUI();enterApp();}
+  $('#loginForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    // Live path: when a backend origin is configured, authenticate for real and gate the whole UI on
+    // the backend's /me/permissions payload. No fallback to the JS role model while connected.
+    if(window.RGO_API && RGO_API.configured()){
+      var email=$('#u').value.trim(), pw=$('#p').value;
+      toast('Signing in…');
+      RGO_API.login(email,pw).then(function(){return RGO_API.myPermissions();}).then(function(me){
+        liveMode=true; livePerms=(me&&me.permissions)||[]; window.liveMe=me;
+        role=(me&&me.role)||email; currentActor={id:email,name:(me&&me.user)||email};
+        $('#roleBadge').textContent=role; $('#userName').textContent=currentActor.name;
+        $('#userAvatar').textContent=(currentActor.name||'?').slice(0,2).toUpperCase();
+        document.querySelectorAll('.nav[data-mod]').forEach(function(n){n.style.display=canAny(MODULE_PERMS[n.dataset.mod]||[])?'flex':'none';});
+        toast('Connected · backend-authoritative permissions'); enterApp();
+      }).catch(function(err){ toast('Live sign-in failed: '+err.message+' — using demo role'); demoLogin(); });
+      return;
+    }
+    demoLogin();
+  });
   $('#signout').addEventListener('click',function(){showScreen('login')});
   document.querySelectorAll('.nav').forEach(function(n){n.addEventListener('click',function(){go(n.dataset.mod)})});
   function setActive(mod){document.querySelectorAll('.nav').forEach(function(x){x.removeAttribute('aria-current');if(x.dataset.mod===mod)x.setAttribute('aria-current','true')});}
@@ -761,16 +838,11 @@ window.RGO_API = (function(){
         '<div class="tblwrap"><table class="tbl"><thead><tr><th>Ref</th><th>Customer</th><th>Service</th><th>Requested</th><th>Route</th><th>Stage</th><th>Quotation</th><th>Payment</th><th>Next action</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     },
     access:function(){
-      var editable=roleCode==='super_admin';
-      var codes=['booking_admin','approver','finance_admin','executive','user_admin','operational_user'];
-      var urows=DB.users.filter(function(u){return u.tenant==='RGO';}).map(function(u){var d=ROLE_DEFS[u.role]||{label:u.role};return '<tr><td class="strong">'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+esc(d.label)+'</td><td>'+esc(u.department)+' · '+esc(u.branch)+'</td><td><span class="chip '+(u.status==='Active'?'c-good':'c-warn')+'">'+esc(u.status)+'</span></td><td style="white-space:nowrap"><button class="btn line sm" data-act="userToggle" data-arg="'+u.id+'">'+(u.status==='Active'?'Suspend':'Unlock')+'</button> <button class="btn line sm" data-act="userReset" data-arg="'+u.id+'">Reset password</button> <button class="btn line sm" data-act="userAssign" data-arg="'+u.id+'">Assign role</button></td></tr>';}).join('');
-      var mh='<tr><th>Booking / quotation permission</th>'+codes.map(function(c){return '<th>'+esc(ROLE_DEFS[c].label)+'</th>';}).join('')+'</tr>';
-      var mb=MATRIX_PERMS.map(function(p){return '<tr><td class="strong">'+p[0]+'</td>'+codes.map(function(c){var yes=canPerm(p[1],c);return '<td>'+(editable?'<input class="perm-toggle" type="checkbox" '+(yes?'checked':'')+' data-act="toggleRolePerm" data-arg="'+c+'|'+p[1]+'" aria-label="'+esc(p[0]+' for '+ROLE_DEFS[c].label)+'">':'<span class="'+(yes?'perm-on':'perm-off')+'">'+(yes?'✓':'—')+'</span>')+'</td>';}).join('')+'</tr>';}).join('');
-      return head('Security & Administration','Users & Access','<button class="btn" data-act="newUser">+ Create User</button>')+
-        '<div class="access-note"><span>🔐</span><div><b>'+esc(role)+'</b> · '+(editable?'You can configure business-role permissions. Every change is recorded in the local demo audit.':'You can maintain users and assign approved business roles, but cannot grant Executive or Super Administrator, elevate yourself, expose financial records, or change platform settings.')+'</div></div>'+
-        '<div class="sod-card"><b>Enforced separation of duties:</b> the creator or any material reviser cannot approve the same booking or quotation. User administration, transaction administration, finance, executive visibility, and platform administration remain independent.</div>'+
-        '<div class="panel" style="margin-bottom:18px"><div class="panel-h"><h3>User accounts · RGO tenant</h3><div class="spacer"></div><span class="cnt">'+DB.users.length+' users</span></div><div class="tblwrap" style="border:0;box-shadow:none;border-radius:0"><table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Business role</th><th>Scope</th><th>Status</th><th>Account actions</th></tr></thead><tbody>'+urows+'</tbody></table></div></div>'+
-        '<div class="panel"><div class="panel-h"><h3>Configurable Booking & Quotation permission matrix</h3><div class="spacer"></div><span class="cnt">'+(editable?'Editable by Super Administrator':'Read only')+'</span></div><div class="tblwrap" style="border:0;box-shadow:none;border-radius:0"><table class="tbl perm-matrix"><thead>'+mh+'</thead><tbody>'+mb+'</tbody></table></div></div>';
+      var canCreate=canPerm('users.manage')||canPerm('user_admin.manage');
+      return head('Security & Administration','Administration Center',(canCreate&&(adminTab==='people')?'<button class="btn" data-act="newUser">+ Create User</button>':'')+(adminTab==='roles'?'<button class="btn line" data-act="roleExport">⤓ Export matrix</button>':''))+
+        '<div class="access-note"><span>🔐</span><div><b>'+esc(role)+'</b> · '+(liveMode?'Connected to the authoritative RBAC backend. Every screen reads permissions from <code>/me/permissions</code> and data from <code>/admin/*</code>; actions persist and audit server-side.':'Offline demo — actions persist to this browser only. Set <code>localStorage.rgo_api_base</code> to a backend origin for authoritative RBAC and server-side persistence.')+'</div></div>'+
+        adminTabsBar()+
+        '<div id="adminBody">'+renderAdminTab()+'</div>';
     },
     jobs:function(){
       var f=views._jf||{q:'',s:'all'};
@@ -827,8 +899,19 @@ window.RGO_API = (function(){
       var revRows=Object.keys(byClient).sort(function(a,b){return byClient[b]-byClient[a]}).map(function(k){return '<div class="chartrow"><div class="lbl">'+esc(k)+'</div><div class="track"><i style="width:'+(byClient[k]/mx*100)+'%"></i></div><div class="val">'+peso(byClient[k])+'</div></div>';}).join('');
       var exp=[['Equipment & fuel',0.42],['Crew & operators',0.28],['Permits & escorts',0.11],['Maintenance',0.10],['Overhead',0.09]];
       var expRows=exp.map(function(e){return '<div class="chartrow"><div class="lbl">'+e[0]+'</div><div class="track"><i style="width:'+(e[1]*100)+'%;background:var(--accent)"></i></div><div class="val">'+Math.round(e[1]*100)+'%</div></div>';}).join('');
+      // Expense per client — estimated cost-to-serve = client revenue × blended cost ratio (carrier + platform).
+      var costRatio=0.72;
+      var expByClient={};Object.keys(byClient).forEach(function(k){expByClient[k]=Math.round(byClient[k]*costRatio)});
+      var emxArr=Object.keys(expByClient).map(function(k){return expByClient[k]});
+      var emx=emxArr.length?Math.max.apply(null,emxArr):1;
+      var expClientRows=Object.keys(expByClient).sort(function(a,b){return expByClient[b]-expByClient[a]}).map(function(k){
+        var pct=byClient[k]?Math.round(expByClient[k]/byClient[k]*100):0;
+        return '<div class="chartrow"><div class="lbl">'+esc(k)+'</div><div class="track"><i style="width:'+(expByClient[k]/emx*100)+'%;background:var(--accent)"></i></div><div class="val">'+peso(expByClient[k])+' · '+pct+'%</div></div>';
+      }).join('')||'<div class="empty">No client expense yet.</div>';
       return head('Admin','Finance Dashboard')+'<div class="stripe hz" style="margin:-8px 0 18px"></div><div class="kpis">'+kpi('Revenue (paid)',peso(paid),'collected',spark([2,3,3,4,5,4,6]))+kpi('Outstanding',peso(outInv+bal),'receivables',spark([3,4,3,5,4,5,6]))+kpi('Work in progress',peso(wip),'active jobs',spark([2,3,4,3,5,4,5]))+kpi('Maintenance spend',peso(mcost),'period',spark([1,2,1,2,3,2,3]))+'</div>'+
-        '<div class="grid2"><div class="panel"><div class="panel-h"><h3>Revenue by Client</h3></div><div class="panel-b">'+revRows+'</div></div><div class="panel"><div class="panel-h"><h3>Expense Breakdown</h3></div><div class="panel-b">'+expRows+'</div></div></div>';
+        '<div class="grid2"><div class="panel"><div class="panel-h"><h3>Revenue by Client</h3></div><div class="panel-b">'+revRows+'</div></div>'+
+        '<div class="panel"><div class="panel-h"><h3>Expense by Client</h3><div class="spacer"></div><span class="es" style="font-size:11px;color:var(--ink-2)">est. cost to serve · % of revenue</span></div><div class="panel-b">'+expClientRows+'</div></div></div>'+
+        '<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>Expense Breakdown</h3><div class="spacer"></div><span class="es" style="font-size:11px;color:var(--ink-2)">share of total cost pool</span></div><div class="panel-b">'+expRows+'</div></div>';
     },
     fleetmap:function(){
       var mstat={'En route':'#3B82F6','On site':'#159C5B','To depot':'#8B5CF6','Yard':'#7C8894'};
@@ -964,14 +1047,36 @@ window.RGO_API = (function(){
     if(act==='userReset')return userReset(arg);
     if(act==='userAssign')return userAssign(arg);
     if(act==='toggleRolePerm')return toggleRolePerm(arg);
+    if(act==='adminTab')return setAdminTab(arg);
+    if(act==='luStatus')return luStatus(arg);
+    if(act==='luLock')return luLock(arg);
+    if(act==='luReset')return luReset(arg);
+    if(act==='luMfa')return luMfa(arg);
+    if(act==='luAssign')return luAssign(arg);
+    if(act==='luEffective')return luEffective(arg);
+    if(act==='luRevokeSess')return luRevokeSess(arg);
+    if(act==='luDeactivate')return luDeactivate(arg);
+    if(act==='luScope')return luScope(arg);
+    if(act==='saveScope')return saveScope(arg);
+    if(act==='luAudit')return luAudit(arg);
+    if(act==='roleCreate')return roleCreateUI();
+    if(act==='roleDep')return roleDepUI(arg);
+    if(act==='rcNew')return rcNew();
+    if(act==='rcEdit')return rcEdit(arg);
+    if(act==='rcArchive')return rcArchive(arg);
+    if(act==='luRevokeTok')return RGO_API.revokeSession(arg).then(function(){toast('Session revoked');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});
+    if(act==='roleClone')return roleCloneUI();
+    if(act==='roleExport')return roleExport();
+    if(act==='roleCompare')return roleCompareUI();
   });
   $('#bookForm').addEventListener('submit',submitBooking);
   document.addEventListener('input',function(e){var el=e.target;
+    if(el.dataset.inp==='userSearch'){adminUserFilter=el.value;var host=$('#adminBody');if(host)host.innerHTML=peopleTableLive(Object.keys(liveUsersById).map(function(k){return liveUsersById[k];}));var si=$('#userSearch');if(si){si.focus();si.setSelectionRange(el.value.length,el.value.length);}return;}
     if(el.dataset.inp==='jq'){views._jf=views._jf||{q:'',s:'all'};views._jf.q=el.value;render();var ni=$('[data-inp="jq"]');if(ni){ni.focus();ni.setSelectionRange(el.value.length,el.value.length);}return;}
     if(el.dataset.inp==='js'){views._jf=views._jf||{q:'',s:'all'};views._jf.s=el.value;render();return;}
     if(el.classList.contains('ql'))recalc();
     if(el.closest&&el.closest('#aiForm'))recalcAi();
-    if(el.classList.contains('bq'))bkPreview();});
+    if(el.classList.contains('bq')){if(el.name==='equip')bkSyncStd(true);bkPreview();}});
 
   function advance(id){var j=DB.jobs.find(function(x){return x.id===id});var i=STFLOW.indexOf(j.status);
     if(j.status==='Permit Pending'){var pm=DB.permits.find(function(p){return p.job===j.id});if(pm&&pm.status!=='approved'){toast('🚫 Permit '+pm.id+' not approved — clear it in Permits first');return;}}
@@ -987,12 +1092,236 @@ window.RGO_API = (function(){
   // user lifecycle is intentionally separate from transaction, finance and platform administration
   function accessAudit(note){DB.accessAudit=DB.accessAudit||[];DB.accessAudit.unshift({ts:bkNow(),by:currentActor.id,role:roleCode,note:note});save();}
   function assignableRoles(){return roleCode==='super_admin'?Object.keys(ROLE_DEFS):['booking_admin','approver','finance_admin','operational_user'];}
-  function formUser(){if(!requirePerm('users.manage'))return;var opts=assignableRoles().map(function(c){return '<option value="'+c+'">'+esc(ROLE_DEFS[c].label)+'</option>';}).join('');modal('<div class="modal"><div class="modal-h"><h3>Create user · RGO tenant</h3><button class="x" data-close>×</button></div><form class="modal-b frm mf" id="uf"><label><span>Full name</span><input name="name" required></label><label><span>Email</span><input name="email" type="email" required></label><div class="two"><label><span>Department</span><input name="department" required></label><label><span>Branch / unit</span><input name="branch" required></label></div><label><span>Approved business role</span><select name="role">'+opts+'</select></label><div class="sod-card"><b>Scope:</b> This account is created only inside the RGO tenant. User Administrators cannot grant Executive, Super Administrator, or User Administrator authority.</div></form><div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="saveUser">Create account</button></div></div>');}
-  function saveUser(){var f=$('#uf');if(!f||!f.name.value.trim()||!f.email.value.trim()){toast('Name and email are required');return;}if(assignableRoles().indexOf(f.role.value)<0){toast('Role assignment requires additional approval');return;}var id='user-'+Date.now();DB.users.push({id:id,name:f.name.value.trim(),email:f.email.value.trim(),role:f.role.value,department:f.department.value.trim(),branch:f.branch.value.trim(),status:'Active',tenant:'RGO'});accessAudit('Created '+id+' with role '+f.role.value);closeModal();toast('User created in RGO tenant');go('access');}
+  function formUser(){
+    if(!(canPerm('users.manage')||canPerm('user_admin.manage'))){toast('You are not authorized to create users');return;}
+    var opts=(liveMode?LIVE_CREATE_ROLES.map(function(c){return '<option value="'+c+'">'+esc(c)+'</option>';}):assignableRoles().map(function(c){return '<option value="'+c+'">'+esc(ROLE_DEFS[c].label)+'</option>';})).join('');
+    var pwField=liveMode?'<label><span>Temporary password (min 10 · upper+lower+digit)</span><input name="password" type="text" value="Welcome123Xy" required></label>':'';
+    modal('<div class="modal"><div class="modal-h"><h3>Create user · RGO tenant'+(liveMode?' · live':'')+'</h3><button class="x" data-close>×</button></div><form class="modal-b frm mf" id="uf"><label><span>Full name</span><input name="name" required></label><label><span>Email</span><input name="email" type="email" required></label><div class="two"><label><span>Department</span><input name="department"></label><label><span>Branch / unit</span><input name="branch"></label></div><label><span>Approved business role</span><select name="role">'+opts+'</select></label>'+pwField+'<div class="sod-card"><b>Scope:</b> This account is created only inside the RGO tenant. '+(liveMode?'The backend rejects any attempt to grant authority above your own, platform roles, or self-elevation.':'User Administrators cannot grant Executive, Super Administrator, or User Administrator authority.')+'</div></form><div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="saveUser">Create account</button></div></div>');
+  }
+  function saveUser(){
+    var f=$('#uf');if(!f||!f.name.value.trim()||!f.email.value.trim()){toast('Name and email are required');return;}
+    if(liveMode){
+      RGO_API.createUserAcct({email:f.email.value.trim(),password:f.password.value,role:f.role.value,name:f.name.value.trim()}).then(function(){closeModal();toast('User created + audited server-side');adminTab='people';refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});
+      return;
+    }
+    if(assignableRoles().indexOf(f.role.value)<0){toast('Role assignment requires additional approval');return;}var id='user-'+Date.now();DB.users.push({id:id,name:f.name.value.trim(),email:f.email.value.trim(),role:f.role.value,department:f.department.value.trim(),branch:f.branch.value.trim(),status:'Active',tenant:'RGO'});accessAudit('Created '+id+' with role '+f.role.value);closeModal();toast('User created in RGO tenant');go('access');}
   function userToggle(id){if(!requirePerm('users.manage'))return;var u=DB.users.find(function(x){return x.id===id&&x.tenant==='RGO';});if(!u)return;if(u.id===currentActor.id){toast('CONTROL: you cannot change your own account status');return;}if(roleCode!=='super_admin'&&(u.role==='super_admin'||u.role==='executive')){toast('CONTROL: privileged account change requires Super Administrator approval');return;}u.status=u.status==='Active'?'Suspended':'Active';accessAudit(u.status+' user '+u.id);toast(u.name+' · '+u.status);go('access');}
   function userReset(id){if(!requirePerm('users.manage'))return;var u=DB.users.find(function(x){return x.id===id&&x.tenant==='RGO';});if(!u)return;if(roleCode!=='super_admin'&&u.role==='super_admin'){toast('CONTROL: Super Administrator reset requires governed approval');return;}accessAudit('Issued password reset for '+u.id);toast('Password reset issued for '+u.name+' (demo)');}
   function userAssign(id){if(!(canPerm('users.assign_business_roles')||canPerm('*'))){toast('Role assignment is not authorized');return;}var u=DB.users.find(function(x){return x.id===id&&x.tenant==='RGO';});if(!u)return;if(roleCode!=='super_admin'&&u.id===currentActor.id){toast('CONTROL: self-elevation is prohibited');return;}var allowed=assignableRoles();var labels=allowed.map(function(c){return c+' = '+ROLE_DEFS[c].label;}).join('\n');var picked=window.prompt('Enter approved role code:\n'+labels,u.role);if(!picked)return;if(allowed.indexOf(picked)<0){toast('CONTROL: this role requires additional privileged approval');return;}var old=u.role;u.role=picked;accessAudit('Changed '+u.id+' role from '+old+' to '+picked);toast(u.name+' assigned '+ROLE_DEFS[picked].label);go('access');}
   function toggleRolePerm(arg){if(roleCode!=='super_admin'){toast('Only Super Administrator can configure permissions');go('access');return;}var bits=arg.split('|'),code=bits[0],perm=bits[1],d=ROLE_DEFS[code];if(!d||code==='super_admin')return;var i=d.perms.indexOf(perm);if(i>-1)d.perms.splice(i,1);else d.perms.push(perm);DB.roleOverrides[code]=d.perms.slice();accessAudit((i>-1?'Revoked ':'Granted ')+perm+' '+(i>-1?'from ':'to ')+code);toast('Permission matrix updated');go('access');}
+
+  /* ===================== ADMINISTRATION CENTER ===================== *
+   * 5-area console (Organization · People & Access · Roles & Permissions · Calendars · Configuration
+   * · Governance). In live mode every panel reads/writes the authoritative backend; in mock mode it
+   * uses the local demo DB. No RBAC decisions are made in JS — gating comes from /me/permissions.  */
+  var adminTab='people';
+  var liveUsersById={};                       // populated from GET /admin/users for action handlers
+  var LIVE_CREATE_ROLES=['booking_quotation_administrator','approver','finance_admin','user_administrator','operational_user','executive'];
+  function apiErr(err){var host=$('#adminBody');if(host)host.innerHTML='<div class="sod-card" style="border-color:var(--crit)"><b>Backend error:</b> '+esc(err.message)+'</div>';toast('Backend: '+err.message);}
+  function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
+  function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
+  function adminTabsBar(){
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
+  }
+  function renderAdminTab(){
+    if(adminTab==='people')return adminPeople();
+    if(adminTab==='roles')return adminRoles();
+    if(adminTab==='rates')return adminRateCards();
+    if(adminTab==='org')return adminOrg();
+    if(adminTab==='cal')return adminCalendars();
+    if(adminTab==='config')return adminConfig();
+    if(adminTab==='gov')return adminGovernance();
+    return '';
+  }
+  var SOD_NOTE='<div class="sod-card"><b>Enforced separation of duties:</b> the creator or any material reviser cannot approve the same booking or quotation. User administration, transaction administration, finance, executive visibility, and platform administration remain independent. Guardrails are enforced server-side.</div>';
+
+  // ---------- People & Access ----------
+  var adminUserFilter='';
+  function adminPeople(){
+    if(liveMode){
+      RGO_API.listUsers().then(function(d){
+        var users=d.users||[];liveUsersById={};users.forEach(function(u){liveUsersById[u.id]=u;});
+        var host=$('#adminBody');if(host&&adminTab==='people')host.innerHTML=peopleTableLive(users);
+        var si=$('#userSearch');if(si){si.focus();si.setSelectionRange(si.value.length,si.value.length);}
+      }).catch(apiErr);
+      return SOD_NOTE+'<div class="panel"><div class="panel-h"><h3>User accounts · live backend</h3></div><div class="panel-b"><div class="empty">Loading users from <code>/admin/users</code>…</div></div></div>';
+    }
+    // mock
+    var urows=DB.users.filter(function(u){return u.tenant==='RGO';}).map(function(u){var d=ROLE_DEFS[u.role]||{label:u.role};return '<tr><td class="strong">'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+esc(d.label)+'</td><td>'+esc(u.department)+' · '+esc(u.branch)+'</td><td><span class="chip '+(u.status==='Active'?'c-good':'c-warn')+'">'+esc(u.status)+'</span></td><td style="white-space:nowrap"><button class="btn line sm" data-act="userToggle" data-arg="'+u.id+'">'+(u.status==='Active'?'Suspend':'Unlock')+'</button> <button class="btn line sm" data-act="userReset" data-arg="'+u.id+'">Reset password</button> <button class="btn line sm" data-act="userAssign" data-arg="'+u.id+'">Assign role</button></td></tr>';}).join('');
+    return SOD_NOTE+'<div class="panel"><div class="panel-h"><h3>User accounts · RGO tenant (demo)</h3><div class="spacer"></div><span class="cnt">'+DB.users.length+' users</span></div><div class="tblwrap" style="border:0;box-shadow:none;border-radius:0"><table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Business role</th><th>Scope</th><th>Status</th><th>Account actions</th></tr></thead><tbody>'+urows+'</tbody></table></div></div>';
+  }
+  function stChipCls(s){s=(s||'').toUpperCase();return s==='ACTIVE'?'c-good':(s==='LOCKED'||s==='SUSPENDED')?'c-warn':'c-crit';}
+  // Permission-gated action button — renders ONLY if the actor holds the backend permission.
+  // The backend independently re-checks on every call, so hiding here is UX, not the security boundary.
+  function gBtn(perm,act,id,label){return canPerm(perm)?'<button class="btn line sm" data-act="'+act+'" data-arg="'+id+'">'+label+'</button> ':'';}
+  function peopleTableLive(users){
+    var q=(adminUserFilter||'').toLowerCase();
+    var filtered=users.filter(function(u){return !q||((u.name||'')+' '+(u.email||'')+' '+(u.role||'')+' '+(u.status||'')).toLowerCase().indexOf(q)>-1;});
+    var rows=filtered.map(function(u){
+      var st=(u.status||'ACTIVE').toUpperCase();
+      var locked=st==='LOCKED';
+      var actions=
+        gBtn('user_admin.manage','luStatus',u.id,(st==='SUSPENDED'?'Activate':'Suspend'))+
+        gBtn('user_admin.manage','luLock',u.id,(locked?'Unlock':'Lock'))+
+        gBtn('user_admin.manage','luDeactivate',u.id,'Deactivate')+
+        gBtn('user_admin.manage','luReset',u.id,'Reset PW')+
+        gBtn('user_admin.view','luMfa',u.id,'MFA')+
+        gBtn('user_admin.assign_roles','luAssign',u.id,'Assign role')+
+        gBtn('user_admin.manage','luScope',u.id,'Org scope')+
+        gBtn('user_admin.view','luEffective',u.id,'Effective')+
+        gBtn('user_admin.view','luAudit',u.id,'Audit')+
+        gBtn('security.manage','luRevokeSess',u.id,'Revoke sessions');
+      return '<tr><td class="strong">'+esc(u.name||'—')+'</td><td>'+esc(u.email)+'</td><td>'+esc(u.role||'—')+'</td><td><span class="chip '+stChipCls(st)+'">'+esc(st)+'</span></td>'+
+        '<td style="white-space:normal;font-size:12px">'+(actions||'<span class="es">no actions permitted</span>')+'</td></tr>';
+    }).join('')||'<tr><td colspan="5" class="empty">No users match “'+esc(adminUserFilter)+'”.</td></tr>';
+    var search='<div class="toolbar" style="margin-bottom:10px"><div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input id="userSearch" data-inp="userSearch" placeholder="Search users by name, email, role, status…" value="'+esc(adminUserFilter)+'"></div></div>';
+    return SOD_NOTE+search+'<div class="panel"><div class="panel-h"><h3>User accounts · live backend</h3><div class="spacer"></div><span class="cnt">'+filtered.length+' / '+users.length+' users · <code>/admin/users</code></span></div><div class="tblwrap" style="border:0;box-shadow:none;border-radius:0"><table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Account actions (permission-gated · persist + audit server-side)</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }
+  function luRefresh(){if(liveMode&&adminTab==='people')adminPeople();}
+  function luStatus(id){var u=liveUsersById[id];if(!u)return;var next=(u.status||'ACTIVE').toUpperCase()==='SUSPENDED'?'ACTIVE':'SUSPENDED';RGO_API.setUserStatus(id,{status:next}).then(function(){toast('User '+next.toLowerCase());luRefresh();}).catch(function(e){toast('Denied: '+e.message);});}
+  function luLock(id){var u=liveUsersById[id];if(!u)return;var next=(u.status||'ACTIVE').toUpperCase()==='LOCKED'?'ACTIVE':'LOCKED';RGO_API.setUserStatus(id,{status:next}).then(function(){toast(next==='LOCKED'?'Account locked':'Account unlocked');luRefresh();}).catch(function(e){toast('Denied: '+e.message);});}
+  function luReset(id){var pw=window.prompt('New password (min 10 chars, upper+lower+digit):','');if(!pw)return;RGO_API.resetUserPw(id,{password:pw}).then(function(){toast('Password reset · sessions revoked');}).catch(function(e){toast('Rejected: '+e.message);});}
+  function luMfa(id){RGO_API.mfaStatus(id).then(function(d){toast('MFA '+(d.enrolled?'ENROLLED':'not enrolled')+' for this user');}).catch(function(e){toast('Error: '+e.message);});}
+  function luAssign(id){var picked=window.prompt('Assign backend role code:\n'+LIVE_CREATE_ROLES.join(', '),'approver');if(!picked)return;RGO_API.assignUserRole(id,{role:picked}).then(function(){toast('Role '+picked+' assigned');luRefresh();}).catch(function(e){
+    if(/separation-of-duties/i.test(e.message)){var reason=window.prompt('SoD conflict:\n'+e.message+'\n\nEnter governed override reason to proceed (or Cancel):','');if(!reason)return;RGO_API.assignUserRole(id,{role:picked,allow_sod_exception:true,reason:reason}).then(function(){toast('Assigned with governed SoD exception');luRefresh();}).catch(function(e2){toast('Rejected: '+e2.message);});}
+    else toast('Rejected: '+e.message);
+  });}
+  function luRevokeSess(id){RGO_API.listSessions().then(function(d){var toks=(d.sessions||[]).filter(function(s){return String(s.user_id)===String(id);}).map(function(s){return s.token;});if(!toks.length){toast('No active sessions for this user');return;}Promise.all(toks.map(function(t){return RGO_API.revokeSession(t);})).then(function(){toast('Revoked '+toks.length+' session(s)');});}).catch(function(e){toast('Error: '+e.message);});}
+  function luEffective(id){RGO_API.effectiveAccess(id).then(function(d){
+    var byMod={};(d.effective_permissions||[]).forEach(function(p){var m=p.split('.')[0];(byMod[m]=byMod[m]||[]).push(p);});
+    var mods=Object.keys(byMod).sort().map(function(m){return '<div style="margin-bottom:8px"><b>'+esc(m)+'</b> <span class="cnt">'+byMod[m].length+'</span><div style="font-size:12px;color:var(--ink-2);word-break:break-word">'+byMod[m].map(esc).join(', ')+'</div></div>';}).join('');
+    var roles=(d.roles||[]).map(function(r){return '<span class="chip c-info">'+esc(r.code)+' · L'+r.layer+'</span>';}).join(' ');
+    modal('<div class="modal"><div class="modal-h"><h3>Effective access · user #'+esc(id)+'</h3><button class="x" data-close>×</button></div><div class="modal-b"><div style="margin-bottom:10px">Roles: '+(roles||'—')+'</div><div class="sod-card">Effective permissions are the union of role grants resolved by the backend (<code>/admin/users/'+esc(id)+'/effective-access</code>).</div>'+mods+'</div><div class="modal-f"><button class="btn" data-close>Close</button></div></div>');
+  }).catch(function(e){toast('Error: '+e.message);});}
+  function luDeactivate(id){if(!window.confirm('Deactivate (offboard) this user? Sessions are revoked immediately.'))return;RGO_API.setUserStatus(id,{status:'DEACTIVATED'}).then(function(){toast('User deactivated · sessions revoked');luRefresh();}).catch(function(e){toast('Denied: '+e.message);});}
+  function luScope(id){
+    RGO_API.userAssignments(id).then(function(d){
+      var cur=(d.assignments||[]).map(function(a){return '<span class="chip c-info">'+esc(a.scope_kind||a.kind||'')+':'+esc(a.scope_id||a.unit_id||'')+(a.assignment_type?' ('+esc(a.assignment_type)+')':'')+'</span>';}).join(' ')||'—';
+      modal('<div class="modal"><div class="modal-h"><h3>Tenant / org scope · user #'+esc(id)+'</h3><button class="x" data-close>×</button></div><form class="modal-b frm mf" id="scopeF"><div style="margin-bottom:8px">Current: '+cur+'</div><div class="two"><label><span>Scope kind</span><select name="scope_kind"><option value="BRANCH">BRANCH</option><option value="DEPARTMENT">DEPARTMENT</option><option value="COST_CENTER">COST_CENTER</option></select></label><label><span>Scope id (org unit id)</span><input name="scope_id" type="number" required></label></div><label><span>Assignment type</span><select name="assignment_type"><option value="PRIMARY">PRIMARY</option><option value="SECONDARY">SECONDARY</option></select></label><label><span>Reason</span><input name="reason" value="Org scope assignment"></label><div class="sod-card">Scope assignment is enforced and audited server-side (<code>/admin/users/'+esc(id)+'/assignments</code>).</div></form><div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="saveScope" data-arg="'+id+'">Assign scope</button></div></div>');
+    }).catch(function(e){toast('Error: '+e.message);});
+  }
+  function saveScope(id){var f=$('#scopeF');if(!f||!f.scope_id.value){toast('Scope id required');return;}RGO_API.assignScope(id,{scope_kind:f.scope_kind.value,scope_id:Number(f.scope_id.value),assignment_type:f.assignment_type.value,reason:f.reason.value}).then(function(){toast('Scope assigned + audited');closeModal();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function luAudit(id){RGO_API.userAudit(id).then(function(d){
+    var rows=(d.audit||[]).map(function(a){return '<tr><td style="white-space:nowrap">'+esc(a.ts||'')+'</td><td>'+esc(a.actor||'')+'</td><td>'+esc(a.action||'')+'</td><td style="font-size:11px;color:var(--ink-2)">'+esc((a.new_value||'').slice(0,90))+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No audit entries.</td></tr>';
+    modal('<div class="modal wide"><div class="modal-h"><h3>Audit history · user #'+esc(id)+'</h3><button class="x" data-close>×</button></div><div class="modal-b"><div class="tblwrap" style="border:0;max-height:420px;overflow:auto"><table class="tbl"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead><tbody>'+rows+'</tbody></table></div></div><div class="modal-f"><button class="btn" data-close>Close</button></div></div>');
+  }).catch(function(e){toast('Error: '+e.message);});}
+  function roleCreateUI(){if(!canPerm('role_admin.manage')){toast('Not authorized to create roles');return;}var code=window.prompt('New role code (kebab/underscore):','regional_ops');if(!code)return;var name=window.prompt('Display name:','Regional Ops');if(!name)return;RGO_API.createRoleApi({code:code,name:name,layer:4,grants:[]}).then(function(){toast('Role created: '+code);refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function roleDepUI(code){RGO_API.roleDependency(code).then(function(d){modal('<div class="modal"><div class="modal-h"><h3>Role dependency · '+esc(code)+'</h3><button class="x" data-close>×</button></div><div class="modal-b"><p><b>Layer:</b> '+esc(d.layer)+'</p><p><b>Protected (system-locked):</b> '+(d.protected?'yes — cannot be edited or archived; clone to customize':'no')+'</p><p><b>Assigned users:</b> '+esc(d.assigned_users)+'</p><p><b>Can archive:</b> '+(d.can_archive?'yes':'no — protected or has assigned users')+'</p></div><div class="modal-f"><button class="btn" data-close>Close</button></div></div>');}).catch(function(e){toast('Error: '+e.message);});}
+
+  // ---------- Roles & Permissions ----------
+  function adminRoles(){
+    if(liveMode){
+      Promise.all([RGO_API.listPermissions().catch(function(){return{permissions:[]};}), RGO_API.rolesMatrix()]).then(function(r){
+        var perms=r[0].permissions||[], roles=r[1].roles||[];
+        var host=$('#adminBody');if(host&&adminTab==='roles')host.innerHTML=rolesMatrixLive(roles,perms);
+        window._roleMatrix={roles:roles,perms:perms};
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-h"><h3>Roles & permission matrix · live backend</h3></div><div class="panel-b"><div class="empty">Loading roles + permissions from <code>/admin/roles/matrix</code>…</div></div></div>';
+    }
+    // mock matrix (existing demo behavior)
+    var editable=roleCode==='super_admin';
+    var codes=['booking_admin','approver','finance_admin','executive','user_admin','operational_user'];
+    var mh='<tr><th>Booking / quotation permission</th>'+codes.map(function(c){return '<th>'+esc(ROLE_DEFS[c].label)+'</th>';}).join('')+'</tr>';
+    var mb=MATRIX_PERMS.map(function(p){return '<tr><td class="strong">'+p[0]+'</td>'+codes.map(function(c){var yes=canPerm(p[1],c);return '<td>'+(editable?'<input class="perm-toggle" type="checkbox" '+(yes?'checked':'')+' data-act="toggleRolePerm" data-arg="'+c+'|'+p[1]+'" aria-label="'+esc(p[0]+' for '+ROLE_DEFS[c].label)+'">':'<span class="'+(yes?'perm-on':'perm-off')+'">'+(yes?'✓':'—')+'</span>')+'</td>';}).join('')+'</tr>';}).join('');
+    return '<div class="panel"><div class="panel-h"><h3>Configurable Booking & Quotation permission matrix (demo)</h3><div class="spacer"></div><span class="cnt">'+(editable?'Editable by Super Administrator':'Read only')+'</span></div><div class="tblwrap" style="border:0;box-shadow:none;border-radius:0"><table class="tbl perm-matrix"><thead>'+mh+'</thead><tbody>'+mb+'</tbody></table></div></div>';
+  }
+  function rolesMatrixLive(roles,perms){
+    // group permissions by module for the matrix rows
+    var byMod={};perms.forEach(function(p){(byMod[p.module]=byMod[p.module]||[]).push(p);});
+    var mods=Object.keys(byMod).sort();
+    var grantSet=roles.map(function(r){var s={};(r.grants||[]).forEach(function(g){s[g]=1;});return s;});
+    function held(gs,code){ if(gs[code])return true; // wildcard match (module.* or *)
+      var parts=code.split('.'); for(var i=parts.length;i>0;i--){var wc=parts.slice(0,i-1).concat('*').join('.'); if(gs[wc])return true;} return !!gs['*']; }
+    var head_='<tr><th style="position:sticky;left:0">Permission</th>'+roles.map(function(r){return '<th title="layer '+r.layer+(r.protected?' · protected system role':'')+' · click for dependency" data-act="roleDep" data-arg="'+esc(r.code)+'" style="cursor:pointer">'+esc(r.code)+(r.protected?' 🔒':'')+'<div style="font-weight:400;font-size:10px;color:var(--ink-2)">'+r.assigned_users+' users</div></th>';}).join('')+'</tr>';
+    var body='';
+    mods.forEach(function(m){
+      body+='<tr class="modrow"><td class="strong" colspan="'+(roles.length+1)+'" style="background:var(--surface-2)">'+esc(m)+'</td></tr>';
+      byMod[m].forEach(function(p){
+        body+='<tr><td title="'+esc(p.description||'')+'" style="position:sticky;left:0;background:var(--surface)">'+esc(p.action||p.code)+'</td>'+grantSet.map(function(gs){var y=held(gs,p.code);return '<td><span class="'+(y?'perm-on':'perm-off')+'">'+(y?'✓':'—')+'</span></td>';}).join('')+'</tr>';
+      });
+    });
+    // SoD summary + assigned users
+    var sod=roles.filter(function(r){return (r.sod_conflicts||[]).length;});
+    var sodHtml=sod.length?'<div class="sod-card" style="border-color:var(--warn)"><b>⚠ SoD conflicts detected in '+sod.length+' role(s):</b> '+sod.map(function(r){return esc(r.code)+' ('+r.sod_conflicts.map(function(c){return c.a+'×'+c.b;}).join('; ')+')';}).join(' · ')+'</div>':'<div class="sod-card"><b>✓ No separation-of-duties conflicts</b> across '+roles.length+' roles.</div>';
+    var tools='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+(canPerm('role_admin.manage')?'<button class="btn line sm" data-act="roleCreate">＋ Create role</button><button class="btn line sm" data-act="roleClone">⧉ Clone role</button>':'')+'<button class="btn line sm" data-act="roleCompare">⇄ Compare roles</button><button class="btn line sm" data-act="roleExport">⤓ Export matrix (CSV)</button></div>';
+    return sodHtml+tools+'<div class="panel"><div class="panel-h"><h3>Role × permission matrix</h3><div class="spacer"></div><span class="cnt">'+roles.length+' roles × '+perms.length+' permissions · grouped by module</span></div><div class="tblwrap" style="border:0;box-shadow:none;border-radius:0;max-height:560px;overflow:auto"><table class="tbl perm-matrix" style="font-size:12px">'+head_+body+'</table></div></div>';
+  }
+  function roleCloneUI(){var src=window.prompt('Clone from role code:','booking_quotation_administrator');if(!src)return;var nc=window.prompt('New role code:','regional_'+src);if(!nc)return;var nm=window.prompt('Display name:','Regional '+src);if(!nm)return;RGO_API.cloneRole(src,{new_code:nc,name:nm}).then(function(){toast('Role cloned: '+nc);refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function roleCompareUI(){var a=window.prompt('Role A code:','approver');if(!a)return;var b=window.prompt('Role B code:','finance_admin');if(!b)return;RGO_API.compareRoles({code_a:a,code_b:b}).then(function(d){var only=function(x){return (x||[]).slice(0,40).map(esc).join(', ')||'—';};modal('<div class="modal"><div class="modal-h"><h3>Compare · '+esc(a)+' vs '+esc(b)+'</h3><button class="x" data-close>×</button></div><div class="modal-b"><p><b>Only '+esc(a)+':</b> '+only(d.only_a)+'</p><p><b>Only '+esc(b)+':</b> '+only(d.only_b)+'</p><p><b>Shared:</b> '+only(d.shared)+'</p>'+((d.sod_conflicts||[]).length?'<div class="sod-card" style="border-color:var(--warn)">⚠ Combined SoD conflicts: '+d.sod_conflicts.map(function(c){return c.a+'×'+c.b;}).join('; ')+'</div>':'')+'</div><div class="modal-f"><button class="btn" data-close>Close</button></div></div>');}).catch(function(e){toast('Error: '+e.message);});}
+  function roleExport(){
+    var m=window._roleMatrix;
+    if(!m){ // mock export
+      var rows=[['Permission'].concat(['booking_admin','approver','finance_admin','executive','user_admin','operational_user'])];
+      MATRIX_PERMS.forEach(function(p){rows.push([p[0]].concat(['booking_admin','approver','finance_admin','executive','user_admin','operational_user'].map(function(c){return canPerm(p[1],c)?'Y':'N';})));});
+      return downloadCsv('rgo_role_matrix_demo.csv',rows);
+    }
+    var roles=m.roles, perms=m.perms;
+    var grantSet=roles.map(function(r){var s={};(r.grants||[]).forEach(function(g){s[g]=1;});return s;});
+    function held(gs,code){if(gs[code])return true;var parts=code.split('.');for(var i=parts.length;i>0;i--){var wc=parts.slice(0,i-1).concat('*').join('.');if(gs[wc])return true;}return !!gs['*'];}
+    var rows=[['module','permission'].concat(roles.map(function(r){return r.code;}))];
+    perms.forEach(function(p){rows.push([p.module,p.code].concat(grantSet.map(function(gs){return held(gs,p.code)?'Y':'N';})));});
+    downloadCsv('rgo_role_matrix.csv',rows);
+  }
+  function downloadCsv(name,rows){var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');var blob=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();toast('Exported '+name);}
+
+  // ---------- Rate Cards (CRM / Pricing Administration) ----------
+  function adminRateCards(){
+    if(liveMode){
+      RGO_API.listRateCards().then(function(d){
+        var cards=d.rate_cards||[];window._rateCards=cards;
+        var canManage=canPerm('crm.admin.pricing.manage')||canPerm('crm.admin.pricing.*')||canPerm('*');
+        var showCost=canPerm('quotation.carrier_cost.view');
+        var rows=cards.map(function(r){return '<tr><td class="strong">'+esc(r.equipment_code)+'</td><td>'+esc(r.equipment_name||'')+'</td><td>'+esc(r.billing_unit)+'</td><td class="tnum">'+peso(r.standard_rate)+'</td><td class="tnum">'+(r.min_rate!=null?peso(r.min_rate):'—')+'</td><td class="tnum">'+(showCost?(r.internal_cost!=null?peso(r.internal_cost):'—'):'🔒')+'</td><td>v'+r.version+'</td><td>'+esc((r.effective_from||'').slice(0,10))+'</td><td><span class="chip '+(r.status==='ACTIVE'?'c-good':'c-warn')+'">'+esc(r.status)+'</span></td><td style="white-space:nowrap">'+(canManage?'<button class="btn line sm" data-act="rcEdit" data-arg="'+r.id+'">New version</button> <button class="btn line sm" data-act="rcArchive" data-arg="'+r.id+'">Archive</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="10" class="empty">No rate cards.</td></tr>';
+        var host=$('#adminBody');if(host&&adminTab==='rates')host.innerHTML=
+          '<div class="access-note"><span>💠</span><div><b>Master rate catalog</b> — effective-dated & versioned. Editing creates a NEW version and supersedes the prior row; historical rates are never overwritten, so quotations referencing an older version stay intact. Internal standard cost is masked unless you may view carrier cost.</div></div>'+
+          (canManage?'<div style="margin-bottom:12px"><button class="btn" data-act="rcNew">＋ New rate card</button></div>':'')+
+          '<div class="panel"><div class="panel-h"><h3>Rate Cards · Administration → CRM / Pricing</h3><div class="spacer"></div><span class="cnt">'+cards.length+' active · <code>/admin/crm/rate-cards</code></span></div><div class="tblwrap" style="border:0;box-shadow:none;border-radius:0"><table class="tbl"><thead><tr><th>Equipment</th><th>Name</th><th>Unit</th><th class="right">Standard</th><th class="right">Min</th><th class="right">Internal cost</th><th>Ver</th><th>Effective</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading rate cards from <code>/admin/crm/rate-cards</code>…</div></div></div>';
+    }
+    // mock: show the demo rate card (read-only reference)
+    var rows=(DB.rateCard||[]).map(function(r){return '<tr><td class="strong">'+esc(r.k)+'</td><td class="tnum">'+peso(r.r)+'</td></tr>';}).join('');
+    return '<div class="access-note"><span>💠</span><div>Master rate catalog (demo). Connect a backend for effective-dated, versioned rate-card administration with internal cost governance.</div></div><div class="panel"><div class="panel-h"><h3>Rate Cards (demo)</h3></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Equipment</th><th class="right">Standard rate/day</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }
+  function rcNew(){var code=window.prompt('Equipment code:','CRANE-XXX');if(!code)return;var name=window.prompt('Equipment name:','');var std=window.prompt('Standard rate (₱/unit):','50000');if(!std)return;var cost=window.prompt('Internal standard cost (₱/unit, blank to skip):','');var minr=window.prompt('Minimum rate (blank to skip):','');var b={equipment_code:code,equipment_name:name,standard_rate:Number(std),billing_unit:'day'};if(cost)b.internal_cost=Number(cost);if(minr)b.min_rate=Number(minr);RGO_API.createRateCard(b).then(function(){toast('Rate card created + audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function rcEdit(id){var std=window.prompt('New standard rate (creates a NEW version; old is preserved):','');if(!std)return;var cost=window.prompt('New internal cost (blank = unchanged):','');var b={standard_rate:Number(std)};if(cost)b.internal_cost=Number(cost);RGO_API.updateRateCard(id,b).then(function(){toast('New rate version created; prior preserved');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function rcArchive(id){if(!window.confirm('Archive this rate card? Historical versions remain intact.'))return;RGO_API.archiveRateCard(id).then(function(){toast('Rate card archived');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+
+  // ---------- Organization / Calendars / Configuration / Governance ----------
+  function adminOrg(){
+    if(liveMode){RGO_API.orgTree().then(function(d){var host=$('#adminBody');if(host&&adminTab==='org')host.innerHTML='<div class="panel"><div class="panel-h"><h3>Organization structure · live</h3></div><div class="panel-b"><pre style="font-size:12px;white-space:pre-wrap;color:var(--ink-2)">'+esc(JSON.stringify(d.tree||d,null,2))+'</pre></div></div>';}).catch(apiErr);return '<div class="panel"><div class="panel-b"><div class="empty">Loading org tree from <code>/admin/org/tree</code>…</div></div></div>';}
+    return '<div class="panel"><div class="panel-h"><h3>Organization</h3></div><div class="panel-b"><div class="sod-card">Tenant <b>RGO</b> · branches, departments, cost centers and company profile are managed here. Connect a backend to load the live org tree (<code>/admin/org/tree</code>).</div></div></div>';
+  }
+  function adminCalendars(){
+    if(liveMode){Promise.all([RGO_API.holidayCalendars().catch(function(){return{calendars:[]};}),RGO_API.workingCalendars().catch(function(){return{calendars:[]};})]).then(function(r){
+      var hc=r[0].calendars||[], wc=r[1].calendars||[];
+      function tbl(title,rows,cols){return '<div class="panel"><div class="panel-h"><h3>'+title+'</h3><div class="spacer"></div><span class="cnt">'+rows.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr>'+cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>'+(rows.map(function(x){return '<tr>'+cols.map(function(c){return '<td>'+esc(x[c]!=null?x[c]:'')+'</td>';}).join('')+'</tr>';}).join('')||'<tr><td colspan="'+cols.length+'" class="empty">None defined.</td></tr>')+'</tbody></table></div></div>';}
+      var host=$('#adminBody');if(host&&adminTab==='cal')host.innerHTML='<div class="grid2">'+tbl('Holiday calendars',hc,['id','name','country','year'])+tbl('Working calendars',wc,['id','name','timezone'])+'</div>';
+    }).catch(apiErr);return '<div class="panel"><div class="panel-b"><div class="empty">Loading calendars from <code>/admin/holiday-calendars</code> + <code>/admin/working-calendars</code>…</div></div></div>';}
+    return '<div class="panel"><div class="panel-h"><h3>Calendars</h3></div><div class="panel-b"><div class="sod-card">Working calendars and holiday calendars drive SLA, escalation and scheduling. Connect a backend to administer calendars (<code>/admin/holiday-calendars</code>, <code>/admin/working-calendars</code>).</div></div></div>';
+  }
+  function adminConfig(){
+    if(liveMode){Promise.all([RGO_API.configList().catch(function(){return{config:[]};}),RGO_API.configHistory().catch(function(){return{history:[]};})]).then(function(r){
+      var cfg=r[0].config||[], h=r[1].history||[];
+      var crows=cfg.map(function(c){return '<tr><td class="strong">'+esc(c.key)+'</td><td>'+esc(c.value)+'</td><td>'+esc(c.scope||'')+(c.scope_ref?':'+esc(c.scope_ref):'')+'</td><td style="font-size:11px;color:var(--ink-2)">'+esc(c.updated_at||'')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No config values.</td></tr>';
+      var hrows=h.map(function(r){return '<tr><td>'+esc(r.ts||'')+'</td><td>'+esc(r.actor||'')+'</td><td style="font-size:12px">'+esc((r.new_value||'').slice(0,120))+'</td></tr>';}).join('')||'<tr><td colspan="3" class="empty">No changes.</td></tr>';
+      var host=$('#adminBody');if(host&&adminTab==='config')host.innerHTML='<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Effective configuration · live</h3><div class="spacer"></div><span class="cnt">'+cfg.length+' keys · <code>/admin/config</code></span></div><div class="tblwrap" style="border:0;max-height:340px;overflow:auto"><table class="tbl"><thead><tr><th>Key</th><th>Value</th><th>Scope</th><th>Updated</th></tr></thead><tbody>'+crows+'</tbody></table></div></div><div class="panel"><div class="panel-h"><h3>Change history</h3><div class="spacer"></div><span class="cnt">'+h.length+' entries</span></div><div class="tblwrap" style="border:0;max-height:280px;overflow:auto"><table class="tbl"><thead><tr><th>When</th><th>Actor</th><th>Change</th></tr></thead><tbody>'+hrows+'</tbody></table></div></div>';
+    }).catch(apiErr);return '<div class="panel"><div class="panel-b"><div class="empty">Loading configuration + history…</div></div></div>';}
+    return '<div class="panel"><div class="panel-h"><h3>Configuration</h3></div><div class="panel-b"><div class="sod-card">Admin-owned policies (approval thresholds, tax, downpayment, auth policy, feature flags) resolve through the backend config cascade. Every change is audited (<code>/admin/config/history</code>).</div></div></div>';
+  }
+  function adminGovernance(){
+    if(liveMode){Promise.all([RGO_API.loginHistory().catch(function(){return{history:[]};}),RGO_API.listSessions().catch(function(){return{sessions:[]};}),RGO_API.auditTrail().catch(function(){return{audit:[]};})]).then(function(r){
+      var lh=r[0].history||[], ss=r[1].sessions||[], au=r[2].audit||[];
+      var canRevoke=canPerm('security.manage');
+      var lrows=lh.slice(0,50).map(function(x){return '<tr><td>'+esc(x.ts||'')+'</td><td>'+esc(x.email||'')+'</td><td><span class="chip '+(x.success?'c-good':'c-crit')+'">'+(x.success?'OK':'FAIL')+'</span></td><td style="font-size:12px">'+esc(x.reason||'')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No login history.</td></tr>';
+      var srows=ss.map(function(s){return '<tr><td>'+esc(String(s.token||'').slice(0,10))+'…</td><td>'+esc(s.user_id)+'</td><td>'+esc(s.created_at||'')+'</td><td>'+(canRevoke?'<button class="btn line sm" data-act="luRevokeTok" data-arg="'+esc(s.token)+'">Revoke</button>':'—')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No active sessions.</td></tr>';
+      var arows=au.slice(0,80).map(function(x){return '<tr><td style="white-space:nowrap">'+esc(x.ts||'')+'</td><td>'+esc(x.actor||'')+'</td><td>'+esc(x.action||'')+'</td><td>'+esc((x.entity||'')+(x.entity_id!=null?'#'+x.entity_id:''))+'</td><td style="font-size:11px;color:var(--ink-2)">'+esc(x.reason||'')+'</td></tr>';}).join('')||'<tr><td colspan="5" class="empty">No audit entries.</td></tr>';
+      var host=$('#adminBody');if(host&&adminTab==='gov')host.innerHTML='<div class="grid2"><div class="panel"><div class="panel-h"><h3>Login history · live</h3></div><div class="tblwrap" style="border:0;max-height:320px;overflow:auto"><table class="tbl"><thead><tr><th>When</th><th>Email</th><th>Result</th><th>Reason</th></tr></thead><tbody>'+lrows+'</tbody></table></div></div><div class="panel"><div class="panel-h"><h3>Active sessions</h3></div><div class="tblwrap" style="border:0;max-height:320px;overflow:auto"><table class="tbl"><thead><tr><th>Token</th><th>User</th><th>Since</th><th></th></tr></thead><tbody>'+srows+'</tbody></table></div></div>'+
+        '<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>Audit ledger · live</h3><div class="spacer"></div><span class="cnt">'+au.length+' recent · <code>/admin/audit</code></span></div><div class="tblwrap" style="border:0;max-height:360px;overflow:auto"><table class="tbl"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Reason</th></tr></thead><tbody>'+arows+'</tbody></table></div></div>';
+    }).catch(apiErr);return '<div class="panel"><div class="panel-b"><div class="empty">Loading governance signals (login history + sessions + audit ledger)…</div></div></div>';}
+    return SOD_NOTE+'<div class="panel"><div class="panel-h"><h3>Governance</h3></div><div class="panel-b"><div class="sod-card">Login history, active sessions, audit ledger and SoD posture are surfaced here. Backend: <code>/admin/login-history</code>, <code>/admin/sessions</code>. Connect a backend for live governance signals.</div></div></div>';
+  }
 
   // bookings → office
   // ===================== BOOKING → CONFIRMED-JOB WORKFLOW =====================
@@ -1066,28 +1395,64 @@ window.RGO_API = (function(){
     return out.join('');}
 
   function formBookingEdit(id){var b=bkGet(id),returned=['RETURNED_FOR_REVISION','REJECTED','REVISION_REQUESTED'].indexOf(b.stage)>-1;if(!requirePerm(returned?'booking.revise_returned':'booking.edit_draft'))return;if(b.stage==='PENDING_INTERNAL_APPROVAL'){toast('Return the record before it can be revised');return;}modal('<div class="modal wide"><div class="modal-h"><h3>Edit Booking · '+b.id+'</h3><button class="x" data-close>×</button></div><form class="modal-b frm mf" id="bef"><div class="two"><label><span>Customer</span><input name="company" value="'+esc(b.company)+'" required></label><label><span>Contact</span><input name="contact" value="'+esc(b.contact)+'" required></label></div><label><span>Email</span><input name="email" type="email" value="'+esc(b.email)+'"></label><label><span>Cargo / scope</span><input name="load" value="'+esc(b.load)+'" required></label><div class="two"><label><span>Weight (tonnes)</span><input name="weight" type="number" min="0" value="'+esc(b.weight)+'"></label><label><span>Dimensions</span><input name="dims" value="'+esc(b.dims)+'"></label></div><div class="two"><label><span>Pickup</span><input name="from" value="'+esc(b.from)+'"></label><label><span>Delivery / site</span><input name="to" value="'+esc(b.to)+'"></label></div><div class="two"><label><span>Preferred schedule</span><input name="date" value="'+esc(b.date)+'"></label><label><span>Vehicle / equipment</span><input name="equipmentReq" value="'+esc(b.equipmentReq)+'"></label></div><label><span>Site conditions</span><input name="conditions" value="'+esc(b.conditions)+'"></label><label><span>Notes</span><textarea name="notes" rows="2">'+esc(b.notes)+'</textarea></label><label><span>Attach supporting documents</span><input name="attachments" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"></label><div class="sod-card"><b>Material revision:</b> saving records your user, timestamp, and field snapshot. You will not be eligible to approve this transaction.</div></form><div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="bkSaveBookingEdit" data-arg="'+b.id+'">Save changes</button></div></div>');}
-  function bkSaveBookingEdit(id){var b=bkGet(id),f=$('#bef');if(!f||!f.company.value.trim()||!f.load.value.trim()){toast('Customer and cargo are required');return;}var before={company:b.company,contact:b.contact,email:b.email,load:b.load,weight:b.weight,dims:b.dims,from:b.from,to:b.to,date:b.date,equipmentReq:b.equipmentReq,conditions:b.conditions,notes:b.notes};['company','contact','email','load','weight','dims','from','to','date','equipmentReq','conditions','notes'].forEach(function(k){b[k]=f[k].value.trim();});b.materiallyRevisedBy=currentActor.id;b.revisionHistory=b.revisionHistory||[];b.revisionHistory.unshift({ts:bkNow(),actorId:currentActor.id,by:role,before:before});b.attachments=b.attachments||[];Array.prototype.forEach.call(f.attachments.files||[],function(file){b.attachments.push({name:file.name,ts:bkNow(),by:currentActor.id});});bkAudit(b,'Booking fields materially revised; supporting evidence '+(f.attachments.files.length?'attached':'unchanged'),'material_revision');closeModal();save();toast(b.id+' changes saved and audited');bookingDetail(id);}
+  function bkSaveBookingEdit(id){var b=bkGet(id),f=$('#bef');if(!f||!f.company.value.trim()||!f.load.value.trim()){toast('Customer and cargo are required');return;}var before={company:b.company,contact:b.contact,email:b.email,load:b.load,weight:b.weight,dims:b.dims,from:b.from,to:b.to,date:b.date,equipmentReq:b.equipmentReq,conditions:b.conditions,notes:b.notes};['company','contact','email','load','weight','dims','from','to','date','equipmentReq','conditions','notes'].forEach(function(k){b[k]=f[k].value.trim();});b.materiallyRevisedBy=currentActor.id;b.revisionHistory=b.revisionHistory||[];b.revisionHistory.unshift({ts:bkNow(),actorId:currentActor.id,by:role,before:before});b.attachments=b.attachments||[];Array.prototype.forEach.call(f.attachments.files||[],function(file){b.attachments.push({name:file.name,ts:bkNow(),by:currentActor.id});});bkAudit(b,'Booking fields materially revised; supporting evidence '+(f.attachments.files.length?'attached':'unchanged'),'material_revision');
+    // Live persistence: PATCH the backend, which independently enforces field-level authorization
+    // (booking.edit_operational / booking.edit_commercial) and writes its own audit trail.
+    if(liveMode&&b.backendId){var patch={service:b.equipmentReq,cargo:b.load,weight:Number(b.weight)||0,from_loc:b.from,to_loc:b.to,date:b.date};RGO_API.updateBooking(b.backendId,patch).then(function(){toast(b.id+' saved · persisted + audited server-side');}).catch(function(e){toast('Saved locally; backend rejected: '+e.message);});}
+    closeModal();save();toast(b.id+' changes saved and audited');bookingDetail(id);}
 
   // --- stage actions ---
   function bkReviewStart(id){var b=bkGet(id);if(!b.estimator)b.estimator='Est. J. Ramos';setBkStage(b,'UNDER_REVIEW','Assigned '+b.estimator+'; under review');bookingDetail(id);}
   function bkMoreInfo(id){var b=bkGet(id);var m=window.prompt('Message to customer (what info is needed):','Please share cargo dimensions and site access photos.');if(m===null)return;bkMsg(b,'staff',m);setBkStage(b,'MORE_INFO_REQUIRED','Requested more info');bookingDetail(id);}
   function bkSurvey(id){var b=bkGet(id);setBkStage(b,'SITE_SURVEY_REQUIRED','Site survey required');bkMsg(b,'staff','We will schedule a site survey before quoting.');bookingDetail(id);}
   function bkReady(id){var b=bkGet(id);setBkStage(b,'READY_FOR_QUOTATION','Ready for quotation');bookingDetail(id);}
+  // Equipment name -> governed rate-catalog code (matches backend rate_cards seed).
+  var RATE_CODE={'250t Crawler Crane':'CRANE-250T','350t All-Terrain Crane':'CRANE-350T','100t All-Terrain Crane':'CRANE-100T','50t Rough-Terrain Crane':'CRANE-50T','Lowbed Trailer':'TRAILER-LOWBED','Extendable Trailer':'TRAILER-EXT','Rigging Crew':'CREW-RIGGING','Mobilization (flat)':'MOBILIZATION'};
   function bkBuildQuote(id){var b=bkGet(id);var rc=DB.rateCard;
     var revising=['RETURNED_FOR_REVISION','REJECTED','REVISION_REQUESTED'].indexOf(b.stage)>-1;if(!requirePerm(revising?'quotation.revise_returned':(b.quote?'quotation.edit_draft':'quotation.create')))return;if(b.stage==='PENDING_INTERNAL_APPROVAL'){toast('Return the quotation before revising it');return;}
     var old=b.quote,primary=old&&old.items&&old.items[0],logistics=old&&old.items&&old.items[1];
-    var eqOpts=rc.map(function(r){return '<option value="'+r.r+'" data-k="'+esc(r.k)+'">'+esc(r.k)+' — '+peso(r.r)+'/day</option>'}).join('');
+    var canOverride=canPerm('quotation.rate.override');
+    var eqOpts=rc.map(function(r){return '<option value="'+r.r+'" data-k="'+esc(r.k)+'" data-code="'+esc(RATE_CODE[r.k]||'')+'">'+esc(r.k)+' — '+peso(r.r)+'/day</option>'}).join('');
     modal('<div class="modal wide"><div class="modal-h"><h3>Quotation Builder · '+b.id+'</h3><button class="x" data-close>×</button></div>'+
-      '<div class="modal-b"><form class="frm mf" id="bqForm"><div class="two"><label><span>Primary equipment</span><div class="selw"><select name="equip" class="bq">'+eqOpts+'</select></div></label><label><span>Days</span><input class="bq" name="days" type="number" min="1" value="'+(primary&&primary.days||2)+'"></label></div>'+
+      '<div class="modal-b"><form class="frm mf" id="bqForm">'+
+      '<div class="sod-card" style="margin-bottom:10px"><b>Line pricing:</b> the <b>standard rate</b> is the governed master rate; the <b>quoted rate</b> is per-quotation and never changes the master. Totals shown are recomputed by the backend on save — that result is authoritative.</div>'+
+      '<label><span>Equipment</span><div class="selw"><select name="equip" class="bq">'+eqOpts+'</select></div></label>'+
+      '<div class="qle" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">'+
+        '<label><span>Standard rate</span><input name="std" class="bq" readonly style="background:var(--surface-2)"></label>'+
+        '<label><span>Quoted rate'+(canOverride?'':' 🔒')+'</span><input name="quoted" class="bq" type="number" min="0"'+(canOverride?'':' readonly title="quotation.rate.override required"')+'></label>'+
+        '<label><span>Days</span><input class="bq" name="days" type="number" min="1" value="'+(primary&&primary.days||2)+'"></label>'+
+        '<label><span>Qty</span><input class="bq" name="qty" type="number" min="1" value="'+(primary&&primary.qty||1)+'"></label>'+
+      '</div>'+
+      '<div class="two"><label><span>Discount %</span><input class="bq" name="disc" type="number" min="0" max="40" value="'+(old&&old.discPct||0)+'"></label><label><span>Override reason (required if quoted ≠ standard)</span><input name="ovr" class="bq" placeholder="e.g. client tier premium / rush mobilization"></label></div>'+
       '<label><span>Logistics, crew, mobilization, fuel, permits (₱)</span><input class="bq" name="logi" type="number" min="0" value="'+(logistics&&logistics.rate||120000)+'"></label>'+
-      '<div class="two"><label><span>Discount %</span><input class="bq" name="disc" type="number" min="0" max="40" value="'+(old&&old.discPct||0)+'"></label><label><span>VAT %</span><input class="bq" name="tax" type="number" min="0" value="'+(old&&old.taxPct||12)+'"></label></div>'+
-      '<div class="two"><label><span>Downpayment %</span><input class="bq" name="dp" type="number" min="0" max="100" value="'+(old&&old.dpPct||30)+'"></label><label><span>Validity (days)</span><input name="valid" type="number" min="1" value="14"></label></div>'+
+      '<div class="two"><label><span>VAT %</span><input class="bq" name="tax" type="number" min="0" value="'+(old&&old.taxPct||12)+'"></label><label><span>Downpayment %</span><input class="bq" name="dp" type="number" min="0" max="100" value="'+(old&&old.dpPct||30)+'"></label></div>'+
+      '<label><span>Validity (days)</span><input name="valid" type="number" min="1" value="14"></label>'+
       '<div class="aiout" id="bqOut"></div></form></div>'+
-      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="bkSaveQuote" data-arg="'+b.id+'">Save quotation draft</button></div></div>');if(primary){var sel=$('#bqForm').equip,match=Array.prototype.find.call(sel.options,function(o){return o.getAttribute('data-k')===primary.k;});if(match)sel.value=match.value;}bkPreview();}
-  function bkQuoteData(){var f=$('#bqForm');if(!f)return null;var sel=f.equip,rate=+sel.value,ek=sel.options[sel.selectedIndex].getAttribute('data-k');var days=+f.days.value||1;var logi=+f.logi.value||0;var discPct=+f.disc.value||0,taxPct=+f.tax.value||0,dpPct=+f.dp.value||0;
-    var items=[{k:ek,qty:1,days:days,rate:rate},{k:'Logistics, crew, mobilization & permits',qty:1,days:1,rate:logi}];var t=qCompute(items,discPct,taxPct,dpPct);return {items:items,discPct:discPct,taxPct:taxPct,dpPct:dpPct,valid:+f.valid.value||14,t:t};}
-  function bkPreview(){var d=bkQuoteData();if(!d)return;var o=$('#bqOut');if(!o)return;o.innerHTML='<div class="airow"><span>Subtotal</span><b>'+peso(d.t.subtotal)+'</b></div>'+(d.t.discount?'<div class="airow"><span>Discount</span><b>-'+peso(d.t.discount)+'</b></div>':'')+'<div class="airow"><span>VAT</span><b>'+peso(d.t.tax)+'</b></div><div class="aigrand"><span style="font-weight:700">Total</span><span class="p tnum">'+peso(d.t.total)+'</span></div><div class="airow" style="margin-top:6px"><span>Downpayment ('+d.dpPct+'%)</span><b>'+peso(d.t.dpAmount)+'</b></div>';}
+      '<div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="bkSaveQuote" data-arg="'+b.id+'">Save quotation draft</button></div></div>');
+    var sel=$('#bqForm').equip;if(primary){var match=Array.prototype.find.call(sel.options,function(o){return o.getAttribute('data-k')===primary.k;});if(match)sel.value=match.value;}
+    bkSyncStd(false);if(primary&&(primary.quoted_rate||primary.rate)!=null)$('#bqForm').quoted.value=(primary.quoted_rate||primary.rate);bkPreview();}
+  function bkSyncStd(resetQuoted){var f=$('#bqForm');if(!f)return;var std=+f.equip.value||0;f.std.value=std;if(resetQuoted||f.quoted.value==='')f.quoted.value=std;}
+  function bkQuoteData(){var f=$('#bqForm');if(!f)return null;var sel=f.equip,std=+sel.value,ek=sel.options[sel.selectedIndex].getAttribute('data-k'),code=sel.options[sel.selectedIndex].getAttribute('data-code');
+    var quoted=+f.quoted.value||std,days=+f.days.value||1,qty=+f.qty.value||1;var logi=+f.logi.value||0;var discPct=+f.disc.value||0,taxPct=+f.tax.value||0,dpPct=+f.dp.value||0;var ovr=(f.ovr.value||'').trim();
+    var items=[{k:ek,equipment_code:code,qty:qty,days:days,rate:quoted,quoted_rate:quoted,standard_rate:std,discount_pct:discPct,override_reason:ovr||null},{k:'Logistics, crew, mobilization & permits',qty:1,days:1,rate:logi}];
+    var t=qCompute(items,discPct,taxPct,dpPct);return {items:items,discPct:discPct,taxPct:taxPct,dpPct:dpPct,valid:+f.valid.value||14,std:std,quoted:quoted,qty:qty,days:days,code:code,ovr:ovr,t:t};}
+  function bkPreview(){var d=bkQuoteData();if(!d)return;var o=$('#bqOut');if(!o)return;
+    var lineBase=d.quoted*d.qty*d.days,lineTotal=Math.round(lineBase*(1-d.discPct/100));
+    var vAmt=d.quoted-d.std,vPct=d.std?Math.round(vAmt/d.std*1000)/10:0;
+    var warn=(vAmt!==0)?('<div class="airow" style="color:'+(Math.abs(vPct)>=15?'var(--crit)':'var(--warn)')+'"><span>Rate variance</span><b>'+(vAmt>0?'+':'')+peso(vAmt)+' ('+vPct+'%)'+(Math.abs(vPct)>=15?' · approval required':Math.abs(vPct)>=5?' · reason required':'')+'</b></div>'):'';
+    o.innerHTML='<div class="airow"><span>Standard rate</span><b>'+peso(d.std)+' /'+'day</b></div><div class="airow"><span>Quoted rate</span><b class="tnum">'+peso(d.quoted)+' /day</b></div>'+warn+
+      '<div class="aigrand"><span style="font-weight:700">Line Total ('+d.qty+'×'+d.days+'d'+(d.discPct?' −'+d.discPct+'%':'')+')</span><span class="p tnum" id="bqLineTotal">'+peso(lineTotal)+'</span></div>'+
+      '<div class="airow" style="margin-top:6px"><span>Quotation total (incl. logistics + VAT)</span><b>'+peso(d.t.total)+'</b></div>'+
+      '<div id="bqAuth" style="font-size:11px;color:var(--ink-2);margin-top:6px">'+(liveMode&&d.code?'Verifying with backend…':'')+'</div>';
+    if(liveMode&&d.code){RGO_API.pricePreview({equipment_code:d.code,quoted_rate:d.quoted,qty:d.qty,days:d.days,discount_pct:d.discPct}).then(function(pp){var el=$('#bqAuth');if(!el)return;var m=(pp.margin_percent!=null)?(' · margin '+pp.margin_percent+'%'):'';el.innerHTML='✓ Backend authoritative: Line Total '+peso(pp.subtotal)+m+(pp.reason_required?' · override reason required':'')+(pp.below_min_rate?' · ⚠ below minimum rate':'');var lt=$('#bqLineTotal');if(lt)lt.textContent=peso(pp.subtotal);}).catch(function(){});}
+  }
   function bkSaveQuote(id){var b=bkGet(id);var d=bkQuoteData();if(!d)return;
+    // Client-side mirror of backend override governance (backend re-enforces regardless):
+    if(d.quoted!==d.std&&!canPerm('quotation.rate.override')){toast('You are not authorized to override the quoted rate');return;}
+    var vPct=d.std?Math.abs((d.quoted-d.std)/d.std*100):0;
+    if(vPct>=5&&!d.ovr){toast('Override reason required: quoted rate varies materially from standard');var of=$('#bqForm');if(of)of.ovr.focus();return;}
+    // Live persistence: the backend recomputes and re-enforces field-level permissions + approval.
+    if(liveMode&&b.backendId){var lines=[{equipment_code:d.code,quoted_rate:d.quoted,standard_rate:d.std,qty:d.qty,days:d.days,discount_pct:d.discPct,override_reason:d.ovr||null,description:d.items[0].k}];RGO_API.createQuotation(b.backendId,{lines:lines,discount_pct:0,dp_pct:d.dpPct}).then(function(){toast('Quotation persisted + priced + audited server-side');}).catch(function(e){toast('Saved locally; backend: '+e.message);});}
     var old=b.quote,revising=old&&['RETURNED_FOR_REVISION','REJECTED','REVISION_REQUESTED'].indexOf(b.stage)>-1,history=old?(old.history||[]):[];if(old){history.push({no:old.no,ver:old.ver,status:'superseded',total:old.total,items:JSON.parse(JSON.stringify(old.items)),decisionComment:old.decisionComment||'',supersededAt:bkNow(),supersededBy:currentActor.id});}
     var ver=old?(old.ver+1):1;
     var no=old?old.no:'QN-'+(DB.seq.qn++);

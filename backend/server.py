@@ -1820,6 +1820,44 @@ ROUTES.update(_marketplace_trust_routes())
 ROUTES.update(_marketplace_closure_routes())
 
 
+def _protected_payment_routes():
+    import protected_payment as pp
+
+    def pp_create(a, b, p):   return {"id": pp.create_transaction(_conn, a, booking_id=int(b["booking_id"]),
+                                      carrier_id=int(b["carrier_id"]), contract_amount=b["contract_amount"],
+                                      protected_amount=b.get("protected_amount", b["contract_amount"]),
+                                      platform_fee=b.get("platform_fee", 0), provider_fee=b.get("provider_fee", 0),
+                                      tax=b.get("tax", 0), quotation_id=b.get("quotation_id"), job_id=b.get("job_id"),
+                                      client_ref=b.get("client_ref"), currency=b.get("currency", "PHP"),
+                                      funding_deadline=b.get("funding_deadline"), dispute_policy=b.get("dispute_policy"),
+                                      milestone_plan=b.get("milestone_plan"))}
+    def pp_transition(a, b, p): return {"state": pp.transition(_conn, a, int(p["id"]), b["to_state"],
+                                      reason=b.get("reason"), payout_account_id=b.get("payout_account_id"),
+                                      job_value=b.get("job_value"), milestone_verified=b.get("milestone_verified"),
+                                      pod_ok=b.get("pod_ok"), approvals_complete=b.get("approvals_complete", True))}
+    def pp_get(a, b, p):      return pp.get_transaction(_conn, a, int(p["id"]))
+    def pp_ledger(a, b, p):   return {"id": pp.append_ledger(_conn, a, int(p["id"]), b["event"],
+                                      b["amount"], b.get("reason"), b.get("reverses_entry_id"))}
+    def pp_reconcile(a, b, p): core.require(a, "marketplace.payment.reconcile") if core.can(a, "marketplace.payment.reconcile") else core.require(a, "marketplace.trust.view"); return pp.reconcile(_conn, int(p["id"]))
+    def pp_daily(a, b, p):    return pp.daily_reconciliation(_conn, a)
+    def pp_queues(a, b, p):   return pp.finance_queues(_conn, a)
+    def pp_integrity(a, b, p): core.require(a, "marketplace.payment.view") if core.can(a, "marketplace.payment.view") else core.require(a, "marketplace.trust.view"); return pp.run_integrity(_conn)
+
+    return {
+        ("POST", "/admin/marketplace/protected-payments"): pp_create,
+        ("POST", "/admin/marketplace/protected-payments/:id/transition"): pp_transition,
+        ("GET", "/admin/marketplace/protected-payments/:id"): pp_get,
+        ("POST", "/admin/marketplace/protected-payments/:id/ledger"): pp_ledger,
+        ("GET", "/admin/marketplace/protected-payments/:id/reconcile"): pp_reconcile,
+        ("GET", "/admin/marketplace/protected-payments-daily-reconciliation"): pp_daily,
+        ("GET", "/admin/marketplace/protected-payments-queues"): pp_queues,
+        ("GET", "/admin/marketplace/protected-payments-integrity"): pp_integrity,
+    }
+
+
+ROUTES.update(_protected_payment_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

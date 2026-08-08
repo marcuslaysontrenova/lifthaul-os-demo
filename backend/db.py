@@ -113,6 +113,8 @@ def _seed_platform(conn):
     marketplace_trust.init(conn); marketplace_trust.seed(conn)           # Trust: KYB verification/fraud/trust-score/eligibility gate
     import marketplace_trust_closure
     marketplace_trust_closure.init(conn); marketplace_trust_closure.seed(conn)  # Trust closure: driver/vehicle/payout/dispute/claims + release gate
+    import protected_payment
+    protected_payment.init(conn); protected_payment.seed(conn)           # Protected Payment authoritative domain: canonical state machine + immutable ledger + reconciliation
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

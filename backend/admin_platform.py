@@ -326,7 +326,7 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.assignment.confirm", "marketplace.assignment.cancel", "marketplace.assignment.reassign",
     # Increment 4: protected payment / release / payout / refund / dispute / freeze / reconciliation
     "marketplace.payment.view", "marketplace.payment.create", "marketplace.payment.reconcile",
-    "marketplace.payment.verify", "marketplace.payment.override",
+    "marketplace.payment.verify", "marketplace.payment.override", "marketplace.payment.manage",
     "marketplace.release.view", "marketplace.release.evaluate", "marketplace.release.create",
     "marketplace.release.approve", "marketplace.release.submit",
     "marketplace.payout.view", "marketplace.payout.manage", "marketplace.payout.approve",

@@ -495,6 +495,13 @@ window.RGO_API = (function(){
     compareRoles:function(b){return req('POST','/admin/roles/compare',b);},
     listPermissions:function(){return req('GET','/admin/permissions');},
     configHistory:function(){return req('GET','/admin/config/history');},
+    /* marketplace trust & compliance */
+    kybSearch:function(b){return req('POST','/admin/marketplace/kyb/search',b||{});},
+    kybVerify:function(id,b){return req('POST','/admin/marketplace/kyb/'+id+'/verify',b);},
+    kybExpiryScan:function(){return req('POST','/admin/marketplace/kyb/expiry-scan',{});},
+    fraudFlags:function(b){return req('POST','/admin/marketplace/fraud-flags/search',b||{});},
+    trustEligibility:function(b){return req('POST','/admin/marketplace/trust/eligibility',b);},
+    trustIntegrity:function(){return req('GET','/admin/marketplace/trust-integrity');},
     createCustomer:function(b){return req('POST','/customers',b);},
     createBooking:function(b){return req('POST','/bookings',b);},
     getBooking:function(id){return req('GET','/bookings/'+id);},
@@ -1064,6 +1071,8 @@ window.RGO_API = (function(){
     if(act==='rcNew')return rcNew();
     if(act==='rcEdit')return rcEdit(arg);
     if(act==='rcArchive')return rcArchive(arg);
+    if(act==='kybVerify')return kybVerify(arg);
+    if(act==='kybExpiry')return kybExpiryScan();
     if(act==='luRevokeTok')return RGO_API.revokeSession(arg).then(function(){toast('Session revoked');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});
     if(act==='roleClone')return roleCloneUI();
     if(act==='roleExport')return roleExport();
@@ -1121,13 +1130,14 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
     if(adminTab==='people')return adminPeople();
     if(adminTab==='roles')return adminRoles();
     if(adminTab==='rates')return adminRateCards();
+    if(adminTab==='trust')return adminTrust();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
     if(adminTab==='config')return adminConfig();
@@ -1287,6 +1297,29 @@ window.RGO_API = (function(){
   function rcNew(){var code=window.prompt('Equipment code:','CRANE-XXX');if(!code)return;var name=window.prompt('Equipment name:','');var std=window.prompt('Standard rate (₱/unit):','50000');if(!std)return;var cost=window.prompt('Internal standard cost (₱/unit, blank to skip):','');var minr=window.prompt('Minimum rate (blank to skip):','');var b={equipment_code:code,equipment_name:name,standard_rate:Number(std),billing_unit:'day'};if(cost)b.internal_cost=Number(cost);if(minr)b.min_rate=Number(minr);RGO_API.createRateCard(b).then(function(){toast('Rate card created + audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function rcEdit(id){var std=window.prompt('New standard rate (creates a NEW version; old is preserved):','');if(!std)return;var cost=window.prompt('New internal cost (blank = unchanged):','');var b={standard_rate:Number(std)};if(cost)b.internal_cost=Number(cost);RGO_API.updateRateCard(id,b).then(function(){toast('New rate version created; prior preserved');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function rcArchive(id){if(!window.confirm('Archive this rate card? Historical versions remain intact.'))return;RGO_API.archiveRateCard(id).then(function(){toast('Rate card archived');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+
+  // ---------- Marketplace Trust & Compliance (R) ----------
+  function adminTrust(){
+    if(liveMode){
+      Promise.all([RGO_API.kybSearch({}).catch(function(){return{profiles:[]};}),RGO_API.fraudFlags({status:'OPEN'}).catch(function(){return{flags:[]};}),RGO_API.trustIntegrity().catch(function(){return{ok:true,kyb_verified_without_source:0};})]).then(function(r){
+        var kyb=r[0].profiles||[],flags=r[1].flags||[],ig=r[2];
+        var canVerify=canPerm('marketplace.kyb.manage')||canPerm('*');
+        var stCls={VERIFIED:'c-good',VERIFIED_WITH_CONDITION:'c-good',SUBMITTED:'c-mut',AUTO_CHECKING:'c-info',NEEDS_REVIEW:'c-warn',REJECTED:'c-crit',EXPIRED:'c-crit',SUSPENDED:'c-warn',REVOKED:'c-crit',SUSPECTED_FRAUD:'c-crit'};
+        var krows=kyb.map(function(k){return '<tr><td>'+esc(k.authority)+'</td><td>'+esc(k.registered_name||'')+'</td><td>'+esc(k.registration_number||'')+'</td><td>'+esc(k.subject_type)+'#'+esc(k.subject_id)+'</td><td><span class="chip '+(stCls[k.status]||'c-mut')+'">'+esc(k.status)+'</span></td><td style="font-size:11px">'+esc(k.source||'')+'</td><td>'+(canVerify&&['SUBMITTED','AUTO_CHECKING','NEEDS_REVIEW'].indexOf(k.status)>-1?'<button class="btn line sm" data-act="kybVerify" data-arg="'+k.id+'">Verify</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="7" class="empty">No KYB profiles.</td></tr>';
+        var frows=flags.map(function(f){return '<tr><td>'+esc(f.subject_type)+'#'+esc(f.subject_id)+'</td><td>'+esc(f.indicator)+'</td><td><span class="chip '+(['HIGH','CRITICAL'].indexOf(f.risk_level)>-1?'c-crit':'c-warn')+'">'+esc(f.risk_level)+'</span></td><td style="font-size:11px">'+esc(f.detail||'')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No open fraud flags.</td></tr>';
+        var host=$('#adminBody');if(host&&adminTab==='trust')host.innerHTML=
+          '<div class="access-note"><span>🛡️</span><div><b>Trust, Legal-Compliance & Protected Transaction.</b> A government-document upload is <b>SUBMITTED</b>, never verified — only a recorded human verification with a source advances a profile. Official-source adapters return <code>MANUAL_VERIFICATION_REQUIRED</code> (verification is never fabricated). A hard compliance denial can never be overridden by trust score. Protected-payment live-fund custody stays fail-closed pending the legal operating-model decision.</div></div>'+
+          '<div class="sod-card" style="'+(ig.ok?'':'border-color:var(--crit)')+'"><b>Integrity:</b> '+(ig.ok?'✓ no fabricated verifications':'⚠ '+ig.kyb_verified_without_source+' VERIFIED profiles without a source')+'</div>'+
+          (canVerify?'<div style="margin-bottom:12px"><button class="btn line" data-act="kybExpiry">Run expiry scan</button></div>':'')+
+          '<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>KYB / Business Verification</h3><div class="spacer"></div><span class="cnt">'+kyb.length+' · <code>/admin/marketplace/kyb</code></span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Authority</th><th>Registered name</th><th>Reg. no.</th><th>Subject</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>'+krows+'</tbody></table></div></div>'+
+          '<div class="panel"><div class="panel-h"><h3>Fraud & Risk — open flags</h3><div class="spacer"></div><span class="cnt">'+flags.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Subject</th><th>Indicator</th><th>Risk</th><th>Detail</th></tr></thead><tbody>'+frows+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading marketplace trust &amp; compliance…</div></div></div>';
+    }
+    return '<div class="access-note"><span>🛡️</span><div><b>Marketplace Trust & Compliance</b> (KYB verification, official-source adapters, fraud/risk, trust score, protected transactions). Connect a backend to administer. Verification is never fabricated; protected-payment live funds stay fail-closed pending the legal operating-model decision.</div></div>';
+  }
+  function kybVerify(id){var src=window.prompt('Recorded verification source (required — e.g. SEC portal ref):','');if(!src)return;var dec=window.prompt('Decision: VERIFIED / VERIFIED_WITH_CONDITION / REJECTED','VERIFIED');if(!dec)return;var cond=dec==='VERIFIED_WITH_CONDITION'?window.prompt('Condition:',''):null;RGO_API.kybVerify(id,{decision:dec,source:src,condition:cond}).then(function(){toast('KYB '+dec+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function kybExpiryScan(){RGO_API.kybExpiryScan().then(function(d){toast('Expiry scan: '+(d.expired||0)+' expired, '+((d.notices||[]).length)+' upcoming');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});}
 
   // ---------- Organization / Calendars / Configuration / Governance ----------
   function adminOrg(){

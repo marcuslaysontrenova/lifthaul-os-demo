@@ -1671,6 +1671,50 @@ def _marketplace_trip_routes():
 ROUTES.update(_marketplace_trip_routes())
 
 
+def _marketplace_trust_routes():
+    import marketplace_trust as mt
+
+    def kyb_submit(a, b, p):   return {"id": mt.submit_kyb(_conn, a, b["subject_type"], int(b["subject_id"]),
+                                       b["authority"], b.get("registration_number"), b.get("registered_name"),
+                                       b.get("scope"), b.get("issue_date"), b.get("expiry_date"), b.get("evidence"))}
+    def kyb_check(a, b, p):    return mt.check_kyb(_conn, a, int(p["id"]))
+    def kyb_verify(a, b, p):   return {"decision": mt.verify_kyb(_conn, a, int(p["id"]), b["decision"],
+                                       b.get("source"), b.get("evidence"), b.get("condition"), b.get("reason"))}
+    def kyb_suspend(a, b, p):  return {"status": mt.suspend_kyb(_conn, a, int(p["id"]), b.get("reason", ""))}
+    def kyb_revoke(a, b, p):   return {"status": mt.revoke_kyb(_conn, a, int(p["id"]), b.get("reason", ""))}
+    def kyb_list(a, b, p):     return {"profiles": mt.list_kyb(_conn, a, b.get("subject_type"), b.get("subject_id"))}
+    def kyb_expiry(a, b, p):   core.require(a, "marketplace.kyb.manage"); return mt.expire_due_kyb(_conn)
+    def fraud_raise(a, b, p):  return {"id": mt.raise_fraud_flag(_conn, a, b["subject_type"], int(b["subject_id"]),
+                                       b["indicator"], b["risk_level"], b.get("detail"))}
+    def fraud_clear(a, b, p):  mt.clear_fraud_flag(_conn, a, int(p["id"]), b.get("reason", "")); return {"ok": True}
+    def fraud_eval(a, b, p):   core.require(a, "marketplace.fraud.view"); return mt.evaluate_fraud(_conn, b["subject_type"], int(b["subject_id"]))
+    def fraud_list(a, b, p):   return {"flags": mt.list_fraud_flags(_conn, a, b.get("status", "OPEN"))}
+    def trust_of(a, b, p):     core.require(a, "marketplace.trust.view"); return mt.trust_score(_conn, int(p["id"]))
+    def eligibility(a, b, p):  return mt.assess_eligibility(_conn, a, int(b["carrier_id"]),
+                                       b.get("vehicle_id"), b.get("driver_id"))
+    def integrity(a, b, p):    core.require(a, "marketplace.kyb.view"); return mt.run_integrity(_conn)
+
+    return {
+        ("POST", "/admin/marketplace/kyb"): kyb_submit,
+        ("POST", "/admin/marketplace/kyb/:id/check"): kyb_check,
+        ("POST", "/admin/marketplace/kyb/:id/verify"): kyb_verify,
+        ("POST", "/admin/marketplace/kyb/:id/suspend"): kyb_suspend,
+        ("POST", "/admin/marketplace/kyb/:id/revoke"): kyb_revoke,
+        ("POST", "/admin/marketplace/kyb/search"): kyb_list,
+        ("POST", "/admin/marketplace/kyb/expiry-scan"): kyb_expiry,
+        ("POST", "/admin/marketplace/fraud-flags"): fraud_raise,
+        ("POST", "/admin/marketplace/fraud-flags/:id/clear"): fraud_clear,
+        ("POST", "/admin/marketplace/fraud/evaluate"): fraud_eval,
+        ("POST", "/admin/marketplace/fraud-flags/search"): fraud_list,
+        ("GET", "/admin/marketplace/trust-score/:id"): trust_of,
+        ("POST", "/admin/marketplace/trust/eligibility"): eligibility,
+        ("GET", "/admin/marketplace/trust-integrity"): integrity,
+    }
+
+
+ROUTES.update(_marketplace_trust_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

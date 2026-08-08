@@ -305,6 +305,9 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.driver.activate", "marketplace.driver.suspend",
     "marketplace.compliance.view", "marketplace.compliance.manage", "marketplace.compliance.verify",
     "marketplace.compliance.override", "marketplace.eligibility.test",
+    # Trust / KYB / fraud / trust-score layer:
+    "marketplace.kyb.view", "marketplace.kyb.manage",
+    "marketplace.fraud.view", "marketplace.fraud.manage", "marketplace.trust.view",
     # Increment 3: booking / pricing / matching / broadcast / offers / bidding / assignment
     "marketplace.booking.view", "marketplace.booking.create", "marketplace.booking.manage",
     "marketplace.booking.validate", "marketplace.booking.cancel",

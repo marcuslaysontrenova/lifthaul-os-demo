@@ -1,0 +1,3 @@
+# LiftHaul OS backend runtime. The service layer is Python stdlib-only; the single
+# production dependency is the PostgreSQL driver. pytest is dev/CI only.
+psycopg2-binary==2.9.9

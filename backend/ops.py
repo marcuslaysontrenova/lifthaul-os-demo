@@ -359,8 +359,10 @@ def generate_final_invoice(conn, actor, job_id, due_date=None):
     co_total = approved_change_total(conn, job_id)
     total = j["amount"] + co_total
     balance = total - downpayment
+    import policy
+    _inv_prefix = policy.number_prefix(conn, policy.policy_context(conn, actor), "invoice", "INV")
     n = conn.execute("SELECT COUNT(*) c FROM invoices").fetchone()["c"]
-    no = f"INV-{9001 + n}"
+    no = f"{_inv_prefix}-{9001 + n}"
     with conn:
         cur = conn.execute(
             "INSERT INTO invoices(no,job_id,customer_id,quoted,change_orders_total,downpayment_applied,"

@@ -35,6 +35,28 @@ def _num(conn, key, ctx, default):
         return float(default), r
 
 
+def number_prefix(conn, ctx, kind, default):
+    """Governed document-number prefix (config consumer). Key: numbering.<kind>.prefix.
+    Default equals the historical hardcoded prefix, so behaviour is unchanged until a
+    tenant/org explicitly overrides it via the config cascade."""
+    v = _resolve(conn, f"numbering.{kind}.prefix", ctx)["value"]
+    return (v or default)
+
+
+def quotation_validity(conn, ctx):
+    """Governed quotation validity window (config consumer). Returns (days, valid_until_iso).
+    Key: quotation.validity_days (default 30). The computed value is snapshotted on the
+    quotation so an issued quote's expiry never shifts when the policy later changes."""
+    days, r = _num(conn, "quotation.validity_days", ctx, 30)
+    days = int(days)
+    valid_until = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=days)) \
+        .date().isoformat()
+    snap = {"consumer": "quotation_validity", "policy_key": "quotation.validity_days",
+            "validity_days": days, "valid_until": valid_until, "source_scope": r.get("scope"),
+            "source_ref": r.get("scope_ref"), "evaluated_at": _now()}
+    return {"days": days, "valid_until": valid_until, "snapshot": snap}
+
+
 def _apply_rounding(value, mode):
     if mode == "floor":
         import math; return math.floor(value)

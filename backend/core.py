@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS quotations(
   accepted_by TEXT, accepted_at TEXT, accepted_terms_version TEXT,
   superseded INTEGER DEFAULT 0,
   tax_snapshot TEXT, dp_snapshot TEXT, approval_snapshot TEXT,
+  valid_until TEXT, validity_snapshot TEXT,
   created_by INTEGER, created_at TEXT,
   UNIQUE(no, version));
 
@@ -208,6 +209,10 @@ def _migrate_pricing(conn):
     for name, decl in _PRICING_COLS:
         if name not in existing:
             conn.execute(f"ALTER TABLE quotation_lines ADD COLUMN {name} {decl}")
+    qcols = {r["name"] for r in conn.execute("PRAGMA table_info(quotations)").fetchall()}
+    for name in ("valid_until", "validity_snapshot"):      # governed validity (config consumer)
+        if name not in qcols:
+            conn.execute(f"ALTER TABLE quotations ADD COLUMN {name} TEXT")
     conn.commit()
 
 
@@ -469,8 +474,10 @@ def create_booking(conn, actor, customer_id, service, cargo, weight=None,
         require(actor, "booking.create")
     import tenant
     tenant.assert_related(conn, actor, "customers", customer_id)   # no cross-tenant linkage
+    import policy
+    _bk_prefix = policy.number_prefix(conn, policy.policy_context(conn, actor), "booking", "BK")
     n = conn.execute("SELECT COUNT(*) c FROM bookings").fetchone()["c"]
-    ref = f"BK-{1000 + n}"
+    ref = f"{_bk_prefix}-{1000 + n}"
     cur = conn.execute(
         "INSERT INTO bookings(ref,customer_id,service,cargo,weight,from_loc,to_loc,date,"
         "stage,created_by,created_at) VALUES(?,?,?,?,?,?,?,?, 'REQUEST_RECEIVED',?,?)",
@@ -665,15 +672,16 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
                 or (l.get("internal_cost") or 0) < 0:
             raise ValidationError("quotation line values must not be negative")
     requested_dp = dp_pct                                 # explicit override or None (=policy default)
+    import policy
+    ctx = policy.policy_context(conn, actor, b)            # tenant/org context from the authenticated actor
     prev = _latest_quote(conn, bid)
     if prev:  # revision -> new version, supersede previous (recalculated with CURRENT policy)
         conn.execute("UPDATE quotations SET superseded=1, status='superseded' WHERE id=?", (prev["id"],))
         no, ver = prev["no"], prev["version"] + 1
     else:
         n = conn.execute("SELECT COUNT(*) c FROM quotations").fetchone()["c"]
-        no, ver = f"QN-{3001 + n}", 1
-    import policy
-    ctx = policy.policy_context(conn, actor, b)            # tenant/org context from the authenticated actor
+        no, ver = f"{policy.number_prefix(conn, ctx, 'quotation', 'QN')}-{3001 + n}", 1
+    validity = policy.quotation_validity(conn, ctx)         # governed validity window + snapshot
     priced = _price_lines(conn, actor, lines, ctx, customer_id=b["customer_id"])  # authoritative line math + override governance
     subtotal = priced["subtotal"]                          # server-side truth; any client total is ignored
     if priced["any_internal"]:
@@ -691,10 +699,11 @@ def create_quotation(conn, actor, bid, lines, discount_pct=0, dp_pct=None, est_c
     cur = conn.execute(
         "INSERT INTO quotations(no,version,booking_id,status,subtotal,discount_pct,discount,tax,"
         "total,dp_pct,dp_amount,balance,est_cost,margin_pct,tax_snapshot,dp_snapshot,approval_snapshot,"
-        "created_by,created_at) VALUES(?,?,?,'draft',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "valid_until,validity_snapshot,created_by,created_at) VALUES(?,?,?,'draft',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (no, ver, bid, subtotal, discount_pct, discount, tax, total, dp_pct, dp_amount,
          total - dp_amount, est_cost, margin_pct, json.dumps(tp["snapshot"]),
-         json.dumps(dpe["snapshot"]), json.dumps(ape["snapshot"]), actor["id"], now()))
+         json.dumps(dpe["snapshot"]), json.dumps(ape["snapshot"]),
+         validity["valid_until"], json.dumps(validity["snapshot"]), actor["id"], now()))
     qid = cur.lastrowid
     import tenant; tenant.stamp(conn, actor, "quotations", qid)   # inherit tenant from context
     for r in priced["lines"]:
@@ -1075,9 +1084,11 @@ def confirm_job(conn, actor, bid):
     pr = conn.execute("SELECT * FROM payment_requests WHERE booking_id=?", (bid,)).fetchone()
     if not pr or pr["status"] != "VERIFIED":
         raise ConflictError("CONTROL: cannot confirm — downpayment not verified")
+    import policy
+    _job_prefix = policy.number_prefix(conn, policy.policy_context(conn, actor), "job", "JO")
     with conn:                                            # portable transaction (sqlite + postgres)
         n = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
-        job_no = f"JO-{2050 + n}"
+        job_no = f"{_job_prefix}-{2050 + n}"
         cur = conn.execute(
             "INSERT INTO jobs(no,booking_id,quotation_id,customer_id,status,amount,scheduled_at,created_by,created_at)"
             " VALUES(?,?,?,?, 'CONFIRMED',?,?,?,?)",

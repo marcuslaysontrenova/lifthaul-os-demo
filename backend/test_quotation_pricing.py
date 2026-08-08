@@ -280,6 +280,48 @@ class RestartPersistenceTests(unittest.TestCase):
                 pass   # Windows may hold the handle briefly; temp file is harmless
 
 
+class ConfigConsumerTests(unittest.TestCase):
+    """P0-2: numbering + quotation validity are governed config consumers. Defaults preserve
+    the historical formats; overrides take effect; issued values are snapshotted (reproducible)."""
+    def setUp(self):
+        self.c = db.connect(":memory:")
+        self.sup = {"id": 0, "role": "super_admin", "perms": {"*"}, "tenant_id": None}
+        eid = admin_platform.create_user(self.c, self.sup, "e@cc", "Demo1234Xy",
+                                         "booking_quotation_administrator", "E")
+        core.create_user(self.c, "a@cc", "pw", "admin", "A")
+        self.adm = core.actor_for(self.c, core.login(self.c, "a@cc", "pw"))
+        self.enc = admin_platform.apply_rbac(self.c, core.actor_for(self.c, core.login(self.c, "e@cc", "Demo1234Xy")))
+        self.cust = core.create_customer(self.c, self.adm, "ClientCo")
+
+    def _quote(self):
+        bid = core.create_booking(self.c, self.enc, self.cust, "Crane", "Load", 40)
+        core.review_booking(self.c, self.enc, bid)
+        core.ready_for_quotation(self.c, self.enc, bid)
+        return bid, core.create_quotation(self.c, self.enc, bid, [_crane_line()])
+
+    def test_default_numbering_prefixes_unchanged(self):
+        bid, qid = self._quote()
+        self.assertTrue(core.get_booking(self.c, self.adm, bid)["ref"].startswith("BK-"))
+        self.assertTrue(core.get_quotation(self.c, self.adm, qid)["no"].startswith("QN-"))
+
+    def test_numbering_prefix_is_config_governed(self):
+        admin_platform.set_config(self.c, "platform", "", "numbering.quotation.prefix", "QUO", actor=self.sup)
+        _, qid = self._quote()
+        self.assertTrue(core.get_quotation(self.c, self.adm, qid)["no"].startswith("QUO-"))
+
+    def test_quotation_validity_persisted_and_reproducible(self):
+        admin_platform.set_config(self.c, "platform", "", "quotation.validity_days", "15", actor=self.sup)
+        _, qid = self._quote()
+        q = core.get_quotation(self.c, self.adm, qid)
+        self.assertIsNotNone(q["valid_until"])
+        snap = __import__("json").loads(q["validity_snapshot"])
+        self.assertEqual(snap["validity_days"], 15)
+        original_valid_until = q["valid_until"]
+        # changing the policy AFTER issue must NOT shift the issued quote's validity
+        admin_platform.set_config(self.c, "platform", "", "quotation.validity_days", "90", actor=self.sup)
+        self.assertEqual(core.get_quotation(self.c, self.adm, qid)["valid_until"], original_valid_until)
+
+
 class RateCardTenantIsolationTests(unittest.TestCase):
     """A tenant must never resolve or list another tenant's custom rate card (Item 1 gap
     introduced by the pricing subsystem — closed here)."""

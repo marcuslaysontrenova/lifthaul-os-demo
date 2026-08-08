@@ -10,6 +10,7 @@ if os.path.exists("rgo_os.sqlite"):
 
 import server  # noqa: E402
 import core     # noqa: E402
+import db       # noqa: E402
 
 
 def call(method, path, body=None, actor=None):
@@ -21,6 +22,14 @@ def call(method, path, body=None, actor=None):
 class TestApiLifecycle(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Isolation: server._conn is a module global shared across test modules; the login
+        # lockout counts consecutive failed login_history rows per email, so another module's
+        # failed logins on the shared connection could leave a seeded account locked here.
+        # Rebinding to a fresh, fully-seeded connection makes this suite order-independent
+        # WITHOUT changing production behavior (the lockout policy itself is untouched).
+        cls._orig_conn = server._conn
+        server._conn = db.connect(":memory:")
+        server._seed_users()                               # admin@rgo.demo, est@, appr@, fin@
         c = server._conn
         for e, r in [("ops2@r", "operations_manager"), ("safe2@r", "safety_officer")]:
             try:
@@ -28,6 +37,14 @@ class TestApiLifecycle(unittest.TestCase):
             except core.ConflictError:
                 pass
         cls.tok = lambda self, e: call("POST", "/login", {"email": e, "password": "demo1234"})["token"]
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            server._conn.close()
+        except Exception:
+            pass
+        server._conn = cls._orig_conn                      # restore the shared connection
 
     def _actor(self, email):
         return core.actor_for(server._conn, call("POST", "/login", {"email": email, "password": "demo1234"})["token"])

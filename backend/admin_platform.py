@@ -485,6 +485,12 @@ DEFAULT_CONFIG = {
     "payment.downpayment.default_rate": "30",
     "payment.downpayment.minimum_rate": "0",
     "payment.downpayment.required": "true",
+    # Governed document numbering prefixes — defaults EQUAL the historical hardcoded values,
+    # so behaviour is unchanged until explicitly overridden through the config cascade.
+    "numbering.booking.prefix": "BK",
+    "numbering.quotation.prefix": "QN",
+    "numbering.job.prefix": "JO",
+    "numbering.invoice.prefix": "INV",
 }
 
 

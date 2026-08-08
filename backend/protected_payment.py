@@ -45,7 +45,7 @@ for s in _EXCEPTION_FROM:
 _TRANSITIONS.update({
     "FUNDS_HELD": {"FUNDS_PROTECTED", "DISPUTED", "REFUND_PENDING", "RELEASE_ELIGIBLE", "LEGAL_HOLD"},
     "FRAUD_REVIEW": {"FUNDS_PROTECTED", "REFUND_PENDING", "LEGAL_HOLD"},
-    "DISPUTED": {"DISPUTE_WINDOW", "RELEASE_ELIGIBLE", "REFUND_PENDING", "LEGAL_HOLD"},
+    "DISPUTED": {"DISPUTE_WINDOW", "RELEASE_ELIGIBLE", "REFUND_PENDING", "LEGAL_HOLD", "FUNDS_HELD"},
     "RELEASE_REJECTED": {"RELEASE_ELIGIBLE", "REFUND_PENDING", "DISPUTED"},
     "REFUND_PENDING": {"PARTIALLY_REFUNDED", "REFUNDED"},
     "PARTIALLY_REFUNDED": {"RELEASE_ELIGIBLE", "REFUND_PENDING", "SETTLED"},
@@ -98,40 +98,78 @@ def seed(conn):
 # 2. Formal provider interface (the licensed/approved rail). LiftHaul stores references +
 #    evidence only — never bank/payment secrets in business tables.
 # --------------------------------------------------------------------------- #
+CAP_NOT_SUPPORTED = "PROVIDER_CAPABILITY_NOT_SUPPORTED"
+
+# Capability flags every adapter must declare (do not assume all providers support all features).
+CAPABILITY_KEYS = ("provider_name", "provider_type", "regulated_status", "supports_protected_funds",
+                   "supports_partial_release", "supports_partial_refund", "supports_webhooks",
+                   "supports_multi_currency", "sandbox", "live")
+
+
 class ProtectedPaymentProvider:
-    """The formal interface a licensed provider adapter must implement."""
+    """The formal interface a licensed provider adapter must implement. Every method returns a
+    NORMALIZED internal result — business services never depend on a provider-specific payload.
+    Unsupported capabilities fail closed (return CAP_NOT_SUPPORTED / raise)."""
     name = "ABSTRACT"
     live = False
+    capabilities = {"provider_name": "ABSTRACT", "provider_type": "none", "regulated_status": "NONE",
+                    "supports_protected_funds": False, "supports_partial_release": False,
+                    "supports_partial_refund": False, "supports_webhooks": False,
+                    "supports_multi_currency": False, "sandbox": False, "live": False}
+
+    def declare_capabilities(self):
+        return dict(self.capabilities)
+
+    def _cap(self, key):
+        if not self.capabilities.get(key):
+            raise core.ForbiddenError(CAP_NOT_SUPPORTED + f": {key}")
+
     def create_payment(self, tx): raise NotImplementedError
-    def get_payment_status(self, ref): raise NotImplementedError
+    def get_payment(self, ref): raise NotImplementedError
     def confirm_funding(self, ref): raise NotImplementedError
     def get_protected_balance(self, ref): raise NotImplementedError
-    def hold(self, ref, amount, reason): raise NotImplementedError
-    def create_release(self, ref, amount): raise NotImplementedError
+    def place_hold(self, ref, amount, reason): raise NotImplementedError
     def release_partial(self, ref, amount): raise NotImplementedError
     def release_full(self, ref): raise NotImplementedError
     def refund_partial(self, ref, amount): raise NotImplementedError
     def refund_full(self, ref): raise NotImplementedError
+    def cancel(self, ref, reason): raise NotImplementedError
     def get_settlement(self, ref): raise NotImplementedError
     def reconcile(self, ref): raise NotImplementedError
+    def verify_webhook(self, provider, event_id, event_type, payload, signature, secret, timestamp=None):
+        return tc.verify_webhook(None, provider, event_id, event_type, payload, signature, secret, timestamp) \
+            if False else {"accepted": False, "reason": "adapter must implement verify_webhook"}
 
 
 class MockProtectedPaymentProvider(ProtectedPaymentProvider):
-    """Deterministic, offline. No real funds. Used until a licensed provider is activated."""
+    """Deterministic, offline, NOT a licensed provider. No real funds. Used until a regulated
+    partner is certified + activated. Declares full sandbox capability, live=False."""
     name = "MOCK"
     live = False
-    def create_payment(self, tx): return {"provider_reference": f"MOCK-PR-{tx.get('id')}", "status": "PAYMENT_INTENT_CREATED"}
-    def get_payment_status(self, ref): return {"status": "MOCK", "reference": ref}
-    def confirm_funding(self, ref): return {"funded": True, "reference": ref, "mock": True}
-    def get_protected_balance(self, ref): return {"protected_balance": None, "mock": True}
-    def hold(self, ref, amount, reason): return {"held": amount, "mock": True}
-    def create_release(self, ref, amount): return {"release_intent": amount, "mock": True}
-    def release_partial(self, ref, amount): return {"released": amount, "mock": True}
-    def release_full(self, ref): return {"released": "full", "mock": True}
-    def refund_partial(self, ref, amount): return {"refunded": amount, "mock": True}
-    def refund_full(self, ref): return {"refunded": "full", "mock": True}
-    def get_settlement(self, ref): return {"settlement": None, "mock": True}
-    def reconcile(self, ref): return {"reconciled": True, "mock": True}
+    capabilities = {"provider_name": "MOCK", "provider_type": "deterministic_sandbox",
+                    "regulated_status": "NOT_A_LICENSED_PROVIDER", "supports_protected_funds": True,
+                    "supports_partial_release": True, "supports_partial_refund": True,
+                    "supports_webhooks": True, "supports_multi_currency": False,
+                    "sandbox": True, "live": False}
+
+    def create_payment(self, tx): return {"provider_reference": f"MOCK-PR-{tx.get('id')}", "status": "PAYMENT_INTENT_CREATED", "normalized": True}
+    def get_payment(self, ref): return {"status": "MOCK", "reference": ref, "normalized": True}
+    def confirm_funding(self, ref): return {"funded": True, "reference": ref, "normalized": True}
+    def get_protected_balance(self, ref): return {"protected_balance": None, "normalized": True}
+    def place_hold(self, ref, amount, reason): self._cap("supports_protected_funds"); return {"held": amount, "normalized": True}
+    def release_partial(self, ref, amount): self._cap("supports_partial_release"); return {"released": amount, "normalized": True}
+    def release_full(self, ref): return {"released": "full", "normalized": True}
+    def refund_partial(self, ref, amount): self._cap("supports_partial_refund"); return {"refunded": amount, "normalized": True}
+    def refund_full(self, ref): return {"refunded": "full", "normalized": True}
+    def cancel(self, ref, reason): return {"cancelled": True, "reference": ref, "normalized": True}
+    def get_settlement(self, ref): return {"settlement": None, "normalized": True}
+    def reconcile(self, ref): return {"reconciled": True, "normalized": True}
+    def verify_webhook(self, provider, event_id, event_type, payload, signature, secret, timestamp=None):
+        # HMAC signature check (offline, deterministic)
+        import hashlib, hmac
+        expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        ok = hmac.compare_digest(expected, signature or "")
+        return {"accepted": ok, "signature_ok": ok, "normalized": True}
 
 
 _PROVIDERS = {"MOCK": MockProtectedPaymentProvider()}
@@ -355,3 +393,131 @@ def run_integrity(conn):
     bad = conn.execute("SELECT COUNT(*) c FROM mkt_protected_ledger WHERE event='reversal'"
                        " AND reverses_entry_id IS NULL").fetchone()["c"]
     return {"reversals_without_origin": bad, "ok": bad == 0}
+
+
+# --------------------------------------------------------------------------- #
+# P5. Provider sandbox CERTIFICATION harness — a provider cannot be ACTIVE unless it passes.
+# --------------------------------------------------------------------------- #
+def certify_provider(adapter):
+    """Provider-neutral certification. Runs mandatory conformance checks against ANY adapter and
+    returns a PROVIDER_CERTIFICATION_REPORT. MOCK is never certified as a licensed provider."""
+    import hashlib, hmac
+    results = []
+
+    def check(name, mandatory, fn):
+        try:
+            fn()
+            results.append({"test": name, "mandatory": mandatory, "status": "PASS"})
+        except Exception as e:
+            results.append({"test": name, "mandatory": mandatory, "status": "FAIL", "detail": str(e)[:120]})
+
+    caps = adapter.declare_capabilities()
+    check("capability_declaration", True, lambda: [caps[k] for k in CAPABILITY_KEYS])
+    check("create_payment", True, lambda: adapter.create_payment({"id": 1}))
+    check("confirm_funding", True, lambda: adapter.confirm_funding("REF-1"))
+    check("get_protected_balance", True, lambda: adapter.get_protected_balance("REF-1"))
+    check("get_payment", True, lambda: adapter.get_payment("REF-1"))
+    if caps.get("supports_partial_release"):
+        check("partial_release", True, lambda: adapter.release_partial("REF-1", 100))
+    check("full_release", True, lambda: adapter.release_full("REF-1"))
+    if caps.get("supports_partial_refund"):
+        check("partial_refund", True, lambda: adapter.refund_partial("REF-1", 50))
+    check("full_refund", True, lambda: adapter.refund_full("REF-1"))
+    check("place_hold", True, lambda: adapter.place_hold("REF-1", 100, "dispute"))
+    check("cancel", True, lambda: adapter.cancel("REF-1", "expired"))
+    check("get_settlement", True, lambda: adapter.get_settlement("REF-1"))
+    check("reconcile", True, lambda: adapter.reconcile("REF-1"))
+
+    if caps.get("supports_webhooks"):
+        secret, payload = "whsec", b'{"e":"funded"}'
+        good = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+        check("webhook_valid_signature", True,
+              lambda: (_ for _ in ()).throw(AssertionError("sig not accepted"))
+              if not adapter.verify_webhook("p", "e1", "funded", payload, good, secret)["accepted"] else None)
+        check("webhook_invalid_signature_rejected", True,
+              lambda: (_ for _ in ()).throw(AssertionError("bad sig accepted"))
+              if adapter.verify_webhook("p", "e2", "funded", payload, "bad", secret)["accepted"] else None)
+
+    mandatory_fail = [r for r in results if r["mandatory"] and r["status"] == "FAIL"]
+    certifiable = (not mandatory_fail) and bool(caps.get("supports_protected_funds"))
+    # a sandbox/non-live/non-regulated adapter can pass conformance but is NEVER marked ACTIVE-eligible
+    active_eligible = certifiable and bool(caps.get("live")) and caps.get("regulated_status") not in (
+        "NONE", "NOT_A_LICENSED_PROVIDER")
+    return {"provider": caps.get("provider_name"), "capabilities": caps, "results": results,
+            "mandatory_failures": len(mandatory_fail), "conformance_pass": certifiable,
+            "active_eligible": active_eligible,
+            "conclusion": ("CONFORMANCE PASS — NOT ACTIVE-ELIGIBLE (sandbox/unregulated)"
+                           if certifiable and not active_eligible else
+                           "CERTIFIED — ACTIVE ELIGIBLE" if active_eligible else "FAILED")}
+
+
+# --------------------------------------------------------------------------- #
+# P14. Observability metrics (no sensitive payment data)
+# --------------------------------------------------------------------------- #
+def metrics(conn, actor=None):
+    if actor is not None:
+        core.require(actor, "marketplace.payment.view") if core.can(actor, "marketplace.payment.view") else core.require(actor, "marketplace.trust.view")
+    frag, params = tenant.predicate(actor) if actor is not None else ("", ())
+    by_state = {r["state"]: r["c"] for r in conn.execute(
+        "SELECT state, COUNT(*) c FROM mkt_protected_tx WHERE 1=1" + frag + " GROUP BY state", params).fetchall()}
+    def g(s): return by_state.get(s, 0)
+    recon = daily_reconciliation(conn, actor)
+    webhook_rejected = conn.execute("SELECT COUNT(*) c FROM mkt_webhook_events WHERE status='QUARANTINED'").fetchone()["c"] \
+        if conn.execute("SELECT name FROM sqlite_master WHERE name='mkt_webhook_events'").fetchone() else 0
+    return {"protected_payment_created": sum(by_state.values()),
+            "funding_pending": g("AWAITING_CUSTOMER_FUNDS"), "funds_protected": g("FUNDS_PROTECTED"),
+            "release_eligible": g("RELEASE_ELIGIBLE"), "release_pending": g("RELEASE_APPROVAL_PENDING") + g("RELEASE_REQUESTED"),
+            "settlement_pending": g("RELEASE_CONFIRMED"), "settled": g("SETTLED"),
+            "dispute_open": g("DISPUTED") + g("DISPUTE_WINDOW"), "refund_pending": g("REFUND_PENDING"),
+            "reconciliation_exception": len(recon["exceptions"]), "webhook_rejected": webhook_rejected,
+            "fraud_hold": g("FRAUD_REVIEW"), "by_state": by_state}
+
+
+# --------------------------------------------------------------------------- #
+# P1 + P2. Customer-friendly + carrier settlement projections (redacted)
+# --------------------------------------------------------------------------- #
+CUSTOMER_LABELS = {
+    "PAYMENT_REQUIRED": "Payment Required", "PAYMENT_INTENT_CREATED": "Awaiting Payment",
+    "AWAITING_CUSTOMER_FUNDS": "Awaiting Payment", "CUSTOMER_FUNDED": "Payment Confirmed",
+    "FUNDING_CONFIRMED": "Payment Confirmed", "FUNDS_PROTECTED": "Funds Protected",
+    "TRIP_AUTHORIZED": "Service Authorized", "SERVICE_IN_PROGRESS": "Service In Progress",
+    "DELIVERY_EVIDENCE_PENDING": "Delivery Evidence Submitted", "DISPUTE_WINDOW": "Acceptance / Dispute Window",
+    "RELEASE_ELIGIBLE": "Release Processing", "RELEASE_APPROVAL_PENDING": "Release Processing",
+    "RELEASE_APPROVED": "Release Processing", "RELEASE_REQUESTED": "Release Processing",
+    "RELEASE_CONFIRMED": "Release Processing", "SETTLED": "Settled",
+    "PAYMENT_FAILED": "Payment Failed", "PAYMENT_EXPIRED": "Payment Expired", "FUNDS_HELD": "Payment Held",
+    "FRAUD_REVIEW": "Under Fraud Review", "DISPUTED": "Disputed", "REFUND_PENDING": "Refund Pending",
+    "PARTIALLY_REFUNDED": "Partially Refunded", "REFUNDED": "Refunded", "LEGAL_HOLD": "Legal Hold",
+    "RELEASE_REJECTED": "Release Processing", "CHARGEBACK": "Payment Held"}
+
+
+def customer_view(conn, actor, tx_id):
+    """Customer-facing projection. NEVER exposes internal carrier cost, LiftHaul margin, provider
+    secrets, carrier bank account, other tenants, or fraud-engine internals."""
+    t = _tx(conn, actor, tx_id)
+    lt = ledger_totals(conn, tx_id)
+    return {"transaction_no": f"PP-{t['id']}", "booking_id": t["booking_id"], "quotation_id": t["quotation_id"],
+            "service_provider": f"Carrier #{t['carrier_id']}", "contract_value": t["contract_amount"],
+            "funded_amount": lt.get("funding", 0), "protected_amount": t["protected_amount"],
+            "released_amount": lt.get("release", 0), "refunded_amount": lt.get("refund", 0),
+            "status": CUSTOMER_LABELS.get(t["state"], "Processing"),
+            "dispute_window_expires_at": t["dispute_window_expires_at"], "currency": t["currency"],
+            "milestone_plan": json.loads(t["milestone_plan"]) if t["milestone_plan"] else None,
+            "terminology": "Protected Payment"}
+
+
+def carrier_settlement(conn, actor, tx_id):
+    """Carrier-facing projection. Exposes earned/eligible/held/released; never customer payment
+    credentials or competing-carrier information."""
+    t = _tx(conn, actor, tx_id)
+    lt = ledger_totals(conn, tx_id)
+    released = lt.get("release", 0)
+    funded = lt.get("funding", 0)
+    held = round(max(0.0, funded - released - lt.get("refund", 0)), 2)
+    return {"transaction_no": f"PP-{t['id']}", "job_id": t["job_id"], "contract_amount": t["contract_amount"],
+            "protected_status": t["state"] in ("FUNDS_PROTECTED", "TRIP_AUTHORIZED", "SERVICE_IN_PROGRESS",
+                                               "DELIVERY_EVIDENCE_PENDING", "DISPUTE_WINDOW", "RELEASE_ELIGIBLE",
+                                               "RELEASE_APPROVED", "RELEASE_REQUESTED", "RELEASE_CONFIRMED", "SETTLED"),
+            "carrier_payable": t["carrier_payable"], "provider_fee": t["provider_fee"],
+            "released_amount": released, "held_amount": held, "state": t["state"],
+            "milestone_plan": json.loads(t["milestone_plan"]) if t["milestone_plan"] else None}

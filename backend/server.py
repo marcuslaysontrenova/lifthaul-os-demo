@@ -1842,6 +1842,12 @@ def _protected_payment_routes():
     def pp_daily(a, b, p):    return pp.daily_reconciliation(_conn, a)
     def pp_queues(a, b, p):   return pp.finance_queues(_conn, a)
     def pp_integrity(a, b, p): core.require(a, "marketplace.payment.view") if core.can(a, "marketplace.payment.view") else core.require(a, "marketplace.trust.view"); return pp.run_integrity(_conn)
+    def pp_customer(a, b, p):  return pp.customer_view(_conn, a, int(p["id"]))
+    def pp_carrier(a, b, p):   return pp.carrier_settlement(_conn, a, int(p["id"]))
+    def pp_metrics(a, b, p):   return pp.metrics(_conn, a)
+    def pp_certify(a, b, p):
+        core.require(a, "marketplace.payment.manage") if core.can(a, "marketplace.payment.manage") else core.require(a, "marketplace.trust.view")
+        return pp.certify_provider(pp.provider(b.get("provider", "MOCK")))
 
     return {
         ("POST", "/admin/marketplace/protected-payments"): pp_create,
@@ -1852,6 +1858,10 @@ def _protected_payment_routes():
         ("GET", "/admin/marketplace/protected-payments-daily-reconciliation"): pp_daily,
         ("GET", "/admin/marketplace/protected-payments-queues"): pp_queues,
         ("GET", "/admin/marketplace/protected-payments-integrity"): pp_integrity,
+        ("GET", "/admin/marketplace/protected-payments/:id/customer-view"): pp_customer,
+        ("GET", "/admin/marketplace/protected-payments/:id/carrier-settlement"): pp_carrier,
+        ("GET", "/admin/marketplace/protected-payments-metrics"): pp_metrics,
+        ("POST", "/admin/marketplace/protected-payments-provider-certify"): pp_certify,
     }
 
 

@@ -85,6 +85,12 @@ img,svg{max-width:100%}
 .stat{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px}
 .stat b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em}
 .stat span{font-size:12.5px;color:var(--muted);font-weight:600}
+.mapscene{margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#EFF7E6}
+.mapscene svg{display:block;width:100%;height:auto}
+.mapcap{font-size:12px;text-align:center;margin-top:10px;font-weight:600}
+@media(prefers-reduced-motion:no-preference){.mapscene .fleet>g{animation:roll 9s ease-in-out infinite}
+  .mapscene .fleet>g:nth-child(2){animation-delay:-3s}.mapscene .fleet>g:nth-child(3){animation-delay:-6s}}
+@keyframes roll{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
 
 /* sections */
 section{padding:58px 0}
@@ -236,13 +242,62 @@ footer a:hover{color:#fff}
     <aside class="herocard" aria-label="What you get">
       <h3>One profile. The whole job pipeline.</h3>
       <p class="muted" style="font-size:14px;margin-top:6px">Register once, get verified, and start receiving matched work across the country.</p>
-      <div class="statgrid">
-        <div class="stat"><b>3</b><span>Island groups served</span></div>
-        <div class="stat"><b>KYB</b><span>Human-verified onboarding</span></div>
-        <div class="stat"><b>CPC</b><span>LTFRB authority checks</span></div>
-        <div class="stat"><b>0</b><span>Fabricated verifications</span></div>
+      <div class="mapscene">
+        <svg viewBox="0 0 320 250" role="img" aria-label="Map of the Philippines with a fleet of trucks moving across it">
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4FAEE"/><stop offset="1" stop-color="#E3F0D6"/></linearGradient>
+            <linearGradient id="land" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#93CE68"/><stop offset="1" stop-color="#BEE398"/></linearGradient>
+          </defs>
+          <rect x="0" y="0" width="320" height="250" fill="url(#sky)"/>
+          <!-- Philippines (stylized) -->
+          <g fill="url(#land)" stroke="#5FB92A" stroke-width="1.1" stroke-linejoin="round">
+            <path d="M150 16c16-6 30 4 33 18 2 10-2 17 2 26 4 10-2 20-13 21-2 10-13 12-20 6-12 1-19-8-18-18-10-7-9-21-1-28-2-16 5-29 17-25z"/>
+            <path d="M183 88c9 1 16 8 15 16-1 7-9 9-14 4-6-6-6-15-1-20z"/>
+            <path d="M116 94c6-2 11 4 8 10l-19 38c-3 6-12 4-11-3 0-2 1-4 2-6l16-36c1-2 2-3 4-3z"/>
+            <path d="M150 116c8-2 13 4 10 11-2 5-10 5-14 1-4-5-2-11 4-12z"/>
+            <path d="M178 118c7-1 11 5 8 10-3 5-10 4-13-1-3-4 0-8 5-9z"/>
+            <path d="M205 124c6 0 8 6 8 12s-2 13-8 13-7-7-7-13 1-12 7-12z"/>
+            <path d="M223 126c5 0 7 6 7 12s-2 13-6 13-6-7-6-13 0-12 5-12z"/>
+            <path d="M235 144c6-1 10 4 9 9-1 5-7 6-11 2-4-4-3-10 2-11z"/>
+            <path d="M233 112c7-1 11 5 10 11-1 5-4 8-2 13 2 6-3 11-9 9-6-1-8-8-6-13-3-6-1-12 3-16 0-2 2-3 4-4z"/>
+            <path d="M194 150c16-8 36-3 44 9 7 10 5 21 12 28 6 7 1 17-8 18-9 7-22 6-28-2-11 2-22-5-23-15-12-5-16-17-8-25-3-12 6-21 11-16z"/>
+          </g>
+          <!-- island-group pins -->
+          <g>
+            <circle cx="164" cy="58" r="8" fill="#F2611A" opacity=".16"/><circle cx="164" cy="58" r="3.4" fill="#F2611A"/>
+            <text x="176" y="61" font-family="Segoe UI,Arial" font-size="10" font-weight="700" fill="#2E5C1A">Luzon</text>
+            <circle cx="213" cy="140" r="7" fill="#F2611A" opacity=".16"/><circle cx="213" cy="140" r="3.2" fill="#F2611A"/>
+            <text x="224" y="143" font-family="Segoe UI,Arial" font-size="10" font-weight="700" fill="#2E5C1A">Visayas</text>
+            <circle cx="220" cy="182" r="8" fill="#F2611A" opacity=".16"/><circle cx="220" cy="182" r="3.4" fill="#F2611A"/>
+            <text x="150" y="185" font-family="Segoe UI,Arial" font-size="10" font-weight="700" fill="#2E5C1A" text-anchor="end">Mindanao</text>
+          </g>
+          <!-- road -->
+          <rect x="4" y="200" width="312" height="42" rx="10" fill="#DCEBC9"/>
+          <line x1="18" y1="221" x2="302" y2="221" stroke="#5FB92A" stroke-width="2.6" stroke-dasharray="13 11" stroke-linecap="round" opacity=".5"/>
+          <!-- fleet: small (light) -> lorry -> semi (accent) : a light gradient of trucks -->
+          <g class="fleet">
+            <g transform="translate(30 205)" opacity="0.5">
+              <rect x="0" y="6" width="20" height="12" rx="2" fill="var(--primary-2)"/>
+              <path d="M20 18V8h6l5 5v5z" fill="var(--primary-2)"/>
+              <circle cx="8" cy="20" r="3.4" fill="#141d0c"/><circle cx="27" cy="20" r="3.4" fill="#141d0c"/>
+            </g>
+            <g transform="translate(120 200)" opacity="0.8">
+              <rect x="0" y="0" width="28" height="20" rx="2" fill="var(--primary)"/>
+              <path d="M28 20V9h8l6 6v5z" fill="var(--primary)"/>
+              <rect x="30" y="11" width="5" height="4" rx="1" fill="#fff" opacity=".55"/>
+              <circle cx="8" cy="22" r="4" fill="#141d0c"/><circle cx="38" cy="22" r="4" fill="#141d0c"/>
+            </g>
+            <g transform="translate(206 195)">
+              <rect x="0" y="2" width="46" height="21" rx="2.5" fill="var(--accent)"/>
+              <path d="M46 23V10h8l7 7v6z" fill="var(--accent)"/>
+              <rect x="49" y="12" width="6" height="5" rx="1" fill="#fff" opacity=".55"/>
+              <circle cx="13" cy="25" r="4.6" fill="#141d0c"/><circle cx="25" cy="25" r="4.6" fill="#141d0c"/><circle cx="54" cy="25" r="4.6" fill="#141d0c"/>
+            </g>
+          </g>
+        </svg>
       </div>
-      <button class="btn accent" style="width:100%;margin-top:16px" data-scroll="#register">Start your registration →</button>
+      <p class="mapcap muted">Luzon · Visayas · Mindanao — one verified network</p>
+      <button class="btn accent" style="width:100%;margin-top:14px" data-scroll="#register">Start your registration →</button>
     </aside>
   </div>
 </header>

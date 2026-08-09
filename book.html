@@ -214,6 +214,15 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
           <div class="field" style="margin-top:0"><label>Choose a vehicle <span class="req">*</span></label></div>
           <div class="veh" id="veh"></div>
 
+          <div class="grid2" style="margin-top:2px">
+            <div class="field"><label>Service level</label><select id="svcLevel"></select></div>
+            <div class="field"><label>Schedule</label><select id="schedType"><option value="NOW">Deliver now</option><option value="SCHEDULED">Scheduled</option></select></div>
+          </div>
+          <div class="field" id="schedWrap" style="display:none"><label>Scheduled date</label><input id="schedAt" type="date"></div>
+          <div class="field"><label>Additional stops <span class="muted" style="font-weight:400;font-size:12px">(optional — multi-drop / staging)</span></label>
+            <div id="stops"></div>
+            <button type="button" class="btn line sm" id="addStop" style="align-self:flex-start;margin-top:4px">+ Add stop</button></div>
+
           <div class="estimate" id="estimate" hidden></div>
 
           <div class="field"><label>Payment method</label></div>
@@ -349,6 +358,10 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
     {id:"crane",name:"Crane / Rigging",cap:"up to 350 t",quote:true,heavy:true}
   ];
   var sel=null, when="now";
+  // service levels (mirror server eligibility + multipliers; server remains authoritative)
+  var SERVICE_LVL={EXPRESS:{n:"Express",m:1.5},STANDARD:{n:"Standard",m:1.0},"ECONOMY":{n:"Economy / Consolidated",m:0.85},DEDICATED:{n:"Dedicated",m:1.25},ENGINEERED_HEAVY_HAUL:{n:"Engineered Heavy Haul",m:null}};
+  function eligibleLevels(isHeavy){return isHeavy?["ENGINEERED_HEAVY_HAUL","DEDICATED"]:["EXPRESS","STANDARD","ECONOMY","DEDICATED"];}
+  function populateLevels(isHeavy){var s=document.getElementById("svcLevel");if(!s)return;var codes=eligibleLevels(isHeavy);s.innerHTML=codes.map(function(c){return '<option value="'+c+'">'+SERVICE_LVL[c].n+'</option>';}).join("");s.value=isHeavy?"ENGINEERED_HEAVY_HAUL":"STANDARD";}
 
   // render vehicle picker (booking) + range grid
   var vh="";
@@ -357,6 +370,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   var rg="";
   VEH.forEach(function(v){ rg+='<div class="vcard'+(v.heavy?' heavy':'')+'"><b>'+v.name+(v.heavy?' ★':'')+'</b><div class="cap">'+v.cap+'</div><p>'+(v.quote?'Engineered, permit-handled lift/haul — priced by our team.':'Transparent base + per-km pricing. Inter-island adds sea-freight.')+'</p></div>'; });
   $("#vehGrid").innerHTML=rg;
+  populateLevels(false);
 
   function peso(n){return "₱"+Number(n).toLocaleString("en-PH",{maximumFractionDigits:0});}
   function interIsland(){var o=$("#oIsland").value,d=$("#dIsland").value;return o&&d&&o!==d;}
@@ -376,17 +390,23 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
     var ii=interIsland();
     var dist=Math.round(v.km*km);
     var sea=ii?v.sea:0;
-    var total=v.base+dist+sea;
+    var lvl=(document.getElementById("svcLevel")||{}).value||"STANDARD";
+    var m=(SERVICE_LVL[lvl]&&SERVICE_LVL[lvl].m)||1;
+    var subtotal=Math.round((v.base+dist)*m);
+    var total=subtotal+sea;
     box.hidden=false;
     box.innerHTML='<div class="row"><span>Base fare · '+v.name+'</span><span>'+peso(v.base)+'</span></div>'+
       '<div class="row"><span>Distance · '+km+' km × '+peso(v.km)+'/km</span><span>'+peso(dist)+'</span></div>'+
+      (m!==1?'<div class="row"><span>Service level · '+((SERVICE_LVL[lvl]||{}).n||lvl)+' (×'+m+')</span><span>'+peso(subtotal-(v.base+dist))+'</span></div>':'')+
       (ii?'<div class="row"><span>Inter-island sea-freight + port handling</span><span>'+peso(sea)+'</span></div>':'')+
       '<div class="row total"><span>Estimated total</span><span>'+peso(total)+'</span></div>'+
       '<div class="row" style="color:var(--muted)"><span>Transparent estimate · final fare confirmed at carrier match</span><span></span></div>';
   }
 
   document.addEventListener("click",function(e){
-    var v=e.target.closest(".vopt"); if(v){[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});v.classList.add("on");sel=v.getAttribute("data-v");estimate();return;}
+    var v=e.target.closest(".vopt"); if(v){[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});v.classList.add("on");sel=v.getAttribute("data-v");var vd=VEH.find(function(x){return x.id===sel;});populateLevels(!!(vd&&vd.heavy));estimate();return;}
+    if(e.target.id==="addStop"){var wrap=document.getElementById("stops");var row=document.createElement("div");row.className="stoprow";row.style.cssText="display:flex;gap:8px;margin-bottom:6px";row.innerHTML='<input class="stopAddr" placeholder="Stop address (drop / staging / transfer)" style="flex:1"><button type="button" class="btn line sm rmStop">×</button>';wrap.appendChild(row);return;}
+    if(e.target.classList&&e.target.classList.contains("rmStop")){var r=e.target.closest(".stoprow");if(r)r.remove();return;}
     var p=e.target.closest(".payopt"); if(p){[].forEach.call(document.querySelectorAll(".payopt"),function(b){b.classList.remove("on");});p.classList.add("on");p.querySelector("input").checked=true;return;}
     var w=e.target.closest(".bhead button"); if(w){[].forEach.call(document.querySelectorAll(".bhead button"),function(b){b.classList.remove("on");});w.classList.add("on");when=w.getAttribute("data-when");return;}
     if(e.target.id==="newBooking"){$("#match").classList.remove("show");$("#bookform").style.display="";$("#bookform").reset();sel=null;[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});$("#estimate").hidden=true;$("#book").scrollIntoView({behavior:"smooth"});}
@@ -394,6 +414,9 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   $("#oIsland").addEventListener("change",refreshInter);
   $("#dIsland").addEventListener("change",refreshInter);
   $("#km").addEventListener("input",estimate);
+  document.getElementById("svcLevel").addEventListener("change",estimate);
+  document.getElementById("schedType").addEventListener("change",function(){document.getElementById("schedWrap").style.display=this.value==="SCHEDULED"?"":"none";});
+  function collectStops(){var out=[];[].forEach.call(document.querySelectorAll("#stops .stopAddr"),function(inp){var a=inp.value.trim();if(a)out.push({type:"DROP",address:a});});return out;}
 
   var STD_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","Destination","Out for Delivery","Delivered","POD","Settled"];
   var II_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","At Port","Sea Leg","Destination Port","Out for Delivery","Delivered","POD","Settled"];
@@ -410,6 +433,10 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
     var ii=interIsland();
     var contact=$("#cContact").value.trim();
     var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:$("#oCity").value.trim(),dest_city:$("#dCity").value.trim(),vehicle:sel,km:$("#km").value,payment:(document.querySelector('input[name=pm]:checked')||{}).value};
+    payload.service_level=(document.getElementById("svcLevel")||{}).value||"STANDARD";
+    payload.schedule_type=(document.getElementById("schedType")||{}).value||"NOW";
+    if(payload.schedule_type==="SCHEDULED"){payload.scheduled_at=(document.getElementById("schedAt")||{}).value||"";}
+    var st=collectStops();if(st.length)payload.stops=st;
     if(contact.indexOf("@")>-1)payload.contact_email=contact; else payload.contact_phone=contact;
     var base=null;try{base=localStorage.getItem("lifthaul_api_base");}catch(_){}
     showMatch();

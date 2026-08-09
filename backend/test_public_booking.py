@@ -328,6 +328,111 @@ class OperatorReview(unittest.TestCase):
         self.assertGreaterEqual(n, 1)
 
 
+class ServiceLevels(unittest.TestCase):
+    def setUp(self): self.c = db.connect(":memory:")
+
+    def test_express_costs_more_than_standard(self):
+        s = pb.submit(self.c, _p(vehicle="6w", km=100, service_level="STANDARD"))["estimate"]
+        e = pb.submit(self.c, _p(vehicle="6w", km=100, service_level="EXPRESS"))["estimate"]
+        self.assertGreater(e, s)
+
+    def test_economy_cheaper(self):
+        s = pb.submit(self.c, _p(vehicle="van", km=50, service_level="STANDARD"))["estimate"]
+        ec = pb.submit(self.c, _p(vehicle="van", km=50, service_level="ECONOMY"))["estimate"]
+        self.assertLess(ec, s)
+
+    def test_economy_not_eligible_for_engineered(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(vehicle="crane", service_level="ECONOMY"))
+
+    def test_unknown_level_rejected(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(service_level="TELEPORT"))
+
+    def test_engineered_defaults_to_heavy_haul_no_price(self):
+        r = pb.submit(self.c, _p(vehicle="lowbed"))
+        self.assertEqual(r["service_level"], "ENGINEERED_HEAVY_HAUL")
+        self.assertIsNone(r["estimate"])
+
+    def test_catalog_filters_by_service_class(self):
+        eng = [l["code"] for l in pb.service_levels_catalog("ENGINEERED")["levels"]]
+        self.assertIn("ENGINEERED_HEAVY_HAUL", eng)
+        self.assertNotIn("ECONOMY", eng)
+
+
+class Scheduling(unittest.TestCase):
+    def setUp(self): self.c = db.connect(":memory:")
+
+    def test_default_now(self):
+        self.assertEqual(pb.submit(self.c, _p())["schedule_type"], "NOW")
+
+    def test_scheduled_requires_date(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(schedule_type="SCHEDULED"))
+
+    def test_scheduled_future_ok(self):
+        import datetime
+        d = (datetime.date.today() + datetime.timedelta(days=14)).isoformat()
+        r = pb.submit(self.c, _p(schedule_type="SCHEDULED", scheduled_at=d))
+        self.assertEqual(r["scheduled_at"], d)
+
+    def test_past_date_rejected(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(schedule_type="SCHEDULED", scheduled_at="2020-01-01"))
+
+    def test_unknown_schedule_type_rejected(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(schedule_type="WHENEVER"))
+
+
+class MultiStop(unittest.TestCase):
+    def setUp(self): self.c = db.connect(":memory:")
+
+    def test_stops_persisted_and_sequenced(self):
+        r = pb.submit(self.c, _p(vehicle="van", stops=[
+            {"type": "PICKUP", "address": "WH-A"}, {"type": "DROP", "address": "S1"},
+            {"type": "DROP", "address": "S2"}]))
+        self.assertEqual(r["stops"], 3)
+        rows = self.c.execute("SELECT seq,stop_type FROM mkt_booking_stops WHERE booking_id=? ORDER BY seq",
+                              (r["booking_id"],)).fetchall()
+        self.assertEqual([x["seq"] for x in rows], [1, 2, 3])
+
+    def test_too_many_stops_rejected(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(stops=[{"address": str(i)} for i in range(25)]))
+
+    def test_stops_in_tracking(self):
+        r = pb.submit(self.c, _p(stops=[{"type": "PICKUP", "address": "A"}, {"type": "DROP", "address": "B"}]))
+        t = pb.track(self.c, r["tracking_token"])
+        self.assertEqual(len(t["stops"]), 2)
+        self.assertEqual(t["stops"][0]["type"], "PICKUP")
+
+
+class BulkImport(unittest.TestCase):
+    def setUp(self): self.c = db.connect(":memory:")
+
+    def test_bulk_creates_batch_with_errors(self):
+        rows = [_p(origin_island="Luzon", dest_island="Visayas") for _ in range(3)] + [{"contact_name": "x"}]
+        b = pb.submit_bulk(self.c, SUP, rows)
+        self.assertEqual(b["created_count"], 3)
+        self.assertEqual(b["error_count"], 1)
+        self.assertTrue(b["batch_id"].startswith("batch_"))
+
+    def test_bulk_requires_permission(self):
+        weak = {"id": 9, "role": "viewer", "perms": {"marketplace.booking.view"}, "tenant_id": None}
+        with self.assertRaises(Exception):
+            pb.submit_bulk(self.c, weak, [_p()])
+
+    def test_bulk_rows_are_canonical_bookings(self):
+        pb.submit_bulk(self.c, SUP, [_p(), _p()])
+        n = self.c.execute("SELECT COUNT(*) c FROM mkt_bookings WHERE source='PUBLIC_MARKETPLACE'").fetchone()["c"]
+        self.assertEqual(n, 2)
+
+    def test_bulk_size_cap(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit_bulk(self.c, SUP, [_p() for _ in range(501)])
+
+
 class Persistence(unittest.TestCase):
     def test_restart_persistence(self):
         import os, tempfile

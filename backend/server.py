@@ -1910,12 +1910,16 @@ def _public_booking_routes():
     def pb_queue(a, b, p):   return pb.admin_queue(_conn, a)
     def pb_review(a, b, p):  return pb.review(_conn, a, int(p["id"]), b["action"],
                                               note=b.get("note"), quote_amount=b.get("quote_amount"))
+    def pb_levels(a, b, p):  return pb.service_levels_catalog(b.get("service_class") if b else None)
+    def pb_bulk(a, b, p):    return pb.submit_bulk(_conn, a, b.get("rows"))
 
     return {
         ("POST", "/public/bookings"): pb_submit,
         ("GET", "/public/bookings/track/:token"): pb_track,
+        ("GET", "/public/service-levels"): pb_levels,
         ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,
         ("POST", "/admin/marketplace/public-bookings/:id/review"): pb_review,
+        ("POST", "/admin/marketplace/public-bookings/bulk"): pb_bulk,
     }
 
 

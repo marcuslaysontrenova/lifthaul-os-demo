@@ -45,12 +45,22 @@ SCHEMA_COLUMNS = [
     ("tracking_token", "TEXT"), ("service_class", "TEXT"), ("routing_candidate", "TEXT"),
     ("quote_amount", "REAL"), ("quote_status", "TEXT"), ("intended_payment", "TEXT"),
     ("idempotency_key", "TEXT"), ("special_instructions", "TEXT"),
+    # Multi-stop + scheduling + service-level increment
+    ("service_level", "TEXT"), ("schedule_type", "TEXT"), ("scheduled_at", "TEXT"), ("recurrence", "TEXT"),
 ]
+
+# Multi-stop legs — child of the canonical booking (NOT a parallel booking model).
+STOPS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS mkt_booking_stops(
+  id INTEGER PRIMARY KEY, tenant_id INTEGER, booking_id INTEGER NOT NULL, seq INTEGER NOT NULL,
+  stop_type TEXT DEFAULT 'DROP', address TEXT, contact_name TEXT, contact_phone TEXT,
+  instructions TEXT, load_type TEXT, status TEXT DEFAULT 'PENDING', created_at TEXT);
+"""
 
 
 def init(conn):
-    """Extend the canonical mkt_bookings with nullable public-intake columns (backward-compatible).
-    Idempotent + dialect-agnostic: attempt each ADD COLUMN; a duplicate is harmless and rolled back."""
+    """Extend the canonical mkt_bookings with nullable public-intake columns (backward-compatible) and
+    add the multi-stop child table. Idempotent + dialect-agnostic."""
     for col, typ in SCHEMA_COLUMNS:
         try:
             conn.execute(f"ALTER TABLE mkt_bookings ADD COLUMN {col} {typ}")
@@ -60,6 +70,14 @@ def init(conn):
                 conn.rollback()
             except Exception:
                 pass
+    try:
+        conn.executescript(STOPS_SCHEMA)
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
 
 
 def seed(conn):
@@ -110,27 +128,123 @@ def classify_service(vehicle):
     return {"requested_vehicle_category": m[0], "service_class": m[1]}
 
 
-def quote(conn, vehicle, km, inter_island):
-    """Server-side estimate. Real rate card when one exists for the equipment; else a server-owned
-    indicative rate for STANDARD classes. ENGINEERED classes NEVER get a fabricated instant price."""
+# Governed service-level catalog. Eligibility is server-owned: consolidation/economy is never
+# offered for engineered heavy haul; pooling a 350t crane makes no sense.
+SERVICE_LEVELS = {
+    "EXPRESS":   {"name": "Express", "multiplier": 1.5, "consolidate": False},
+    "STANDARD":  {"name": "Standard", "multiplier": 1.0, "consolidate": False},
+    "ECONOMY":   {"name": "Economy / Consolidated", "multiplier": 0.85, "consolidate": True},
+    "DEDICATED": {"name": "Dedicated", "multiplier": 1.25, "consolidate": False},
+    "ENGINEERED_HEAVY_HAUL": {"name": "Engineered Heavy Haul", "multiplier": None, "consolidate": False},
+}
+
+
+def eligible_service_levels(service_class):
+    if service_class == "ENGINEERED":
+        return ["ENGINEERED_HEAVY_HAUL", "DEDICATED"]
+    return ["EXPRESS", "STANDARD", "ECONOMY", "DEDICATED"]
+
+
+def resolve_service_level(level, service_class):
+    lvl = (str(level or "").upper()) or ("ENGINEERED_HEAVY_HAUL" if service_class == "ENGINEERED" else "STANDARD")
+    if lvl not in SERVICE_LEVELS:
+        raise core.ValidationError(f"unknown service level '{level}'")
+    if lvl not in eligible_service_levels(service_class):
+        raise core.ValidationError(f"service level {lvl} is not eligible for a {service_class} job")
+    return lvl
+
+
+def service_levels_catalog(service_class=None):
+    codes = eligible_service_levels(service_class) if service_class else list(SERVICE_LEVELS)
+    return {"service_class": service_class,
+            "levels": [{"code": c, "name": SERVICE_LEVELS[c]["name"],
+                        "multiplier": SERVICE_LEVELS[c]["multiplier"],
+                        "consolidate": SERVICE_LEVELS[c]["consolidate"]} for c in codes]}
+
+
+SCHEDULE_TYPES = ("NOW", "SCHEDULED", "RECURRING", "WINDOWED")
+_MAX_SCHEDULE_DAYS = 365   # heavy haul frequently books weeks / months ahead
+
+
+def resolve_schedule(payload):
+    st = (str(payload.get("schedule_type", "")).upper()) or "NOW"
+    if st not in SCHEDULE_TYPES:
+        raise core.ValidationError(f"unknown schedule_type '{st}'")
+    scheduled_at = str(payload.get("scheduled_at", "")).strip() or None
+    if st in ("SCHEDULED", "RECURRING", "WINDOWED") and not scheduled_at:
+        raise core.ValidationError(f"{st} booking requires scheduled_at")
+    if scheduled_at:
+        try:
+            d = datetime.date.fromisoformat(scheduled_at[:10])
+        except Exception:
+            raise core.ValidationError("scheduled_at must be an ISO date (YYYY-MM-DD)")
+        today = datetime.date.today()
+        if d < today:
+            raise core.ValidationError("scheduled_at must be in the future")
+        if (d - today).days > _MAX_SCHEDULE_DAYS:
+            raise core.ValidationError("scheduled_at is too far ahead")
+    return {"schedule_type": st, "scheduled_at": scheduled_at,
+            "recurrence": (str(payload.get("recurrence", ""))[:120] or None),
+            "pickup_window": (str(payload.get("pickup_window", ""))[:120] or None),
+            "delivery_window": (str(payload.get("delivery_window", ""))[:120] or None)}
+
+
+_MAX_STOPS = 20
+_STOP_TYPES = ("PICKUP", "DROP", "TRANSFER", "PORT", "STAGING", "WAREHOUSE")
+
+
+def _clean_stops(stops):
+    if not stops:
+        return []
+    if not isinstance(stops, list):
+        raise core.ValidationError("stops must be a list")
+    if len(stops) > _MAX_STOPS:
+        raise core.ValidationError(f"too many stops (max {_MAX_STOPS})")
+    out = []
+    for i, s in enumerate(stops):
+        if not isinstance(s, dict):
+            raise core.ValidationError("each stop must be an object")
+        stype = str(s.get("type", "DROP")).upper()
+        if stype not in _STOP_TYPES:
+            stype = "DROP"
+        out.append({"seq": i + 1, "stop_type": stype,
+                    "address": str(s.get("address", ""))[:400], "contact_name": str(s.get("contact_name", ""))[:200],
+                    "contact_phone": str(s.get("contact_phone", ""))[:60],
+                    "instructions": str(s.get("instructions", ""))[:400], "load_type": str(s.get("load_type", ""))[:60]})
+    return out
+
+
+def _persist_stops(conn, booking_id, stops):
+    for s in stops:
+        conn.execute(
+            "INSERT INTO mkt_booking_stops(booking_id,seq,stop_type,address,contact_name,contact_phone,"
+            "instructions,load_type,status,created_at) VALUES(?,?,?,?,?,?,?,?, 'PENDING', ?)",
+            (booking_id, s["seq"], s["stop_type"], s["address"], s["contact_name"],
+             s["contact_phone"], s["instructions"], s["load_type"], _now()))
+
+
+def quote(conn, vehicle, km, inter_island, service_level=None):
+    """Server-side estimate. Real rate card when one exists; else a server-owned indicative rate for
+    STANDARD classes, adjusted by the service-level multiplier. ENGINEERED classes NEVER get a
+    fabricated instant price (service level or not)."""
     veh, cls, base, perkm, sea = VEHICLE_MAP[vehicle]
     if cls == "ENGINEERED":
         return {"amount": None, "status": "ESTIMATE_REQUIRED", "note": ENGINEERED_NOTE}
     km = float(km or 0)
     if km <= 0:
         return {"amount": None, "status": "ESTIMATE_REQUIRED", "note": "distance required for a standard quote"}
-    # Prefer the governed rate engine if a card is configured for this equipment.
+    mult = SERVICE_LEVELS.get(str(service_level or "STANDARD").upper(), {}).get("multiplier") or 1.0
     try:
         import rates
         rc = rates.resolve_rate(conn, veh)
         if rc and rc.get("standard_rate"):
             line = rates.price_line(rc["standard_rate"], 1, max(1, round(km / 200)), 0.0, rc.get("internal_cost", 0.0))
-            amt = round(line["total"] + (sea if inter_island else 0))
-            return {"amount": amt, "status": "QUOTED", "source": "rate_card"}
+            amt = round(line["total"] * mult + (sea if inter_island else 0))
+            return {"amount": amt, "status": "QUOTED", "source": "rate_card", "service_level": service_level}
     except Exception:
         pass
-    amt = round(base + perkm * km + (sea if inter_island else 0))
-    return {"amount": amt, "status": "QUOTED_INDICATIVE", "source": "server_tariff"}
+    amt = round((base + perkm * km) * mult + (sea if inter_island else 0))
+    return {"amount": amt, "status": "QUOTED_INDICATIVE", "source": "server_tariff", "service_level": service_level}
 
 
 def routing_candidate(service_class):
@@ -165,7 +279,10 @@ def submit(conn, payload):
 
     route = classify_route(payload.get("origin_island"), payload.get("dest_island"))
     svc = classify_service(payload.get("vehicle"))
-    q = quote(conn, payload["vehicle"], payload.get("km"), route["inter_island"])
+    level = resolve_service_level(payload.get("service_level"), svc["service_class"])
+    sched = resolve_schedule(payload)
+    stops = _clean_stops(payload.get("stops"))
+    q = quote(conn, payload["vehicle"], payload.get("km"), route["inter_island"], level)
     routing = routing_candidate(svc["service_class"])
     intended = "protected" if str(payload.get("payment", "protected")).lower().startswith("prot") else "operator"
 
@@ -187,11 +304,17 @@ def submit(conn, payload):
         "UPDATE mkt_bookings SET source='PUBLIC_MARKETPLACE', status='REQUEST_RECEIVED', "
         "contact_name=?, contact_email=?, contact_phone=?, tracking_token=?, service_class=?, "
         "routing_candidate=?, quote_amount=?, quote_status=?, intended_payment=?, idempotency_key=?, "
-        "special_instructions=?, payment_status='PROTECTED_PENDING', quotation_status=?, updated_at=? WHERE id=?",
+        "special_instructions=?, service_level=?, schedule_type=?, scheduled_at=?, recurrence=?, "
+        "pickup_window=?, delivery_window=?, payment_status='PROTECTED_PENDING', quotation_status=?, "
+        "updated_at=? WHERE id=?",
         (str(payload.get("contact_name"))[:200], str(payload.get("contact_email", ""))[:200],
          str(payload.get("contact_phone", ""))[:60], token, svc["service_class"], routing,
          q.get("amount"), q["status"], intended, idem, str(payload.get("notes", ""))[:2000],
+         level, sched["schedule_type"], sched["scheduled_at"], sched["recurrence"],
+         sched["pickup_window"], sched["delivery_window"],
          ("ESTIMATE_REQUIRED" if q["status"] == "ESTIMATE_REQUIRED" else "AUTO_QUOTED"), _now(), bid))
+    if stops:
+        _persist_stops(conn, bid, stops)
     # Protected Payment: eligibility recorded; NO live transaction (no carrier yet, funds gate OFF).
     import marketplace_payments as pay
     live = pay.live_funds_enabled(conn)
@@ -206,11 +329,40 @@ def submit(conn, payload):
         "inter_island": route["inter_island"], "service_class": svc["service_class"],
         "routing_candidate": routing,
         "estimate": q.get("amount"), "estimate_status": q["status"], "estimate_note": q.get("note"),
+        "service_level": level, "schedule_type": sched["schedule_type"],
+        "scheduled_at": sched["scheduled_at"], "stops": len(stops),
         "protected_payment": {"eligible": True, "live_funds_enabled": live, "intended_method": intended},
         "next_step": ("Engineering estimate — our team returns a priced lift plan"
                       if q["status"] == "ESTIMATE_REQUIRED"
                       else "Quotation review → carrier matching"),
     }
+
+
+def submit_bulk(conn, actor, rows):
+    """Batch intake for business clients: validate + price + create a controlled batch of canonical
+    bookings. Governed (marketplace.booking.create); each row independent; per-row errors returned;
+    idempotent per row. No parallel booking model — each row is a normal public booking."""
+    core.require(actor, "marketplace.booking.create")
+    if not isinstance(rows, list):
+        raise core.ValidationError("rows must be a list")
+    if len(rows) > 500:
+        raise core.ValidationError("batch too large (max 500)")
+    batch = "batch_" + secrets.token_urlsafe(8)
+    created, errors = [], []
+    for i, r in enumerate(rows):
+        try:
+            row = dict(r) if isinstance(r, dict) else {}
+            row.setdefault("idempotency_key", batch + "-" + str(i))
+            res = submit(conn, row)
+            created.append({"index": i, "ref": res["ref"], "tracking_token": res.get("tracking_token"),
+                            "estimate": res.get("estimate"), "estimate_status": res.get("estimate_status")})
+        except Exception as e:
+            errors.append({"index": i, "error": str(e)})
+    core.audit(conn, actor, "PUBLIC_BOOKING_BULK", "mkt_bookings", 0, None,
+               {"batch": batch, "created": len(created), "errors": len(errors)})
+    conn.commit()
+    return {"batch_id": batch, "submitted": len(rows), "created_count": len(created),
+            "error_count": len(errors), "created": created, "errors": errors}
 
 
 def _num(v):
@@ -282,8 +434,8 @@ def track(conn, token):
     r = conn.execute(
         "SELECT id,tracking_token,status,service_type,service_class,inter_island,route_class,"
         "requested_vehicle_category,quote_amount,quote_status,quotation_status,payment_status,intended_payment,"
-        "assignment_status,pickup_address,delivery_address,pickup_window,created_at "
-        "FROM mkt_bookings WHERE tracking_token=?", (token,)).fetchone()
+        "assignment_status,pickup_address,delivery_address,pickup_window,created_at,"
+        "service_level,schedule_type,scheduled_at FROM mkt_bookings WHERE tracking_token=?", (token,)).fetchone()
     if not r:
         raise core.NotFoundError("booking not found")
     d = dict(r)
@@ -354,9 +506,24 @@ def track(conn, token):
         "next_action": _NEXT_ACTION.get(raw, "Contact support for an update."),
         "actions": actions,
         "communication": "unavailable",     # honest: secure customer messaging not yet supported (post-launch)
+        "service_level": d.get("service_level"),
+        "schedule_type": d.get("schedule_type") or "NOW",
+        "scheduled_at": d.get("scheduled_at"),
+        "stops": _track_stops(conn, bid),
         "stages": [{"name": s, "state": ("done" if i < cur else "current" if i == cur else "upcoming")}
                    for i, s in enumerate(stages)],
     }
+
+
+def _track_stops(conn, booking_id):
+    """Customer-safe multi-stop legs (own data): sequence, type, address, status. No internal fields."""
+    try:
+        rows = conn.execute("SELECT seq,stop_type,address,status FROM mkt_booking_stops "
+                            "WHERE booking_id=? ORDER BY seq", (booking_id,)).fetchall()
+        return [{"seq": r["seq"], "type": r["stop_type"], "address": r["address"], "status": r["status"]}
+                for r in rows]
+    except Exception:
+        return []
 
 
 # --------------------------------------------------------------------------- #

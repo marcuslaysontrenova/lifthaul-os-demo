@@ -126,6 +126,8 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
     rows+=kv("Destination", d.destination);
     rows+=kv("Requested", d.requested_date? String(d.requested_date).slice(0,10):"");
     rows+=kv("Vehicle", d.vehicle_class);
+    rows+=kv("Service level", d.service_level);
+    rows+=kv("Schedule", (d.schedule_type||"NOW")+(d.scheduled_at?(" · "+String(d.scheduled_at).slice(0,10)):""));
     rows+=kv("Quotation", d.quotation_status + (d.estimate!=null? (" · "+peso(d.estimate)) : ""));
     rows+=kv("Provider", d.provider || "Assigned once matched");
     var pp=d.protected_payment||{};
@@ -139,6 +141,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
         '<div class="chead"><span class="ref">'+esc(d.ref)+'</span>'+(d.inter_island?'<span class="svc">Inter-island</span>':'<span class="svc">Domestic</span>')+'<span class="pill">'+esc(d.customer_status)+'</span></div>'+
         '<div class="grid">'+rows+'</div>'+
         '<div class="section"><h3>Protected Payment</h3><div class="pay"><span class="lbl">'+esc(pp.label||d.payment_status)+'</span>'+(pp.live_funds_enabled?'':'<span class="off">Live custody OFF</span>')+'</div><p class="muted" style="font-size:12.5px;margin-top:6px">Funds are released to the carrier only when delivery is verified. Until our regulated provider is live, settlement is operator-verified (bank / Wise) under the same delivery-verified policy.</p></div>'+
+        ((d.stops&&d.stops.length)?('<div class="section"><h3>Stops</h3>'+d.stops.map(function(s){return '<div class="tstep '+(s.status==="DONE"?"done":"upcoming")+'"><div class="ic">'+esc(s.seq)+'</div><div class="nm">'+esc(s.type)+' · '+esc(s.address||"")+'</div></div>';}).join("")+'</div>'):"")+
         '<div class="section"><h3>Progress</h3><div class="time">'+stages+'</div></div>'+
         '<div class="section"><h3>What happens next</h3><div class="next">'+esc(d.next_action)+'</div><div class="acts">'+acts+'</div>'+
           (d.communication==="unavailable"?'<p class="muted" style="font-size:12px;margin-top:10px">Secure in-app messaging is coming soon — for now, please contact support for updates.</p>':'')+

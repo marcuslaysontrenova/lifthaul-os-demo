@@ -517,6 +517,9 @@ window.RGO_API = (function(){
     ppCustomerView:function(id){return req('GET','/admin/marketplace/protected-payments/'+id+'/customer-view');},
     ppCarrierSettlement:function(id){return req('GET','/admin/marketplace/protected-payments/'+id+'/carrier-settlement');},
     ppMetrics:function(){return req('GET','/admin/marketplace/protected-payments-metrics');},
+    regulatorySummary:function(){return req('GET','/admin/marketplace/regulatory-summary');},
+    ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
+    ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
     createBooking:function(b){return req('POST','/bookings',b);},
     getBooking:function(id){return req('GET','/bookings/'+id);},
@@ -1153,7 +1156,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1161,6 +1164,7 @@ window.RGO_API = (function(){
     if(adminTab==='roles')return adminRoles();
     if(adminTab==='rates')return adminRateCards();
     if(adminTab==='trust')return adminTrust();
+    if(adminTab==='regulatory')return adminRegulatory();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
     if(adminTab==='config')return adminConfig();
@@ -1344,6 +1348,30 @@ window.RGO_API = (function(){
       return '<div class="panel"><div class="panel-b"><div class="empty">Loading marketplace trust &amp; compliance…</div></div></div>';
     }
     return '<div class="access-note"><span>🛡️</span><div><b>Marketplace Trust & Compliance</b> (KYB verification, official-source adapters, fraud/risk, trust score, protected transactions). Connect a backend to administer. Verification is never fabricated; protected-payment live funds stay fail-closed pending the legal operating-model decision.</div></div>';
+  }
+  // ---------- Regulatory Compliance (BSP + LTFRB) ----------
+  function adminRegulatory(){
+    if(liveMode){
+      Promise.all([RGO_API.regulatorySummary().catch(function(){return null;}),RGO_API.ltfrbExpiring().catch(function(){return{expiring:[]};}),RGO_API.ltfrbPending().catch(function(){return{pending:[]};})]).then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='regulatory')return;
+        var s=r[0],exp=(r[1]||{}).expiring||[],pend=(r[2]||{}).pending||[];
+        if(!s){host.innerHTML='<div class="access-note"><span>⚖️</span><div>Regulatory summary unavailable. Requires <code>marketplace.ltfrb.view</code>.</div></div>';return;}
+        var lt=s.ltfrb||{},pp=s.payment_provider||{},bsp=s.bsp||{};
+        var conflicts=exp.filter(function(e){return e.tier==='EXPIRED';});
+        var badge=function(ok,txt){return '<span class="chip '+(ok?'c-good':'c-warn')+'">'+esc(txt)+'</span>';};
+        host.innerHTML=
+          '<div class="access-note"><span>⚖️</span><div><b>Regulatory Compliance.</b> BSP status is <b>REGULATORY CLASSIFICATION / APPLICATION PREPARATION</b> — LiftHaul is <b>not</b> BSP-registered. Live protected-fund custody stays <b>OFF</b> until the regulatory operating model is confirmed by BSP/counsel AND a BSP-regulated provider is certified. LTFRB carrier authority is the mandatory carrier-compliance gate; verification is never fabricated.</div></div>'+
+          '<div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:14px">'+
+            '<div class="panel"><div class="panel-h"><h3>BSP OPS Readiness</h3></div><div class="panel-b"><div class="sod-card" style="border-color:var(--warn)"><b>'+esc(bsp.status||'')+'</b></div><div class="airow"><span>Registered</span><span>'+badge(false,bsp.registered?'YES':'NO')+'</span></div><div class="airow"><span>Package</span><span><code>'+esc(bsp.package||'docs/regulatory/bsp/')+'</code></span></div></div></div>'+
+            '<div class="panel"><div class="panel-h"><h3>Payment Provider</h3></div><div class="panel-b"><div class="airow"><span>Live protected funds</span><span>'+badge(false,pp.live_funds_enabled?'ON':'OFF')+'</span></div><div class="airow"><span>Status</span><span>'+esc(pp.status||'PENDING')+'</span></div></div></div>'+
+            '<div class="panel"><div class="panel-h"><h3>LTFRB Carrier Compliance</h3></div><div class="panel-b"><div class="airow"><span>Authorities on file</span><span>'+esc(lt.authorities_total||0)+'</span></div><div class="airow"><span>Verified CPCs</span><span>'+badge((lt.verified||0)>0,String(lt.verified||0))+'</span></div><div class="airow"><span>Pending manual verification</span><span>'+badge((lt.pending_manual_verification||0)===0,String(lt.pending_manual_verification||0))+'</span></div></div></div>'+
+          '</div>'+
+          '<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>CPC Expiries &amp; Geographic / Unit Conflicts</h3><div class="spacer"></div><span class="cnt">'+exp.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Authority</th><th>Carrier</th><th>CPC</th><th class="right">Days to expiry</th><th>Tier</th></tr></thead><tbody>'+(exp.map(function(e){return '<tr><td>#'+esc(e.authority_id)+'</td><td>#'+esc(e.carrier_id)+'</td><td>'+esc(e.cpc_number||'')+'</td><td class="tnum">'+esc(e.days_to_expiry)+'</td><td><span class="chip '+(e.tier==='EXPIRED'||e.tier==='CRITICAL'?'c-crit':e.tier==='HIGH'?'c-warn':'c-info')+'">'+esc(e.tier)+'</span></td></tr>';}).join('')||'<tr><td colspan="5" class="empty">No CPCs expiring within 60 days.</td></tr>')+'</tbody></table></div>'+(conflicts.length?'<div class="panel-b"><div class="sod-card" style="border-color:var(--crit)"><b>⚠ '+conflicts.length+' expired CPC(s) — carriers hard-blocked from new assignment (unauthorized-to-operate).</b></div></div>':'')+'</div>'+
+          '<div class="panel"><div class="panel-h"><h3>Pending Manual Verification &amp; Regulatory Exceptions</h3><div class="spacer"></div><span class="cnt">'+pend.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Authority</th><th>Carrier</th><th>CPC</th><th>Status</th></tr></thead><tbody>'+(pend.map(function(p){return '<tr><td>#'+esc(p.id)+'</td><td>#'+esc(p.carrier_id)+'</td><td>'+esc(p.cpc_number||'')+'</td><td><span class="chip c-warn">'+esc(p.status)+'</span></td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No authorities pending verification.</td></tr>')+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading regulatory compliance…</div></div></div>';
+    }
+    return '<div class="access-note"><span>⚖️</span><div><b>Regulatory Compliance</b> (BSP OPS readiness, payment-provider readiness, LTFRB carrier compliance, CPC expiries, unauthorized units, geographic authority conflicts, pending manual verification). Connect a backend to administer. LiftHaul is not BSP-registered; live protected funds stay OFF pending BSP/counsel + a certified provider.</div></div>';
   }
   function kybVerify(id){var src=window.prompt('Recorded verification source (required — e.g. SEC portal ref):','');if(!src)return;var dec=window.prompt('Decision: VERIFIED / VERIFIED_WITH_CONDITION / REJECTED','VERIFIED');if(!dec)return;var cond=dec==='VERIFIED_WITH_CONDITION'?window.prompt('Condition:',''):null;RGO_API.kybVerify(id,{decision:dec,source:src,condition:cond}).then(function(){toast('KYB '+dec+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function kybExpiryScan(){RGO_API.kybExpiryScan().then(function(d){toast('Expiry scan: '+(d.expired||0)+' expired, '+((d.notices||[]).length)+' upcoming');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});}

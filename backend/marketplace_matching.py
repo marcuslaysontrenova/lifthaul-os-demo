@@ -760,6 +760,23 @@ def create_assignment(conn, actor, booking_id):
         raise ValueError(f"assignment blocked: {reasons}")
     if o.get("valid_until") and o["valid_until"] < _now():
         raise ValueError("selected offer expired")
+    # Regulatory closure C: hard-block assignment when LTFRB carrier authority is invalid. Config-gated
+    # (marketplace.ltfrb_enforcement_enabled) so it is inert until the owner records/verifies carrier CPCs
+    # and switches enforcement on at go-live. Never fabricates authority — a missing CPC blocks.
+    try:
+        import admin_platform as _ap
+        _val, _ = _ap.resolve_config(conn, "marketplace.ltfrb_enforcement_enabled", tenant=b.get("tenant_id"))
+        _enf = str(_val).lower() == "true"
+    except Exception:
+        _enf = False
+    if _enf:
+        import ltfrb as _lt
+        veh = conn.execute("SELECT plate_number FROM mkt_vehicles WHERE id=?", (o["vehicle_id"],)).fetchone()
+        gate = _lt.assignment_authority_gate(conn, o["carrier_id"],
+                                             vehicle_plate=(veh["plate_number"] if veh else None),
+                                             area=b.get("origin_zone"))
+        if not gate["ok"]:
+            raise ValueError(f"assignment blocked (LTFRB authority): {gate['reasons']}")
     snap = conn.execute("SELECT * FROM mkt_pricing_snapshots WHERE booking_id=? ORDER BY id DESC LIMIT 1",
                         (booking_id,)).fetchone()
     high_value = (snap and snap["total"] and snap["total"] >= HIGH_VALUE_THRESHOLD) or (o["amount"] >= HIGH_VALUE_THRESHOLD)

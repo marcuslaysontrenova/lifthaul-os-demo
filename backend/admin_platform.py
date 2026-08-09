@@ -340,6 +340,8 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.trip.view", "marketplace.trip.manage", "marketplace.trip.activate", "marketplace.trip.execute",
     "marketplace.gps.ingest", "marketplace.geofence.manage",
     "marketplace.pod.submit", "marketplace.pod.verify", "marketplace.exception.manage",
+    # Regulatory closure: LTFRB carrier transport-authority (CPC) + BSP/provider readiness dashboard
+    "marketplace.ltfrb.view", "marketplace.ltfrb.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
@@ -503,6 +505,9 @@ DEFAULT_CONFIG = {
     "payments.live_protected_funds_enabled": "false",
     "payments.legal_operating_model_approved": "false",
     "payments.licensed_provider_active": "false",
+    # Regulatory closure: LTFRB carrier-authority enforcement at assignment. OFF by default so existing
+    # behaviour is unchanged; the owner flips this ON at go-live once carrier CPCs are recorded/verified.
+    "marketplace.ltfrb_enforcement_enabled": "false",
 }
 
 

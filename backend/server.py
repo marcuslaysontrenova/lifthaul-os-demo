@@ -1868,6 +1868,40 @@ def _protected_payment_routes():
 ROUTES.update(_protected_payment_routes())
 
 
+def _ltfrb_routes():
+    import ltfrb
+
+    def lt_record(a, b, p):    return {"id": ltfrb.record_authority(_conn, a, int(b["carrier_id"]),
+                                      cpc_number=b.get("cpc_number"), case_reference=b.get("case_reference"),
+                                      area_of_operation=b.get("area_of_operation"), authorized_units=b.get("authorized_units"),
+                                      port_authority=b.get("port_authority"), special_permits=b.get("special_permits"),
+                                      garage_evidence=b.get("garage_evidence"), hauling_contract_evidence=b.get("hauling_contract_evidence"),
+                                      issue_date=b.get("issue_date"), expiry_date=b.get("expiry_date"))}
+    def lt_check(a, b, p):     return ltfrb.check_authority(_conn, a, int(p["id"]))
+    def lt_verify(a, b, p):    return {"decision": ltfrb.verify_authority(_conn, a, int(p["id"]),
+                                      b["decision"], b.get("source"), b.get("evidence"))}
+    def lt_carrier_gate(a, b, p): core.require(a, "marketplace.ltfrb.view"); return ltfrb.carrier_authority_gate(_conn, int(p["carrier_id"]))
+    def lt_assign_gate(a, b, p):  core.require(a, "marketplace.ltfrb.view"); return ltfrb.assignment_authority_gate(
+                                      _conn, int(p["carrier_id"]), b.get("vehicle_plate"), b.get("area"))
+    def lt_summary(a, b, p):   return ltfrb.regulatory_summary(_conn, a)
+    def lt_expiring(a, b, p):  return {"expiring": ltfrb.expiring_cpcs(_conn, a)}
+    def lt_pending(a, b, p):   return {"pending": ltfrb.pending_verification(_conn, a)}
+
+    return {
+        ("POST", "/admin/marketplace/ltfrb/authorities"): lt_record,
+        ("POST", "/admin/marketplace/ltfrb/authorities/:id/check"): lt_check,
+        ("POST", "/admin/marketplace/ltfrb/authorities/:id/verify"): lt_verify,
+        ("GET", "/admin/marketplace/ltfrb/carriers/:carrier_id/gate"): lt_carrier_gate,
+        ("POST", "/admin/marketplace/ltfrb/carriers/:carrier_id/assignment-gate"): lt_assign_gate,
+        ("GET", "/admin/marketplace/regulatory-summary"): lt_summary,
+        ("GET", "/admin/marketplace/ltfrb/expiring"): lt_expiring,
+        ("GET", "/admin/marketplace/ltfrb/pending-verification"): lt_pending,
+    }
+
+
+ROUTES.update(_ltfrb_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

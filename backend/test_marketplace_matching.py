@@ -327,6 +327,48 @@ class SelectionAssignmentTests(Base):
         self.assertEqual(self.c.execute("SELECT COUNT(*) FROM mkt_assignments WHERE status='READY_FOR_TRIP_ACTIVATION'").fetchone()[0], 0)
 
 
+class LtfrbEnforcementTests(Base):
+    """Regulatory closure C: LTFRB carrier-authority hard block at assignment, config-gated."""
+    def _selected(self):
+        bk = self._booking(); off = self._priced_matched(bk)
+        mm.evaluate_offers(self.c, self.vf, bk); mm.select_offer(self.c, self.vf, bk, off)
+        return bk
+
+    def _enable(self):
+        ap.set_config(self.c, "platform", "", "marketplace.ltfrb_enforcement_enabled", "true", actor=self.vf)
+
+    def test_off_by_default_allows_without_authority(self):
+        bk = self._selected()
+        self.assertTrue(mm.create_assignment(self.c, self.ac, bk)["assignment_id"])
+
+    def test_on_blocks_when_no_verified_cpc(self):
+        self._enable()
+        bk = self._selected()
+        with self.assertRaises(ValueError):
+            mm.create_assignment(self.c, self.ac, bk)
+
+    def test_on_allows_verified_authorized_unit_in_area(self):
+        import ltfrb
+        self._enable()
+        aid = ltfrb.record_authority(self.c, self.vf, self.cid, cpc_number="CPC-1",
+                                     area_of_operation=["METRO_MANILA"], authorized_units=["ABC-1"],
+                                     expiry_date="2027-01-01")
+        ltfrb.verify_authority(self.c, self.vf, aid, "VERIFIED", source="LTFRB")
+        bk = self._selected()
+        self.assertTrue(mm.create_assignment(self.c, self.ac, bk)["assignment_id"])
+
+    def test_on_blocks_unauthorized_unit(self):
+        import ltfrb
+        self._enable()
+        aid = ltfrb.record_authority(self.c, self.vf, self.cid, cpc_number="CPC-1",
+                                     area_of_operation=["METRO_MANILA"], authorized_units=["OTHER-9"],
+                                     expiry_date="2027-01-01")
+        ltfrb.verify_authority(self.c, self.vf, aid, "VERIFIED", source="LTFRB")
+        bk = self._selected()
+        with self.assertRaises(ValueError):
+            mm.create_assignment(self.c, self.ac, bk)
+
+
 class IntegrityMigrationDriftTests(Base):
     def test_integrity_runs(self):
         bk = self._booking(); self._priced_matched(bk)

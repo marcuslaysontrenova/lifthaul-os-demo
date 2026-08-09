@@ -115,6 +115,8 @@ def _seed_platform(conn):
     marketplace_trust_closure.init(conn); marketplace_trust_closure.seed(conn)  # Trust closure: driver/vehicle/payout/dispute/claims + release gate
     import protected_payment
     protected_payment.init(conn); protected_payment.seed(conn)           # Protected Payment authoritative domain: canonical state machine + immutable ledger + reconciliation
+    import ltfrb
+    ltfrb.init(conn); ltfrb.seed(conn)                                   # Regulatory closure: LTFRB carrier transport-authority (CPC) records + verification + hard assignment gate
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

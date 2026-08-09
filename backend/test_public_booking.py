@@ -168,6 +168,102 @@ class Tracking(unittest.TestCase):
             pb.track(self.c, "1")  # sequential id must not resolve
 
 
+class CustomerTracking(unittest.TestCase):
+    def setUp(self):
+        self.c = db.connect(":memory:")
+
+    def _tok(self, **kw):
+        return pb.submit(self.c, _p(**kw))["tracking_token"]
+
+    def test_status_projection_customer_safe(self):
+        t = pb.track(self.c, self._tok())
+        self.assertEqual(t["customer_status"], "Request Received")
+        self.assertIn(t["service"], ("Domestic", "Inter-Island"))
+
+    def test_luzon_domestic(self):
+        t = pb.track(self.c, self._tok(origin_island="Luzon", dest_island="Luzon"))
+        self.assertEqual(t["service"], "Domestic")
+        self.assertNotIn("At Port", [s["name"] for s in t["stages"]])
+
+    def test_visayas_domestic(self):
+        t = pb.track(self.c, self._tok(origin_island="Visayas", dest_island="Visayas"))
+        self.assertEqual(t["service"], "Domestic")
+
+    def test_mindanao_domestic(self):
+        t = pb.track(self.c, self._tok(origin_island="Mindanao", dest_island="Mindanao"))
+        self.assertEqual(t["service"], "Domestic")
+
+    def test_inter_island_stages(self):
+        t = pb.track(self.c, self._tok(origin_island="Luzon", dest_island="Mindanao"))
+        names = [s["name"] for s in t["stages"]]
+        for leg in ("At Port", "Sea Transit", "Destination Port"):
+            self.assertIn(leg, names)
+
+    def test_engineered_projection_no_price(self):
+        t = pb.track(self.c, self._tok(vehicle="crane"))
+        self.assertIsNone(t["estimate"])
+        self.assertIn("Estimate Required", [s["name"] for s in t["stages"]])
+
+    def test_quotation_and_payment_projection(self):
+        t = pb.track(self.c, self._tok())
+        self.assertIn(t["quotation_status"], ("Ready", "Indicative", "Estimate required", "Pending"))
+        self.assertEqual(t["payment_status"], "Payment Required")
+
+    def test_protected_payment_wording_and_funds_off(self):
+        t = pb.track(self.c, self._tok())
+        self.assertEqual(t["protected_payment"]["terminology"], "Protected Payment")
+        self.assertFalse(t["protected_payment"]["live_funds_enabled"])
+        # never the legal term "Escrow"
+        self.assertNotIn("escrow", json_dumps(t).lower())
+
+    def test_internal_note_and_financial_redaction(self):
+        tok = self._tok()
+        # staff attaches an internal note; it must never surface publicly
+        bid = self.c.execute("SELECT id FROM mkt_bookings WHERE tracking_token=?", (tok,)).fetchone()["id"]
+        pb.review(self.c, SUP, bid, "REVIEW", note="INTERNAL: carrier margin 18%, bank acct 1234")
+        t = pb.track(self.c, tok)
+        blob = json_dumps(t).lower()
+        for leak in ("internal", "margin", "bank acct", "special_instructions", "1234"):
+            self.assertNotIn(leak, blob)
+        # sensitive keys are simply absent
+        for k in ("special_instructions", "margin", "internal_cost", "contact_phone", "notes"):
+            self.assertNotIn(k, t)
+
+    def test_provider_redacted_until_assigned(self):
+        t = pb.track(self.c, self._tok())
+        self.assertIsNone(t["provider"])
+
+    def test_cross_customer_isolation(self):
+        a = self._tok(contact_name="A")
+        b = self._tok(contact_name="B")
+        self.assertNotEqual(pb.track(self.c, a)["ref"], pb.track(self.c, b)["ref"])
+
+    def test_operator_action_reflected_publicly(self):
+        tok = self._tok()
+        bid = self.c.execute("SELECT id FROM mkt_bookings WHERE tracking_token=?", (tok,)).fetchone()["id"]
+        self.assertEqual(pb.track(self.c, tok)["customer_status"], "Request Received")
+        pb.review(self.c, SUP, bid, "REVIEW")
+        self.assertEqual(pb.track(self.c, tok)["customer_status"], "Under Review")
+        pb.review(self.c, SUP, bid, "QUOTE", quote_amount=4200)
+        self.assertEqual(pb.track(self.c, tok)["customer_status"], "Quotation Ready")
+        pb.review(self.c, SUP, bid, "MOVE_TO_MARKETPLACE")
+        self.assertEqual(pb.track(self.c, tok)["customer_status"], "Matching Service Provider")
+
+    def test_modified_token_denied(self):
+        tok = self._tok()
+        with self.assertRaises(core.NotFoundError):
+            pb.track(self.c, tok + "TAMPER")
+
+    def test_oversized_token_denied(self):
+        with self.assertRaises(core.NotFoundError):
+            pb.track(self.c, "pbk_" + "x" * 500)
+
+
+def json_dumps(o):
+    import json
+    return json.dumps(o, default=str)
+
+
 class AdminQueue(unittest.TestCase):
     def setUp(self): self.c = db.connect(":memory:")
 

@@ -158,7 +158,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
     <span class="wordmark"><b>Lift</b><b>Haul</b></span>
   </a>
   <div class="links">
-    <a href="#book">Book</a><a href="#vehicles">Vehicles</a><a href="#coverage">Coverage</a><a href="#business">For business</a>
+    <a href="#book">Book</a><a href="#vehicles">Vehicles</a><a href="#coverage">Coverage</a><a href="#business">For business</a><a href="track.html">Track</a>
   </div>
   <div class="sp"></div>
   <a class="btn line sm hidesm" href="index.html#register">Register</a>
@@ -419,6 +419,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
           if(j.error)throw new Error(j.error);var d=j.data;
           var sub=(d.estimate!=null)?("Estimate ₱"+Number(d.estimate).toLocaleString("en-PH")+" · "+d.next_step):((d.estimate_note||"")+" "+d.next_step);
           renderTrack(d.ref,"Request received · "+v.name,sub,(d.inter_island?II_STAGES:STD_STAGES),0);
+          if(d.tracking_token){var ex=document.getElementById("bkTrack");if(ex)ex.remove();$("#ref").insertAdjacentHTML("afterend",'<a id="bkTrack" class="btn accent block" style="margin-top:12px" href="track.html?t='+encodeURIComponent(d.tracking_token)+'">Track this booking →</a>');}
         }).catch(function(){localDemo(payload,v,ii);});
     } else { localDemo(payload,v,ii); }
   });

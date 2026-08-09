@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiftHaul — Track your booking</title>
+<meta name="description" content="Track a LiftHaul booking with your tracking code — live status, milestones and Protected Payment state across Luzon, Visayas, Mindanao and inter-island.">
+<style>
+:root{
+  --bg:#EAF4E0;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
+  --ink:#14210C;--ink-2:#47563C;--muted:#7C8A70;--line:#D5E3C6;
+  --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
+  --primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;
+  --good:#3B8F1E;--good-bg:#E4F3D6;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;
+  --radius:12px;--radius-sm:8px;
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);--wrap:820px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3{line-height:1.14;letter-spacing:-.02em;margin:0}p{margin:0}a{color:inherit;text-decoration:none}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 22px}
+.eyebrow{font-size:12.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--primary-2)}
+.muted{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;font-family:inherit;font-size:15px;font-weight:700;padding:12px 20px;border-radius:var(--radius-sm);border:1.5px solid transparent;background:var(--primary);color:var(--primary-ink);cursor:pointer;transition:.12s;white-space:nowrap}
+.btn:hover{background:var(--primary-2)}
+.btn.line{background:transparent;border-color:var(--line);color:var(--ink)}
+.btn.sm{padding:8px 14px;font-size:13.5px}
+.snav{position:sticky;top:0;z-index:50;background:rgba(234,244,224,.85);backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
+.snav .in{max-width:1140px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:18px}
+.mark{display:flex;align-items:center;gap:10px}
+.wordmark{font-weight:800;font-size:21px;letter-spacing:-.03em}.wordmark b:last-child{color:var(--accent)}
+.snav .links{display:flex;gap:22px;margin-left:8px}.snav .links a{font-size:14.5px;font-weight:600;color:var(--ink-2)}
+.snav .sp{flex:1}
+@media(max-width:720px){.snav .links{display:none}}
+.hero{padding:40px 0 8px}
+.hero h1{font-size:clamp(28px,4vw,40px);font-weight:800}
+.finder{margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+.finder input{flex:1;min-width:200px;font-family:var(--mono);font-size:15px;color:var(--ink);background:var(--surface-2);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:12px 13px}
+.finder input:focus{border-color:var(--primary);outline:none;box-shadow:0 0 0 3px rgba(95,185,42,.16)}
+.note{font-size:12.5px;color:var(--muted);margin-top:10px}
+.err{display:none;margin-top:14px;background:var(--crit-bg);border:1px solid #e6b3b3;color:#7c1d1d;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:600}
+.err.show{display:block}
+.result{display:none;margin:22px 0 40px}
+.result.show{display:block}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.chead{padding:18px 20px;background:linear-gradient(120deg,var(--ink),#20351a);color:#fff;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chead .ref{font-family:var(--mono);font-size:15px;font-weight:700}
+.chead .pill{margin-left:auto;background:var(--accent);color:#fff;font-weight:800;font-size:12.5px;border-radius:999px;padding:6px 13px}
+.chead .svc{background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:12px;border-radius:999px;padding:5px 11px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+@media(max-width:620px){.grid{grid-template-columns:1fr}}
+.kv{padding:13px 20px;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+.kv:nth-child(even){border-right:0}
+.kv .k{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kv .v{font-size:15px;font-weight:600;margin-top:3px}
+.section{padding:18px 20px;border-top:1px solid var(--line)}
+.section h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--primary-2)}
+.pay{display:flex;align-items:center;gap:10px;margin-top:10px}
+.pay .lbl{font-size:16px;font-weight:800}
+.pay .off{font-size:11.5px;font-weight:700;color:var(--warn);background:var(--warn-bg);border:1px solid #e9c98a;border-radius:999px;padding:4px 10px}
+.time{margin-top:12px;position:relative}
+.tstep{display:flex;gap:12px;align-items:flex-start;padding:7px 0}
+.tstep .ic{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:12px;font-weight:800;background:var(--surface-3);color:var(--muted)}
+.tstep.done .ic{background:var(--good-bg);color:var(--good)}
+.tstep.current .ic{background:var(--accent);color:#fff}
+.tstep .nm{font-size:14px;font-weight:600}
+.tstep.current .nm{font-weight:800}
+.tstep.upcoming .nm{color:var(--muted)}
+.next{background:var(--primary-soft);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;font-weight:600;color:var(--primary-ink);margin-top:6px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:999px;padding:8px 13px;font-size:13px;font-weight:700;background:var(--surface);color:var(--ink)}
+footer{background:var(--ink);color:#c9d8bd;padding:28px 0;margin-top:20px;font-size:12.5px}
+footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<nav class="snav"><div class="in">
+  <a class="mark" href="index.html" aria-label="LiftHaul">
+    <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="35" height="35" rx="10" fill="#101408" stroke="#5FB92A" stroke-width="2"/><path d="M20 8.5 L28.8 19.5 H23 V25.6 H17 V19.5 H11.2 Z" fill="#F2611A"/><rect x="11.5" y="28.6" width="17" height="3.3" rx="1.65" fill="#5FB92A"/></svg>
+    <span class="wordmark"><b>Lift</b><b>Haul</b></span>
+  </a>
+  <div class="links"><a href="book.html">Book</a><a href="track.html">Track</a><a href="index.html#register">Register</a></div>
+  <div class="sp"></div>
+  <a class="btn sm" href="console.html">Operator login</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">Track your booking</div>
+  <h1>Where's my shipment?</h1>
+  <p class="muted" style="margin-top:8px">Enter the tracking code from your booking confirmation. Works across Luzon, Visayas, Mindanao and inter-island lanes.</p>
+  <form class="finder" id="finder">
+    <input id="tok" placeholder="Tracking code (e.g. pbk_…)" autocomplete="off" spellcheck="false" aria-label="Tracking code">
+    <button class="btn" type="submit">Track →</button>
+  </form>
+  <div class="note">🔒 Read-only. Your code is opaque and specific to your booking — it never exposes internal IDs, pricing internals, carrier details or other customers' data. Protected Payment live-fund custody is currently <b>OFF</b>.</div>
+  <div class="err" id="err"></div>
+</div></header>
+
+<div class="wrap"><div class="result" id="result"></div></div>
+
+<footer><div class="in">
+  <span>© <span id="yr"></span> LiftHaul Enterprise · Powered by LiftHaul · Developed by TrenovaTech.ai</span>
+  <span>Demo prototype · Protected Payment live funds OFF</span>
+</div></footer>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(s){return document.querySelector(s);};
+  function esc(s){return String(s==null?"":s).replace(/[<>&"]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];});}
+  function peso(n){return "₱"+Number(n).toLocaleString("en-PH",{maximumFractionDigits:0});}
+  var ACT_LABEL={VIEW_QUOTATION:"View quotation",VIEW_PAYMENT_INSTRUCTIONS:"Payment instructions",VIEW_POD:"View proof of delivery",CONTACT_SUPPORT:"Contact support"};
+
+  function showErr(m){$("#err").textContent=m;$("#err").classList.add("show");$("#result").classList.remove("show");}
+  function clearErr(){$("#err").classList.remove("show");}
+
+  function render(d){
+    clearErr();
+    var kv=function(k,v){return v?('<div class="kv"><div class="k">'+k+'</div><div class="v">'+esc(v)+'</div></div>'):"";};
+    var rows="";
+    rows+=kv("Service", d.service+(d.service_class?(" · "+d.service_class):""));
+    rows+=kv("Origin", d.origin);
+    rows+=kv("Destination", d.destination);
+    rows+=kv("Requested", d.requested_date? String(d.requested_date).slice(0,10):"");
+    rows+=kv("Vehicle", d.vehicle_class);
+    rows+=kv("Quotation", d.quotation_status + (d.estimate!=null? (" · "+peso(d.estimate)) : ""));
+    rows+=kv("Provider", d.provider || "Assigned once matched");
+    var pp=d.protected_payment||{};
+    var stages=(d.stages||[]).map(function(s){var i=s.state==="done"?"✓":s.state==="current"?"●":"○";return '<div class="tstep '+s.state+'"><div class="ic">'+i+'</div><div class="nm">'+esc(s.name)+'</div></div>';}).join("");
+    var acts=(d.actions||[]).map(function(a){
+      if(a==="CONTACT_SUPPORT")return '<a class="chip" href="mailto:support@lifthaul.demo">'+ACT_LABEL[a]+'</a>';
+      return '<span class="chip">'+(ACT_LABEL[a]||a)+'</span>';
+    }).join("");
+    $("#result").innerHTML=
+      '<div class="card">'+
+        '<div class="chead"><span class="ref">'+esc(d.ref)+'</span>'+(d.inter_island?'<span class="svc">Inter-island</span>':'<span class="svc">Domestic</span>')+'<span class="pill">'+esc(d.customer_status)+'</span></div>'+
+        '<div class="grid">'+rows+'</div>'+
+        '<div class="section"><h3>Protected Payment</h3><div class="pay"><span class="lbl">'+esc(pp.label||d.payment_status)+'</span>'+(pp.live_funds_enabled?'':'<span class="off">Live custody OFF</span>')+'</div><p class="muted" style="font-size:12.5px;margin-top:6px">Funds are released to the carrier only when delivery is verified. Until our regulated provider is live, settlement is operator-verified (bank / Wise) under the same delivery-verified policy.</p></div>'+
+        '<div class="section"><h3>Progress</h3><div class="time">'+stages+'</div></div>'+
+        '<div class="section"><h3>What happens next</h3><div class="next">'+esc(d.next_action)+'</div><div class="acts">'+acts+'</div>'+
+          (d.communication==="unavailable"?'<p class="muted" style="font-size:12px;margin-top:10px">Secure in-app messaging is coming soon — for now, please contact support for updates.</p>':'')+
+        '</div>'+
+      '</div>';
+    $("#result").classList.add("show");
+  }
+
+  function lookup(token){
+    token=(token||"").trim();
+    if(!token){showErr("Please enter your tracking code.");return;}
+    var base=null;try{base=localStorage.getItem("lifthaul_api_base");}catch(_){}
+    if(!base){
+      showErr("Live tracking connects to the LiftHaul backend, which isn't configured in this demo. Once the API is hosted (localStorage.lifthaul_api_base), this page shows the real, persisted status of booking "+token+".");
+      return;
+    }
+    fetch(base.replace(/\/+$/,"")+"/public/bookings/track/"+encodeURIComponent(token))
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j.data;});})
+      .then(render)
+      .catch(function(e){showErr(/not found/i.test(e.message)?"We couldn't find a booking for that code. Please check it and try again.":("Unable to load tracking: "+e.message));});
+  }
+
+  $("#finder").addEventListener("submit",function(e){e.preventDefault();lookup($("#tok").value);});
+  // deep-link ?t=<token>
+  var m=/[?&]t=([^&]+)/.exec(location.search);
+  if(m){var tok=decodeURIComponent(m[1]);$("#tok").value=tok;lookup(tok);}
+  $("#yr").textContent=new Date().getFullYear();
+})();
+</script>
+</body>
+</html>

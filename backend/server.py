@@ -1942,6 +1942,63 @@ def _public_rate_ok(ip):
     return True
 
 
+# Platform Control -> Integrations: B2B Developer Portal (admin) + /api/v1 gateway (API-key auth).
+def _dev_portal_routes():
+    import api_platform as ap
+
+    def c_create(a, b, p): return ap.create_client(_conn, a, b["name"], b.get("scopes", []),
+                                                    b.get("environment", "SANDBOX"), b.get("rate_per_min", 120),
+                                                    b.get("rate_per_day", 20000), b.get("ip_allowlist"))
+    def c_list(a, b, p):   return ap.list_clients(_conn, a)
+    def c_revoke(a, b, p): return ap.revoke_client(_conn, a, int(p["id"]))
+    def c_rotate(a, b, p): return ap.rotate_secret(_conn, a, int(p["id"]))
+    def c_prod(a, b, p):   return ap.approve_production(_conn, a, int(p["id"]))
+    def w_create(a, b, p): return ap.create_webhook(_conn, a, b["url"], b.get("events", []), b.get("client_ref"))
+    def w_list(a, b, p):   return ap.list_webhooks(_conn, a)
+    def w_rotate(a, b, p): return ap.rotate_webhook_secret(_conn, a, int(p["id"]))
+    def w_disable(a, b, p): return ap.disable_webhook(_conn, a, int(p["id"]))
+    def d_list(a, b, p):   return ap.list_deliveries(_conn, a)
+    def d_replay(a, b, p): return ap.replay_delivery(_conn, a, int(p["id"]))
+    def d_run(a, b, p):    core.require(a, "integration.profile.manage"); return ap.deliver_pending(_conn)
+    def cat(a, b, p):      return ap.catalog(_conn, a)
+    return {
+        ("POST", "/admin/integrations/api-clients"): c_create,
+        ("GET", "/admin/integrations/api-clients"): c_list,
+        ("POST", "/admin/integrations/api-clients/:id/revoke"): c_revoke,
+        ("POST", "/admin/integrations/api-clients/:id/rotate-secret"): c_rotate,
+        ("POST", "/admin/integrations/api-clients/:id/approve-production"): c_prod,
+        ("POST", "/admin/integrations/api-webhooks"): w_create,
+        ("GET", "/admin/integrations/api-webhooks"): w_list,
+        ("POST", "/admin/integrations/api-webhooks/:id/rotate-secret"): w_rotate,
+        ("POST", "/admin/integrations/api-webhooks/:id/disable"): w_disable,
+        ("GET", "/admin/integrations/api-deliveries"): d_list,
+        ("POST", "/admin/integrations/api-deliveries/:id/replay"): d_replay,
+        ("POST", "/admin/integrations/api-deliveries/run"): d_run,
+        ("GET", "/admin/integrations/api-catalog"): cat,
+    }
+
+
+def _api_v1_routes():
+    import api_platform as ap
+
+    def bk_create(a, b, p): return ap.api_create_booking(_conn, a, b, idem_key=a.get("_idem"))
+    def bk_get(a, b, p):    return ap.api_get_booking(_conn, a, p["ref"])
+    def bk_track(a, b, p):  return ap.api_get_booking(_conn, a, p["ref"])
+    def bk_bulk(a, b, p):   return ap.api_bulk(_conn, a, b.get("rows"), idem_key=a.get("_idem"))
+    def qt_est(a, b, p):    return ap.api_quote_estimate(_conn, a, b)
+    return {
+        ("POST", "/api/v1/bookings"): bk_create,
+        ("GET", "/api/v1/bookings/:ref"): bk_get,
+        ("GET", "/api/v1/bookings/:ref/tracking"): bk_track,
+        ("POST", "/api/v1/bookings/bulk"): bk_bulk,
+        ("POST", "/api/v1/quotes/estimate"): qt_est,
+    }
+
+
+ROUTES.update(_dev_portal_routes())
+ROUTES.update(_api_v1_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:
@@ -2015,6 +2072,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(413, {"error": "payload too large"})
             if method == "POST" and not _public_rate_ok(self.client_address[0] if self.client_address else "?"):
                 return self._send(429, {"error": "rate limit exceeded, try again shortly"})
+        if path.startswith("/api/v1/") and int(self.headers.get("Content-Length", 0) or 0) > 262144:
+            return self._send(413, {"error": "payload too large"})
         fn, params = _match(method, path)
         if not fn:
             return self._send(404, {"error": "not found"})
@@ -2028,7 +2087,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             with _DB_LOCK:                      # serialize DB access across worker threads
                 core.set_correlation_id(self._rid)   # tag every audited write in this request
-                actor = None if (self.path == "/login" or path.startswith("/public/")) else _actor(self)
+                if path.startswith("/api/v1/"):
+                    import api_platform as _api
+                    _key = (self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+                            or self.headers.get("X-API-Key", "").strip())
+                    actor = _api.authenticate(_conn, _key, self.client_address[0] if self.client_address else None)
+                    _api.check_rate(actor)
+                    actor["_idem"] = self.headers.get("Idempotency-Key")
+                else:
+                    actor = None if (self.path == "/login" or path.startswith("/public/")) else _actor(self)
                 result = fn(actor, body, params)
             return self._send(200, {"data": result})
         except core.AppError as e:

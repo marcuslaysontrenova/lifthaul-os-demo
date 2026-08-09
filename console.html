@@ -531,6 +531,13 @@ window.RGO_API = (function(){
     regulatorySummary:function(){return req('GET','/admin/marketplace/regulatory-summary');},
     publicBookingQueue:function(){return req('GET','/admin/marketplace/public-booking-queue');},
     publicBookingReview:function(id,b){return req('POST','/admin/marketplace/public-bookings/'+id+'/review',b);},
+    apiClients:function(){return req('GET','/admin/integrations/api-clients');},
+    apiClientCreate:function(b){return req('POST','/admin/integrations/api-clients',b);},
+    apiClientRevoke:function(id){return req('POST','/admin/integrations/api-clients/'+id+'/revoke');},
+    apiWebhooks:function(){return req('GET','/admin/integrations/api-webhooks');},
+    apiWebhookCreate:function(b){return req('POST','/admin/integrations/api-webhooks',b);},
+    apiDeliveries:function(){return req('GET','/admin/integrations/api-deliveries');},
+    apiDeliveryReplay:function(id){return req('POST','/admin/integrations/api-deliveries/'+id+'/replay');},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1104,6 +1111,10 @@ window.RGO_API = (function(){
     if(act==='rcArchive')return rcArchive(arg);
     if(act==='kybVerify')return kybVerify(arg);
     if(act==='pbReview')return pbReview(arg);
+    if(act==='apiClientNew')return apiClientNew();
+    if(act==='apiWebhookNew')return apiWebhookNew();
+    if(act==='apiClientRevoke')return apiClientRevoke(arg);
+    if(act==='apiReplay')return apiReplay(arg);
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1170,7 +1181,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1180,6 +1191,7 @@ window.RGO_API = (function(){
     if(adminTab==='trust')return adminTrust();
     if(adminTab==='regulatory')return adminRegulatory();
     if(adminTab==='intake')return adminIntake();
+    if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
     if(adminTab==='config')return adminConfig();
@@ -1420,6 +1432,28 @@ window.RGO_API = (function(){
     if(action==='REVIEW'||action==='ASSIGN_ESTIMATOR'){var n=window.prompt('Note (optional):','');if(n)body.note=n;}
     RGO_API.publicBookingReview(id,body).then(function(d){toast('Booking #'+id+' → '+d.status+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});
   }
+  // ---------- Developer Portal (Platform Control -> Integrations) ----------
+  function adminDevPortal(){
+    if(liveMode){
+      Promise.all([RGO_API.apiClients().catch(function(){return{clients:[]};}),RGO_API.apiWebhooks().catch(function(){return{webhooks:[]};}),RGO_API.apiDeliveries().catch(function(){return{deliveries:[]};})]).then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='devportal')return;
+        var cls=(r[0]||{}).clients||[],whs=(r[1]||{}).webhooks||[],dls=(r[2]||{}).deliveries||[];
+        var chip=function(s){var c=(s==='REVOKED'||s==='DEAD_LETTER'||s==='FAILED')?'c-crit':(s==='DELIVERED'||s==='ACTIVE')?'c-good':(s==='RETRYING'||s==='PENDING')?'c-warn':'c-info';return '<span class="chip '+c+'">'+esc(s)+'</span>';};
+        host.innerHTML=
+          '<div class="access-note"><span>🔌</span><div><b>Developer Portal</b> — Platform Control → Integrations. Governed B2B API clients (scoped, sandbox/production), outbound webhooks (HMAC-signed, retry → dead-letter → replay), and delivery logs. The <code>/api/v1</code> endpoints reuse the canonical booking/quote/tracking engines — no parallel logic. Secrets are shown once and stored hashed.</div></div>'+
+          '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn line" data-act="apiClientNew">+ API client</button><button class="btn line" data-act="apiWebhookNew">+ Webhook</button></div>'+
+          '<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>API Clients</h3><div class="spacer"></div><span class="cnt">'+cls.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Name</th><th>Client ID</th><th>Env</th><th>Scopes</th><th>Status</th><th>Last used</th><th></th></tr></thead><tbody>'+(cls.map(function(x){return '<tr><td>'+esc(x.name)+'</td><td><code>'+esc(x.client_id)+'</code></td><td>'+esc(x.environment)+((x.environment==="PRODUCTION"&&!x.production_approved)?' <span class="chip c-warn">unapproved</span>':'')+'</td><td style="font-size:11px">'+esc(x.scopes)+'</td><td>'+chip(x.status)+'</td><td style="font-size:11px">'+esc(String(x.last_used_at||"—").slice(0,16))+'</td><td>'+(x.status==="ACTIVE"?'<button class="btn line sm" data-act="apiClientRevoke" data-arg="'+x.id+'">Revoke</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="7" class="empty">No API clients.</td></tr>')+'</tbody></table></div></div>'+
+          '<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Webhooks</h3><div class="spacer"></div><span class="cnt">'+whs.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>URL</th><th>Events</th><th>Status</th></tr></thead><tbody>'+(whs.map(function(x){return '<tr><td style="font-size:12px">'+esc(x.url)+'</td><td style="font-size:11px">'+esc(x.events)+'</td><td>'+chip(x.status)+'</td></tr>';}).join('')||'<tr><td colspan="3" class="empty">No webhook subscriptions.</td></tr>')+'</tbody></table></div></div>'+
+          '<div class="panel"><div class="panel-h"><h3>Webhook Deliveries</h3><div class="spacer"></div><span class="cnt">'+dls.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Event</th><th>Type</th><th>Status</th><th class="right">Attempts</th><th></th></tr></thead><tbody>'+(dls.map(function(x){return '<tr><td><code>'+esc(x.event_id)+'</code></td><td>'+esc(x.event_type)+'</td><td>'+chip(x.status)+'</td><td class="tnum">'+esc(x.attempts)+(x.replays?(" · replays "+x.replays):"")+'</td><td>'+((x.status==="DEAD_LETTER"||x.status==="FAILED"||x.status==="RETRYING")?'<button class="btn line sm" data-act="apiReplay" data-arg="'+x.id+'">Replay</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="5" class="empty">No deliveries.</td></tr>')+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading developer portal…</div></div></div>';
+    }
+    return '<div class="access-note"><span>🔌</span><div><b>Developer Portal</b> (Platform Control → Integrations) — B2B API clients, scopes, sandbox/production, outbound webhooks with HMAC + retry/dead-letter/replay, and delivery logs. Connect a backend to administer. Requires <code>integration.profile.manage</code>.</div></div>';
+  }
+  function apiClientNew(){var name=window.prompt("Application name:","");if(!name)return;var sc=window.prompt("Scopes (comma-separated): bookings:create, bookings:read, tracking:read, quotations:read","bookings:create,bookings:read,tracking:read");if(!sc)return;var env=window.prompt("Environment: SANDBOX or PRODUCTION","SANDBOX");RGO_API.apiClientCreate({name:name,scopes:sc.split(",").map(function(s){return s.trim();}),environment:(env||"SANDBOX").toUpperCase()}).then(function(d){window.prompt("API key — copy now, shown once:",d.api_key);toast("API client created · audited");refreshAdmin();}).catch(function(e){toast("Rejected: "+e.message);});}
+  function apiWebhookNew(){var url=window.prompt("Webhook URL (https):","");if(!url)return;var ev=window.prompt("Events (comma-separated): booking.created, quotation.ready, carrier.assigned, trip.delivered, settlement.completed","booking.created,quotation.ready");if(!ev)return;RGO_API.apiWebhookCreate({url:url,events:ev.split(",").map(function(s){return s.trim();})}).then(function(d){window.prompt("Signing secret — copy now, shown once:",d.secret);toast("Webhook created · audited");refreshAdmin();}).catch(function(e){toast("Rejected: "+e.message);});}
+  function apiClientRevoke(id){if(!window.confirm("Revoke this API client? Its keys stop working immediately."))return;RGO_API.apiClientRevoke(id).then(function(){toast("Client revoked · audited");refreshAdmin();}).catch(function(e){toast("Rejected: "+e.message);});}
+  function apiReplay(id){RGO_API.apiDeliveryReplay(id).then(function(d){toast("Delivery "+d.event_id+" queued for replay");refreshAdmin();}).catch(function(e){toast("Rejected: "+e.message);});}
   function kybVerify(id){var src=window.prompt('Recorded verification source (required — e.g. SEC portal ref):','');if(!src)return;var dec=window.prompt('Decision: VERIFIED / VERIFIED_WITH_CONDITION / REJECTED','VERIFIED');if(!dec)return;var cond=dec==='VERIFIED_WITH_CONDITION'?window.prompt('Condition:',''):null;RGO_API.kybVerify(id,{decision:dec,source:src,condition:cond}).then(function(){toast('KYB '+dec+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function kybExpiryScan(){RGO_API.kybExpiryScan().then(function(d){toast('Expiry scan: '+(d.expired||0)+' expired, '+((d.notices||[]).length)+' upcoming');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});}
   function payoutApprove(id){if(!window.confirm('Approve payout destination? This is an independent-checker action requiring MFA; the maker cannot self-approve, and high-value payouts stay blocked during the cooling period.'))return;RGO_API.payoutApprove(id,{mfa_ok:true,beneficiary_verified:true}).then(function(){toast('Payout account approved · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}

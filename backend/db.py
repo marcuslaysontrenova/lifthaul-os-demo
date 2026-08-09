@@ -119,6 +119,8 @@ def _seed_platform(conn):
     ltfrb.init(conn); ltfrb.seed(conn)                                   # Regulatory closure: LTFRB carrier transport-authority (CPC) records + verification + hard assignment gate
     import public_booking
     public_booking.init(conn); public_booking.seed(conn)                 # Public Nationwide Booking intake -> canonical mkt_bookings (source=PUBLIC_MARKETPLACE)
+    import api_platform
+    api_platform.init(conn); api_platform.seed(conn)                     # Platform Control -> Integrations: B2B API clients + scopes + outbound webhooks
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

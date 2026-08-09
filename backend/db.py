@@ -117,6 +117,8 @@ def _seed_platform(conn):
     protected_payment.init(conn); protected_payment.seed(conn)           # Protected Payment authoritative domain: canonical state machine + immutable ledger + reconciliation
     import ltfrb
     ltfrb.init(conn); ltfrb.seed(conn)                                   # Regulatory closure: LTFRB carrier transport-authority (CPC) records + verification + hard assignment gate
+    import public_booking
+    public_booking.init(conn); public_booking.seed(conn)                 # Public Nationwide Booking intake -> canonical mkt_bookings (source=PUBLIC_MARKETPLACE)
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

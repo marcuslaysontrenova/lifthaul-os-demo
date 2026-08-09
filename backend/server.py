@@ -1902,6 +1902,39 @@ def _ltfrb_routes():
 ROUTES.update(_ltfrb_routes())
 
 
+def _public_booking_routes():
+    import public_booking as pb
+
+    def pb_submit(a, b, p):  return pb.submit(_conn, b)              # a is None (public); server owns the actor
+    def pb_track(a, b, p):   return pb.track(_conn, p["token"])
+    def pb_queue(a, b, p):   return pb.admin_queue(_conn, a)
+
+    return {
+        ("POST", "/public/bookings"): pb_submit,
+        ("GET", "/public/bookings/track/:token"): pb_track,
+        ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,
+    }
+
+
+ROUTES.update(_public_booking_routes())
+
+# Basic per-IP rate limiter for public (unauthenticated) endpoints.
+_PUBLIC_HITS = {}
+_PUBLIC_RATE_MAX = 20      # requests per window per IP
+_PUBLIC_RATE_WINDOW = 60   # seconds
+
+
+def _public_rate_ok(ip):
+    now = time.time()
+    q = _PUBLIC_HITS.setdefault(ip, [])
+    while q and q[0] < now - _PUBLIC_RATE_WINDOW:
+        q.pop(0)
+    if len(q) >= _PUBLIC_RATE_MAX:
+        return False
+    q.append(now)
+    return True
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:
@@ -1969,6 +2002,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"status": "ready", "schema_version": db.current_version(_conn)})
             except Exception as e:
                 return self._send(503, {"status": "not-ready", "detail": str(e)})
+        # public (unauthenticated) marketplace intake: payload cap + basic per-IP rate limit
+        if path.startswith("/public/"):
+            if int(self.headers.get("Content-Length", 0) or 0) > 32768:
+                return self._send(413, {"error": "payload too large"})
+            if method == "POST" and not _public_rate_ok(self.client_address[0] if self.client_address else "?"):
+                return self._send(429, {"error": "rate limit exceeded, try again shortly"})
         fn, params = _match(method, path)
         if not fn:
             return self._send(404, {"error": "not found"})
@@ -1982,7 +2021,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             with _DB_LOCK:                      # serialize DB access across worker threads
                 core.set_correlation_id(self._rid)   # tag every audited write in this request
-                actor = None if self.path == "/login" else _actor(self)
+                actor = None if (self.path == "/login" or path.startswith("/public/")) else _actor(self)
                 result = fn(actor, body, params)
             return self._send(200, {"data": result})
         except core.AppError as e:

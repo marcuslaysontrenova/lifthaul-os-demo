@@ -224,6 +224,11 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
               <div><b>Operator-verified (bank / Wise)</b><br><span>Pay via bank transfer or Wise with proof; Finance verifies before release.</span></div></label>
           </div>
 
+          <div class="grid2">
+            <div class="field"><label>Your name <span class="req">*</span></label><input id="cName" autocomplete="name" required></div>
+            <div class="field"><label>Mobile or email <span class="req">*</span></label><input id="cContact" placeholder="09xx xxx xxxx or you@email.com" required></div>
+          </div>
+
           <button class="btn accent lg block" type="submit" id="bookbtn">Get instant quote &amp; book →</button>
           <p class="note">🔒 <b>Live protected-funds custody is currently OFF</b> — until LiftHaul's regulated payment provider and legal operating model are approved, bookings settle via operator-verified payment under the same delivery-verified release policy. This is a prototype: your booking is saved to this browser only; no real payment is taken and no carrier is dispatched.</p>
         </form>
@@ -390,39 +395,32 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   $("#dIsland").addEventListener("change",refreshInter);
   $("#km").addEventListener("input",estimate);
 
-  var STAGES=[
-    ["Carrier matched","A verified, LTFRB-authorized carrier accepted your job."],
-    ["Pickup","Driver/operator arriving at pickup."],
-    ["In transit","On the road"+"" ],
-    ["Delivered","Proof of delivery captured — Protected Payment released."]
-  ];
+  var STD_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","Destination","Out for Delivery","Delivered","POD","Settled"];
+  var II_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","At Port","Sea Leg","Destination Port","Out for Delivery","Delivered","POD","Settled"];
+  function showMatch(){$("#bookform").style.display="none";var m=$("#match");m.classList.add("show");m.scrollIntoView({behavior:"smooth",block:"center"});$("#spin").style.display="";$("#newBooking").style.display="none";}
+  function renderTrack(ref,title,sub,stages,cur){$("#ref").textContent="Booking "+ref;$("#spin").style.display="none";$("#matchTitle").textContent=title;$("#matchSub").textContent=sub;var html="";stages.forEach(function(s,i){var cls=i<cur?"done":i===cur?"cur":"";html+='<div class="tstep '+cls+'"><div class="ic">'+(i<cur?"✓":i===cur?"●":(i+1))+'</div><div><b>'+s+'</b></div></div>';});$("#track").innerHTML=html;$("#newBooking").style.display="";}
+  function localDemo(payload,v,ii){var ref="LH-"+(ii?"II":"")+Date.now().toString(36).toUpperCase().slice(-6);try{var a=JSON.parse(localStorage.getItem("lifthaul_bookings")||"[]");a.push(Object.assign({ref:ref,at:new Date().toISOString()},payload));localStorage.setItem("lifthaul_bookings",JSON.stringify(a));}catch(_){}var stages=(ii?II_STAGES:STD_STAGES);setTimeout(function(){renderTrack(ref,v.quote?"Request received · "+v.name:"Carrier matched · "+v.name,v.quote?"Engineered lift — our team returns a priced plan shortly.":"Estimated arrival at pickup: ~"+(15+Math.floor(Math.random()*20))+" min.",stages,v.quote?0:1);},2000);}
 
   $("#bookform").addEventListener("submit",function(e){
     e.preventDefault();
-    var need=["oIsland","oCity","dIsland","dCity","km"];
+    var need=["oIsland","oCity","dIsland","dCity","km","cName","cContact"];
     for(var i=0;i<need.length;i++){var el=$("#"+need[i]);if(!el.value.trim()){el.focus();el.style.borderColor="var(--crit)";return;}el.style.borderColor="";}
     if(!sel){$("#veh").scrollIntoView({behavior:"smooth",block:"center"});return;}
     var v=VEH.find(function(x){return x.id===sel;});
     var ii=interIsland();
-    var ref="LH-"+(ii?"II":"")+Date.now().toString(36).toUpperCase().slice(-6);
-    var order={ref:ref,at:new Date().toISOString(),when:when,vehicle:v.name,
-      from:$("#oCity").value.trim()+" ("+$("#oIsland").value+")",to:$("#dCity").value.trim()+" ("+$("#dIsland").value+")",
-      km:$("#km").value,interIsland:ii,payment:(document.querySelector('input[name=pm]:checked')||{}).value};
-    try{var a=JSON.parse(localStorage.getItem("lifthaul_bookings")||"[]");a.push(order);localStorage.setItem("lifthaul_bookings",JSON.stringify(a));}catch(_){}
-    // matching simulation → tracking
-    $("#bookform").style.display="none";
-    var m=$("#match");m.classList.add("show");m.scrollIntoView({behavior:"smooth",block:"center"});
-    $("#ref").textContent="Booking "+ref;
-    var stages=STAGES.slice(); if(ii) stages.splice(2,0,["At port","Loading onto RoRo / sea leg."]);
-    setTimeout(function(){
-      $("#spin").style.display="none";
-      $("#matchTitle").textContent="Carrier matched · "+v.name;
-      $("#matchSub").textContent = v.quote ? "Engineered lift — our team returns a priced plan shortly." : "Estimated arrival at pickup: ~"+(15+Math.floor(Math.random()*20))+" min.";
-      var html="";
-      stages.forEach(function(s,i){var cls=i===0?"cur":"";html+='<div class="tstep '+cls+'"><div class="ic">'+(i===0?"●":(i+1))+'</div><div><b>'+s[0]+'</b><br><span>'+s[1]+'</span></div></div>';});
-      $("#track").innerHTML=html;
-      $("#newBooking").style.display="";
-    },2200);
+    var contact=$("#cContact").value.trim();
+    var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:$("#oCity").value.trim(),dest_city:$("#dCity").value.trim(),vehicle:sel,km:$("#km").value,payment:(document.querySelector('input[name=pm]:checked')||{}).value};
+    if(contact.indexOf("@")>-1)payload.contact_email=contact; else payload.contact_phone=contact;
+    var base=null;try{base=localStorage.getItem("lifthaul_api_base");}catch(_){}
+    showMatch();
+    if(base){
+      fetch(base.replace(/\/+$/,"")+"/public/bookings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+        .then(function(r){return r.json();}).then(function(j){
+          if(j.error)throw new Error(j.error);var d=j.data;
+          var sub=(d.estimate!=null)?("Estimate ₱"+Number(d.estimate).toLocaleString("en-PH")+" · "+d.next_step):((d.estimate_note||"")+" "+d.next_step);
+          renderTrack(d.ref,"Request received · "+v.name,sub,(d.inter_island?II_STAGES:STD_STAGES),0);
+        }).catch(function(){localDemo(payload,v,ii);});
+    } else { localDemo(payload,v,ii); }
   });
 
   $("#yr").textContent=new Date().getFullYear();

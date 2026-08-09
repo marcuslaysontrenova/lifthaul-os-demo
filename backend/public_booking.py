@@ -266,3 +266,52 @@ def admin_queue(conn, actor, limit=100):
         "contact_email,created_at FROM mkt_bookings WHERE source='PUBLIC_MARKETPLACE'" + frag +
         " ORDER BY id DESC LIMIT ?", list(params) + [limit]).fetchall()
     return {"source": "PUBLIC_MARKETPLACE", "count": len(rows), "requests": [dict(r) for r in rows]}
+
+
+# --------------------------------------------------------------------------- #
+# Operator review workflow — staff triage of public requests (governed, audited).
+# Uses the existing marketplace booking record; no parallel lifecycle.
+# --------------------------------------------------------------------------- #
+ACTION_STATUS = {
+    "REVIEW": "REVIEWED",                 # acknowledged, in triage
+    "ASSIGN_ESTIMATOR": "ESTIMATION",     # engineered / needs a priced plan
+    "QUOTE": "QUOTED",                    # staff-priced (or auto-quote confirmed)
+    "MOVE_TO_MARKETPLACE": "MATCHING",    # ready for the existing matching pipeline
+    "DECLINE": "DECLINED",                # rejected / spam / out of scope
+}
+_TERMINAL = {"DECLINED", "DELIVERED", "SETTLED", "CANCELLED"}
+
+
+def review(conn, actor, booking_id, action, note=None, quote_amount=None):
+    """Staff action on a PUBLIC_MARKETPLACE booking. Requires marketplace.booking.manage; tenant-scoped;
+    audited. Advances the canonical mkt_bookings record — the same identity flows into matching/quotation."""
+    core.require(actor, "marketplace.booking.manage")
+    action = (action or "").upper()
+    if action not in ACTION_STATUS:
+        raise core.ValidationError(f"unknown review action '{action}'")
+    frag, params = tenant.predicate(actor)
+    row = conn.execute(
+        "SELECT id,status,special_instructions FROM mkt_bookings WHERE id=? AND source='PUBLIC_MARKETPLACE'"
+        + frag, [booking_id] + list(params)).fetchone()
+    if not row:
+        raise core.NotFoundError("public booking not found")
+    cur = row["status"]
+    if cur in _TERMINAL:
+        raise core.ConflictError(f"booking is {cur}; no further action")
+    new = ACTION_STATUS[action]
+    sets, vals = "status=?, updated_at=?", [new, _now()]
+    if action == "QUOTE" and quote_amount is not None:
+        sets += ", quote_amount=?, quote_status='STAFF_QUOTED', quotation_status='QUOTED'"
+        vals.append(float(quote_amount))
+    if action == "MOVE_TO_MARKETPLACE":
+        sets += ", routing_candidate='MARKETPLACE_CANDIDATE'"
+    if note:
+        existing = row["special_instructions"] or ""
+        vals.append(((existing + " | ") if existing else "") + f"[{action}] {str(note)[:400]}")
+        sets += ", special_instructions=?"
+    vals.append(booking_id)
+    conn.execute(f"UPDATE mkt_bookings SET {sets} WHERE id=?", vals)
+    core.audit(conn, actor, "PUBLIC_BOOKING_REVIEWED", "mkt_bookings", booking_id,
+               {"from": cur}, {"action": action, "to": new})
+    conn.commit()
+    return {"booking_id": booking_id, "status": new, "action": action}

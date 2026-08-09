@@ -529,6 +529,8 @@ window.RGO_API = (function(){
     ppCarrierSettlement:function(id){return req('GET','/admin/marketplace/protected-payments/'+id+'/carrier-settlement');},
     ppMetrics:function(){return req('GET','/admin/marketplace/protected-payments-metrics');},
     regulatorySummary:function(){return req('GET','/admin/marketplace/regulatory-summary');},
+    publicBookingQueue:function(){return req('GET','/admin/marketplace/public-booking-queue');},
+    publicBookingReview:function(id,b){return req('POST','/admin/marketplace/public-bookings/'+id+'/review',b);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1101,6 +1103,7 @@ window.RGO_API = (function(){
     if(act==='rcEdit')return rcEdit(arg);
     if(act==='rcArchive')return rcArchive(arg);
     if(act==='kybVerify')return kybVerify(arg);
+    if(act==='pbReview')return pbReview(arg);
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1167,7 +1170,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1176,6 +1179,7 @@ window.RGO_API = (function(){
     if(adminTab==='rates')return adminRateCards();
     if(adminTab==='trust')return adminTrust();
     if(adminTab==='regulatory')return adminRegulatory();
+    if(adminTab==='intake')return adminIntake();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
     if(adminTab==='config')return adminConfig();
@@ -1383,6 +1387,38 @@ window.RGO_API = (function(){
       return '<div class="panel"><div class="panel-b"><div class="empty">Loading regulatory compliance…</div></div></div>';
     }
     return '<div class="access-note"><span>⚖️</span><div><b>Regulatory Compliance</b> (BSP OPS readiness, payment-provider readiness, LTFRB carrier compliance, CPC expiries, unauthorized units, geographic authority conflicts, pending manual verification). Connect a backend to administer. LiftHaul is not BSP-registered; live protected funds stay OFF pending BSP/counsel + a certified provider.</div></div>';
+  }
+  // ---------- Marketplace Intake (public booking queue triage) ----------
+  function adminIntake(){
+    if(liveMode){
+      RGO_API.publicBookingQueue().then(function(q){
+        var host=$('#adminBody');if(!host||adminTab!=='intake')return;
+        var rows=(q&&q.requests)||[];
+        var chip=function(s){var c=(s==='DECLINED')?'c-crit':(s==='MATCHING'||s==='QUOTED')?'c-good':(s==='ESTIMATION')?'c-warn':'c-info';return '<span class="chip '+c+'">'+esc(s)+'</span>';};
+        host.innerHTML=
+          '<div class="access-note"><span>📥</span><div><b>Marketplace Intake.</b> Public nationwide booking requests (source <code>PUBLIC_MARKETPLACE</code>) land as canonical bookings. Triage here — review, quote, assign estimator, move to marketplace matching, or decline. Every action needs <code>marketplace.booking.manage</code> and is audited. Engineered lifts (crane / lowbed) require an estimate — never an instant price.</div></div>'+
+          '<div class="panel"><div class="panel-h"><h3>Public Booking Queue</h3><div class="spacer"></div><span class="cnt">'+rows.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>ID</th><th>Contact</th><th>Route</th><th>Service</th><th>Vehicle</th><th class="right">Estimate</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
+          (rows.map(function(r){
+            var eng=(r.service_class==='ENGINEERED');
+            var est=eng?'<span class="chip c-warn">ESTIMATE REQ</span>':(r.quote_amount!=null?peso(r.quote_amount):'—');
+            var acts='<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':REVIEW">Review</button> '+
+              (eng?'<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':ASSIGN_ESTIMATOR">Estimator</button> ':'<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':QUOTE">Quote</button> ')+
+              '<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':MOVE_TO_MARKETPLACE">→ Marketplace</button> '+
+              '<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':DECLINE">Decline</button>';
+            return '<tr><td>#'+esc(r.id)+'</td><td>'+esc(r.contact_name||'')+'<br><span class="es">'+esc(r.contact_phone||r.contact_email||'')+'</span></td><td>'+esc(r.route_class||'')+(r.inter_island?' <span class="chip c-info">inter-island</span>':'')+'</td><td>'+esc(r.service_class||'')+'</td><td>'+esc(r.requested_vehicle_category||'')+'</td><td class="tnum">'+est+'</td><td>'+chip(r.status||'')+'</td><td style="white-space:nowrap">'+acts+'</td></tr>';
+          }).join('')||'<tr><td colspan="8" class="empty">No public booking requests.</td></tr>')+
+          '</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading marketplace intake…</div></div></div>';
+    }
+    return '<div class="access-note"><span>📥</span><div><b>Marketplace Intake</b> — public nationwide booking requests land here as canonical bookings for staff triage (review, quote, assign estimator, move to marketplace, decline). Connect a backend to administer. Requires <code>marketplace.booking.view/manage</code>.</div></div>';
+  }
+  function pbReview(arg){
+    var parts=(arg||'').split(':'),id=parts[0],action=parts[1],body={action:action};
+    if(action==='QUOTE'){var amt=window.prompt('Staff quote amount (₱):','');if(!amt)return;body.quote_amount=Number(amt);}
+    if(action==='DECLINE'&&!window.confirm('Decline this public booking request?'))return;
+    if(action==='REVIEW'||action==='ASSIGN_ESTIMATOR'){var n=window.prompt('Note (optional):','');if(n)body.note=n;}
+    RGO_API.publicBookingReview(id,body).then(function(d){toast('Booking #'+id+' → '+d.status+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});
   }
   function kybVerify(id){var src=window.prompt('Recorded verification source (required — e.g. SEC portal ref):','');if(!src)return;var dec=window.prompt('Decision: VERIFIED / VERIFIED_WITH_CONDITION / REJECTED','VERIFIED');if(!dec)return;var cond=dec==='VERIFIED_WITH_CONDITION'?window.prompt('Condition:',''):null;RGO_API.kybVerify(id,{decision:dec,source:src,condition:cond}).then(function(){toast('KYB '+dec+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function kybExpiryScan(){RGO_API.kybExpiryScan().then(function(d){toast('Expiry scan: '+(d.expired||0)+' expired, '+((d.notices||[]).length)+' upcoming');refreshAdmin();}).catch(function(e){toast('Error: '+e.message);});}

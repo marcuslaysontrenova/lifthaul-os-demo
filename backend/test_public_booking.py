@@ -183,6 +183,55 @@ class AdminQueue(unittest.TestCase):
             pb.admin_queue(self.c, weak)
 
 
+class OperatorReview(unittest.TestCase):
+    def setUp(self):
+        self.c = db.connect(":memory:")
+        self.bid = pb.submit(self.c, _p())["booking_id"]
+
+    def test_review_advances_status(self):
+        r = pb.review(self.c, SUP, self.bid, "REVIEW")
+        self.assertEqual(r["status"], "REVIEWED")
+
+    def test_quote_sets_amount_and_status(self):
+        pb.review(self.c, SUP, self.bid, "QUOTE", quote_amount=4200, note="priced per lane")
+        row = self.c.execute("SELECT status,quote_amount,quote_status FROM mkt_bookings WHERE id=?", (self.bid,)).fetchone()
+        self.assertEqual(row["status"], "QUOTED")
+        self.assertEqual(row["quote_amount"], 4200)
+        self.assertEqual(row["quote_status"], "STAFF_QUOTED")
+
+    def test_move_to_marketplace(self):
+        r = pb.review(self.c, SUP, self.bid, "MOVE_TO_MARKETPLACE")
+        self.assertEqual(r["status"], "MATCHING")
+        row = self.c.execute("SELECT routing_candidate FROM mkt_bookings WHERE id=?", (self.bid,)).fetchone()
+        self.assertEqual(row["routing_candidate"], "MARKETPLACE_CANDIDATE")
+
+    def test_assign_estimator(self):
+        self.assertEqual(pb.review(self.c, SUP, self.bid, "ASSIGN_ESTIMATOR")["status"], "ESTIMATION")
+
+    def test_decline_is_terminal(self):
+        pb.review(self.c, SUP, self.bid, "DECLINE")
+        with self.assertRaises(core.ConflictError):
+            pb.review(self.c, SUP, self.bid, "REVIEW")
+
+    def test_unknown_action_denied(self):
+        with self.assertRaises(core.ValidationError):
+            pb.review(self.c, SUP, self.bid, "NUKE")
+
+    def test_requires_manage_permission(self):
+        weak = {"id": 9, "role": "viewer", "perms": {"marketplace.booking.view"}, "tenant_id": None}
+        with self.assertRaises(Exception):
+            pb.review(self.c, weak, self.bid, "REVIEW")
+
+    def test_unknown_booking_not_found(self):
+        with self.assertRaises(core.NotFoundError):
+            pb.review(self.c, SUP, 999999, "REVIEW")
+
+    def test_review_is_audited(self):
+        pb.review(self.c, SUP, self.bid, "REVIEW", note="ok")
+        n = self.c.execute("SELECT COUNT(*) c FROM audit_logs WHERE action='PUBLIC_BOOKING_REVIEWED'").fetchone()["c"]
+        self.assertGreaterEqual(n, 1)
+
+
 class Persistence(unittest.TestCase):
     def test_restart_persistence(self):
         import os, tempfile

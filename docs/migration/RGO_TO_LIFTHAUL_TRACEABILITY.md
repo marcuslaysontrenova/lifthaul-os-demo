@@ -92,7 +92,7 @@ There is **one** canonical entity per concept — no `rgo_*` vs `lifthaul_*` spl
 
 - `tenants` table + `tenant.py` isolation (404-no-leak `guard`, `stamp`, `predicate`, cross-access grants) are present and tested (`test_tenant_isolation`). Tests already seed and operate a tenant keyed **"RGO"** (`ap.get_tenant(c,"RGO")`), so RGO functions as the reference tenant today.
 - Tenant-scoped config exists for company profile, branches (`org_units`/`branches`), users, roles, equipment, services, rate cards, taxes, payment terms, numbering (`numbering.*`), calendars (`working_calendars`,`holiday_calendars`) — all resolved through the config cascade / tenant tables.
-- **Finding (branding separation):** the operator console (`console.html`, formerly `index.html`) still **hardcodes** "RGO Machine Rigging Services" as product-level chrome. Correct SaaS separation is **product = LiftHaul Enterprise**, **tenant = RGO Machine Rigging Services** (tenant branding). This is a **PARTIAL(UI)** convergence item, **not release-critical** (operator-only surface, behind login); the public front page (`index.html`) is already correctly LiftHaul-branded. Recommendation logged in §N.
+- **RESOLVED — branding separation:** the operator console (`console.html`) now enforces **product = LiftHaul Enterprise** (fixed chrome: title, login, topbar, footer "Powered by", client comment) and **tenant = RGO Machine Rigging Services (Tenant Zero)** as configuration via a single `TENANT` object + `applyBranding()`; a topbar tenant chip shows the tenant identity. Internal API storage keys renamed `lifthaul_api_*` (backward-compatible read of legacy `rgo_api_*`). Verified in-browser: title `LiftHaul Enterprise — RGO Machine Rigging Services`, 0 "RGO OS" product strings in the DOM, no console errors. RGO's own marketing sections remain as Tenant Zero content (legitimate tenant data).
 
 ## D–F. Commercial / Operations / Financial flows
 
@@ -149,7 +149,7 @@ No production RGO dataset is present in this repo to migrate (dev seed only). Th
 ## N. RGO branding
 
 - **Public front page:** RGO removed — `index.html` is LiftHaul (verified 0 "RGO"/forklift marks).
-- **Operator console (`console.html`):** still hardcodes RGO as product chrome. **Recommendation (not release-critical):** drive console chrome from **product = LiftHaul Enterprise** + **tenant branding = RGO Machine Rigging Services** (read tenant name/logo/colors from tenant config), so RGO is tenant identity, not hardcoded product identity. Tracked as a follow-up; does not block the LiftHaul public launch.
+- **Operator console (`console.html`): DONE.** Product chrome = **LiftHaul Enterprise** (with the LiftHaul lift-badge mark); tenant identity = **RGO Machine Rigging Services (Tenant Zero)** driven by the `TENANT` config object + `applyBranding()`, surfaced as a topbar tenant chip and in the login/footer. No hardcoded RGO product name remains; RGO persists only as tenant configuration/content. A connected backend can override `TENANT` from `/me`/company profile.
 
 ## O. RGO reference-tenant E2E
 
@@ -162,7 +162,7 @@ No production RGO dataset is present in this repo to migrate (dev seed only). Th
 - **NEW LiftHaul capabilities:** tenant isolation, marketplace, protected payment, KYB/LTFRB/trust, island-group/inter-island.
 - **ENHANCED (11):** CRM, quotation, rate/pricing, cost/margin, quote approval, versioning, credit terms, driver assignment, refunds, incident mgmt, finance dashboard/reports, user-admin/RBAC/audit.
 - **PRESERVED (fully, tested):** booking, site assessment, downpayment, Wise, reservation hold/confirm, job, dispatch, equipment assignment, change orders, expenses, actual costing, profitability, final invoice, collections, cancellation, fleet, equipment registry, inspections, contacts/addresses.
-- **PARTIAL(UI)** (backend+data+tests present; UI thin): customer communication, quote acceptance, dispatch calendar, availability calendar, suppliers, subcontractors, POs, preventive-maintenance UI, safety-center UI, inventory, documents, notifications, private-fleet→marketplace hop, supplier→carrier promotion, console product/tenant branding.
+- **PARTIAL(UI)** (backend+data+tests present; UI thin): customer communication, quote acceptance, dispatch calendar, availability calendar, suppliers, subcontractors, POs, preventive-maintenance UI, safety-center UI, inventory, documents, notifications, private-fleet→marketplace hop, supplier→carrier promotion. *(Console product/tenant branding — now RESOLVED.)*
 - **POST-LAUNCH (deliberate):** employee self-service portal, full customer self-service portal, AI quotation assistant, AI dispatch assistant.
 - **MISSING (release-critical):** **none.** No RGO operational essential was left behind at the backend/data/test level.
 

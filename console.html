@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-<title>RGO Machine Rigging Services · Book a Lift</title>
+<title>LiftHaul Enterprise — Operator Console</title>
 <style>
   :root{
     --bg:#EAF4E0; --surface:#FFFFFF; --surface-2:#F1F7EB; --surface-3:#E4F0D9;
@@ -373,21 +373,21 @@
     <div class="col"><b>Company</b><a href="#portfolio">Projects</a><a href="#book">Book a lift</a><a data-act="staffLogin" style="cursor:pointer">Staff login</a></div>
     <div class="col"><b>Contact</b><a href="mailto:dispatch@rgo-rigging.demo">dispatch@rgo-rigging.demo</a><a>+63 2 8•• ••••</a><a>24/7 operations</a></div>
   </div>
-  <div class="base"><div class="bwrap"><span>© RGO Machine Rigging Services (demo) · Powered by <b>RGO OS</b> · Developed by <a href="https://trenovatech.ai" target="_blank" rel="noopener">TrenovaTech.ai</a></span></div></div></footer>
+  <div class="base"><div class="bwrap"><span>© <span id="ftTenant">RGO Machine Rigging Services</span> — Tenant Zero (demo) · Powered by <b>LiftHaul Enterprise</b> · Developed by <a href="https://trenovatech.ai" target="_blank" rel="noopener">TrenovaTech.ai</a></span></div></div></footer>
 </section>
 
 <!-- ================= LOGIN ================= -->
 <section id="login">
   <div class="brand">
     <div class="hzbar hz"></div>
-    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg><div class="wordmark" style="font-weight:800;letter-spacing:.06em">RGO&nbsp;<b style="color:var(--accent)">OS</b></div></div>
+    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="3" width="42" height="42" rx="12" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><path d="M24 10 L34.5 23.4 H27.6 V30.7 H20.4 V23.4 H13.5 Z" fill="#F2611A"/><rect x="13.8" y="34.3" width="20.4" height="3.9" rx="2" fill="#5FB92A"/></svg><div class="wordmark" style="font-weight:800;letter-spacing:.02em">Lift<b>Haul</b> Enterprise</div></div>
     <div class="brand-hero"><div class="eyebrow">Operations Console</div><h1>The office behind the lift.</h1><p>Dispatch, fleet, permits and billing for the crew running the jobs your customers book online.</p></div>
     <div class="brand-foot"><a data-act="backSite">← Back to public site</a></div>
   </div>
   <div class="auth">
     <form class="card" id="loginForm">
       <a class="backlink" data-act="backSite"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Back to site</a>
-      <h2>Staff sign in</h2><div class="sub">RGO OS — operations console.</div>
+      <h2>Staff sign in</h2><div class="sub" id="loginSub">LiftHaul Enterprise · RGO Machine Rigging (Tenant Zero)</div>
       <label class="fld"><span>Demo role</span><select id="demoRole" class="role-select" aria-label="Demo role"><option value="booking_admin">Booking &amp; Quotation Administrator</option><option value="approver">Approver</option><option value="finance_admin">Finance Administrator</option><option value="executive">Executive View</option><option value="user_admin">User Administrator</option><option value="super_admin">Super Administrator</option><option value="operational_user">Operational User</option></select></label>
       <label class="fld"><span>Username</span><input id="u" type="text" value="encoder-1" autocomplete="username" spellcheck="false"></label>
       <label class="fld"><span>Password</span><input id="p" type="password" value="demo1234" autocomplete="current-password"></label>
@@ -402,7 +402,7 @@
 <!-- ================= APP ================= -->
 <section id="dash">
   <header class="topbar">
-    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg><div class="wordmark" style="font-weight:800;letter-spacing:.06em">RGO&nbsp;<b style="color:var(--accent)">OS</b></div></div>
+    <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="3" width="42" height="42" rx="12" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><path d="M24 10 L34.5 23.4 H27.6 V30.7 H20.4 V23.4 H13.5 Z" fill="#F2611A"/><rect x="13.8" y="34.3" width="20.4" height="3.9" rx="2" fill="#5FB92A"/></svg><div class="wordmark" style="font-weight:800;letter-spacing:.02em">Lift<b>Haul</b> Enterprise</div></div><span id="tenantChip" style="margin-left:12px;font-size:11px;font-weight:700;color:#7C8A70;border:1px solid #D5E3C6;border-radius:999px;padding:4px 10px;white-space:nowrap">RGO Machine Rigging · Tenant Zero</span>
     <div class="spacer"></div>
     <button class="iconbtn" data-act="notif" title="Notifications" aria-label="Notifications"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3a6 6 0 0 0-6 6c0 5-2 6-2 6h16s-2-1-2-6a6 6 0 0 0-6-6zM10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="ncount" id="notifCount">0</span></button>
     <button class="iconbtn" data-act="themeToggle" title="Toggle theme" aria-label="Toggle theme"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
@@ -439,20 +439,31 @@
 
 <div class="backdrop" id="backdrop"></div>
 <div class="toast" id="toast"></div>
-<div id="demoRibbon" style="position:fixed;right:10px;bottom:10px;z-index:70;background:var(--steel);color:#fff;font-size:11px;font-weight:700;padding:6px 11px;border-radius:8px;box-shadow:var(--shadow-lg);opacity:.92;max-width:260px;line-height:1.4">DEMO PROTOTYPE · in-browser mock<br><span style="font-weight:500;opacity:.85">Tested backend (auth·DB·RBAC·Wise·63 tests) in <b>/backend</b>. Connect via <code>localStorage.rgo_api_base</code>.</span> <button onclick="this.parentNode.style.display='none'" style="background:transparent;border:0;color:#fff;opacity:.7;cursor:pointer;float:right;margin-top:-24px">×</button></div>
+<div id="demoRibbon" style="position:fixed;right:10px;bottom:10px;z-index:70;background:var(--steel);color:#fff;font-size:11px;font-weight:700;padding:6px 11px;border-radius:8px;box-shadow:var(--shadow-lg);opacity:.92;max-width:260px;line-height:1.4">DEMO PROTOTYPE · in-browser mock<br><span style="font-weight:500;opacity:.85">Tested backend (auth·DB·RBAC·Wise·63 tests) in <b>/backend</b>. Connect via <code>localStorage.lifthaul_api_base</code>.</span> <button onclick="this.parentNode.style.display='none'" style="background:transparent;border:0;color:#fff;opacity:.7;cursor:pointer;float:right;margin-top:-24px">×</button></div>
 <script>
-/* RGO OS front-end API client — talks to the real backend in /backend when a base
-   URL is configured (localStorage.rgo_api_base = deployed API origin). Until a
+/* LiftHaul Enterprise front-end API client — talks to the real backend in /backend when a base
+   URL is configured (localStorage.lifthaul_api_base = deployed API origin). Until a
    backend is hosted, the app runs on its in-browser mock (clearly a prototype).
    This is the correct integration interface; the blocker is hosting, not code. */
 /* Primary config is runtime (window.RGO_CONFIG.apiBase — injected by config.js / env at deploy).
-   localStorage.rgo_api_base is a clearly-labeled DEV/DEMO override only. */
+   localStorage.lifthaul_api_base is a clearly-labeled DEV/DEMO override only. */
 window.RGO_CONFIG = window.RGO_CONFIG || {};
+/* Product / tenant branding separation. Product = LiftHaul Enterprise (fixed). Tenant = configuration
+   (Tenant Zero = RGO Machine Rigging Services). RGO is tenant identity, never the product name. */
+var PRODUCT={name:"LiftHaul Enterprise"};
+var TENANT={id:"RGO",name:"RGO Machine Rigging Services",status:"Tenant Zero"};
+function applyBranding(){try{
+  document.title=PRODUCT.name+" — "+TENANT.name;
+  var c=document.getElementById('tenantChip'); if(c) c.textContent=TENANT.name+" · "+TENANT.status;
+  var s=document.getElementById('loginSub'); if(s) s.textContent=PRODUCT.name+" · "+TENANT.name+" ("+TENANT.status+")";
+  var f=document.getElementById('ftTenant'); if(f) f.textContent=TENANT.name;
+}catch(e){}}
+try{applyBranding();}catch(e){}
 window.RGO_API = (function(){
   var base=(window.RGO_CONFIG.apiBase)||null, token=null;
-  try{ if(!base) base=localStorage.getItem('rgo_api_base'); token=localStorage.getItem('rgo_api_token'); }catch(e){}
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token')||localStorage.getItem('rgo_api_token'); }catch(e){}
   function req(method, path, body){
-    if(!base) return Promise.reject(new Error('API not configured (demo mock mode). Set localStorage.rgo_api_base to the deployed backend origin to go live.'));
+    if(!base) return Promise.reject(new Error('API not configured (demo mock mode). Set localStorage.lifthaul_api_base to the deployed backend origin to go live.'));
     var h={'Content-Type':'application/json'};
     if(token && path!=='/login') h['Authorization']='Bearer '+token;
     return fetch(base.replace(/\/+$/,'')+path,{method:method,headers:h,body:body?JSON.stringify(body):undefined})
@@ -460,9 +471,9 @@ window.RGO_API = (function(){
   }
   return {
     configured:function(){return !!base;},
-    setBase:function(b){base=b; try{localStorage.setItem('rgo_api_base',b);}catch(e){}},
-    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('rgo_api_token',token);}catch(e){} return d;});},
-    logout:function(){token=null; try{localStorage.removeItem('rgo_api_token');}catch(e){}},
+    setBase:function(b){base=b; try{localStorage.setItem('lifthaul_api_base',b);}catch(e){}},
+    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('lifthaul_api_token',token);}catch(e){} return d;});},
+    logout:function(){token=null; try{localStorage.removeItem('lifthaul_api_token');localStorage.removeItem('rgo_api_token');}catch(e){}},
     /* authoritative effective-permission payload — the frontend gates on THIS, not a JS engine */
     myPermissions:function(){return req('GET','/me/permissions');},
     /* user administration (Gap 3) — paths match backend/server.py route table exactly */
@@ -865,7 +876,7 @@ window.RGO_API = (function(){
     access:function(){
       var canCreate=canPerm('users.manage')||canPerm('user_admin.manage');
       return head('Security & Administration','Administration Center',(canCreate&&(adminTab==='people')?'<button class="btn" data-act="newUser">+ Create User</button>':'')+(adminTab==='roles'?'<button class="btn line" data-act="roleExport">⤓ Export matrix</button>':''))+
-        '<div class="access-note"><span>🔐</span><div><b>'+esc(role)+'</b> · '+(liveMode?'Connected to the authoritative RBAC backend. Every screen reads permissions from <code>/me/permissions</code> and data from <code>/admin/*</code>; actions persist and audit server-side.':'Offline demo — actions persist to this browser only. Set <code>localStorage.rgo_api_base</code> to a backend origin for authoritative RBAC and server-side persistence.')+'</div></div>'+
+        '<div class="access-note"><span>🔐</span><div><b>'+esc(role)+'</b> · '+(liveMode?'Connected to the authoritative RBAC backend. Every screen reads permissions from <code>/me/permissions</code> and data from <code>/admin/*</code>; actions persist and audit server-side.':'Offline demo — actions persist to this browser only. Set <code>localStorage.lifthaul_api_base</code> to a backend origin for authoritative RBAC and server-side persistence.')+'</div></div>'+
         adminTabsBar()+
         '<div id="adminBody">'+renderAdminTab()+'</div>';
     },

@@ -538,6 +538,9 @@ window.RGO_API = (function(){
     apiWebhookCreate:function(b){return req('POST','/admin/integrations/api-webhooks',b);},
     apiDeliveries:function(){return req('GET','/admin/integrations/api-deliveries');},
     apiDeliveryReplay:function(id){return req('POST','/admin/integrations/api-deliveries/'+id+'/replay');},
+    gpRequests:function(){return req('GET','/admin/marketplace/insurance/requests');},
+    gpQuote:function(id){return req('POST','/admin/marketplace/bookings/'+id+'/insurance/quote',{});},
+    gpBind:function(id,b){return req('POST','/admin/marketplace/bookings/'+id+'/insurance/bind',b);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1115,6 +1118,8 @@ window.RGO_API = (function(){
     if(act==='apiWebhookNew')return apiWebhookNew();
     if(act==='apiClientRevoke')return apiClientRevoke(arg);
     if(act==='apiReplay')return apiReplay(arg);
+    if(act==='gpQuote')return gpQuote(arg);
+    if(act==='gpBind')return gpBind(arg);
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1181,7 +1186,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1191,6 +1196,7 @@ window.RGO_API = (function(){
     if(adminTab==='trust')return adminTrust();
     if(adminTab==='regulatory')return adminRegulatory();
     if(adminTab==='intake')return adminIntake();
+    if(adminTab==='insurance')return adminInsurance();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1432,6 +1438,28 @@ window.RGO_API = (function(){
     if(action==='REVIEW'||action==='ASSIGN_ESTIMATOR'){var n=window.prompt('Note (optional):','');if(n)body.note=n;}
     RGO_API.publicBookingReview(id,body).then(function(d){toast('Booking #'+id+' → '+d.status+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});
   }
+  // ---------- Goods Protection (Cargo Insurance orchestration) ----------
+  function adminInsurance(){
+    if(liveMode){
+      RGO_API.gpRequests().then(function(q){
+        var host=$('#adminBody');if(!host||adminTab!=='insurance')return;
+        var rows=(q&&q.requests)||[],mu=(q&&q.manual_underwriting_queue)||[],pol=(q&&q.policies)||[];
+        var chip=function(s){var c=(s==='BOUND')?'c-good':(s==='NOT_ELIGIBLE')?'c-crit':(s&&s.indexOf('MANUAL')>-1)?'c-warn':'c-info';return '<span class="chip '+c+'">'+esc(s||'—')+'</span>';};
+        host.innerHTML=
+          '<div class="access-note"><span>🛡️</span><div><b>Goods Protection</b> — cargo insurance orchestration. LiftHaul is <b>not</b> the insurer; coverage stays with a licensed insurer/broker. Insurer connected: <b>'+(q.provider_active?'YES (sandbox)':'NO')+'</b>. With no insurer connected, quotes return <b>MANUAL_INSURANCE_REVIEW_REQUIRED</b>. High-value / engineered / heavy / excluded cargo → <b>MANUAL_UNDERWRITING_REQUIRED</b> — never a fabricated instant premium. Binding requires real policy reference + approval evidence. The premium is a pass-through to the insurer, never platform revenue.</div></div>'+
+          '<div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">'+
+            '<div class="panel"><div class="panel-h"><h3>Coverage Requests</h3></div><div class="panel-b"><b style="font-size:22px">'+rows.length+'</b></div></div>'+
+            '<div class="panel"><div class="panel-h"><h3>Manual Underwriting</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--warn)">'+mu.length+'</b></div></div>'+
+            '<div class="panel"><div class="panel-h"><h3>Bound Policies</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--good)">'+pol.length+'</b></div></div>'+
+          '</div>'+
+          '<div class="panel"><div class="panel-h"><h3>Coverage Requests &amp; Policies</h3><div class="spacer"></div><span class="cnt">'+rows.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Booking</th><th class="right">Declared value</th><th>Cargo</th><th>Status</th><th class="right">Premium</th><th>Provider / Policy</th><th></th></tr></thead><tbody>'+(rows.map(function(r){var acts='';if(r.gp_status==='REQUESTED'||!r.gp_status){acts+='<button class="btn line sm" data-act="gpQuote" data-arg="'+r.id+'">Quote</button> ';}if(r.gp_status==='QUOTED'||(r.gp_status&&r.gp_status.indexOf('MANUAL')>-1)){acts+='<button class="btn line sm" data-act="gpBind" data-arg="'+r.id+'">Bind</button>';}return '<tr><td>#'+esc(r.id)+'</td><td class="tnum">'+(r.declared_value!=null?peso(r.declared_value):'—')+'</td><td>'+esc(r.cargo_category||'')+'</td><td>'+chip(r.gp_status)+'</td><td class="tnum">'+(r.gp_premium!=null?peso(r.gp_premium):'—')+'</td><td style="font-size:11px">'+esc(r.gp_provider||'')+(r.gp_policy_ref?(' · '+esc(r.gp_policy_ref)):'')+'</td><td style="white-space:nowrap">'+acts+'</td></tr>';}).join('')||'<tr><td colspan="7" class="empty">No coverage requests.</td></tr>')+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading Goods Protection…</div></div></div>';
+    }
+    return '<div class="access-note"><span>🛡️</span><div><b>Goods Protection</b> (cargo insurance orchestration) — coverage requests, quotes, manual-underwriting queue, bound policies, claims. LiftHaul is not the insurer. Connect a backend to administer. Requires <code>marketplace.insurance.manage</code>.</div></div>';
+  }
+  function gpQuote(id){RGO_API.gpQuote(id).then(function(d){toast('Coverage: '+d.result+(d.premium?(' · premium '+d.premium):'')+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function gpBind(id){var ins=window.prompt('Insurer name (from the licensed provider):','');if(!ins)return;var pol=window.prompt('Policy / binder reference (required):','');if(!pol)return;var ev=window.prompt('Approval evidence reference (required — e.g. binder doc id):','');if(!ev)return;var amt=window.prompt('Coverage amount:','');var prem=window.prompt('Premium:','');RGO_API.gpBind(id,{insurer:ins,policy_ref:pol,coverage_amount:Number(amt||0),premium:Number(prem||0),deductible:0,effective_from:new Date().toISOString().slice(0,10),effective_to:'',evidence:ev}).then(function(){toast('Coverage BOUND · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Developer Portal (Platform Control -> Integrations) ----------
   function adminDevPortal(){
     if(liveMode){

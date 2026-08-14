@@ -24,13 +24,16 @@ import tenant
 
 # Granular scopes — an integration client never gets unrestricted access.
 SCOPES = ("bookings:create", "bookings:read", "bookings:update", "quotations:read",
-          "tracking:read", "marketplace:read", "payments:read", "jobs:read")
+          "tracking:read", "marketplace:read", "payments:read", "jobs:read",
+          "insurance:quote", "insurance:read", "claims:create", "claims:read")
 
 # Webhook event catalogue (customer-subscribable).
 EVENTS = ("booking.created", "booking.reviewed", "quotation.ready", "quotation.accepted",
           "payment.required", "payment.confirmed", "marketplace.matching", "carrier.assigned",
           "trip.started", "trip.at_port", "trip.in_transit", "trip.delivered", "pod.available",
-          "dispute.opened", "settlement.completed")
+          "dispute.opened", "settlement.completed",
+          "insurance.quote_ready", "insurance.bound", "insurance.rejected",
+          "claim.created", "claim.submitted", "claim.approved", "claim.denied", "claim.settled")
 
 DELIVERY_STATES = ("PENDING", "DELIVERING", "DELIVERED", "RETRYING", "FAILED", "DEAD_LETTER", "DISABLED")
 
@@ -313,6 +316,60 @@ def api_quote_estimate(conn, actor, payload):
     return {"result": kind, "estimate": q.get("amount"), "estimate_status": q["status"],
             "service_class": svc["service_class"], "service_level": level,
             "inter_island": route["inter_island"], "note": q.get("note")}
+
+
+def _resolve_booking_id(conn, ref):
+    if str(ref).startswith("pbk_"):
+        r = conn.execute("SELECT id FROM mkt_bookings WHERE tracking_token=?", (ref,)).fetchone()
+        return (r["id"] if r else None)
+    suffix = str(ref).split("-")[-1].lower()
+    for r in conn.execute("SELECT id,tracking_token FROM mkt_bookings WHERE tracking_token IS NOT NULL").fetchall():
+        if str(r["tracking_token"])[-6:].lower() == suffix:
+            return r["id"]
+    return None
+
+
+def _svc(actor, perms):
+    return {"id": actor.get("client_ref"), "role": "api_client", "perms": set(perms), "tenant_id": actor.get("tenant_id")}
+
+
+def api_insurance_quote(conn, actor, payload):
+    require_scope(actor, "insurance:quote")
+    import goods_protection as gp
+    bid = _resolve_booking_id(conn, (payload or {}).get("booking_ref"))
+    if not bid:
+        raise core.NotFoundError("booking not found")
+    svc = _svc(actor, {"marketplace.booking.manage", "marketplace.insurance.manage"})
+    gp.request_coverage(conn, svc, bid, (payload or {}).get("declared_value"), (payload or {}).get("cargo_category", "GENERAL"))
+    return gp.quote_coverage(conn, svc, bid)
+
+
+def api_insurance_get(conn, actor, ref):
+    require_scope(actor, "insurance:read")
+    import goods_protection as gp
+    bid = _resolve_booking_id(conn, ref)
+    if not bid:
+        raise core.NotFoundError("booking not found")
+    return gp.get_coverage(conn, bid)
+
+
+def api_claim_create(conn, actor, payload):
+    require_scope(actor, "claims:create")
+    import goods_protection as gp
+    bid = _resolve_booking_id(conn, (payload or {}).get("booking_ref"))
+    if not bid:
+        raise core.NotFoundError("booking not found")
+    svc = _svc(actor, {"marketplace.claim.manage"})
+    return gp.link_claim(conn, svc, bid, (payload or {}).get("incident_ref"), (payload or {}).get("claimed_amount"))
+
+
+def api_claim_get(conn, actor, claim_id):
+    require_scope(actor, "claims:read")
+    r = conn.execute("SELECT claim_number,status,claimed_amount,approved_amount,insurer,policy_reference "
+                     "FROM mkt_claims WHERE id=?", (int(claim_id),)).fetchone()
+    if not r:
+        raise core.NotFoundError("claim not found")
+    return dict(r)
 
 
 # --------------------------------------------------------------------------- #

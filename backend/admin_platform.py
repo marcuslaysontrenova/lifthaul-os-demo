@@ -342,6 +342,8 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.pod.submit", "marketplace.pod.verify", "marketplace.exception.manage",
     # Regulatory closure: LTFRB carrier transport-authority (CPC) + BSP/provider readiness dashboard
     "marketplace.ltfrb.view", "marketplace.ltfrb.manage",
+    # Cargo Insurance / Goods Protection (coverage orchestration; claims reuse marketplace.claim.*)
+    "marketplace.insurance.view", "marketplace.insurance.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
@@ -508,6 +510,15 @@ DEFAULT_CONFIG = {
     # Regulatory closure: LTFRB carrier-authority enforcement at assignment. OFF by default so existing
     # behaviour is unchanged; the owner flips this ON at go-live once carrier CPCs are recorded/verified.
     "marketplace.ltfrb_enforcement_enabled": "false",
+    # Cargo Insurance / Goods Protection (orchestration; LiftHaul is not the insurer). No insurer is
+    # connected by default -> quotes return MANUAL_INSURANCE_REVIEW_REQUIRED until a licensed provider
+    # is configured + activated. Live coverage is never advertised until approved.
+    "insurance.enabled": "true",
+    "insurance.provider_active": "false",
+    "insurance.max_auto_quote_amount": "500000",
+    "insurance.manual_underwriting_threshold": "1000000",
+    "insurance.excluded_cargo": "PROHIBITED,DANGEROUS",
+    "insurance.deductible_pct": "2",
 }
 
 

@@ -143,6 +143,40 @@ rotatable.
 `RETRYING` (exponential backoff) → `DEAD_LETTER` after 5 attempts. Administrators can **replay** a
 failed delivery (same event id, incremented attempt, full audit trail).
 
+## Goods Protection (cargo insurance) & Claims
+
+LiftHaul orchestrates coverage; the policy sits with a **licensed insurer/broker** — LiftHaul is not
+the insurer. Live coverage isn't advertised until an insurer is configured.
+
+### Quote coverage — `POST /api/v1/insurance/quote` (scope `insurance:quote`)
+
+```json
+{ "booking_ref": "LH-...", "declared_value": 300000, "cargo_category": "MACHINERY" }
+```
+
+Result is one of: `ELIGIBLE` (with `coverage_limit`, `premium`, `deductible`, `provider`,
+`validity_days`, `exclusions`), `MANUAL_UNDERWRITING_REQUIRED` (high-value / engineered / heavy),
+`MANUAL_INSURANCE_REVIEW_REQUIRED` (no insurer connected), or `NOT_ELIGIBLE` (excluded cargo). No
+instant premium is ever fabricated for engineered/heavy risks.
+
+### Read coverage — `GET /api/v1/insurance/:ref` (scope `insurance:read`)
+### Open a claim — `POST /api/v1/claims` (scope `claims:create`)
+
+```json
+{ "booking_ref": "LH-...", "incident_ref": "INC-1", "claimed_amount": 50000 }
+```
+
+A claim can be opened only against **BOUND** coverage; it references the policy and insured amount.
+Insurer decisions (approve/deny/settle) require a recorded adjuster reference — LiftHaul never
+fabricates them.
+
+### Read a claim — `GET /api/v1/claims/:id` (scope `claims:read`)
+
+### Additional webhook events
+
+`insurance.quote_ready`, `insurance.bound`, `insurance.rejected`, `claim.created`, `claim.submitted`,
+`claim.approved`, `claim.denied`, `claim.settled`.
+
 ## Errors
 
 | HTTP | Meaning |

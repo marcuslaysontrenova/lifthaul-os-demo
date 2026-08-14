@@ -1986,17 +1986,51 @@ def _api_v1_routes():
     def bk_track(a, b, p):  return ap.api_get_booking(_conn, a, p["ref"])
     def bk_bulk(a, b, p):   return ap.api_bulk(_conn, a, b.get("rows"), idem_key=a.get("_idem"))
     def qt_est(a, b, p):    return ap.api_quote_estimate(_conn, a, b)
+    def ins_quote(a, b, p): return ap.api_insurance_quote(_conn, a, b)
+    def ins_get(a, b, p):   return ap.api_insurance_get(_conn, a, p["ref"])
+    def clm_create(a, b, p): return ap.api_claim_create(_conn, a, b)
+    def clm_get(a, b, p):   return ap.api_claim_get(_conn, a, p["id"])
     return {
         ("POST", "/api/v1/bookings"): bk_create,
         ("GET", "/api/v1/bookings/:ref"): bk_get,
         ("GET", "/api/v1/bookings/:ref/tracking"): bk_track,
         ("POST", "/api/v1/bookings/bulk"): bk_bulk,
         ("POST", "/api/v1/quotes/estimate"): qt_est,
+        ("POST", "/api/v1/insurance/quote"): ins_quote,
+        ("GET", "/api/v1/insurance/:ref"): ins_get,
+        ("POST", "/api/v1/claims"): clm_create,
+        ("GET", "/api/v1/claims/:id"): clm_get,
+    }
+
+
+def _goods_protection_routes():
+    import goods_protection as gp
+
+    def g_request(a, b, p): return gp.request_coverage(_conn, a, int(p["id"]), b.get("declared_value"), b.get("cargo_category", "GENERAL"))
+    def g_quote(a, b, p):   return gp.quote_coverage(_conn, a, int(p["id"]))
+    def g_bind(a, b, p):    return gp.bind(_conn, a, int(p["id"]), b.get("insurer"), b.get("policy_ref"),
+                                           b.get("coverage_amount"), b.get("premium"), b.get("deductible"),
+                                           b.get("effective_from"), b.get("effective_to"), b.get("evidence"))
+    def g_get(a, b, p):     return gp.get_coverage(_conn, int(p["id"]))
+    def g_requests(a, b, p): return gp.coverage_requests(_conn, a)
+    def g_claim(a, b, p):   return gp.link_claim(_conn, a, int(p["id"]), b.get("incident_ref"), b.get("claimed_amount"))
+    def g_claim_adv(a, b, p): return gp.advance_gp_claim(_conn, a, int(p["id"]), b["to_status"],
+                                                         adjuster_reference=b.get("adjuster_reference"),
+                                                         approved_amount=b.get("approved_amount"))
+    return {
+        ("POST", "/admin/marketplace/bookings/:id/insurance/request"): g_request,
+        ("POST", "/admin/marketplace/bookings/:id/insurance/quote"): g_quote,
+        ("POST", "/admin/marketplace/bookings/:id/insurance/bind"): g_bind,
+        ("GET", "/admin/marketplace/bookings/:id/insurance"): g_get,
+        ("GET", "/admin/marketplace/insurance/requests"): g_requests,
+        ("POST", "/admin/marketplace/bookings/:id/insurance/claim"): g_claim,
+        ("POST", "/admin/marketplace/insurance/claims/:id/advance"): g_claim_adv,
     }
 
 
 ROUTES.update(_dev_portal_routes())
 ROUTES.update(_api_v1_routes())
+ROUTES.update(_goods_protection_routes())
 
 
 def _match(method, path):

@@ -121,6 +121,8 @@ def _seed_platform(conn):
     public_booking.init(conn); public_booking.seed(conn)                 # Public Nationwide Booking intake -> canonical mkt_bookings (source=PUBLIC_MARKETPLACE)
     import api_platform
     api_platform.init(conn); api_platform.seed(conn)                     # Platform Control -> Integrations: B2B API clients + scopes + outbound webhooks
+    import goods_protection
+    goods_protection.init(conn); goods_protection.seed(conn)             # Cargo Insurance / Goods Protection: coverage orchestration on mkt_bookings (claims reuse mkt_claims)
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

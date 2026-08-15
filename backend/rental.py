@@ -363,6 +363,16 @@ def finalize_rental(conn, actor, agreement_id, *, discount=0, fund_protected=Tru
     core.audit(conn, actor, "RENTAL_FINALIZED", "rental_invoices", inv, None,
                {"agreement": agreement_id, "total": bill["total"], "protected_tx": tx_id})
     conn.commit()
+    # Consolidate into the customer's corporate billing statement IF they have an account (best-effort;
+    # no account -> the rental invoice still stands on its own). A/R only — never moves funds.
+    if a.get("customer_id"):
+        try:
+            import billing
+            billing.post_charge_for_customer(conn, actor, a["customer_id"], "RENTAL", inv,
+                                             f"Rental {a['agreement_no']} ({a['vehicle_category']}/{a['rate_unit']})",
+                                             bill["subtotal"], tax=bill["tax"])
+        except Exception:
+            pass
     return {"invoice_id": inv, "protected_tx_id": tx_id, "status": "COMPLETED", **bill}
 
 

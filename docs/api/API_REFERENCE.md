@@ -351,6 +351,46 @@ Operator endpoints (RBAC `marketplace.rental.*`):
 Front-end: a **Rental** operator console tab (queues, quote form, agreement lifecycle actions, and the
 effective rate catalog).
 
+## Corporate Billing & Statements
+
+Consolidated accounts-receivable over the **existing** revenue streams — a corporate customer running
+both freight and rental gets ONE account, ONE running balance, and periodic statements, without a
+parallel payment domain and without coupling billing to each source's schema.
+
+- `billing_accounts` — one account per customer, with credit limit + payment terms + billing cycle.
+  Credit governance **reuses `crm_admin.evaluate_credit`** (evidence-only by default), never a second
+  credit engine.
+- `billing_items` — a normalized, source-agnostic charge/credit **ledger**. Any revenue source posts a
+  charge via `post_charge(source_type, source_id, …)`, **idempotent per source**, so statements read
+  one ledger. Rental finalize posts here automatically; freight/ERP use the same call.
+- `billing_payments` — A/R payment **records**. Recording a payment posts a `CREDIT` and moves the
+  balance; **it never moves real money** — live custody stays behind the Protected Payment funds gate
+  (`funds_moved: false`).
+- `billing_statements` — an immutable, checksummed period snapshot: opening balance (carried from the
+  prior statement), charges, payments, closing balance, **aging** (current / 1-30 / 31-60 / 61-90 /
+  90+), due date (`period_end + terms`), and a credit-limit evaluation. Generation **sweeps every still-
+  open item up to `period_end`** — a charge posted late (dated before the period but after the last
+  statement) is never lost — and stamps swept items to the statement so they are not double-counted.
+
+Operator endpoints (RBAC `marketplace.billing.*`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST/GET | `/admin/marketplace/billing/accounts` | Open (`…manage`) / list accounts |
+| POST | `/admin/marketplace/billing/accounts/:id/terms` | Update credit limit / terms / status |
+| GET | `/admin/marketplace/billing/accounts/:id/balance` | Running balance (charges − credits) |
+| POST | `/admin/marketplace/billing/accounts/:id/charges` | Post a charge (idempotent per source) |
+| POST | `/admin/marketplace/billing/accounts/:id/payments` | Record an A/R payment (`…payment`; no fund movement) |
+| POST | `/admin/marketplace/billing/accounts/:id/statements` | Generate a period statement (`…statement`) |
+| GET | `/admin/marketplace/billing/statements` · `/:id` | List / detail (with lines + aging) |
+| POST | `/admin/marketplace/billing/statements/:id/paid` | Mark a statement (and its charges) paid |
+| GET | `/admin/marketplace/billing/queues` | Account / over-limit / issued-statement counts |
+
+Integration: `rental.finalize_rental` calls `billing.post_charge_for_customer` so a corporate
+customer's rental invoices accrue to their statement automatically (no account → the source invoice
+simply stands alone). Front-end: a **Corporate Billing** operator console tab (accounts, charges,
+payments, statement generation, and a statement detail view with aging).
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

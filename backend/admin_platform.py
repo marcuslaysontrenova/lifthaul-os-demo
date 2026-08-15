@@ -357,6 +357,9 @@ MARKETPLACE_PERMISSIONS = [
     # Hourly / Daily / Project Rental — duration-and-usage revenue over the existing spine
     "marketplace.rental.view", "marketplace.rental.manage", "marketplace.rental.rate.manage",
     "marketplace.rental.usage.record", "marketplace.rental.billing.finalize", "marketplace.rental.overtime.approve",
+    # Corporate Billing & Statements — consolidated A/R over the existing revenue streams
+    "marketplace.billing.view", "marketplace.billing.manage", "marketplace.billing.statement",
+    "marketplace.billing.payment",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

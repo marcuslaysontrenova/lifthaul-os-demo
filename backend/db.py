@@ -133,6 +133,8 @@ def _seed_platform(conn):
     driver_reassignment.init(conn); driver_reassignment.seed(conn)       # Driver Reassignment / Re-matching: governed orchestration over matching (intra-carrier substitution + inter-carrier re-match; funds never moved)
     import rental
     rental.init(conn); rental.seed(conn)                                 # Hourly/Daily/Project Rental: duration-and-usage revenue model over the existing spine (reuses Protected Payment; funds never fabricated)
+    import billing
+    billing.init(conn); billing.seed(conn)                               # Corporate Billing & Statements: consolidated A/R ledger + periodic statements over the existing revenue streams (A/R only; no fund movement)
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

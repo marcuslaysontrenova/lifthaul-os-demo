@@ -2221,10 +2221,49 @@ def _rental_routes():
     }
 
 
+def _billing_routes():
+    import billing as bl
+
+    def acct_open(a, b, p):  return bl.open_account(_conn, a, int(b["customer_id"]),
+                                                     credit_limit=b.get("credit_limit"),
+                                                     payment_terms_days=b.get("payment_terms_days", 30),
+                                                     billing_cycle=b.get("billing_cycle", "MONTHLY"))
+    def acct_terms(a, b, p): return bl.set_account_terms(_conn, a, int(p["id"]),
+                                                         credit_limit=b.get("credit_limit"),
+                                                         payment_terms_days=b.get("payment_terms_days"),
+                                                         billing_cycle=b.get("billing_cycle"), status=b.get("status"))
+    def acct_list(a, b, p):  return {"accounts": bl.list_accounts(_conn, a, status=b.get("status"))}
+    def acct_bal(a, b, p):   return bl.account_balance(_conn, a, int(p["id"]))
+    def charge(a, b, p):     return bl.post_charge(_conn, a, int(p["id"]), b["source_type"], b["source_id"],
+                                                   b.get("description", ""), b["amount"], tax=b.get("tax", 0),
+                                                   item_date=b.get("item_date"))
+    def pay(a, b, p):        return bl.record_payment(_conn, a, int(p["id"]), b["amount"],
+                                                      method=b.get("method", "BANK_TRANSFER"), reference=b.get("reference"))
+    def stmt_gen(a, b, p):   return bl.generate_statement(_conn, a, int(p["id"]), b["period_start"], b["period_end"])
+    def stmt_get(a, b, p):   return bl.get_statement(_conn, a, int(p["id"]))
+    def stmt_list(a, b, p):  return {"statements": bl.list_statements(_conn, a, account_id=b.get("account_id"))}
+    def stmt_paid(a, b, p):  return bl.mark_statement_paid(_conn, a, int(p["id"]))
+    def b_queues(a, b, p):   return bl.queues(_conn, a)
+    return {
+        ("POST", "/admin/marketplace/billing/accounts"): acct_open,
+        ("POST", "/admin/marketplace/billing/accounts/:id/terms"): acct_terms,
+        ("GET", "/admin/marketplace/billing/accounts"): acct_list,
+        ("GET", "/admin/marketplace/billing/accounts/:id/balance"): acct_bal,
+        ("POST", "/admin/marketplace/billing/accounts/:id/charges"): charge,
+        ("POST", "/admin/marketplace/billing/accounts/:id/payments"): pay,
+        ("POST", "/admin/marketplace/billing/accounts/:id/statements"): stmt_gen,
+        ("GET", "/admin/marketplace/billing/statements/:id"): stmt_get,
+        ("GET", "/admin/marketplace/billing/statements"): stmt_list,
+        ("POST", "/admin/marketplace/billing/statements/:id/paid"): stmt_paid,
+        ("GET", "/admin/marketplace/billing/queues"): b_queues,
+    }
+
+
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
 ROUTES.update(_reassignment_routes())
 ROUTES.update(_rental_routes())
+ROUTES.update(_billing_routes())
 
 
 def _match(method, path):

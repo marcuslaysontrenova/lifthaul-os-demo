@@ -567,6 +567,15 @@ window.RGO_API = (function(){
     rtUsage:function(id,b){return req('POST','/admin/marketplace/rental/agreements/'+id+'/usage',b);},
     rtFinalize:function(id,b){return req('POST','/admin/marketplace/rental/agreements/'+id+'/finalize',b||{});},
     rtSettle:function(id){return req('POST','/admin/marketplace/rental/agreements/'+id+'/settle',{});},
+    blAccounts:function(){return req('GET','/admin/marketplace/billing/accounts');},
+    blQueues:function(){return req('GET','/admin/marketplace/billing/queues');},
+    blOpen:function(b){return req('POST','/admin/marketplace/billing/accounts',b);},
+    blBalance:function(id){return req('GET','/admin/marketplace/billing/accounts/'+id+'/balance');},
+    blCharge:function(id,b){return req('POST','/admin/marketplace/billing/accounts/'+id+'/charges',b);},
+    blPay:function(id,b){return req('POST','/admin/marketplace/billing/accounts/'+id+'/payments',b);},
+    blStatement:function(id,b){return req('POST','/admin/marketplace/billing/accounts/'+id+'/statements',b);},
+    blStatements:function(){return req('GET','/admin/marketplace/billing/statements');},
+    blStatementGet:function(id){return req('GET','/admin/marketplace/billing/statements/'+id);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1160,6 +1169,11 @@ window.RGO_API = (function(){
     if(act==='rtUsage')return rtUsage(arg);
     if(act==='rtFinalize')return rtFinalize(arg);
     if(act==='rtSettle')return rtSettle(arg);
+    if(act==='blOpen')return blOpen();
+    if(act==='blCharge')return blCharge(arg);
+    if(act==='blPay')return blPay(arg);
+    if(act==='blStmt')return blStmt(arg);
+    if(act==='blStmtView')return blStmtView(arg);
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1226,7 +1240,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1242,6 +1256,7 @@ window.RGO_API = (function(){
     if(adminTab==='carrieraccess')return adminCarrierAccess();
     if(adminTab==='reassignment')return adminReassignment();
     if(adminTab==='rental')return adminRental();
+    if(adminTab==='billing')return adminBilling();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1586,6 +1601,35 @@ window.RGO_API = (function(){
   function rtUsage(id){var a=window.prompt('Actual quantity used (hours/days):','');if(a===null)return;var o=window.prompt('Overtime quantity (0 if none):','0');var s=window.prompt('Standby quantity (0 if none):','0');RGO_API.rtUsage(id,{actual_quantity:Number(a),overtime_quantity:Number(o||0),standby_quantity:Number(s||0)}).then(function(){toast('Usage recorded');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function rtFinalize(id){var d=window.prompt('Discount (0 if none):','0');if(d===null)return;RGO_API.rtFinalize(id,{discount:Number(d||0)}).then(function(r){toast('Finalized · total ₱'+Number(r.total).toLocaleString()+(r.protected_tx_id?(' · protected tx '+r.protected_tx_id):''));refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function rtSettle(id){RGO_API.rtSettle(id).then(function(){toast('Settled');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  // ---------- Corporate Billing & Statements ----------
+  function adminBilling(){
+    if(liveMode){
+      Promise.all([RGO_API.blQueues().catch(function(){return{};}),RGO_API.blAccounts().catch(function(){return{accounts:[]};}),RGO_API.blStatements().catch(function(){return{statements:[]};})]).then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='billing')return;
+        var q=r[0]||{},accts=(r[1]||{}).accounts||[],stmts=(r[2]||{}).statements||[];
+        var money=function(n){return n==null?'—':'₱'+Number(n).toLocaleString();};
+        var cs=function(s){return '<span class="chip '+(s==='OVER_LIMIT'?'c-crit':'c-good')+'">'+esc(s)+'</span>';};
+        var arows=accts.map(function(x){return '<tr><td>'+esc(x.account_no||('#'+x.id))+'</td><td>#'+esc(x.customer_id)+'</td><td class="tnum">'+money(x.credit_limit)+'</td><td class="tnum">'+esc(x.payment_terms_days)+'d</td><td>'+esc(x.billing_cycle)+'</td><td>'+cs(x.credit_status)+'</td><td><button class="btn line sm" data-act="blCharge" data-arg="'+x.id+'">+ Charge</button> <button class="btn line sm" data-act="blPay" data-arg="'+x.id+'">+ Payment</button> <button class="btn line sm" data-act="blStmt" data-arg="'+x.id+'">Statement</button></td></tr>';}).join('')||'<tr><td colspan="7" class="empty">No billing accounts.</td></tr>';
+        var srows=stmts.map(function(x){return '<tr><td>'+esc(x.statement_no||('#'+x.id))+'</td><td>#'+esc(x.account_id)+'</td><td style="font-size:11px">'+esc(x.period_start)+' → '+esc(x.period_end)+'</td><td class="tnum">'+money(x.opening_balance)+'</td><td class="tnum">'+money(x.charges_total)+'</td><td class="tnum">'+money(x.payments_total)+'</td><td class="tnum"><b>'+money(x.closing_balance)+'</b></td><td>'+esc(x.due_date||'—')+(x.over_limit?' <span class="chip c-crit">over limit</span>':'')+'</td><td><button class="btn line sm" data-act="blStmtView" data-arg="'+x.id+'">View</button></td></tr>';}).join('')||'<tr><td colspan="9" class="empty">No statements.</td></tr>';
+        host.innerHTML=
+          '<div class="access-note"><span>🧾</span><div><b>Corporate Billing & Statements.</b> One account per corporate customer consolidating <b>freight + rental</b> activity into a running balance and periodic statements with aging (current / 1-30 / 31-60 / 61-90 / 90+) and credit-limit checks (reuses the CRM credit engine). Recording a payment is <b>A/R bookkeeping — it never moves funds</b> (live custody stays behind Protected Payment). Requires <code>marketplace.billing.*</code>.</div></div>'
+          +'<div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px">'
+          +'<div class="panel"><div class="panel-h"><h3>Accounts</h3></div><div class="panel-b"><b style="font-size:22px">'+(q.accounts||0)+'</b></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Over limit</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--crit)">'+(q.over_limit_accounts||0)+'</b></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Issued statements</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--info)">'+(q.issued_statements||0)+'</b></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Open a corporate account</h3></div><div class="panel-b"><div class="frm" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end"><label><span>Customer ID</span><input id="blCust" type="number"></label><label><span>Credit limit</span><input id="blLimit" type="number" placeholder="optional"></label><label><span>Terms (days)</span><input id="blTerms" type="number" value="30"></label><button class="btn" data-act="blOpen">Open account</button></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Accounts</h3><div class="spacer"></div><span class="cnt">'+accts.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Account</th><th>Customer</th><th class="right">Credit limit</th><th class="right">Terms</th><th>Cycle</th><th>Status</th><th></th></tr></thead><tbody>'+arows+'</tbody></table></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Statements</h3><div class="spacer"></div><span class="cnt">'+stmts.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Statement</th><th>Account</th><th>Period</th><th class="right">Opening</th><th class="right">Charges</th><th class="right">Payments</th><th class="right">Closing</th><th>Due</th><th></th></tr></thead><tbody>'+srows+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading billing…</div></div></div>';
+    }
+    return '<div class="access-note"><span>🧾</span><div><b>Corporate Billing & Statements</b> — one account per corporate customer consolidating freight + rental into a running balance and periodic statements with aging + credit-limit checks. Payments are A/R bookkeeping and never move funds. Connect a backend to administer. Requires <code>marketplace.billing.*</code>.</div></div>';
+  }
+  function blOpen(){var cu=$('#blCust').value,l=$('#blLimit').value,t=$('#blTerms').value;if(!cu){toast('Customer ID required');return;}var b={customer_id:Number(cu),payment_terms_days:Number(t||30)};if(l)b.credit_limit=Number(l);RGO_API.blOpen(b).then(function(d){toast('Account '+d.account_no+' opened');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function blCharge(id){var src=window.prompt('Source type (e.g. FREIGHT/RENTAL/MANUAL):','MANUAL');if(!src)return;var sid=window.prompt('Source id (number):','0');var desc=window.prompt('Description:','');var amt=window.prompt('Amount (ex-tax):','');if(!amt)return;var tax=window.prompt('Tax (0 if none):','0');RGO_API.blCharge(id,{source_type:src,source_id:Number(sid||0),description:desc,amount:Number(amt),tax:Number(tax||0)}).then(function(){toast('Charge posted');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function blPay(id){var amt=window.prompt('Payment amount received:','');if(!amt)return;var ref=window.prompt('Reference (OR no. etc):','');RGO_API.blPay(id,{amount:Number(amt),reference:ref}).then(function(){toast('Payment recorded (A/R · no funds moved)');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function blStmt(id){var s=window.prompt('Period start (YYYY-MM-DD):','');if(!s)return;var e=window.prompt('Period end (YYYY-MM-DD):','');if(!e)return;RGO_API.blStatement(id,{period_start:s,period_end:e}).then(function(d){toast(d.statement_no+' · closing ₱'+Number(d.closing_balance).toLocaleString()+(d.over_limit?' · OVER LIMIT':''));refreshAdmin();}).catch(function(err){toast('Rejected: '+err.message);});}
+  function blStmtView(id){RGO_API.blStatementGet(id).then(function(d){var s=d.statement||{},ag=s.aging||{};var lines=(d.lines||[]).map(function(l){return '<tr><td>'+esc(l.item_date)+'</td><td>'+esc(l.kind)+'</td><td>'+esc(l.description||'')+'</td><td class="tnum">₱'+Number(l.total).toLocaleString()+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No lines.</td></tr>';modal('<div class="modal" style="max-width:640px"><div class="modal-h"><h3>'+esc(s.statement_no)+' · account #'+esc(s.account_id)+'</h3><button class="x" data-close>×</button></div><div class="modal-b"><div class="grid2" style="margin-bottom:12px"><div>Opening: <b>₱'+Number(s.opening_balance).toLocaleString()+'</b><br>Charges: ₱'+Number(s.charges_total).toLocaleString()+'<br>Payments: ₱'+Number(s.payments_total).toLocaleString()+'<br>Closing: <b>₱'+Number(s.closing_balance).toLocaleString()+'</b></div><div>Due: '+esc(s.due_date||'—')+'<br>Aging — current ₱'+Number(ag.current||0).toLocaleString()+'<br>1-30 ₱'+Number(ag.d1_30||0).toLocaleString()+' · 31-60 ₱'+Number(ag.d31_60||0).toLocaleString()+'<br>61-90 ₱'+Number(ag.d61_90||0).toLocaleString()+' · 90+ ₱'+Number(ag.d90_plus||0).toLocaleString()+'</div></div><div class="tblwrap" style="border:0;max-height:280px;overflow:auto"><table class="tbl"><thead><tr><th>Date</th><th>Kind</th><th>Description</th><th class="right">Total</th></tr></thead><tbody>'+lines+'</tbody></table></div></div><div class="modal-f"><button class="btn line" data-close>Close</button></div></div>');}).catch(function(e){toast('Error: '+e.message);});}
   // ---------- Carrier Access (operator binds a login to a carrier; the carrier self-serves in portal.html) ----------
   function adminCarrierAccess(){
     if(liveMode){

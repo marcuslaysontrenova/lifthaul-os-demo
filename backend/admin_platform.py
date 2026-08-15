@@ -363,6 +363,8 @@ MARKETPLACE_PERMISSIONS = [
     # Preferred Carriers / Dedicated Capacity — shipper preference layer over matching
     "marketplace.preference.view", "marketplace.preference.manage",
     "marketplace.capacity.view", "marketplace.capacity.manage",
+    # Dynamic Surcharge Engine — governed effective-dated surcharge rules over pricing (config-gated)
+    "marketplace.surcharge.view", "marketplace.surcharge.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
@@ -529,6 +531,7 @@ DEFAULT_CONFIG = {
     # Regulatory closure: LTFRB carrier-authority enforcement at assignment. OFF by default so existing
     # behaviour is unchanged; the owner flips this ON at go-live once carrier CPCs are recorded/verified.
     "marketplace.ltfrb_enforcement_enabled": "false",
+    "marketplace.surcharge_enabled": "false",   # Dynamic Surcharge Engine: OFF by default -> pricing unchanged until switched on
     # Cargo Insurance / Goods Protection (orchestration; LiftHaul is not the insurer). No insurer is
     # connected by default -> quotes return MANUAL_INSURANCE_REVIEW_REQUIRED until a licensed provider
     # is configured + activated. Live coverage is never advertised until approved.

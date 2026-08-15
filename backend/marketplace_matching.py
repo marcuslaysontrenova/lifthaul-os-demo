@@ -461,6 +461,22 @@ def price_booking(conn, actor, booking_id, vehicle_category=None):
     if b.get("loading_required"):
         subtotal += add("loading_charge", "flat", 1, (_rate(conn, "loading") or {}).get("rate", 800))
     subtotal = round(subtotal, 2)
+    # Dynamic Surcharge Engine — config-gated (marketplace.surcharge_enabled=false by default, so pricing
+    # is UNCHANGED until an operator switches it on). Surcharges land as transparent line components.
+    _sc_apps = []
+    try:
+        import surcharge as _sc
+        if _sc.enabled(conn, b.get("tenant_id")):
+            _ctx = {"origin_zone": b.get("origin_zone"), "dest_zone": b.get("dest_zone"),
+                    "cargo_code": b.get("cargo_code"), "vehicle_category": vehicle_category,
+                    "pickup_window": b.get("pickup_window")}
+            _ev = _sc.evaluate(conn, _ctx, subtotal, distance_km=dist, tenant_id=b.get("tenant_id"))
+            for s in _ev["surcharges"]:
+                subtotal += add("surcharge_" + s["code"], s["basis"].lower(), 1, s["amount"])
+            subtotal = round(subtotal, 2)
+            _sc_apps = _ev["surcharges"]
+    except Exception:
+        _sc_apps = []
     minc = (_rate(conn, "minimum") or {}).get("rate", 1500)
     if subtotal < minc:
         add("minimum_charge_adjustment", "flat", 1, minc - subtotal)
@@ -487,6 +503,12 @@ def price_booking(conn, actor, booking_id, vehicle_category=None):
     core.audit(conn, actor, "MKT_BOOKING_PRICED", "mkt_pricing_snapshots", sid, None,
                {"booking": booking_id, "total": total})
     conn.commit()
+    if _sc_apps:   # immutable audit of applied surcharges (transparency)
+        try:
+            import surcharge as _sc
+            _sc.record_applications(conn, actor, booking_id, sid, _sc_apps)
+        except Exception:
+            pass
     return {"snapshot_id": sid, **snap}
 
 

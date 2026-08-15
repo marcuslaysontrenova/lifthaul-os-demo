@@ -429,6 +429,39 @@ Operator endpoints (RBAC `marketplace.preference.*` / `marketplace.capacity.*`):
 Front-end: a **Preferred Carriers** operator console tab (tier preferences, capacity reservations, and
 live usage).
 
+## Dynamic Surcharge Engine
+
+Governed, effective-dated surcharge rules applied **transparently** inside the existing
+`price_booking` — without forking the pricing engine and **without silently changing any price**.
+
+- `surcharge_rules` — effective-dated, versioned rules. Each has a type (FUEL / PEAK / HOLIDAY / ZONE /
+  CONGESTION / DEMAND / SPECIAL), a basis (`PERCENT` of subtotal / `FLAT` / `PER_KM`), a rate, an
+  `applies_when` condition set (origin/dest zones, vehicle categories, cargo codes, weekdays, a date
+  window, a distance band), a priority, and a `stackable` flag. Superseding a rule closes the prior one.
+- `surcharge_applications` — an immutable record of exactly which rules hit which pricing snapshot and
+  for how much (full transparency + audit).
+
+**Config-gated, fail-safe by default.** The pricing hook fires only when `marketplace.surcharge_enabled`
+is `true` (default `false`), so existing prices and pricing-snapshot checksums are **unchanged** until an
+operator deliberately switches surcharging on — the same fail-closed discipline as LTFRB enforcement and
+live funds. Rates are operator-set, never fabricated from a live feed. `evaluate` is pure and
+deterministic; stackable rules all apply, and among non-stackable matched rules only the single
+highest-priority one applies.
+
+Operator endpoints (RBAC `marketplace.surcharge.*`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST/GET | `/admin/marketplace/surcharge/rules` | Set/upsert (versioned) / list rules (`…manage` / `…view`) |
+| POST | `/admin/marketplace/surcharge/rules/:id/deactivate` | Deactivate a rule |
+| POST | `/admin/marketplace/surcharge/quote` | Preview which surcharges would apply to a context (no persist) |
+| GET | `/admin/marketplace/surcharge/bookings/:id/applications` | The immutable applied-surcharge audit for a booking |
+| GET | `/admin/marketplace/surcharge/queues` | Active-rule / application counts + engine on/off |
+
+When enabled, surcharges appear as `surcharge_<CODE>` line components in the pricing snapshot and are
+recorded in `surcharge_applications`. Front-end: a **Surcharges** operator console tab (rule catalog,
+a "what would apply" preview, and the engine on/off indicator).
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

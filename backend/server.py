@@ -2286,12 +2286,37 @@ def _preference_routes():
     }
 
 
+def _surcharge_routes():
+    import surcharge as sc
+
+    def rule_set(a, b, p):   return sc.set_rule(_conn, a, b["code"], b.get("name", b["code"]), b["surcharge_type"],
+                                                b["basis"], b["rate"], applies_when=b.get("applies_when"),
+                                                priority=b.get("priority", 0), stackable=b.get("stackable", True))
+    def rule_off(a, b, p):   return sc.deactivate_rule(_conn, a, int(p["id"]))
+    def rule_list(a, b, p):  return {"rules": sc.list_rules(_conn, a, include_history=bool(b.get("include_history")))}
+    def sc_quote(a, b, p):   return sc.quote(_conn, a, b["subtotal"], origin_zone=b.get("origin_zone"),
+                                             dest_zone=b.get("dest_zone"), vehicle_category=b.get("vehicle_category"),
+                                             cargo_code=b.get("cargo_code"), distance_km=b.get("distance_km"),
+                                             as_of=b.get("as_of"))
+    def sc_apps(a, b, p):    return {"applications": sc.applications_for(_conn, a, int(p["id"]))}
+    def sc_queues(a, b, p):  return sc.queues(_conn, a)
+    return {
+        ("POST", "/admin/marketplace/surcharge/rules"): rule_set,
+        ("POST", "/admin/marketplace/surcharge/rules/:id/deactivate"): rule_off,
+        ("GET", "/admin/marketplace/surcharge/rules"): rule_list,
+        ("POST", "/admin/marketplace/surcharge/quote"): sc_quote,
+        ("GET", "/admin/marketplace/surcharge/bookings/:id/applications"): sc_apps,
+        ("GET", "/admin/marketplace/surcharge/queues"): sc_queues,
+    }
+
+
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
 ROUTES.update(_reassignment_routes())
 ROUTES.update(_rental_routes())
 ROUTES.update(_billing_routes())
 ROUTES.update(_preference_routes())
+ROUTES.update(_surcharge_routes())
 
 
 def _match(method, path):

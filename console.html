@@ -584,6 +584,11 @@ window.RGO_API = (function(){
     pcReserve:function(b){return req('POST','/admin/marketplace/dedicated-capacity',b);},
     pcCapStatus:function(id){return req('GET','/admin/marketplace/dedicated-capacity/'+id+'/status');},
     pcCapCancel:function(id){return req('POST','/admin/marketplace/dedicated-capacity/'+id+'/cancel',{});},
+    scRules:function(){return req('GET','/admin/marketplace/surcharge/rules');},
+    scQueues:function(){return req('GET','/admin/marketplace/surcharge/queues');},
+    scSetRule:function(b){return req('POST','/admin/marketplace/surcharge/rules',b);},
+    scOffRule:function(id){return req('POST','/admin/marketplace/surcharge/rules/'+id+'/deactivate',{});},
+    scQuote:function(b){return req('POST','/admin/marketplace/surcharge/quote',b);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1187,6 +1192,9 @@ window.RGO_API = (function(){
     if(act==='pcReserve')return pcReserve();
     if(act==='pcCapStatus')return pcCapStatus(arg);
     if(act==='pcCapCancel')return pcCapCancel(arg);
+    if(act==='scSet')return scSet();
+    if(act==='scOff')return scOff(arg);
+    if(act==='scPreview')return scPreview();
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1253,7 +1261,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['preferred','Preferred Carriers'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['preferred','Preferred Carriers'],['surcharge','Surcharges'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1271,6 +1279,7 @@ window.RGO_API = (function(){
     if(adminTab==='rental')return adminRental();
     if(adminTab==='billing')return adminBilling();
     if(adminTab==='preferred')return adminPreferred();
+    if(adminTab==='surcharge')return adminSurcharge();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1671,6 +1680,33 @@ window.RGO_API = (function(){
   function pcReserve(){var s=$('#pcCapShip').value,ca=$('#pcCapCar').value,u=$('#pcCapUnits').value;if(!s||!ca||!u){toast('Shipper, Carrier, Units required');return;}var b={shipper_id:Number(s),carrier_id:Number(ca),vehicle_category:$('#pcCapCat').value.trim(),committed_units:Number(u)};var e=$('#pcCapEnd').value;if(e)b.period_end=e;RGO_API.pcReserve(b).then(function(){toast('Dedicated capacity reserved · carrier set DEDICATED');refreshAdmin();}).catch(function(err){toast('Rejected: '+err.message);});}
   function pcCapStatus(id){RGO_API.pcCapStatus(id).then(function(d){toast('Capacity #'+id+': '+d.used_units+'/'+d.committed_units+' used · '+d.available_units+' available');}).catch(function(e){toast('Error: '+e.message);});}
   function pcCapCancel(id){if(!window.confirm('Cancel dedicated capacity #'+id+'?'))return;RGO_API.pcCapCancel(id).then(function(){toast('Capacity cancelled');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  // ---------- Dynamic Surcharge Engine ----------
+  function adminSurcharge(){
+    if(liveMode){
+      Promise.all([RGO_API.scQueues().catch(function(){return{};}),RGO_API.scRules().catch(function(){return{rules:[]};})]).then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='surcharge')return;
+        var q=r[0]||{},rules=(r[1]||{}).rules||[];
+        var enabled=!!q.enabled;
+        var tchip=function(t){return '<span class="chip c-info">'+esc(t)+'</span>';};
+        var cond=function(w){w=w||{};var out=[];if(w.origin_zones)out.push('orig∈'+w.origin_zones.join('/'));if(w.dest_zones)out.push('dest∈'+w.dest_zones.join('/'));if(w.vehicle_categories)out.push('veh∈'+w.vehicle_categories.join('/'));if(w.weekdays)out.push('wd='+w.weekdays.join(','));if(w.date_from||w.date_to)out.push((w.date_from||'')+'…'+(w.date_to||''));if(w.min_distance_km!=null||w.max_distance_km!=null)out.push('km '+(w.min_distance_km||0)+'-'+(w.max_distance_km||'∞'));return out.join(' · ')||'always';};
+        var rows=rules.map(function(x){return '<tr><td><code>'+esc(x.code)+'</code></td><td>'+tchip(x.surcharge_type)+'</td><td>'+esc(x.basis)+'</td><td class="tnum">'+esc(x.rate)+(x.basis==='PERCENT'?'%':'')+'</td><td class="tnum">'+esc(x.priority)+'</td><td>'+(x.stackable?'stack':'excl')+'</td><td style="font-size:11px;color:var(--muted)">'+esc(cond(x.applies_when))+'</td><td>v'+esc(x.version)+'</td><td><button class="btn line sm" data-act="scOff" data-arg="'+x.id+'">Off</button></td></tr>';}).join('')||'<tr><td colspan="9" class="empty">No surcharge rules.</td></tr>';
+        host.innerHTML=
+          '<div class="access-note"><span>⛽</span><div><b>Dynamic Surcharge Engine.</b> Governed, effective-dated surcharge rules (fuel / peak / holiday / zone / congestion / demand) applied <b>transparently</b> inside freight pricing as line components. <b>Config-gated:</b> it is '+(enabled?'<b style="color:var(--good)">ENABLED</b>':'<b style="color:var(--warn)">OFF</b> — pricing is unchanged until switched on (<code>marketplace.surcharge_enabled</code>)')+'. Rates are operator-set, never fabricated from a live feed. Requires <code>marketplace.surcharge.*</code>.</div></div>'
+          +'<div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px">'
+          +'<div class="panel"><div class="panel-h"><h3>Engine</h3></div><div class="panel-b"><span class="chip '+(enabled?'c-good':'c-warn')+'" style="font-size:14px">'+(enabled?'ENABLED':'OFF')+'</span></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Active rules</h3></div><div class="panel-b"><b style="font-size:22px">'+(q.active_rules||0)+'</b></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Applications</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--info)">'+(q.applications||0)+'</b></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Define a surcharge rule</h3></div><div class="panel-b"><div class="frm" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:10px;align-items:end"><label><span>Code</span><input id="scCode" placeholder="FUEL"></label><label><span>Type</span><select id="scType"><option>FUEL</option><option>PEAK</option><option>HOLIDAY</option><option>ZONE</option><option>CONGESTION</option><option>DEMAND</option><option>SPECIAL</option></select></label><label><span>Basis</span><select id="scBasis"><option>PERCENT</option><option>FLAT</option><option>PER_KM</option></select></label><label><span>Rate</span><input id="scRate" type="number"></label><label><span>Priority</span><input id="scPrio" type="number" value="0"></label><button class="btn" data-act="scSet">Set rule</button></div><div style="margin-top:8px;font-size:12px;color:var(--muted)">Applies-when (optional origin zone): <input id="scZone" placeholder="e.g. METRO_MANILA" style="width:180px;padding:5px 8px;border:1px solid var(--line);border-radius:6px"></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Preview (what would apply)</h3></div><div class="panel-b"><div class="frm" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><label><span>Subtotal</span><input id="scQSub" type="number" value="10000"></label><label><span>Origin zone</span><input id="scQZone" placeholder="METRO_MANILA"></label><label><span>Distance km</span><input id="scQKm" type="number" placeholder="optional"></label><button class="btn line" data-act="scPreview">Preview</button></div><div id="scPreviewOut" style="margin-top:10px;font-size:13px"></div></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Active surcharge rules</h3><div class="spacer"></div><span class="cnt">'+rules.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Code</th><th>Type</th><th>Basis</th><th class="right">Rate</th><th class="right">Prio</th><th>Stack</th><th>Applies when</th><th>Ver</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading surcharges…</div></div></div>';
+    }
+    return '<div class="access-note"><span>⛽</span><div><b>Dynamic Surcharge Engine</b> — governed, effective-dated surcharge rules (fuel/peak/holiday/zone/congestion) applied transparently to freight pricing. Config-gated OFF by default so pricing is unchanged until switched on. Connect a backend to administer. Requires <code>marketplace.surcharge.*</code>.</div></div>';
+  }
+  function scSet(){var code=$('#scCode').value.trim();if(!code){toast('Code required');return;}var rate=Number($('#scRate').value||0);var b={code:code,name:code,surcharge_type:$('#scType').value,basis:$('#scBasis').value,rate:rate,priority:Number($('#scPrio').value||0)};var z=$('#scZone').value.trim();if(z)b.applies_when={origin_zones:[z]};RGO_API.scSetRule(b).then(function(){toast('Rule '+code+' set');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function scOff(id){RGO_API.scOffRule(id).then(function(){toast('Rule deactivated');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function scPreview(){var b={subtotal:Number($('#scQSub').value||0)};var z=$('#scQZone').value.trim();if(z)b.origin_zone=z;var km=$('#scQKm').value;if(km)b.distance_km=Number(km);RGO_API.scQuote(b).then(function(d){var rows=(d.surcharges||[]).map(function(s){return s.code+' ('+s.basis+' '+s.rate+') → ₱'+Number(s.amount).toLocaleString();}).join('<br>')||'No surcharges apply.';$('#scPreviewOut').innerHTML=rows+'<br><b>Total surcharge: ₱'+Number(d.total).toLocaleString()+'</b>';}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Carrier Access (operator binds a login to a carrier; the carrier self-serves in portal.html) ----------
   function adminCarrierAccess(){
     if(liveMode){

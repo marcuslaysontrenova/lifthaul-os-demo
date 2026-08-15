@@ -271,6 +271,48 @@ Operator-side principal administration (requires `marketplace.carrier.applicatio
 Front-end: `portal.html` (carrier-facing) + a **Carrier Access** tab in the operator console for
 binding principals and previewing a carrier's operating picture.
 
+## Driver Reassignment / Re-matching
+
+A governed orchestration over the **existing** matching primitives — no new carrier/vehicle/driver/
+matching/offer/assignment/payment domain. When an assigned resource falls through, a reassignment case
+(`mkt_reassignments`, the only new table) records why and what moved, and drives one of two paths:
+
+- **Intra-carrier substitution** — swap in another driver/vehicle from the **same carrier** via the
+  existing `request_substitution`, which deterministically re-runs every eligibility gate (carrier
+  active + compliant, vehicle ACTIVE + eligible, driver assignable). **Fail-closed:** an ineligible
+  substitute is rejected and the case stays OPEN. The substitute must belong to the same carrier.
+- **Inter-carrier re-match** (ops authority) — release the current carrier, set the assignment
+  `REASSIGNMENT_REQUIRED`, return the booking to matching and re-open the broadcast to other eligible
+  carriers via the existing candidate-generation + broadcast.
+
+**Protected Payment continuity is absolute:** a reassignment asserts `funds_moved: false`, is **refused**
+once the protected transaction is releasing/settled (`RELEASE_APPROVED/REQUESTED/CONFIRMED/SETTLED`), and
+never mutates the protected ledger — settlement stays governed by the existing release gate. Mid-trip
+reassignment (an active trip exists) is **HIGH severity and requires evidence**. Terminal assignments
+cannot be reassigned. Reason codes: `DRIVER_UNAVAILABLE, DRIVER_NO_SHOW, VEHICLE_BREAKDOWN, LICENSE_EXPIRED,
+COMPLIANCE_LAPSED, CARRIER_SUSPENDED, SHIPPER_REQUESTED, OPS_FORCED`.
+
+Operator endpoints (RBAC `marketplace.reassignment.*`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/admin/marketplace/reassignments` | Open a case (`marketplace.reassignment.open`) |
+| POST | `/admin/marketplace/reassignments/:id/substitute` | Intra-carrier substitution (`…substitute`) |
+| POST | `/admin/marketplace/reassignments/:id/rematch` | Inter-carrier re-match (`…rematch`) |
+| POST | `/admin/marketplace/reassignments/:id/cancel` | Cancel an open case |
+| GET | `/admin/marketplace/reassignments` · `/:id` · `/:id/timeline` | List / detail / audit timeline |
+| GET | `/admin/marketplace/reassignment-queues` | Open / high-severity / substituted / re-matched counts |
+
+Carrier-portal (intra-carrier only — a carrier can never re-match its own work away):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/portal/carrier/reassignments` | Open an intra-carrier reassignment on an own assignment |
+| POST | `/portal/carrier/reassignments/:id/substitute` | Propose a same-carrier substitute |
+
+Front-end: a **Reassignment** operator console tab (queues + open/substitute/re-match/cancel) and a
+"Reassign driver/vehicle" action on the carrier portal's Assignments tab.
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

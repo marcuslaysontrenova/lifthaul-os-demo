@@ -551,6 +551,12 @@ window.RGO_API = (function(){
     cpBind:function(b){return req('POST','/admin/carrier-portal/bind',b);},
     cpRevoke:function(id,b){return req('POST','/admin/carrier-portal/principals/'+id+'/revoke',b||{});},
     cpOverview:function(cid){return req('GET','/admin/carrier-portal/overview/'+cid);},
+    raList:function(st){return req('GET','/admin/marketplace/reassignments'+(st?('?status='+st):''));},
+    raQueues:function(){return req('GET','/admin/marketplace/reassignment-queues');},
+    raOpen:function(b){return req('POST','/admin/marketplace/reassignments',b);},
+    raSubstitute:function(id,b){return req('POST','/admin/marketplace/reassignments/'+id+'/substitute',b);},
+    raRematch:function(id){return req('POST','/admin/marketplace/reassignments/'+id+'/rematch',{});},
+    raCancel:function(id,b){return req('POST','/admin/marketplace/reassignments/'+id+'/cancel',b);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1134,6 +1140,10 @@ window.RGO_API = (function(){
     if(act==='notifDeliver')return notifDeliver();
     if(act==='cpBind')return cpBind();
     if(act==='cpPreview')return cpPreview();
+    if(act==='raOpen')return raOpen();
+    if(act==='raSub')return raSub(arg);
+    if(act==='raRematch')return raRematch(arg);
+    if(act==='raCancel')return raCancel(arg);
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1200,7 +1210,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1214,6 +1224,7 @@ window.RGO_API = (function(){
     if(adminTab==='delivery')return adminDelivery();
     if(adminTab==='notifications')return adminNotifications();
     if(adminTab==='carrieraccess')return adminCarrierAccess();
+    if(adminTab==='reassignment')return adminReassignment();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1532,6 +1543,36 @@ window.RGO_API = (function(){
     }
     return '<div class="access-note"><span>🚚</span><div><b>Carrier Access</b> — bind a user login to a carrier for self-service in the Carrier / Fleet Owner Portal (<code>portal.html</code>). Carriers manage their own fleet/drivers/documents/offers but never self-verify regulated compliance. Connect a backend to administer. Requires <code>marketplace.carrier.application.manage</code>.</div></div>';
   }
+  // ---------- Driver Reassignment / Re-matching ----------
+  function adminReassignment(){
+    if(liveMode){
+      Promise.all([RGO_API.raQueues().catch(function(){return{};}),RGO_API.raList().catch(function(){return{reassignments:[]};})]).then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='reassignment')return;
+        var q=r[0]||{},rows=(r[1]||{}).reassignments||[];
+        var st=function(s){var c=(s==='SUBSTITUTED'?'c-good':s==='REMATCH_INITIATED'?'c-info':s==='CANCELLED'?'c-mut':'c-warn');return '<span class="chip '+c+'">'+esc(s)+'</span>';};
+        var sev=function(s){return '<span class="chip '+(s==='HIGH'?'c-crit':'c-mut')+'">'+esc(s)+'</span>';};
+        var body=rows.map(function(x){
+          var acts=x.status==='OPEN'?('<button class="btn line sm" data-act="raSub" data-arg="'+x.id+'">Substitute</button> <button class="btn line sm" data-act="raRematch" data-arg="'+x.id+'">Re-match</button> <button class="btn line sm" data-act="raCancel" data-arg="'+x.id+'">Cancel</button>'):'';
+          return '<tr><td>#'+esc(x.id)+'</td><td>#'+esc(x.assignment_id)+'</td><td>'+esc(x.reason)+'</td><td>'+esc(x.scope)+'</td><td>'+sev(x.severity)+'</td><td>'+st(x.status)+'</td><td><span class="chip c-good">funds safe</span></td><td>'+acts+'</td></tr>';
+        }).join('')||'<tr><td colspan="8" class="empty">No reassignments.</td></tr>';
+        host.innerHTML=
+          '<div class="access-note"><span>🔄</span><div><b>Driver Reassignment / Re-matching.</b> When a driver/vehicle falls through, swap in another resource from the <b>same carrier</b> (substitution, re-runs every eligibility gate, fail-closed) or <b>re-match to another carrier</b> (releases the current one, re-opens matching). <b>Protected funds are never moved</b> and reassignment is refused once release/settlement is under way. Requires <code>marketplace.reassignment.*</code>.</div></div>'
+          +'<div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px">'
+          +'<div class="panel"><div class="panel-h"><h3>Open</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--warn)">'+(q.open||0)+'</b></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>High severity</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--crit)">'+(q.high_severity_open||0)+'</b></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Substituted</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--good)">'+(q.substituted||0)+'</b></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Re-matched</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--info)">'+(q.rematch_initiated||0)+'</b></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Open a reassignment</h3></div><div class="panel-b"><div class="frm" style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end"><label><span>Assignment ID</span><input id="raAsg" type="number"></label><label><span>Reason</span><select id="raReason"><option>DRIVER_UNAVAILABLE</option><option>DRIVER_NO_SHOW</option><option>VEHICLE_BREAKDOWN</option><option>LICENSE_EXPIRED</option><option>COMPLIANCE_LAPSED</option><option>CARRIER_SUSPENDED</option><option>SHIPPER_REQUESTED</option><option>OPS_FORCED</option></select></label><button class="btn" data-act="raOpen">Open case</button></div></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Reassignment cases</h3><div class="spacer"></div><span class="cnt">'+rows.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>ID</th><th>Assignment</th><th>Reason</th><th>Scope</th><th>Severity</th><th>Status</th><th>Funds</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading reassignments…</div></div></div>';
+    }
+    return '<div class="access-note"><span>🔄</span><div><b>Driver Reassignment / Re-matching</b> — intra-carrier substitution (re-runs eligibility, fail-closed) + inter-carrier re-match (releases current carrier, re-opens matching). Protected funds are never moved; reassignment is refused during release/settlement. Connect a backend to administer. Requires <code>marketplace.reassignment.*</code>.</div></div>';
+  }
+  function raOpen(){var a=$('#raAsg').value,r=$('#raReason').value;if(!a){toast('Assignment ID required');return;}RGO_API.raOpen({assignment_id:Number(a),reason:r}).then(function(d){toast('Reassignment opened ('+d.severity+') · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function raSub(id){var d=window.prompt('New driver ID (blank to keep):','');var v=window.prompt('New vehicle ID (blank to keep):','');var b={};if(d)b.driver_id=Number(d);if(v)b.vehicle_id=Number(v);RGO_API.raSubstitute(id,b).then(function(r){toast(r.ok?('Substituted · funds untouched'):('Rejected: '+(r.reasons||[]).join(', ')));refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function raRematch(id){if(!window.confirm('Re-match reassignment #'+id+' to another carrier? This releases the current carrier and re-opens matching. Funds are not moved.'))return;RGO_API.raRematch(id).then(function(){toast('Re-match initiated · current carrier released');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function raCancel(id){var r=window.prompt('Reason for cancelling reassignment #'+id+':','');if(r===null)return;RGO_API.raCancel(id,{reason:r}).then(function(){toast('Reassignment cancelled');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function cpBind(){var u=$('#cpUser').value,c=$('#cpCarrier').value;if(!u||!c){toast('User ID and Carrier ID required');return;}RGO_API.cpBind({user_id:Number(u),carrier_id:Number(c)}).then(function(){toast('Principal bound · audited');}).catch(function(e){toast('Rejected: '+e.message);});}
   function cpPreview(){var c=$('#cpPrevCarrier').value;if(!c){toast('Carrier ID required');return;}RGO_API.cpOverview(c).then(function(d){var cm=d.company||{},f=d.fleet||{},dr=d.drivers||{};var chip=function(ok){return '<span class="chip '+(ok?'c-good':'c-crit')+'">'+(ok?'✓':'✗')+'</span>';};$('#cpPreview').innerHTML='<div class="grid2"><div class="panel"><div class="panel-h"><h3>'+esc(d.legal_name||('Carrier #'+d.carrier_id))+'</h3><div class="spacer"></div><span class="chip '+(d.marketplace_status==="ACTIVE"?"c-good":"c-crit")+'">'+esc(d.marketplace_status)+'</span></div><div class="panel-b" style="font-size:13px"><div>'+chip(cm.kyb_verified)+' KYB '+esc(cm.kyb_status||"")+'</div><div>'+chip(cm.business_permit_valid)+' Business permits</div><div>'+chip(cm.ltfrb_authority_valid)+' LTFRB authority</div>'+(d.marketplace_reasons&&d.marketplace_reasons.length?'<div style="color:var(--crit);margin-top:6px">'+esc(d.marketplace_reasons.join("; "))+'</div>':'')+'</div></div><div class="panel"><div class="panel-h"><h3>Fleet & Drivers</h3></div><div class="panel-b" style="font-size:13px"><div>Fleet: <b>'+f.total+'</b> · '+f.eligible+' eligible · '+f.maintenance_hold+' maintenance · '+f.registration_expired+' reg-expired</div><div>Drivers: <b>'+dr.total+'</b> · '+dr.eligible+' eligible · '+dr.license_expiring+' lic-expiring · '+dr.qualification_missing+' qual-missing</div></div></div></div>';}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Developer Portal (Platform Control -> Integrations) ----------

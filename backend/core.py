@@ -335,7 +335,8 @@ PERMISSIONS = {
     # approve/activate. See carrier_portal.PORTAL_PERMISSIONS.
     "carrier_principal": {"carrier.portal.view", "carrier.portal.fleet.manage",
                           "carrier.portal.compliance.submit", "carrier.portal.offers.manage",
-                          "carrier.portal.trips.execute", "carrier.portal.settings.manage"},
+                          "carrier.portal.trips.execute", "carrier.portal.settings.manage",
+                          "carrier.portal.reassign"},
 }
 
 

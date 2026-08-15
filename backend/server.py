@@ -2149,6 +2149,32 @@ def _carrier_portal_routes():
         ("POST", "/admin/carrier-portal/bind"): bind,
         ("POST", "/admin/carrier-portal/principals/:id/revoke"): revoke,
         ("GET", "/admin/carrier-portal/overview/:carrier_id"): op_overview,
+        # carrier-portal reassignment (intra-carrier only; never re-match)
+        ("POST", "/portal/carrier/reassignments"): lambda a, b, p: cp.open_reassignment(_conn, a, int(b["assignment_id"]), b["reason"], evidence=b.get("evidence")),
+        ("POST", "/portal/carrier/reassignments/:id/substitute"): lambda a, b, p: cp.propose_substitute(_conn, a, int(p["id"]), new_driver_id=b.get("driver_id"), new_vehicle_id=b.get("vehicle_id")),
+    }
+
+
+def _reassignment_routes():
+    import driver_reassignment as dr
+
+    def r_open(a, b, p):   return dr.open_reassignment(_conn, a, int(b["assignment_id"]), b["reason"], evidence=b.get("evidence"), scope=b.get("scope", "INTRA_CARRIER"))
+    def r_sub(a, b, p):    return dr.propose_substitute(_conn, a, int(p["id"]), new_driver_id=b.get("driver_id"), new_vehicle_id=b.get("vehicle_id"))
+    def r_rematch(a, b, p): return dr.escalate_to_rematch(_conn, a, int(p["id"]), response_minutes=b.get("response_minutes", 120))
+    def r_cancel(a, b, p): return dr.cancel_reassignment(_conn, a, int(p["id"]), b.get("reason", ""))
+    def r_list(a, b, p):   return {"reassignments": dr.list_reassignments(_conn, a, status=b.get("status"), carrier_id=b.get("carrier_id"))}
+    def r_get(a, b, p):    return dr.get_reassignment(_conn, a, int(p["id"]))
+    def r_time(a, b, p):   return dr.reassignment_timeline(_conn, a, int(p["id"]))
+    def r_queues(a, b, p): return dr.queues(_conn, a)
+    return {
+        ("POST", "/admin/marketplace/reassignments"): r_open,
+        ("POST", "/admin/marketplace/reassignments/:id/substitute"): r_sub,
+        ("POST", "/admin/marketplace/reassignments/:id/rematch"): r_rematch,
+        ("POST", "/admin/marketplace/reassignments/:id/cancel"): r_cancel,
+        ("GET", "/admin/marketplace/reassignments"): r_list,
+        ("GET", "/admin/marketplace/reassignments/:id"): r_get,
+        ("GET", "/admin/marketplace/reassignments/:id/timeline"): r_time,
+        ("GET", "/admin/marketplace/reassignment-queues"): r_queues,
     }
 
 
@@ -2158,6 +2184,7 @@ ROUTES.update(_goods_protection_routes())
 ROUTES.update(_delivery_verification_routes())
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
+ROUTES.update(_reassignment_routes())
 
 
 def _match(method, path):

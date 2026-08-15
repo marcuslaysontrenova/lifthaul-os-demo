@@ -212,8 +212,22 @@ function vOffers(d){
   return tableize('Marketplace offers',(d.offers||[]).length,['Booking','Offer amount','Status'],rows);
 }
 function vAssignments(d){
-  var rows=(d.assignments||[]).map(function(a){return '<tr><td>#'+esc(a.id)+'</td><td>#'+esc(a.booking_id)+'</td><td>'+statusChip(a.status)+'</td></tr>';}).join('');
-  return tableize('Active assignments',(d.assignments||[]).length,['Assignment','Booking','Status'],rows);
+  var rows=(d.assignments||[]).map(function(a){return '<tr><td>#'+esc(a.id)+'</td><td>#'+esc(a.booking_id)+'</td><td>'+statusChip(a.status)+'</td><td><button class="btn line sm" onclick="reassign('+a.id+')">Reassign driver/vehicle</button></td></tr>';}).join('');
+  return '<div class="note"><span>🔄</span><div>If a driver or vehicle falls through, request an <b>intra-carrier reassignment</b> — swap in another of your own drivers/vehicles. Every eligibility gate re-runs (fail-closed). Re-matching to a different carrier is an operator action. Protected funds are never moved.</div></div>'
+    +tableize('Active assignments',(d.assignments||[]).length,['Assignment','Booking','Status',''],rows);
+}
+function reassign(aid){
+  var reasons=['DRIVER_UNAVAILABLE','DRIVER_NO_SHOW','VEHICLE_BREAKDOWN','LICENSE_EXPIRED','COMPLIANCE_LAPSED'];
+  var reason=window.prompt('Reason for reassignment (one of: '+reasons.join(', ')+'):','DRIVER_UNAVAILABLE');
+  if(!reason)return;
+  RGO_API.post('/portal/carrier/reassignments',{assignment_id:aid,reason:reason}).then(function(r){
+    var did=window.prompt('New driver ID (blank to keep):',''); var vid=window.prompt('New vehicle ID (blank to keep):','');
+    var b={}; if(did)b.driver_id=Number(did); if(vid)b.vehicle_id=Number(vid);
+    if(!did&&!vid){ toast('Reassignment #'+r.reassignment_id+' opened ('+r.severity+'). Provide a substitute to complete.'); return; }
+    return RGO_API.post('/portal/carrier/reassignments/'+r.reassignment_id+'/substitute',b).then(function(s){
+      toast(s.ok?('Substituted · funds untouched'):('Rejected: '+((s.reasons||[]).join(', ')))); render();
+    });
+  }).catch(function(e){ toast('Rejected: '+e.message); });
 }
 function vTrips(d){
   var rows=(d.trips||[]).map(function(t){return '<tr><td>#'+esc(t.id)+'</td><td>#'+esc(t.assignment_id)+'</td><td>'+statusChip(t.status)+'</td></tr>';}).join('');

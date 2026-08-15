@@ -350,6 +350,10 @@ MARKETPLACE_PERMISSIONS = [
     # Carrier / Fleet Owner Portal — self-service scope (own carrier only; no verify/approve/activate)
     "carrier.portal.view", "carrier.portal.fleet.manage", "carrier.portal.compliance.submit",
     "carrier.portal.offers.manage", "carrier.portal.trips.execute", "carrier.portal.settings.manage",
+    "carrier.portal.reassign",
+    # Driver Reassignment / Re-matching — governed orchestration over matching (funds never moved)
+    "marketplace.reassignment.view", "marketplace.reassignment.open", "marketplace.reassignment.substitute",
+    "marketplace.reassignment.rematch", "marketplace.reassignment.approve",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

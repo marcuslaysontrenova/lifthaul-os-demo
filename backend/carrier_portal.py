@@ -40,6 +40,7 @@ import protected_payment as pp
 import goods_protection as gp
 import ltfrb
 import notifications_engine as ne
+import driver_reassignment as dr
 
 
 # --------------------------------------------------------------------------- #
@@ -68,6 +69,8 @@ _SELF_SERVICE = {
     "withdraw_offer":   ("marketplace.offer.manage",),
     "respond_assignment": ("marketplace.assignment.confirm",),
     "submit_pod":       ("marketplace.pod.submit",),
+    "open_reassignment":   ("marketplace.reassignment.open",),
+    "propose_substitute":  ("marketplace.reassignment.substitute", "marketplace.assignment.confirm"),
 }
 
 # Permissions the portal must NEVER elevate into (defence-in-depth: a hard assertion, so a future
@@ -578,6 +581,32 @@ def submit_pod(conn, actor, trip_id, kind="POD", evidence_types=None, requested=
     if not a or a["carrier_id"] != cid:
         raise core.ForbiddenError("trip does not belong to your carrier")
     return tp.submit_proof(conn, _svc(actor, *_SELF_SERVICE["submit_pod"]), trip_id, kind, evidence_types=evidence_types, **attrs)
+
+
+def _own_assignment(conn, cid, assignment_id):
+    a = conn.execute("SELECT carrier_id FROM mkt_assignments WHERE id=?", (assignment_id,)).fetchone()
+    if not a or a["carrier_id"] != cid:
+        raise core.ForbiddenError("assignment does not belong to your carrier")
+
+
+def open_reassignment(conn, actor, assignment_id, reason, evidence=None, requested=None):
+    """A carrier may open an INTRA-CARRIER reassignment on its own assignment (e.g. driver sick, vehicle
+    breakdown). It can never re-match the work to another carrier — that is an operator action."""
+    core.require(actor, "carrier.portal.reassign")
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    _own_assignment(conn, cid, assignment_id)
+    return dr.open_reassignment(conn, _svc(actor, *_SELF_SERVICE["open_reassignment"]), assignment_id,
+                                reason, evidence=evidence, scope="INTRA_CARRIER")
+
+
+def propose_substitute(conn, actor, reassignment_id, new_driver_id=None, new_vehicle_id=None, requested=None):
+    core.require(actor, "carrier.portal.reassign")
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    case = conn.execute("SELECT carrier_id FROM mkt_reassignments WHERE id=?", (reassignment_id,)).fetchone()
+    if not case or case["carrier_id"] != cid:
+        raise core.ForbiddenError("reassignment does not belong to your carrier")
+    return dr.propose_substitute(conn, _svc(actor, *_SELF_SERVICE["propose_substitute"]), reassignment_id,
+                                 new_driver_id=new_driver_id, new_vehicle_id=new_vehicle_id)
 
 
 # --------------------------------------------------------------------------- #

@@ -131,6 +131,8 @@ def _seed_platform(conn):
     carrier_portal.init(conn); carrier_portal.seed(conn)                 # Carrier / Fleet Owner Portal: secure self-service over the existing carrier ecosystem (principal binding only; no new domains)
     import driver_reassignment
     driver_reassignment.init(conn); driver_reassignment.seed(conn)       # Driver Reassignment / Re-matching: governed orchestration over matching (intra-carrier substitution + inter-carrier re-match; funds never moved)
+    import rental
+    rental.init(conn); rental.seed(conn)                                 # Hourly/Daily/Project Rental: duration-and-usage revenue model over the existing spine (reuses Protected Payment; funds never fabricated)
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

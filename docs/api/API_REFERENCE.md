@@ -313,6 +313,44 @@ Carrier-portal (intra-carrier only — a carrier can never re-match its own work
 Front-end: a **Reassignment** operator console tab (queues + open/substitute/re-match/cancel) and a
 "Reassign driver/vehicle" action on the carrier portal's Assignments tab.
 
+## Hourly / Daily / Project Rental
+
+A duration-and-usage revenue model over the **existing** spine — LiftHaul's heavy-equipment roots
+(crane/rigging rental), where the unit of sale is a resource rented for a duration, not a point-to-point
+haul. It reuses carriers, vehicles, drivers, tax policy, the platform-fee split and **Protected Payment**
+(`create_transaction`, MOCK provider) — rental money is protected and released by the **same governed
+gate** as freight, and is never fabricated.
+
+New, structurally-distinct pieces: a rental **rate model** and **agreement lifecycle**:
+- `rental_rate_cards` — governed, **effective-dated + versioned** rates per (vehicle_category, rate_unit
+  ∈ HOURLY/DAILY/WEEKLY/MONTHLY/PROJECT) with a **minimum-billing quantity**, overtime multiplier,
+  standby rate, mobilization fee, and operator/fuel inclusion flags. Superseding a rate closes the prior
+  one (audit trail, never an in-place mutation).
+- `rental_agreements` — `QUOTED → CONFIRMED → ACTIVE → COMPLETED → SETTLED` (or `CANCELLED`). Confirm
+  requires an assigned carrier+vehicle; activate re-runs the **same** driver/vehicle eligibility gate the
+  marketplace uses.
+- `rental_usage` — **honest** capture of actual hours/days + overtime + standby (non-negative,
+  meter-ordered; never inferred).
+- `rental_invoices` — an immutable, checksummed billing snapshot: `billed = max(actual, min_billing)`;
+  `+ overtime×rate×multiplier + standby + mobilization − discount`; tax + 10% platform fee; carrier
+  payout derived. **Overtime above ₱50,000 requires `marketplace.rental.overtime.approve`.** One invoice
+  per agreement.
+
+Operator endpoints (RBAC `marketplace.rental.*`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST | `/admin/marketplace/rental/rates` | List / set (versioned) a rental rate (`…rate.manage`) |
+| POST | `/admin/marketplace/rental/agreements` | Quote a rental (returns an estimate) |
+| POST | `/admin/marketplace/rental/agreements/:id/confirm` · `/activate` | Advance the agreement |
+| POST | `/admin/marketplace/rental/agreements/:id/usage` | Record actual usage (`…usage.record`) |
+| POST | `/admin/marketplace/rental/agreements/:id/finalize` | Billing snapshot + Protected Payment (`…billing.finalize`) |
+| POST | `/admin/marketplace/rental/agreements/:id/settle` · `/cancel` | Settle / cancel |
+| GET | `/admin/marketplace/rental/agreements` · `/:id` · `/queues` | List / detail (+usage+invoice) / counts |
+
+Front-end: a **Rental** operator console tab (queues, quote form, agreement lifecycle actions, and the
+effective rate catalog).
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

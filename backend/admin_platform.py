@@ -354,6 +354,9 @@ MARKETPLACE_PERMISSIONS = [
     # Driver Reassignment / Re-matching — governed orchestration over matching (funds never moved)
     "marketplace.reassignment.view", "marketplace.reassignment.open", "marketplace.reassignment.substitute",
     "marketplace.reassignment.rematch", "marketplace.reassignment.approve",
+    # Hourly / Daily / Project Rental — duration-and-usage revenue over the existing spine
+    "marketplace.rental.view", "marketplace.rental.manage", "marketplace.rental.rate.manage",
+    "marketplace.rental.usage.record", "marketplace.rental.billing.finalize", "marketplace.rental.overtime.approve",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

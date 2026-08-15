@@ -2182,9 +2182,49 @@ ROUTES.update(_dev_portal_routes())
 ROUTES.update(_api_v1_routes())
 ROUTES.update(_goods_protection_routes())
 ROUTES.update(_delivery_verification_routes())
+def _rental_routes():
+    import rental as rt
+
+    def rate_set(a, b, p):  return rt.set_rental_rate(_conn, a, b["vehicle_category"], b["rate_unit"], b["rate"],
+                                                       **{k: v for k, v in b.items() if k not in ("vehicle_category", "rate_unit", "rate")})
+    def rate_list(a, b, p): return {"rates": rt.list_rental_rates(_conn, a, include_history=bool(b.get("include_history")))}
+    def quote(a, b, p):     return rt.quote_rental(_conn, a, b["vehicle_category"], b["rate_unit"], b["quoted_quantity"],
+                                                    **{k: v for k, v in b.items() if k not in ("vehicle_category", "rate_unit", "quoted_quantity")})
+    def confirm(a, b, p):   return rt.confirm_rental(_conn, a, int(p["id"]))
+    def activate(a, b, p):  return rt.activate_rental(_conn, a, int(p["id"]))
+    def usage(a, b, p):     return rt.record_usage(_conn, a, int(p["id"]), b["actual_quantity"],
+                                                    overtime_quantity=b.get("overtime_quantity", 0),
+                                                    standby_quantity=b.get("standby_quantity", 0),
+                                                    meter_start=b.get("meter_start"), meter_end=b.get("meter_end"),
+                                                    notes=b.get("notes"))
+    def finalize(a, b, p):  return rt.finalize_rental(_conn, a, int(p["id"]), discount=b.get("discount", 0),
+                                                       fund_protected=b.get("fund_protected", True))
+    def settle(a, b, p):    return rt.settle_rental(_conn, a, int(p["id"]))
+    def cancel(a, b, p):    return rt.cancel_rental(_conn, a, int(p["id"]), b.get("reason", ""))
+    def a_list(a, b, p):    return {"agreements": rt.list_agreements(_conn, a, status=b.get("status"),
+                                                                     carrier_id=b.get("carrier_id"), customer_id=b.get("customer_id"))}
+    def a_get(a, b, p):     return rt.get_agreement(_conn, a, int(p["id"]))
+    def a_queues(a, b, p):  return rt.queues(_conn, a)
+    return {
+        ("POST", "/admin/marketplace/rental/rates"): rate_set,
+        ("GET", "/admin/marketplace/rental/rates"): rate_list,
+        ("POST", "/admin/marketplace/rental/agreements"): quote,
+        ("POST", "/admin/marketplace/rental/agreements/:id/confirm"): confirm,
+        ("POST", "/admin/marketplace/rental/agreements/:id/activate"): activate,
+        ("POST", "/admin/marketplace/rental/agreements/:id/usage"): usage,
+        ("POST", "/admin/marketplace/rental/agreements/:id/finalize"): finalize,
+        ("POST", "/admin/marketplace/rental/agreements/:id/settle"): settle,
+        ("POST", "/admin/marketplace/rental/agreements/:id/cancel"): cancel,
+        ("GET", "/admin/marketplace/rental/agreements"): a_list,
+        ("GET", "/admin/marketplace/rental/agreements/:id"): a_get,
+        ("GET", "/admin/marketplace/rental/queues"): a_queues,
+    }
+
+
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
 ROUTES.update(_reassignment_routes())
+ROUTES.update(_rental_routes())
 
 
 def _match(method, path):

@@ -337,6 +337,9 @@ PERMISSIONS = {
                           "carrier.portal.compliance.submit", "carrier.portal.offers.manage",
                           "carrier.portal.trips.execute", "carrier.portal.settings.manage",
                           "carrier.portal.reassign"},
+    # Driver Mobile App principal — own trips only. Holds NO operational marketplace.* perm and NO
+    # verify/approve/activate; can verify a recipient OTP but never issue/see it. See driver_app.
+    "driver_principal": {"driver.app.view", "driver.app.execute"},
 }
 
 

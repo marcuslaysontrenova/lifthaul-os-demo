@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>LiftHaul — Driver App</title>
+<meta name="description" content="LiftHaul Driver App — your assigned trips, status updates, GPS, proof-of-delivery and recipient verification. The delivery code is entered by the recipient; the driver never sees it.">
+<style>
+:root{
+  --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
+  --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
+  --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
+  --primary:#5FB92A;--primary-2:#4E9E20;
+  --good:#3B8F1E;--good-bg:#E4F3D6;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;--info:#2A72C9;--info-bg:#E4EEFB;
+  --radius:14px;--radius-sm:9px;
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.10);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;line-height:1.16;letter-spacing:-.02em}p{margin:0}code{font-family:var(--mono)}
+.app{max-width:560px;margin:0 auto;min-height:100vh;background:var(--surface-2);display:flex;flex-direction:column}
+.top{background:var(--primary);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:30}
+.top .wm{font-weight:800;font-size:19px;letter-spacing:-.03em}.top .wm b:last-child{color:#0C2306}
+.sp{flex:1}
+.top .who{font-size:12px;opacity:.9}
+.wrap{flex:1;padding:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;font-family:inherit;font-size:16px;font-weight:700;padding:14px 18px;border-radius:var(--radius-sm);border:0;background:var(--accent);color:#fff;cursor:pointer}
+.btn:active{background:var(--accent-2)}
+.btn.line{background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+.btn.sm{padding:10px 12px;font-size:14px;width:auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
+.chip.good{background:var(--good-bg);color:var(--good)}.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.crit{background:var(--crit-bg);color:var(--crit)}.chip.info{background:var(--info-bg);color:var(--info)}
+.muted{color:var(--muted);font-size:13px}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0}
+input{width:100%;margin-top:5px;font-family:inherit;font-size:16px;padding:13px;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--ink)}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.row .btn{flex:1;min-width:120px}
+.note{display:flex;gap:10px;background:var(--surface-3);border-radius:var(--radius-sm);padding:12px;font-size:13px;color:var(--ink-2);margin-bottom:14px}
+.tl{list-style:none;margin:10px 0 0;padding:0}
+.tl li{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;display:flex;justify-content:space-between;gap:8px}
+.big{font-size:20px;font-weight:800}
+.hide{display:none}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:var(--shadow);z-index:99;max-width:92vw;text-align:center}
+.back{background:none;border:0;color:#fff;font-size:15px;font-weight:700;cursor:pointer;padding:0}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <button id="backBtn" class="back hide" onclick="showList()">‹ Trips</button>
+    <div class="wm"><b>Lift</b><b>Haul</b></div>
+    <span class="sp"></span>
+    <span id="who" class="who"></span>
+    <button id="out" class="back hide" onclick="doLogout()" style="font-size:13px">Sign out</button>
+  </div>
+  <div class="wrap">
+    <!-- LOGIN -->
+    <div id="login">
+      <div class="card">
+        <h2 style="margin-bottom:6px">Driver sign in</h2>
+        <div class="note"><span>🔒</span><div>You see <b>only your own trips</b>. The delivery code is read to you by the <b>recipient</b> — you enter it here, you never receive or see it yourself.</div></div>
+        <label>Email<input id="email" type="email" autocomplete="username" placeholder="you@carrier.com"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="••••••••"></label>
+        <button class="btn" style="margin-top:12px" onclick="doLogin()">Sign in</button>
+        <p id="msg" class="muted" style="margin-top:12px"></p>
+      </div>
+    </div>
+    <!-- TRIP LIST -->
+    <div id="list" class="hide"></div>
+    <!-- TRIP DETAIL -->
+    <div id="detail" class="hide"></div>
+  </div>
+</div>
+<div id="toast" class="toast hide"></div>
+
+<script>
+var RGO_API=(function(){
+  var base=null, token=null;
+  try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_driver_token'); }catch(e){}
+  function req(m,p,b){
+    if(!base) return Promise.reject(new Error('offline'));
+    var h={'Content-Type':'application/json'};
+    if(token && p!=='/login') h['Authorization']='Bearer '+token;
+    return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:h,body:b?JSON.stringify(b):undefined})
+      .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(!r.ok) throw new Error(d.error||d.detail||('HTTP '+r.status)); return d;});});
+  }
+  return {
+    configured:function(){return !!base;},
+    login:function(e,pw){return req('POST','/login',{email:e,password:pw}).then(function(d){token=d.token;try{localStorage.setItem('lifthaul_driver_token',token);}catch(x){}return d;});},
+    logout:function(){token=null;try{localStorage.removeItem('lifthaul_driver_token');}catch(x){}},
+    get:function(p){return req('GET',p);}, post:function(p,b){return req('POST',p,b);}
+  };
+})();
+
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide');},3000);}
+var curTrip=null;
+
+function doLogin(){
+  if(!RGO_API.configured()){ $('#msg').innerHTML='Honest offline demo — no backend configured. Set <code>localStorage.lifthaul_api_base</code> to a hosted LiftHaul API to sign in as a driver.'; return; }
+  $('#msg').textContent='Signing in…';
+  RGO_API.login($('#email').value.trim(),$('#password').value).then(function(){ enter(); }).catch(function(e){ $('#msg').textContent='Sign-in failed: '+e.message; });
+}
+function doLogout(){ RGO_API.logout(); location.reload(); }
+function enter(){ $('#login').classList.add('hide'); $('#out').classList.remove('hide'); showList(); }
+
+function stChip(s){var m={ACTIVATED:'info',EN_ROUTE_PICKUP:'info',ARRIVED_PICKUP:'info',LOADING:'warn',LOADED:'warn',DEPARTED:'info',IN_TRANSIT:'info',ARRIVED_DESTINATION:'warn',UNLOADING:'warn',DELIVERED:'good',POD_SUBMITTED:'good',COMPLETED:'good',CANCELLED:'crit',CREATED:'',EXCEPTION:'crit'};return '<span class="chip '+(m[s]||'')+'">'+esc(s)+'</span>';}
+
+function showList(){
+  curTrip=null; $('#detail').classList.add('hide'); $('#backBtn').classList.add('hide');
+  var host=$('#list'); host.classList.remove('hide');
+  host.innerHTML='<div class="card"><span class="muted">Loading your trips…</span></div>';
+  Promise.all([RGO_API.get('/driver/profile').catch(function(){return{};}),RGO_API.get('/driver/trips').catch(function(e){throw e;})]).then(function(r){
+    var pr=r[0]||{},trips=(r[1]||{}).trips||[];
+    $('#who').textContent=(pr.full_name||'Driver');
+    var cards=trips.map(function(t){return '<div class="card" onclick="showTrip('+t.id+')" style="cursor:pointer"><div style="display:flex;align-items:center;gap:8px"><b>Trip #'+t.id+'</b><span class="sp"></span>'+stChip(t.status)+'</div><div class="muted" style="margin-top:6px">Booking #'+esc(t.booking_id)+' · '+esc(t.planned_distance_km||'—')+' km'+(t.progress_pct?(' · '+Math.round(t.progress_pct)+'%'):'')+'</div></div>';}).join('')||'<div class="card"><span class="muted">No trips assigned right now.</span></div>';
+    host.innerHTML='<div class="note"><span>🚚</span><div>Tap a trip to update its status, send GPS, submit proof-of-delivery, or verify the recipient code.</div></div>'+cards;
+  }).catch(function(e){ host.innerHTML='<div class="card"><span class="chip crit">'+esc(e.message)+'</span></div>'; });
+}
+
+var NEXT={ACTIVATED:'EN_ROUTE_PICKUP',EN_ROUTE_PICKUP:'ARRIVED_PICKUP',ARRIVED_PICKUP:'LOADING',LOADING:'LOADED',LOADED:'DEPARTED',DEPARTED:'IN_TRANSIT',IN_TRANSIT:'ARRIVED_DESTINATION',ARRIVED_DESTINATION:'UNLOADING',UNLOADING:'DELIVERED'};
+
+function showTrip(id){
+  curTrip=id; $('#list').classList.add('hide'); $('#backBtn').classList.remove('hide');
+  var host=$('#detail'); host.classList.remove('hide');
+  host.innerHTML='<div class="card"><span class="muted">Loading trip…</span></div>';
+  RGO_API.get('/driver/trips/'+id).then(function(d){
+    var t=d.trip||{},dvs=d.delivery_verification||{},tl=(d.timeline&&d.timeline.events)||d.timeline||[];
+    var nxt=NEXT[t.status];
+    var acts='';
+    if(t.status==='CREATED') acts+='<button class="btn" onclick="act(\'start\')">Start trip</button>';
+    if(nxt) acts+='<button class="btn" onclick="advance(\''+nxt+'\')">Mark: '+esc(nxt.replace(/_/g,' '))+'</button>';
+    var rows='<div class="row">'
+      +'<button class="btn line sm" onclick="ping()">📍 Send GPS</button>'
+      +'<button class="btn line sm" onclick="pod()">📷 Submit POD</button>'
+      +'<button class="btn line sm" onclick="exc()">⚠️ Exception</button></div>';
+    var otp=(t.status==='ARRIVED_DESTINATION'||t.status==='UNLOADING'||t.status==='DELIVERED')
+      ? '<div class="card"><h3>Recipient verification</h3><div class="note"><span>🔐</span><div>Ask the recipient for their delivery code and enter it. You never receive this code yourself.</div></div><label>Delivery code<input id="otp" inputmode="numeric" placeholder="● ● ● ● ● ●"></label><button class="btn" onclick="verifyOtp()">Verify recipient</button></div>' : '';
+    var tlhtml=(tl.length?('<ul class="tl">'+tl.slice(-8).map(function(e){return '<li><span>'+esc(e.to_status||e.status||e.action||e.event||'')+'</span><span class="muted">'+esc(String(e.at||e.created_at||e.ts||'').slice(11,16))+'</span></li>';}).join('')+'</ul>'):'<span class="muted">No events yet.</span>');
+    host.innerHTML=
+      '<div class="card"><div style="display:flex;align-items:center;gap:8px"><h2>Trip #'+esc(t.id)+'</h2><span class="sp"></span>'+stChip(t.status)+'</div>'
+      +'<div class="muted" style="margin-top:6px">Booking #'+esc(t.booking_id)+' · '+esc(t.planned_distance_km||'—')+' km'+(t.progress_pct?(' · '+Math.round(t.progress_pct)+'% done'):'')+'</div>'
+      +'<div style="margin-top:8px">Recipient: '+(dvs&&dvs.status?stChip(dvs.status):'<span class="chip">pending</span>')+'</div>'
+      +'<div style="margin-top:12px">'+(acts||'<span class="muted">No further status step.</span>')+'</div>'+rows+'</div>'
+      + otp
+      +'<div class="card"><h3>Timeline</h3>'+tlhtml+'</div>';
+  }).catch(function(e){ host.innerHTML='<div class="card"><span class="chip crit">'+esc(e.message)+'</span></div>'; });
+}
+function refresh(){ if(curTrip)showTrip(curTrip); }
+function act(a){ RGO_API.post('/driver/trips/'+curTrip+'/'+a,{}).then(function(){toast('Trip started');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
+function advance(to){ RGO_API.post('/driver/trips/'+curTrip+'/advance',{to_status:to}).then(function(){toast('Updated: '+to.replace(/_/g,' '));refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
+function ping(){
+  function send(lat,lng){ RGO_API.post('/driver/trips/'+curTrip+'/ping',{lat:lat,lng:lng}).then(function(){toast('GPS sent');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
+  if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(function(p){send(p.coords.latitude,p.coords.longitude);},function(){send(14.6,121.0);}); } else { send(14.6,121.0); }
+}
+function pod(){ RGO_API.post('/driver/trips/'+curTrip+'/pod',{kind:'POD',evidence_types:['photo','signature']}).then(function(){toast('POD submitted');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
+function exc(){ var r=window.prompt('Describe the exception (e.g. breakdown, access blocked):',''); if(!r)return; RGO_API.post('/driver/trips/'+curTrip+'/exception',{exception_type:'FIELD',severity:'MEDIUM',description:r}).then(function(){toast('Exception reported');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
+function verifyOtp(){ var code=($('#otp')||{}).value; if(!code){toast('Enter the recipient code');return;} RGO_API.post('/driver/trips/'+curTrip+'/verify-otp',{code:code}).then(function(){toast('Recipient verified ✓');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
+
+// resume session
+if(RGO_API.configured()){ RGO_API.get('/driver/profile').then(function(){ enter(); }).catch(function(){}); }
+</script>
+</body>
+</html>

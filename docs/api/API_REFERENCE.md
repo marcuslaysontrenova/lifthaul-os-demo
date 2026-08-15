@@ -462,6 +462,46 @@ When enabled, surcharges appear as `surcharge_<CODE>` line components in the pri
 recorded in `surcharge_applications`. Front-end: a **Surcharges** operator console tab (rule catalog,
 a "what would apply" preview, and the engine on/off indicator).
 
+## Driver Mobile App
+
+A driver-facing operating surface over the **existing** trip / POD / OTP domains — no parallel trip,
+POD, or verification domain. It mirrors the Carrier Portal governance pattern: a login is bound to
+exactly one driver (`driver_principals`, identity-derived, never client-supplied), and every read/write
+is forced to that driver's **own** trips and delegates to the canonical `marketplace_trips` /
+`delivery_verification` functions via a minimal, auditable elevation.
+
+**Two hard safety rules, preserved by construction:**
+- **A driver never self-verifies compliance.** The `driver_principal` role holds no operational
+  `marketplace.*` permission and no verify/activate/approve, so any `/admin/*` route is `403`; the
+  elevation allow-list can never include a verify/approve permission (hard-asserted).
+- **A driver never issues or sees a delivery OTP.** The app can only **verify** a code the recipient
+  provides (`delivery.verification.verify`); it cannot issue, resend, or read the plaintext (separate
+  permissions the role lacks, and the verify path returns a result, never the code).
+
+Driver-facing (session actor = a bound driver principal):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/driver/profile` · `/driver/trips` · `/driver/trips/:id` | Own profile, own trips, trip detail + timeline + delivery-verification status |
+| POST | `/driver/trips/:id/start` | Activate the trip |
+| POST | `/driver/trips/:id/advance` | Advance status (EN_ROUTE → … → DELIVERED) |
+| POST | `/driver/trips/:id/ping` | Send a GPS position |
+| POST | `/driver/trips/:id/pod` | Submit proof-of-delivery evidence |
+| POST | `/driver/trips/:id/accept` | Accept delivery |
+| POST | `/driver/trips/:id/verify-otp` | Verify the recipient's delivery code (never issued/seen by the driver) |
+| POST | `/driver/trips/:id/exception` | Report a field exception |
+
+Operator-side (requires `marketplace.driver.manage`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/admin/driver-app/bind` | Bind a login to a driver |
+| POST | `/admin/driver-app/principals/:id/revoke` | Revoke a binding |
+
+Front-end: `driver.html` — a mobile-first driver app (assigned trips, one-tap status advance, GPS from
+the device, POD capture, and a recipient-code entry field). Operators bind driver logins from the
+console **Carrier Access** tab.
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

@@ -2310,6 +2310,39 @@ def _surcharge_routes():
     }
 
 
+def _driver_app_routes():
+    import driver_app as da
+
+    def d_trips(a, b, p):    return da.my_trips(_conn, a, status=b.get("status"))
+    def d_profile(a, b, p):  return da.my_profile(_conn, a)
+    def d_detail(a, b, p):   return da.trip_detail(_conn, a, int(p["id"]))
+    def d_start(a, b, p):    return da.start_trip(_conn, a, int(p["id"]))
+    def d_advance(a, b, p):  return da.advance(_conn, a, int(p["id"]), b["to_status"], note=b.get("note"),
+                                               lat=b.get("lat"), lng=b.get("lng"))
+    def d_ping(a, b, p):     return da.ping(_conn, a, int(p["id"]), progress=b.get("progress"), lat=b.get("lat"), lng=b.get("lng"))
+    def d_pod(a, b, p):      return da.submit_pod(_conn, a, int(p["id"]), kind=b.get("kind", "POD"), evidence_types=b.get("evidence_types"))
+    def d_accept(a, b, p):   return da.accept_delivery(_conn, a, int(p["id"]))
+    def d_otp(a, b, p):      return da.verify_recipient_otp(_conn, a, int(p["id"]), b["code"], stop_seq=b.get("stop_seq"))
+    def d_exc(a, b, p):      return da.report_exception(_conn, a, int(p["id"]), b["exception_type"],
+                                                        severity=b.get("severity", "MEDIUM"), description=b.get("description"))
+    def d_bind(a, b, p):     return da.bind_principal(_conn, a, int(b["user_id"]), int(b["driver_id"]))
+    def d_revoke(a, b, p):   return da.revoke_principal(_conn, a, int(p["id"]), reason=b.get("reason"))
+    return {
+        ("GET", "/driver/trips"): d_trips,
+        ("GET", "/driver/profile"): d_profile,
+        ("GET", "/driver/trips/:id"): d_detail,
+        ("POST", "/driver/trips/:id/start"): d_start,
+        ("POST", "/driver/trips/:id/advance"): d_advance,
+        ("POST", "/driver/trips/:id/ping"): d_ping,
+        ("POST", "/driver/trips/:id/pod"): d_pod,
+        ("POST", "/driver/trips/:id/accept"): d_accept,
+        ("POST", "/driver/trips/:id/verify-otp"): d_otp,
+        ("POST", "/driver/trips/:id/exception"): d_exc,
+        ("POST", "/admin/driver-app/bind"): d_bind,
+        ("POST", "/admin/driver-app/principals/:id/revoke"): d_revoke,
+    }
+
+
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
 ROUTES.update(_reassignment_routes())
@@ -2317,6 +2350,7 @@ ROUTES.update(_rental_routes())
 ROUTES.update(_billing_routes())
 ROUTES.update(_preference_routes())
 ROUTES.update(_surcharge_routes())
+ROUTES.update(_driver_app_routes())
 
 
 def _match(method, path):

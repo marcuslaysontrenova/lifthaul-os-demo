@@ -365,6 +365,8 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.capacity.view", "marketplace.capacity.manage",
     # Dynamic Surcharge Engine — governed effective-dated surcharge rules over pricing (config-gated)
     "marketplace.surcharge.view", "marketplace.surcharge.manage",
+    # Driver Mobile App — driver self-service over own trips (no verify/approve; never sees OTP)
+    "driver.app.view", "driver.app.execute",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

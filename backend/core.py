@@ -330,6 +330,12 @@ PERMISSIONS = {
     "customer": {"self.booking.create", "self.booking.read", "self.quotation.read",
                  "self.quotation.accept", "self.quotation.decline", "self.payment.read",
                  "self.payment.evidence"},
+    # Carrier / Fleet Owner Portal principal — self-service over the carrier's OWN data only.
+    # Holds NONE of the operational marketplace.* perms (so /admin/* is 403) and NO verify/
+    # approve/activate. See carrier_portal.PORTAL_PERMISSIONS.
+    "carrier_principal": {"carrier.portal.view", "carrier.portal.fleet.manage",
+                          "carrier.portal.compliance.submit", "carrier.portal.offers.manage",
+                          "carrier.portal.trips.execute", "carrier.portal.settings.manage"},
 }
 
 

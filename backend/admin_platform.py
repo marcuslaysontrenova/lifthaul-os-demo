@@ -347,6 +347,9 @@ MARKETPLACE_PERMISSIONS = [
     # Secure Delivery Verification / recipient OTP (driver may verify, never view/override the code)
     "delivery.verification.view", "delivery.verification.issue", "delivery.verification.resend",
     "delivery.verification.verify", "delivery.verification.override",
+    # Carrier / Fleet Owner Portal — self-service scope (own carrier only; no verify/approve/activate)
+    "carrier.portal.view", "carrier.portal.fleet.manage", "carrier.portal.compliance.submit",
+    "carrier.portal.offers.manage", "carrier.portal.trips.execute", "carrier.portal.settings.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

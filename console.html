@@ -548,6 +548,9 @@ window.RGO_API = (function(){
     notifPolicy:function(ev){return req('GET','/admin/notifications/policy/'+encodeURIComponent(ev));},
     notifDeliver:function(){return req('POST','/admin/notifications/deliver',{});},
     notifPref:function(b){return req('POST','/admin/notifications/preferences',b);},
+    cpBind:function(b){return req('POST','/admin/carrier-portal/bind',b);},
+    cpRevoke:function(id,b){return req('POST','/admin/carrier-portal/principals/'+id+'/revoke',b||{});},
+    cpOverview:function(cid){return req('GET','/admin/carrier-portal/overview/'+cid);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1129,6 +1132,8 @@ window.RGO_API = (function(){
     if(act==='gpBind')return gpBind(arg);
     if(act==='dvOverride')return dvOverride(arg);
     if(act==='notifDeliver')return notifDeliver();
+    if(act==='cpBind')return cpBind();
+    if(act==='cpPreview')return cpPreview();
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1195,7 +1200,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['notifications','Notifications'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1208,6 +1213,7 @@ window.RGO_API = (function(){
     if(adminTab==='insurance')return adminInsurance();
     if(adminTab==='delivery')return adminDelivery();
     if(adminTab==='notifications')return adminNotifications();
+    if(adminTab==='carrieraccess')return adminCarrierAccess();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1517,6 +1523,17 @@ window.RGO_API = (function(){
     return '<div class="access-note"><span>🔔</span><div><b>Automated Customer &amp; Operational Notifications</b> — event-driven comms across the canonical lifecycle. Notification Policy Matrix (per-event × channel), mandatory transactional notices, opt-outs where legal, template versioning, provider health, retries → dead-letter, duplicate prevention, recipient masking, correlation IDs, full audit. Providers fail honestly — no fabricated delivery. Connect a backend to administer. Requires <code>integration.catalog.view</code>.</div></div>';
   }
   function notifDeliver(){RGO_API.notifDeliver().then(function(d){toast('Delivery pass: '+((d.delivered||0)+' delivered · '+(d.no_provider||0)+' no-provider · '+(d.retrying||0)+' retrying · '+(d.dead_letter||0)+' dead-letter'));refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  // ---------- Carrier Access (operator binds a login to a carrier; the carrier self-serves in portal.html) ----------
+  function adminCarrierAccess(){
+    if(liveMode){
+      return '<div class="access-note"><span>🚚</span><div><b>Carrier Access.</b> Bind a user login to a carrier so it can self-serve in the <b>Carrier / Fleet Owner Portal</b> (<code>portal.html</code>). A bound principal reaches <b>only its own carrier</b> and can never verify its own compliance — uploads land SUBMITTED for reviewer verification. Requires <code>marketplace.carrier.application.manage</code>.</div></div>'
+        +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Bind a carrier principal</h3></div><div class="panel-b"><div class="frm" style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end"><label><span>User ID</span><input id="cpUser" type="number" placeholder="e.g. 42"></label><label><span>Carrier ID</span><input id="cpCarrier" type="number" placeholder="e.g. 1"></label><button class="btn" data-act="cpBind">Bind principal</button></div></div></div>'
+        +'<div class="panel"><div class="panel-h"><h3>Preview a carrier operating picture</h3><div class="spacer"></div><span class="cnt">operator support view</span></div><div class="panel-b"><div class="frm" style="display:flex;gap:10px;align-items:end"><label style="flex:1"><span>Carrier ID</span><input id="cpPrevCarrier" type="number" placeholder="carrier id"></label><button class="btn line" data-act="cpPreview">Load overview</button></div><div id="cpPreview" style="margin-top:14px"></div></div></div>';
+    }
+    return '<div class="access-note"><span>🚚</span><div><b>Carrier Access</b> — bind a user login to a carrier for self-service in the Carrier / Fleet Owner Portal (<code>portal.html</code>). Carriers manage their own fleet/drivers/documents/offers but never self-verify regulated compliance. Connect a backend to administer. Requires <code>marketplace.carrier.application.manage</code>.</div></div>';
+  }
+  function cpBind(){var u=$('#cpUser').value,c=$('#cpCarrier').value;if(!u||!c){toast('User ID and Carrier ID required');return;}RGO_API.cpBind({user_id:Number(u),carrier_id:Number(c)}).then(function(){toast('Principal bound · audited');}).catch(function(e){toast('Rejected: '+e.message);});}
+  function cpPreview(){var c=$('#cpPrevCarrier').value;if(!c){toast('Carrier ID required');return;}RGO_API.cpOverview(c).then(function(d){var cm=d.company||{},f=d.fleet||{},dr=d.drivers||{};var chip=function(ok){return '<span class="chip '+(ok?'c-good':'c-crit')+'">'+(ok?'✓':'✗')+'</span>';};$('#cpPreview').innerHTML='<div class="grid2"><div class="panel"><div class="panel-h"><h3>'+esc(d.legal_name||('Carrier #'+d.carrier_id))+'</h3><div class="spacer"></div><span class="chip '+(d.marketplace_status==="ACTIVE"?"c-good":"c-crit")+'">'+esc(d.marketplace_status)+'</span></div><div class="panel-b" style="font-size:13px"><div>'+chip(cm.kyb_verified)+' KYB '+esc(cm.kyb_status||"")+'</div><div>'+chip(cm.business_permit_valid)+' Business permits</div><div>'+chip(cm.ltfrb_authority_valid)+' LTFRB authority</div>'+(d.marketplace_reasons&&d.marketplace_reasons.length?'<div style="color:var(--crit);margin-top:6px">'+esc(d.marketplace_reasons.join("; "))+'</div>':'')+'</div></div><div class="panel"><div class="panel-h"><h3>Fleet & Drivers</h3></div><div class="panel-b" style="font-size:13px"><div>Fleet: <b>'+f.total+'</b> · '+f.eligible+' eligible · '+f.maintenance_hold+' maintenance · '+f.registration_expired+' reg-expired</div><div>Drivers: <b>'+dr.total+'</b> · '+dr.eligible+' eligible · '+dr.license_expiring+' lic-expiring · '+dr.qualification_missing+' qual-missing</div></div></div></div>';}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Developer Portal (Platform Control -> Integrations) ----------
   function adminDevPortal(){
     if(liveMode){

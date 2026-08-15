@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiftHaul — Carrier / Fleet Owner Portal</title>
+<meta name="description" content="LiftHaul Carrier & Fleet Owner Portal — manage your own fleet, drivers, compliance, offers, trips, earnings and settlements. Regulated compliance is reviewer-verified; carriers never self-verify.">
+<style>
+:root{
+  --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
+  --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
+  --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
+  --primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;
+  --good:#3B8F1E;--good-bg:#E4F3D6;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;
+  --info:#2A72C9;--info-bg:#E4EEFB;
+  --radius:12px;--radius-sm:8px;
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3{line-height:1.16;letter-spacing:-.02em;margin:0}p{margin:0}code{font-family:var(--mono);font-size:.92em}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.topbar{background:rgba(234,244,224,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.topbar .in{max-width:1120px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px}
+.wordmark{font-weight:800;font-size:20px;letter-spacing:-.03em}.wordmark b:last-child{color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
+.chip.c-good{background:var(--good-bg);color:var(--good)}.chip.c-warn{background:var(--warn-bg);color:var(--warn)}
+.chip.c-crit{background:var(--crit-bg);color:var(--crit)}.chip.c-info{background:var(--info-bg);color:var(--info)}.chip.c-mut{background:var(--surface-3);color:var(--muted)}
+.sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;font-family:inherit;font-size:14.5px;font-weight:700;padding:11px 18px;border-radius:var(--radius-sm);border:1.5px solid transparent;background:var(--accent);color:var(--accent-ink);cursor:pointer;transition:.12s}
+.btn:hover{background:var(--accent-2)}.btn.line{background:rgba(255,255,255,.18);border-color:rgba(12,20,6,.28);color:var(--ink)}
+.btn.sm{padding:7px 13px;font-size:13px}
+.main{padding:22px 0 60px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.panel-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.panel-h h3{font-size:15px}.panel-b{padding:16px}
+.cnt{font-size:12px;color:var(--muted);font-weight:600}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}@media(max-width:860px){.g4{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px;box-shadow:var(--shadow)}
+.stat .k{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--primary-2)}
+.stat .rows{margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.stat .r{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.stat .r .big{font-size:22px;font-weight:800;margin-right:2px}
+.ok{color:var(--good)}.bad{color:var(--crit)}.wn{color:var(--warn)}
+.tick::before{content:"✓ ";color:var(--good);font-weight:800}
+.cross::before{content:"✗ ";color:var(--crit);font-weight:800}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px}
+.tab{font-size:13px;font-weight:700;padding:8px 13px;border-radius:var(--radius-sm);border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.tab.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.empty{padding:20px;text-align:center;color:var(--muted);font-size:13px}
+.note{display:flex;gap:12px;background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--primary);border-radius:var(--radius-sm);padding:13px 15px;font-size:13.5px;color:var(--ink-2);margin-bottom:16px}
+.login{max-width:420px;margin:8vh auto 0}
+.login .panel-b label{display:block;font-size:13px;font-weight:600;margin-bottom:10px}
+.login input{width:100%;margin-top:5px;font-family:inherit;font-size:14.5px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;font-size:13.5px;box-shadow:var(--shadow);z-index:99;max-width:90vw}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="in">
+  <div class="wordmark"><b>Lift</b><b>Haul</b></div>
+  <span class="chip">Carrier / Fleet Owner Portal</span>
+  <span class="sp"></span>
+  <span id="whoami" class="cnt hide"></span>
+  <button id="logoutBtn" class="btn line sm hide" onclick="doLogout()">Sign out</button>
+</div></div>
+
+<div class="wrap main">
+  <!-- LOGIN -->
+  <div id="loginView" class="login">
+    <div class="panel">
+      <div class="panel-h"><h3>Sign in to your carrier account</h3></div>
+      <div class="panel-b">
+        <div class="note" style="border-left-color:var(--accent)"><span>🔐</span><div>This portal shows <b>your own carrier</b> only. You can manage your fleet, drivers, documents, offers and trips — but <b>regulated compliance is verified by a LiftHaul reviewer</b>, never self-approved.</div></div>
+        <label>Email<input id="email" type="email" placeholder="you@carrier.com"></label>
+        <label>Password<input id="password" type="password" placeholder="••••••••"></label>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="doLogin()">Sign in</button>
+        <p id="loginMsg" class="cnt" style="margin-top:12px"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="appView" class="hide">
+    <div id="tabs" class="tabs"></div>
+    <div id="body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hide"></div>
+
+<script>
+var RGO_API=(function(){
+  var base=null, token=null;
+  try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  function req(method,path,body){
+    if(!base) return Promise.reject(new Error('offline'));
+    var h={'Content-Type':'application/json'};
+    if(token && path!=='/login') h['Authorization']='Bearer '+token;
+    return fetch(base.replace(/\/+$/,'')+path,{method:method,headers:h,body:body?JSON.stringify(body):undefined})
+      .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(!r.ok) throw new Error(d.error||d.detail||('HTTP '+r.status)); return d;});});
+  }
+  return {
+    configured:function(){return !!base;},
+    login:function(e,pw){return req('POST','/login',{email:e,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('lifthaul_api_token',token);}catch(x){} return d;});},
+    logout:function(){token=null; try{localStorage.removeItem('lifthaul_api_token');}catch(x){}},
+    get:function(p){return req('GET',p);},
+    post:function(p,b){return req('POST',p,b);}
+  };
+})();
+
+var TABS=[['overview','Overview'],['fleet','Fleet'],['drivers','Drivers'],['compliance','Compliance'],
+          ['invitations','Offers'],['assignments','Assignments'],['trips','Trips'],['finance','Earnings'],
+          ['cases','Disputes & Claims'],['notifications','Notifications']];
+var tab='overview', live=false;
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide');},3200);}
+
+function doLogin(){
+  var e=$('#email').value.trim(), pw=$('#password').value;
+  if(!RGO_API.configured()){ $('#loginMsg').innerHTML='This is the honest offline demo — no backend is configured. Set <code>localStorage.lifthaul_api_base</code> to a hosted LiftHaul API origin to sign in as a carrier principal and see your real, persisted data.'; return; }
+  $('#loginMsg').textContent='Signing in…';
+  RGO_API.login(e,pw).then(function(){ live=true; enterApp(); }).catch(function(err){ $('#loginMsg').textContent='Sign-in failed: '+err.message; });
+}
+function doLogout(){ RGO_API.logout(); location.reload(); }
+
+function enterApp(){
+  $('#loginView').classList.add('hide'); $('#appView').classList.remove('hide');
+  $('#logoutBtn').classList.remove('hide'); $('#whoami').classList.remove('hide');
+  renderTabs(); setTab('overview');
+}
+function renderTabs(){ $('#tabs').innerHTML=TABS.map(function(t){return '<button class="tab'+(tab===t[0]?' on':'')+'" onclick="setTab(\''+t[0]+'\')">'+esc(t[1])+'</button>';}).join(''); }
+function setTab(t){ tab=t; renderTabs(); render(); }
+
+function render(){
+  var host=$('#body'); host.innerHTML='<div class="panel"><div class="panel-b"><div class="empty">Loading…</div></div></div>';
+  var routes={overview:'/portal/carrier/overview',fleet:'/portal/carrier/fleet',drivers:'/portal/carrier/drivers',
+    compliance:'/portal/carrier/compliance',invitations:'/portal/carrier/invitations',assignments:'/portal/carrier/assignments',
+    trips:'/portal/carrier/trips',finance:'/portal/carrier/finance',cases:'/portal/carrier/cases',notifications:'/portal/carrier/notifications'};
+  RGO_API.get(routes[tab]).then(function(d){ host.innerHTML=({overview:vOverview,fleet:vFleet,drivers:vDrivers,compliance:vCompliance,
+    invitations:vOffers,assignments:vAssignments,trips:vTrips,finance:vFinance,cases:vCases,notifications:vNotifications})[tab](d); })
+    .catch(function(err){ host.innerHTML='<div class="note" style="border-left-color:var(--crit)"><span>⚠️</span><div>'+esc(err.message)+'</div></div>'; });
+}
+
+function eligChip(ok){return '<span class="chip '+(ok?'c-good':'c-crit')+'">'+(ok?'Eligible':'Blocked')+'</span>';}
+
+function vOverview(d){
+  $('#whoami').textContent=(d.legal_name||'Carrier')+' · #'+d.carrier_id;
+  var c=d.company;
+  var company='<div class="stat"><div class="k">Company</div><div class="rows">'
+    +'<div class="r '+(c.kyb_verified?'tick':'cross')+'">KYB '+esc(c.kyb_status)+'</div>'
+    +'<div class="r '+(c.business_permit_valid?'tick':'cross')+'">Business permits '+(c.business_permit_valid?'valid':esc((c.business_permit_blockers||[]).join(', ')||'incomplete'))+'</div>'
+    +'<div class="r '+(c.ltfrb_authority_valid?'tick':'cross')+'">LTFRB authority '+(c.ltfrb_authority_valid?'valid':esc((c.ltfrb_reasons||[]).join(', ')))+'</div>'
+    +'</div></div>';
+  var f=d.fleet, fleet='<div class="stat"><div class="k">Fleet</div><div class="rows">'
+    +'<div class="r"><span class="big">'+f.total+'</span> vehicles</div>'
+    +'<div class="r ok">'+f.eligible+' eligible</div>'
+    +'<div class="r wn">'+f.maintenance_hold+' maintenance hold</div>'
+    +'<div class="r bad">'+f.registration_expired+' registration expired</div></div></div>';
+  var dr=d.drivers, drivers='<div class="stat"><div class="k">Drivers</div><div class="rows">'
+    +'<div class="r"><span class="big">'+dr.total+'</span> drivers</div>'
+    +'<div class="r ok">'+dr.eligible+' eligible</div>'
+    +'<div class="r wn">'+dr.license_expiring+' license expiring</div>'
+    +'<div class="r bad">'+dr.qualification_missing+' qualification missing</div></div></div>';
+  var act=d.marketplace_status==='ACTIVE';
+  var mkt='<div class="stat"><div class="k">Marketplace status</div><div class="rows">'
+    +'<div class="r"><span class="chip '+(act?'c-good':'c-crit')+'" style="font-size:15px;padding:5px 14px">'+esc(d.marketplace_status)+'</span></div>'
+    +(act?'<div class="r ok" style="margin-top:4px">Accepting work'+(d.trust_score!=null?(' · trust '+d.trust_score):'')+'</div>'
+         :'<div class="r bad" style="margin-top:4px">'+esc((d.marketplace_reasons||[]).join('; ')||'Not eligible')+'</div>')
+    +'</div></div>';
+  return '<div class="note"><span>📋</span><div>This is your live operating picture. A vehicle, driver or your company shows exactly <b>why</b> it cannot accept work. Fixing it (uploading a fresh document, renewing a CPC) submits for <b>reviewer verification</b> — the portal never marks your own compliance approved.</div></div>'
+    +'<div class="grid g4">'+company+fleet+drivers+mkt+'</div>';
+}
+
+function statusChip(s){var m={ACTIVE:'c-good',APPROVED:'c-good',VERIFIED:'c-good',DRAFT:'c-mut',APPLICATION:'c-mut',
+  MAINTENANCE:'c-warn',EXPIRED:'c-crit',REJECTED:'c-crit',SUSPENDED:'c-crit',UPLOADED:'c-info',PENDING_REVIEW:'c-info',
+  SUBMITTED:'c-info',PENDING_APPROVAL:'c-warn',DEAD_LETTER:'c-crit',DELIVERED:'c-good',RETRYING:'c-warn',SUPPRESSED:'c-warn'};
+  return '<span class="chip '+(m[s]||'c-mut')+'">'+esc(s)+'</span>';}
+
+function tableize(title,cnt,head,rows){
+  return '<div class="panel"><div class="panel-h"><h3>'+esc(title)+'</h3><span class="sp"></span><span class="cnt">'+cnt+'</span></div>'
+    +'<div style="overflow-x:auto"><table><thead><tr>'+head.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead>'
+    +'<tbody>'+(rows||'<tr><td colspan="'+head.length+'" class="empty">Nothing here yet.</td></tr>')+'</tbody></table></div></div>';
+}
+
+function vFleet(d){
+  var rows=(d.vehicles||[]).map(function(v){return '<tr><td><code>'+esc(v.plate_number)+'</code></td><td>'+esc(v.category_code)+'</td><td>'+statusChip(v.status)+'</td><td>'+eligChip(v.eligible)+'</td><td style="font-size:11px;color:var(--muted)">'+esc((v.reasons||[]).join(', '))+'</td></tr>';}).join('');
+  return '<div class="note"><span>🚚</span><div>Register vehicles here — they enter as <b>DRAFT</b> and a reviewer verifies + activates them before they can accept work. You can place your own vehicle on a maintenance hold.</div></div>'
+    +tableize('Vehicles',(d.vehicles||[]).length,['Plate','Category','Status','Eligibility','Why not eligible'],rows);
+}
+function vDrivers(d){
+  var rows=(d.drivers||[]).map(function(x){return '<tr><td>'+esc(x.full_name)+'</td><td>'+esc(x.licence_class||'—')+'</td><td>'+esc(x.licence_expiry||'—')+(x.license_expiring?' <span class="chip c-warn">expiring</span>':'')+'</td><td>'+statusChip(x.status)+'</td><td>'+eligChip(x.eligible)+'</td><td style="font-size:11px;color:var(--muted)">'+esc((x.reasons||[]).join(', '))+'</td></tr>';}).join('');
+  return tableize('Drivers / Operators',(d.drivers||[]).length,['Name','Class','Licence expiry','Status','Eligibility','Why not eligible'],rows);
+}
+function vCompliance(d){
+  var lt=d.ltfrb||{}, a=lt.authority;
+  var top='<div class="grid g4" style="margin-bottom:16px"><div class="stat"><div class="k">KYB</div><div class="rows"><div class="r">'+statusChip(d.kyb_status)+'</div></div></div>'
+    +'<div class="stat"><div class="k">LTFRB / CPC</div><div class="rows"><div class="r '+(lt.ok?'tick':'cross')+'">'+(a?('CPC '+esc(a.cpc_number)+' · '+esc(a.status)):'none on file')+'</div>'+(a&&a.days_to_expiry!=null?'<div class="r '+(a.days_to_expiry<30?'wn':'')+'">'+a.days_to_expiry+' days to expiry</div>':'')+'</div></div></div></div>';
+  var rows=(d.documents||[]).map(function(x){return '<tr><td>'+esc(x.document_type)+'</td><td>'+statusChip(x.status)+'</td><td>'+esc(x.issuing_authority||'—')+'</td><td>'+esc(x.expiry_date||'—')+(x.days_to_expiry!=null&&x.days_to_expiry<30?' <span class="chip c-warn">'+x.days_to_expiry+'d</span>':'')+'</td></tr>';}).join('');
+  return '<div class="note"><span>📎</span><div>Upload a document and it becomes <b>SUBMITTED</b> for review. Only a LiftHaul Compliance Reviewer can mark it VERIFIED — you cannot self-verify a CPC, licence, insurance, OR/CR or KYB.</div></div>'
+    +top+tableize('Compliance documents',(d.documents||[]).length,['Document','Status','Issuer','Expiry'],rows);
+}
+function vOffers(d){
+  var rows=(d.offers||[]).map(function(o){return '<tr><td>#'+esc(o.booking_id)+'</td><td class="num">'+esc(o.amount)+'</td><td>'+statusChip(o.status||'—')+'</td></tr>';}).join('');
+  return tableize('Marketplace offers',(d.offers||[]).length,['Booking','Offer amount','Status'],rows);
+}
+function vAssignments(d){
+  var rows=(d.assignments||[]).map(function(a){return '<tr><td>#'+esc(a.id)+'</td><td>#'+esc(a.booking_id)+'</td><td>'+statusChip(a.status)+'</td></tr>';}).join('');
+  return tableize('Active assignments',(d.assignments||[]).length,['Assignment','Booking','Status'],rows);
+}
+function vTrips(d){
+  var rows=(d.trips||[]).map(function(t){return '<tr><td>#'+esc(t.id)+'</td><td>#'+esc(t.assignment_id)+'</td><td>'+statusChip(t.status)+'</td></tr>';}).join('');
+  return '<div class="note"><span>📍</span><div>Trips you are executing. Submit proof-of-delivery evidence here. The recipient <b>OTP is never entered in this portal</b> — it stays on the secure delivery-verification path.</div></div>'
+    +tableize('Trips',(d.trips||[]).length,['Trip','Assignment','Status'],rows);
+}
+function vFinance(d){
+  var t=d.totals||{};
+  var top='<div class="grid g4" style="margin-bottom:16px">'
+    +'<div class="stat"><div class="k">Earned (payable)</div><div class="rows"><div class="r"><span class="big">'+esc(t.earned)+'</span></div></div></div>'
+    +'<div class="stat"><div class="k">Released</div><div class="rows"><div class="r ok"><span class="big">'+esc(t.released)+'</span></div></div></div>'
+    +'<div class="stat"><div class="k">Held (protected)</div><div class="rows"><div class="r wn"><span class="big">'+esc(t.held)+'</span></div></div></div>'
+    +'<div class="stat"><div class="k">Payout accounts</div><div class="rows"><div class="r">'+((d.payout_accounts||[]).length?statusChip((d.payout_accounts[0]||{}).status):'<span class="chip c-mut">none</span>')+'</div></div></div></div>';
+  var rows=(d.settlements||[]).map(function(s){return '<tr><td>'+esc(s.transaction_no)+'</td><td class="num">'+esc(s.carrier_payable)+'</td><td class="num">'+esc(s.released_amount)+'</td><td class="num">'+esc(s.held_amount)+'</td><td>'+statusChip(s.state)+'</td></tr>';}).join('');
+  var pay=(d.payout_accounts||[]).map(function(p){return '<tr><td>'+esc(p.beneficiary_name||'—')+'</td><td>'+esc(p.entity_name||'—')+'</td><td><code>'+esc(p.account_masked||'••••')+'</code></td><td>'+statusChip(p.status)+'</td></tr>';}).join('');
+  return '<div class="note"><span>💳</span><div>Your earnings and Protected Payment status. Funds are <b>held</b> until release conditions pass. A payout account must be reviewer-approved before any payout; account numbers are stored masked.</div></div>'
+    +top+tableize('Settlements',(d.settlements||[]).length,['Transaction','Payable','Released','Held','State'],rows)
+    +tableize('Payout accounts',(d.payout_accounts||[]).length,['Beneficiary','Entity','Account','Status'],pay);
+}
+function vCases(d){
+  var disp=(d.disputes||[]).map(function(x){return '<tr><td>#'+esc(x.id)+'</td><td>#'+esc(x.booking_id)+'</td><td class="num">'+esc(x.amount_disputed)+'</td><td>'+statusChip(x.status)+'</td><td style="font-size:12px">'+esc(x.reason||'')+'</td></tr>';}).join('');
+  var clm=(d.claims||[]).map(function(x){return '<tr><td>#'+esc(x.id)+'</td><td>'+esc(x.claim_type)+'</td><td>'+esc(x.claimant||'—')+'</td><td class="num">'+esc(x.approved_amount==null?'—':x.approved_amount)+'</td><td>'+statusChip(x.status)+'</td></tr>';}).join('');
+  return tableize('Disputes',(d.disputes||[]).length,['ID','Booking','Amount','Status','Reason'],disp)
+    +tableize('Claims (incl. Goods Protection)',(d.claims||[]).length,['ID','Type','Claimant','Approved','Status'],clm);
+}
+function vNotifications(d){
+  var rows=(d.messages||[]).map(function(m){return '<tr><td style="font-size:11px">'+esc(String(m.created_at||'').slice(0,16))+'</td><td><code>'+esc(m.event_type)+'</code></td><td>'+esc(m.channel)+'</td><td>'+statusChip(m.status)+'</td></tr>';}).join('');
+  return '<div class="note"><span>🔔</span><div>Communications sent to <b>'+esc(d.recipient||'you')+'</b> (recipient masked). Notifications never contain OTPs or other sensitive values.</div></div>'
+    +tableize('Notification history',(d.messages||[]).length,['When','Event','Channel','Status'],rows);
+}
+
+// boot
+if(RGO_API.configured()){
+  // resume a session if a token is stored
+  RGO_API.get('/portal/carrier/overview').then(function(){ live=true; enterApp(); }).catch(function(){ /* show login */ });
+}
+</script>
+</body>
+</html>

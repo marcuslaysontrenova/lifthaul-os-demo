@@ -222,6 +222,55 @@ Admin endpoints (session-authenticated, RBAC `integration.catalog.view` / `integ
 | POST | `/admin/notifications/preferences` | Set a recipient communication preference / opt-out |
 | POST | `/admin/notifications/deliver` | Run one delivery pass (honest — no fabricated sends) |
 
+## Carrier / Fleet Owner Portal
+
+A secure **self-service surface over the existing carrier ecosystem** — it introduces no parallel
+carrier, vehicle, driver, compliance, payment, trust or marketplace domain. A portal login is bound
+to exactly one carrier via a `carrier_principals` record (identity-derived, **never** client-supplied);
+a bound principal can only ever read or act on its **own** carrier_id, and a spoofed `carrier_id` in a
+request is ignored.
+
+**Governance invariant — a carrier manages its own fleet but never self-verifies regulated compliance.**
+Registering a vehicle lands it `DRAFT`; a driver lands `APPLICATION`; an uploaded document lands
+`UPLOADED/SUBMITTED`; a payout account lands `PENDING_APPROVAL`. Only a LiftHaul reviewer can move any
+of these to VERIFIED/ACTIVE/APPROVED. The `carrier_principal` role holds none of the operational
+`marketplace.*` permissions and no verify/activate/approve/override permission, so a carrier token
+against any `/admin/*` route is `403`. Internally the portal elevates the carrier's own actor by the
+single minimal permission needed for one self-service call — a closed allow-list that can never include
+a verification permission (a hard assertion guards it).
+
+The **operational-eligibility panel** (`GET /portal/carrier/overview`) composes KYB, business-permit
+compliance, LTFRB/CPC authority, fleet + driver eligibility (via the existing compliance and legality
+gates) and the hard marketplace gate, so a carrier sees exactly *why* a company, vehicle or driver
+cannot accept work.
+
+Carrier-facing (session actor = a bound carrier principal):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/portal/carrier/overview` | Eligibility summary panel (company / fleet / drivers / marketplace status) |
+| GET | `/portal/carrier/profile` · `/compliance` · `/fleet` · `/drivers` | Profile, document/CPC status + expiry watch, fleet, drivers (each with per-item eligibility reasons) |
+| GET | `/portal/carrier/invitations` · `/assignments` · `/trips` | Offers, active assignments, trips (scoped to this carrier) |
+| GET | `/portal/carrier/finance` · `/cases` · `/notifications` · `/performance` | Earnings + Protected Payment + payout status; disputes/claims/Goods-Protection; masked comms; trust score |
+| POST | `/portal/carrier/vehicles` · `/drivers` | Register a vehicle (→DRAFT) / driver (→APPLICATION) |
+| POST | `/portal/carrier/vehicles/:id/maintenance` | Toggle own vehicle maintenance hold (cannot mark ACTIVE) |
+| POST | `/portal/carrier/documents` | Upload a compliance document (→SUBMITTED, never self-verified) |
+| POST | `/portal/carrier/payout-account` | Submit a payout account (→pending approval; masked at rest) |
+| POST | `/portal/carrier/offers` · `/offers/:id/withdraw` | Submit / withdraw a marketplace offer |
+| POST | `/portal/carrier/assignments/:id/respond` | Accept / decline an assignment |
+| POST | `/portal/carrier/trips/:id/pod` | Submit proof-of-delivery evidence (OTP never entered here) |
+
+Operator-side principal administration (requires `marketplace.carrier.application.manage`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/admin/carrier-portal/bind` | Bind a user login to a carrier |
+| POST | `/admin/carrier-portal/principals/:id/revoke` | Revoke a binding |
+| GET | `/admin/carrier-portal/overview/:carrier_id` | Operator support read of a carrier's overview |
+
+Front-end: `portal.html` (carrier-facing) + a **Carrier Access** tab in the operator console for
+binding principals and previewing a carrier's operating picture.
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

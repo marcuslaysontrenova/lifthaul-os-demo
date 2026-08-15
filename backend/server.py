@@ -2080,11 +2080,84 @@ def _notifications_routes():
     }
 
 
+def _carrier_portal_routes():
+    import carrier_portal as cp
+
+    # ---- carrier-facing self-service (session actor = a bound carrier principal) ----
+    def ov(a, b, p):        return cp.overview(_conn, a)
+    def prof(a, b, p):      return cp.profile(_conn, a)
+    def comp(a, b, p):      return cp.compliance(_conn, a)
+    def flt(a, b, p):       return cp.fleet(_conn, a)
+    def drv(a, b, p):       return cp.drivers(_conn, a)
+    def inv(a, b, p):       return cp.invitations(_conn, a)
+    def asg(a, b, p):       return cp.assignments(_conn, a)
+    def trp(a, b, p):       return cp.trips(_conn, a)
+    def fin(a, b, p):       return cp.finance(_conn, a)
+    def cas(a, b, p):       return cp.cases(_conn, a)
+    def notif(a, b, p):     return cp.notifications(_conn, a)
+    def perf(a, b, p):      return cp.performance(_conn, a)
+
+    def veh_add(a, b, p):   return cp.add_vehicle(_conn, a, b["category_code"], b["plate_number"],
+                                                  **{k: v for k, v in b.items() if k not in ("category_code", "plate_number")})
+    def drv_add(a, b, p):   return cp.add_driver(_conn, a, b["full_name"],
+                                                 **{k: v for k, v in b.items() if k != "full_name"})
+    def veh_maint(a, b, p): return cp.set_vehicle_maintenance(_conn, a, int(p["id"]), on=b.get("on", True), reason=b.get("reason"))
+    def pair(a, b, p):      return cp.check_pairing(_conn, a, int(b["driver_id"]), int(b["vehicle_id"]))
+    def doc_up(a, b, p):    return cp.upload_document(_conn, a, b["document_type"], b["subject_type"], int(b["subject_id"]),
+                                                      **{k: v for k, v in b.items() if k not in ("document_type", "subject_type", "subject_id")})
+    def payout(a, b, p):    return cp.submit_payout_account(_conn, a, b["beneficiary_name"], b["entity_name"],
+                                                            b["provider_reference"], b["account_number"],
+                                                            cooling_hours=b.get("cooling_hours"))
+    def off_new(a, b, p):   return cp.submit_offer(_conn, a, int(b["booking_id"]), b["amount"],
+                                                   vehicle_id=b.get("vehicle_id"), driver_id=b.get("driver_id"),
+                                                   **{k: v for k, v in b.items() if k not in ("booking_id", "amount", "vehicle_id", "driver_id")})
+    def off_wd(a, b, p):    return cp.withdraw_offer(_conn, a, int(p["id"]))
+    def asg_resp(a, b, p):  return cp.respond_assignment(_conn, a, int(p["id"]), b["decision"])
+    def pod(a, b, p):       return cp.submit_pod(_conn, a, int(p["id"]), kind=b.get("kind", "POD"),
+                                                 evidence_types=b.get("evidence_types"),
+                                                 **{k: v for k, v in b.items() if k not in ("kind", "evidence_types")})
+
+    # ---- operator-side principal administration (requires carrier-application authority) ----
+    def bind(a, b, p):      return {"id": cp.bind_principal(_conn, a, int(b["user_id"]), int(b["carrier_id"]),
+                                                            portal_role=b.get("portal_role", "CARRIER_OWNER"))}
+    def revoke(a, b, p):    return cp.revoke_principal(_conn, a, int(p["id"]), reason=b.get("reason"))
+    def op_overview(a, b, p): return cp.overview(_conn, a, requested=int(p["carrier_id"]))
+
+    return {
+        ("GET", "/portal/carrier/overview"): ov,
+        ("GET", "/portal/carrier/profile"): prof,
+        ("GET", "/portal/carrier/compliance"): comp,
+        ("GET", "/portal/carrier/fleet"): flt,
+        ("GET", "/portal/carrier/drivers"): drv,
+        ("GET", "/portal/carrier/invitations"): inv,
+        ("GET", "/portal/carrier/assignments"): asg,
+        ("GET", "/portal/carrier/trips"): trp,
+        ("GET", "/portal/carrier/finance"): fin,
+        ("GET", "/portal/carrier/cases"): cas,
+        ("GET", "/portal/carrier/notifications"): notif,
+        ("GET", "/portal/carrier/performance"): perf,
+        ("POST", "/portal/carrier/vehicles"): veh_add,
+        ("POST", "/portal/carrier/drivers"): drv_add,
+        ("POST", "/portal/carrier/vehicles/:id/maintenance"): veh_maint,
+        ("POST", "/portal/carrier/pairing-check"): pair,
+        ("POST", "/portal/carrier/documents"): doc_up,
+        ("POST", "/portal/carrier/payout-account"): payout,
+        ("POST", "/portal/carrier/offers"): off_new,
+        ("POST", "/portal/carrier/offers/:id/withdraw"): off_wd,
+        ("POST", "/portal/carrier/assignments/:id/respond"): asg_resp,
+        ("POST", "/portal/carrier/trips/:id/pod"): pod,
+        ("POST", "/admin/carrier-portal/bind"): bind,
+        ("POST", "/admin/carrier-portal/principals/:id/revoke"): revoke,
+        ("GET", "/admin/carrier-portal/overview/:carrier_id"): op_overview,
+    }
+
+
 ROUTES.update(_dev_portal_routes())
 ROUTES.update(_api_v1_routes())
 ROUTES.update(_goods_protection_routes())
 ROUTES.update(_delivery_verification_routes())
 ROUTES.update(_notifications_routes())
+ROUTES.update(_carrier_portal_routes())
 
 
 def _match(method, path):

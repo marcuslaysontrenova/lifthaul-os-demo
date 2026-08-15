@@ -1990,6 +1990,8 @@ def _api_v1_routes():
     def ins_get(a, b, p):   return ap.api_insurance_get(_conn, a, p["ref"])
     def clm_create(a, b, p): return ap.api_claim_create(_conn, a, b)
     def clm_get(a, b, p):   return ap.api_claim_get(_conn, a, p["id"])
+    def dv_status(a, b, p): return ap.api_delivery_status(_conn, a, p["ref"])
+    def dv_verify(a, b, p): return ap.api_delivery_verify(_conn, a, b)
     return {
         ("POST", "/api/v1/bookings"): bk_create,
         ("GET", "/api/v1/bookings/:ref"): bk_get,
@@ -2000,6 +2002,37 @@ def _api_v1_routes():
         ("GET", "/api/v1/insurance/:ref"): ins_get,
         ("POST", "/api/v1/claims"): clm_create,
         ("GET", "/api/v1/claims/:id"): clm_get,
+        ("GET", "/api/v1/bookings/:ref/delivery-verification"): dv_status,
+        ("POST", "/api/v1/delivery/verify"): dv_verify,
+    }
+
+
+def _delivery_verification_routes():
+    import delivery_verification as dv
+
+    def d_recipient(a, b, p): return dv.set_recipient(_conn, a, int(p["id"]), b["name"], b.get("mobile"),
+                                                      b.get("email"), b.get("org"), b.get("role"))
+    def d_issue(a, b, p):     return dv.issue_otp(_conn, a, int(p["id"]), b.get("stop_seq"), b.get("channel", "SMS"))
+    def d_resend(a, b, p):    return dv.resend_otp(_conn, a, int(p["id"]), b.get("stop_seq"))
+    def d_verify(a, b, p):    return dv.verify_otp(_conn, a, int(p["id"]), b["code"], b.get("stop_seq"))
+    def d_offline(a, b, p):   return dv.offline_capture(_conn, a, int(p["id"]), b.get("pod"), b.get("photo"), b.get("signature"))
+    def d_override(a, b, p):  return dv.manual_override(_conn, a, int(p["id"]), b.get("reason"), b.get("evidence"),
+                                                        mfa_ok=b.get("mfa_ok", False), approver_id=b.get("approver_id"))
+    def d_status(a, b, p):    core.require(a, "delivery.verification.view") if core.can(a, "delivery.verification.view") else core.require(a, "marketplace.trust.view"); return dv.status(_conn, int(p["id"]))
+    def d_policy(a, b, p):    return dv.resolve_policy(_conn, int(p["id"]))
+    def d_evidence(a, b, p):  return dv.evidence_bundle(_conn, a, int(p["id"]))
+    def d_queue(a, b, p):     return dv.admin_queue(_conn, a)
+    return {
+        ("POST", "/admin/marketplace/bookings/:id/delivery/recipient"): d_recipient,
+        ("POST", "/admin/marketplace/bookings/:id/delivery/otp/issue"): d_issue,
+        ("POST", "/admin/marketplace/bookings/:id/delivery/otp/resend"): d_resend,
+        ("POST", "/admin/marketplace/bookings/:id/delivery/otp/verify"): d_verify,
+        ("POST", "/admin/marketplace/bookings/:id/delivery/offline"): d_offline,
+        ("POST", "/admin/marketplace/bookings/:id/delivery/override"): d_override,
+        ("GET", "/admin/marketplace/bookings/:id/delivery/status"): d_status,
+        ("GET", "/admin/marketplace/bookings/:id/delivery/policy"): d_policy,
+        ("GET", "/admin/marketplace/bookings/:id/delivery/evidence"): d_evidence,
+        ("GET", "/admin/marketplace/delivery-verification-queue"): d_queue,
     }
 
 
@@ -2031,6 +2064,7 @@ def _goods_protection_routes():
 ROUTES.update(_dev_portal_routes())
 ROUTES.update(_api_v1_routes())
 ROUTES.update(_goods_protection_routes())
+ROUTES.update(_delivery_verification_routes())
 
 
 def _match(method, path):

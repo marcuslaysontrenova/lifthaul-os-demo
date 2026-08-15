@@ -344,6 +344,9 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.ltfrb.view", "marketplace.ltfrb.manage",
     # Cargo Insurance / Goods Protection (coverage orchestration; claims reuse marketplace.claim.*)
     "marketplace.insurance.view", "marketplace.insurance.manage",
+    # Secure Delivery Verification / recipient OTP (driver may verify, never view/override the code)
+    "delivery.verification.view", "delivery.verification.issue", "delivery.verification.resend",
+    "delivery.verification.verify", "delivery.verification.override",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
@@ -519,6 +522,17 @@ DEFAULT_CONFIG = {
     "insurance.manual_underwriting_threshold": "1000000",
     "insurance.excluded_cargo": "PROHIBITED,DANGEROUS",
     "insurance.deductible_pct": "2",
+    # Secure Delivery Verification (recipient OTP is ONE factor). Enforcement OFF by default so existing
+    # release flows are unchanged; policy is per-context (default / heavy / high-value), not universal.
+    "delivery.verification_enforced": "false",
+    "delivery.policy.default": "POD_REQUIRED",
+    "delivery.policy.heavy": "POD_REQUIRED,RECIPIENT_SIGNATURE_REQUIRED,PHOTO_REQUIRED",
+    "delivery.policy.high_value": "POD_REQUIRED,GEOFENCE_REQUIRED,RECIPIENT_OTP_REQUIRED,RECIPIENT_SIGNATURE_REQUIRED",
+    "delivery.high_value_threshold": "1000000",
+    "delivery.otp_ttl_minutes": "15",
+    "delivery.otp_max_attempts": "5",
+    "delivery.resend_max": "3",
+    "delivery.messaging_provider_active": "false",
 }
 
 

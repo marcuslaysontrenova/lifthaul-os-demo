@@ -500,6 +500,15 @@ def release_gate(conn, booking_id, carrier_id, *, funding_confirmed=False, funds
         reasons.append("exceeds_carrier_risk_limit")
     if not approvals_complete:
         reasons.append("required_approvals_incomplete")
+    # Secure delivery verification (config-gated; default OFF so existing flows are unchanged). When
+    # enforcement is on and the policy requires a recipient factor, release fails CLOSED until verified.
+    try:
+        import delivery_verification as _dv
+        rv = _dv.release_requirement_met(conn, booking_id)
+        if not rv["ok"]:
+            reasons.extend(rv["reasons"])
+    except Exception:
+        pass
     return {"allowed": not reasons, "denied_reasons": reasons}
 
 

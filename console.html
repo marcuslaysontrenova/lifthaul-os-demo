@@ -541,6 +541,8 @@ window.RGO_API = (function(){
     gpRequests:function(){return req('GET','/admin/marketplace/insurance/requests');},
     gpQuote:function(id){return req('POST','/admin/marketplace/bookings/'+id+'/insurance/quote',{});},
     gpBind:function(id,b){return req('POST','/admin/marketplace/bookings/'+id+'/insurance/bind',b);},
+    dvQueue:function(){return req('GET','/admin/marketplace/delivery-verification-queue');},
+    dvOverride:function(id,b){return req('POST','/admin/marketplace/bookings/'+id+'/delivery/override',b);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1120,6 +1122,7 @@ window.RGO_API = (function(){
     if(act==='apiReplay')return apiReplay(arg);
     if(act==='gpQuote')return gpQuote(arg);
     if(act==='gpBind')return gpBind(arg);
+    if(act==='dvOverride')return dvOverride(arg);
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1186,7 +1189,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1197,6 +1200,7 @@ window.RGO_API = (function(){
     if(adminTab==='regulatory')return adminRegulatory();
     if(adminTab==='intake')return adminIntake();
     if(adminTab==='insurance')return adminInsurance();
+    if(adminTab==='delivery')return adminDelivery();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1460,6 +1464,27 @@ window.RGO_API = (function(){
   }
   function gpQuote(id){RGO_API.gpQuote(id).then(function(d){toast('Coverage: '+d.result+(d.premium?(' · premium '+d.premium):'')+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function gpBind(id){var ins=window.prompt('Insurer name (from the licensed provider):','');if(!ins)return;var pol=window.prompt('Policy / binder reference (required):','');if(!pol)return;var ev=window.prompt('Approval evidence reference (required — e.g. binder doc id):','');if(!ev)return;var amt=window.prompt('Coverage amount:','');var prem=window.prompt('Premium:','');RGO_API.gpBind(id,{insurer:ins,policy_ref:pol,coverage_amount:Number(amt||0),premium:Number(prem||0),deductible:0,effective_from:new Date().toISOString().slice(0,10),effective_to:'',evidence:ev}).then(function(){toast('Coverage BOUND · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  // ---------- Delivery Verification (recipient OTP is one factor) ----------
+  function adminDelivery(){
+    if(liveMode){
+      RGO_API.dvQueue().then(function(q){
+        var host=$('#adminBody');if(!host||adminTab!=='delivery')return;
+        var ch=(q&&q.challenges)||[],pend=(q&&q.pending)||[],lock=(q&&q.locked)||[],exp=(q&&q.expired)||[];
+        var chip=function(s){var c=(s==='LOCKED'||s==='REVOKED')?'c-crit':(s==='VERIFIED')?'c-good':(s==='EXPIRED')?'c-warn':(s==='ISSUED'||s==='DELIVERED_TO_RECIPIENT')?'c-info':'c-mut';return '<span class="chip '+c+'">'+esc(s)+'</span>';};
+        host.innerHTML=
+          '<div class="access-note"><span>📮</span><div><b>Delivery Verification.</b> Recipient OTP is <b>one factor</b>, never the whole proof — a delivery is verified only when every required control passes (destination + geofence + POD + authorized recipient + OTP/signature + no blocking dispute + no critical fraud). Then the existing Protected Payment release gate can consider the milestone verified. The OTP is server-generated, hashed, single-use, and <b>never shown here or to the driver</b>. <b>OTP verified ≠ cargo undamaged</b> — claims and Goods Protection stay independent.</div></div>'+
+          '<div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px">'+
+            '<div class="panel"><div class="panel-h"><h3>Pending</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--info)">'+pend.length+'</b></div></div>'+
+            '<div class="panel"><div class="panel-h"><h3>Locked</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--crit)">'+lock.length+'</b></div></div>'+
+            '<div class="panel"><div class="panel-h"><h3>Expired</h3></div><div class="panel-b"><b style="font-size:22px;color:var(--warn)">'+exp.length+'</b></div></div>'+
+          '</div>'+
+          '<div class="panel"><div class="panel-h"><h3>Verification Challenges</h3><div class="spacer"></div><span class="cnt">'+ch.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Booking</th><th>Stop</th><th>Status</th><th class="right">Attempts</th><th>Issued</th><th>Verified</th><th></th></tr></thead><tbody>'+(ch.map(function(r){var acts=(r.status==='LOCKED'||r.status==='EXPIRED')?'<button class="btn line sm" data-act="dvOverride" data-arg="'+r.booking_id+'">Override</button>':'';return '<tr><td>#'+esc(r.booking_id)+'</td><td>'+esc(r.stop_seq==null?'final':r.stop_seq)+'</td><td>'+chip(r.status)+'</td><td class="tnum">'+esc(r.attempt_count)+'/'+esc(r.max_attempts)+'</td><td style="font-size:11px">'+esc(String(r.issued_at||'').slice(0,16))+'</td><td style="font-size:11px">'+esc(String(r.verified_at||'—').slice(0,16))+'</td><td>'+acts+'</td></tr>';}).join('')||'<tr><td colspan="7" class="empty">No verification challenges.</td></tr>')+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading delivery verification…</div></div></div>';
+    }
+    return '<div class="access-note"><span>📮</span><div><b>Delivery Verification</b> — recipient OTP (one factor), pending/locked/expired challenges, manual override (MFA + reason + evidence). The OTP is never displayed. Connect a backend to administer. Requires <code>delivery.verification.view</code>.</div></div>';
+  }
+  function dvOverride(id){if(!window.confirm('Manual delivery-verification override for booking #'+id+'? This is a high-severity, audited action (MFA + reason + evidence required).'))return;var reason=window.prompt('Reason (required):','');if(!reason)return;var ev=window.prompt('Supporting evidence reference (required):','');if(!ev)return;RGO_API.dvOverride(id,{reason:reason,evidence:ev,mfa_ok:true}).then(function(){toast('Override applied · high-severity audit');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Developer Portal (Platform Control -> Integrations) ----------
   function adminDevPortal(){
     if(liveMode){

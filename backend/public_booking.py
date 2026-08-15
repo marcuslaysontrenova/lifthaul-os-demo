@@ -510,9 +510,19 @@ def track(conn, token):
         "schedule_type": d.get("schedule_type") or "NOW",
         "scheduled_at": d.get("scheduled_at"),
         "stops": _track_stops(conn, bid),
+        "delivery_verification": _dv_status(conn, bid),
         "stages": [{"name": s, "state": ("done" if i < cur else "current" if i == cur else "upcoming")}
                    for i, s in enumerate(stages)],
     }
+
+
+def _dv_status(conn, booking_id):
+    """Customer-safe delivery-verification projection (no OTP, no phone). Empty if the feature is off."""
+    try:
+        import delivery_verification as dv
+        return dv.public_status(conn, booking_id)
+    except Exception:
+        return {"required": False}
 
 
 def _track_stops(conn, booking_id):

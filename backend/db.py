@@ -123,6 +123,8 @@ def _seed_platform(conn):
     api_platform.init(conn); api_platform.seed(conn)                     # Platform Control -> Integrations: B2B API clients + scopes + outbound webhooks
     import goods_protection
     goods_protection.init(conn); goods_protection.seed(conn)             # Cargo Insurance / Goods Protection: coverage orchestration on mkt_bookings (claims reuse mkt_claims)
+    import delivery_verification
+    delivery_verification.init(conn); delivery_verification.seed(conn)   # Secure Delivery Verification: recipient OTP factor + release-gate integration
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

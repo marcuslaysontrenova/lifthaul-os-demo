@@ -25,7 +25,8 @@ import tenant
 # Granular scopes — an integration client never gets unrestricted access.
 SCOPES = ("bookings:create", "bookings:read", "bookings:update", "quotations:read",
           "tracking:read", "marketplace:read", "payments:read", "jobs:read",
-          "insurance:quote", "insurance:read", "claims:create", "claims:read")
+          "insurance:quote", "insurance:read", "claims:create", "claims:read",
+          "delivery:read", "delivery:verify")
 
 # Webhook event catalogue (customer-subscribable).
 EVENTS = ("booking.created", "booking.reviewed", "quotation.ready", "quotation.accepted",
@@ -33,7 +34,9 @@ EVENTS = ("booking.created", "booking.reviewed", "quotation.ready", "quotation.a
           "trip.started", "trip.at_port", "trip.in_transit", "trip.delivered", "pod.available",
           "dispute.opened", "settlement.completed",
           "insurance.quote_ready", "insurance.bound", "insurance.rejected",
-          "claim.created", "claim.submitted", "claim.approved", "claim.denied", "claim.settled")
+          "claim.created", "claim.submitted", "claim.approved", "claim.denied", "claim.settled",
+          "delivery.verification_required", "delivery.recipient_verified", "delivery.verification_failed",
+          "delivery.completed")
 
 DELIVERY_STATES = ("PENDING", "DELIVERING", "DELIVERED", "RETRYING", "FAILED", "DEAD_LETTER", "DISABLED")
 
@@ -370,6 +373,25 @@ def api_claim_get(conn, actor, claim_id):
     if not r:
         raise core.NotFoundError("claim not found")
     return dict(r)
+
+
+def api_delivery_status(conn, actor, ref):
+    require_scope(actor, "delivery:read")
+    import delivery_verification as dv
+    bid = _resolve_booking_id(conn, ref)
+    if not bid:
+        raise core.NotFoundError("booking not found")
+    return dv.public_status(conn, bid)   # customer-safe: no OTP, no phone, no fraud signals
+
+
+def api_delivery_verify(conn, actor, payload):
+    require_scope(actor, "delivery:verify")
+    import delivery_verification as dv
+    bid = _resolve_booking_id(conn, (payload or {}).get("booking_ref"))
+    if not bid:
+        raise core.NotFoundError("booking not found")
+    svc = _svc(actor, {"delivery.verification.verify"})
+    return dv.verify_otp(conn, svc, bid, (payload or {}).get("code"), (payload or {}).get("stop_seq"))
 
 
 # --------------------------------------------------------------------------- #

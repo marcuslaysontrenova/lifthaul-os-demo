@@ -187,6 +187,41 @@ fabricates them.
 | 413 | payload too large |
 | 429 | rate limit exceeded |
 
+## Automated Customer & Operational Notifications
+
+An event-driven notification layer sits over the canonical lifecycle. It **extends the existing
+notification domain** — it is not a parallel messaging system. The B2B event bus (`emit_event`) fans
+each platform event out to both outbound webhooks **and** this notification engine, so a single
+lifecycle event (booking → quote → payment → carrier → pickup → delivery → OTP → POD → claim →
+settlement) can reach the customer over email / SMS / push (WhatsApp later) according to policy.
+
+**Honest delivery.** When no live provider adapter is configured for a channel, a send is **never**
+marked DELIVERED. It fails as `provider_unavailable`; mandatory transactional notices retry with
+exponential backoff to a dead-letter state, optional ones fail. Internal states: `CREATED · QUEUED ·
+PROVIDER_ACCEPTED · DELIVERED · FAILED · RETRYING · DEAD_LETTER · SUPPRESSED`.
+
+**Notification Policy Matrix** — per-event × channel modes (`REQUIRED` / `OPTIONAL` / `OFF`) decide
+which channels fire; not every event blindly sends every channel. `REQUIRED` events in the mandatory
+set (payment, carrier assignment, OTP issuance, recipient verified, delivered, claim status,
+settlement) **cannot be suppressed** by an opt-out; `OPTIONAL` channels honor recipient opt-in/opt-out.
+
+**Safety.** Duplicate prevention via a per-(tenant,event,recipient,channel,correlation) dedup key;
+sensitive values (OTP/code/secret/password/card/bank/PIN) are **stripped from notification bodies** —
+the OTP plaintext is delivered only through the authorized delivery-verification path, never logged,
+returned, or placed in a notification. Recipients are masked in all history views. Every send emits an
+audit trail; templates are tenant-scoped and versioned (activating a new version deactivates the prior).
+
+Admin endpoints (session-authenticated, RBAC `integration.catalog.view` / `integration.profile.manage`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/notifications/history` | Notification history (recipient omitted; tenant-scoped) |
+| GET | `/admin/notifications/provider-health` | Per-channel adapter status |
+| GET | `/admin/notifications/policy/:event` | Resolved policy matrix row for an event |
+| POST | `/admin/notifications/templates` | Upsert a tenant/event/channel/locale template (versioned) |
+| POST | `/admin/notifications/preferences` | Set a recipient communication preference / opt-out |
+| POST | `/admin/notifications/deliver` | Run one delivery pass (honest — no fabricated sends) |
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

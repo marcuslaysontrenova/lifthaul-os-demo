@@ -2061,10 +2061,30 @@ def _goods_protection_routes():
     }
 
 
+def _notifications_routes():
+    import notifications_engine as ne
+
+    def n_history(a, b, p):  return ne.history(_conn, a)
+    def n_health(a, b, p):   core.require(a, "integration.catalog.view") if core.can(a, "integration.catalog.view") else core.require(a, "integration.profile.manage"); return ne.provider_health(_conn)
+    def n_template(a, b, p): return ne.upsert_template(_conn, a, b["event_type"], b["channel"], b.get("subject", ""), b["body"], b.get("locale", "en"), b.get("tenant_id"))
+    def n_pref(a, b, p):     return ne.set_pref(_conn, a, b["recipient"], b["channel"], b.get("opted_out", False), b.get("locale", "en"), b.get("tenant_id"))
+    def n_deliver(a, b, p):  core.require(a, "integration.profile.manage"); return ne.deliver_pending(_conn)
+    def n_policy(a, b, p):   core.require(a, "integration.catalog.view") if core.can(a, "integration.catalog.view") else core.require(a, "integration.profile.manage"); return ne.policy_for(_conn, a.get("tenant_id"), p["event"])
+    return {
+        ("GET", "/admin/notifications/history"): n_history,
+        ("GET", "/admin/notifications/provider-health"): n_health,
+        ("POST", "/admin/notifications/templates"): n_template,
+        ("POST", "/admin/notifications/preferences"): n_pref,
+        ("POST", "/admin/notifications/deliver"): n_deliver,
+        ("GET", "/admin/notifications/policy/:event"): n_policy,
+    }
+
+
 ROUTES.update(_dev_portal_routes())
 ROUTES.update(_api_v1_routes())
 ROUTES.update(_goods_protection_routes())
 ROUTES.update(_delivery_verification_routes())
+ROUTES.update(_notifications_routes())
 
 
 def _match(method, path):

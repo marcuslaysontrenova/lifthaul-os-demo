@@ -533,6 +533,12 @@ DEFAULT_CONFIG = {
     "delivery.otp_max_attempts": "5",
     "delivery.resend_max": "3",
     "delivery.messaging_provider_active": "false",
+    # Automated notifications — providers OFF by default so delivery FAILS honestly (never fabricated).
+    "notify.max_attempts": "5",
+    "notify.email.provider_active": "false",
+    "notify.sms.provider_active": "false",
+    "notify.push.provider_active": "false",
+    "notify.whatsapp.provider_active": "false",
 }
 
 

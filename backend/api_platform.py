@@ -478,6 +478,12 @@ def emit_event(conn, tenant_id, event_type, payload, correlation_id=None):
                       ts, ts, ts))
         n += 1
     conn.commit()
+    # Bridge the same canonical event into the notification layer (customer/operational comms).
+    try:
+        import notifications_engine as ne
+        ne.on_event(conn, tenant_id, event_type, payload)
+    except Exception:
+        pass
     return {"queued": n, "event_type": event_type}
 
 

@@ -543,6 +543,11 @@ window.RGO_API = (function(){
     gpBind:function(id,b){return req('POST','/admin/marketplace/bookings/'+id+'/insurance/bind',b);},
     dvQueue:function(){return req('GET','/admin/marketplace/delivery-verification-queue');},
     dvOverride:function(id,b){return req('POST','/admin/marketplace/bookings/'+id+'/delivery/override',b);},
+    notifHistory:function(){return req('GET','/admin/notifications/history');},
+    notifHealth:function(){return req('GET','/admin/notifications/provider-health');},
+    notifPolicy:function(ev){return req('GET','/admin/notifications/policy/'+encodeURIComponent(ev));},
+    notifDeliver:function(){return req('POST','/admin/notifications/deliver',{});},
+    notifPref:function(b){return req('POST','/admin/notifications/preferences',b);},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1123,6 +1128,7 @@ window.RGO_API = (function(){
     if(act==='gpQuote')return gpQuote(arg);
     if(act==='gpBind')return gpBind(arg);
     if(act==='dvOverride')return dvOverride(arg);
+    if(act==='notifDeliver')return notifDeliver();
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1189,7 +1195,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['notifications','Notifications'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1201,6 +1207,7 @@ window.RGO_API = (function(){
     if(adminTab==='intake')return adminIntake();
     if(adminTab==='insurance')return adminInsurance();
     if(adminTab==='delivery')return adminDelivery();
+    if(adminTab==='notifications')return adminNotifications();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1485,6 +1492,31 @@ window.RGO_API = (function(){
     return '<div class="access-note"><span>📮</span><div><b>Delivery Verification</b> — recipient OTP (one factor), pending/locked/expired challenges, manual override (MFA + reason + evidence). The OTP is never displayed. Connect a backend to administer. Requires <code>delivery.verification.view</code>.</div></div>';
   }
   function dvOverride(id){if(!window.confirm('Manual delivery-verification override for booking #'+id+'? This is a high-severity, audited action (MFA + reason + evidence required).'))return;var reason=window.prompt('Reason (required):','');if(!reason)return;var ev=window.prompt('Supporting evidence reference (required):','');if(!ev)return;RGO_API.dvOverride(id,{reason:reason,evidence:ev,mfa_ok:true}).then(function(){toast('Override applied · high-severity audit');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  // ---------- Automated Customer & Operational Notifications ----------
+  var NOTIF_EVENTS=['booking_received','quotation_ready','payment_required','carrier_assigned','driver_approaching','delivery_otp_issued','pod_available','claim_status','settlement_complete'];
+  function adminNotifications(){
+    if(liveMode){
+      Promise.all([RGO_API.notifHistory().catch(function(){return{notifications:[]};}),RGO_API.notifHealth().catch(function(){return{providers:[]};})].concat(NOTIF_EVENTS.map(function(ev){return RGO_API.notifPolicy(ev).catch(function(){return null;});}))).then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='notifications')return;
+        var hist=(r[0]||{}).notifications||[],prov=(r[1]||{}).providers||[],pols=r.slice(2);
+        var st=function(s){var c=(s==='DEAD_LETTER'||s==='FAILED')?'c-crit':(s==='DELIVERED'||s==='PROVIDER_ACCEPTED')?'c-good':(s==='RETRYING'||s==='SUPPRESSED')?'c-warn':(s==='QUEUED'||s==='CREATED')?'c-info':'c-mut';return '<span class="chip '+c+'">'+esc(s)+'</span>';};
+        var mode=function(m){var c=m==='REQUIRED'?'c-good':m==='OPTIONAL'?'c-info':'c-mut';return '<span class="chip '+c+'">'+esc(m||'OFF')+'</span>';};
+        var phealth=function(s){return '<span class="chip '+(s==='ACTIVE'?'c-good':'c-warn')+'">'+esc(s)+'</span>';};
+        var polRows=pols.map(function(p,i){if(!p)return '';return '<tr><td><code>'+esc(NOTIF_EVENTS[i])+'</code>'+(p.mandatory?' <span class="chip c-crit">mandatory</span>':'')+'</td><td>'+mode(p.email)+'</td><td>'+mode(p.sms)+'</td><td>'+mode(p.push)+'</td><td>'+mode(p.whatsapp)+'</td></tr>';}).join('');
+        var provRows=prov.map(function(x){return '<tr><td>'+esc(x.channel)+'</td><td>'+phealth(x.status)+'</td><td style="font-size:11px;color:var(--ink-2)">'+esc(x.detail||'')+'</td></tr>';}).join('')||'<tr><td colspan="3" class="empty">No channels configured.</td></tr>';
+        var hRows=hist.map(function(x){return '<tr><td style="font-size:11px">'+esc(String(x.created_at||'').slice(0,16))+'</td><td><code>'+esc(x.event_type)+'</code>'+(x.mandatory?' <span class="chip c-crit sm">M</span>':'')+'</td><td>'+esc(x.channel)+'</td><td>'+st(x.status)+'</td><td class="tnum">'+esc(x.attempts||0)+'/'+esc(x.max_attempts||0)+'</td><td style="font-size:11px;color:var(--crit)">'+esc(x.last_error||'')+'</td></tr>';}).join('')||'<tr><td colspan="6" class="empty">No notifications yet.</td></tr>';
+        host.innerHTML=
+          '<div class="access-note"><span>🔔</span><div><b>Automated Notifications.</b> Event-driven layer over the canonical lifecycle (booking → quote → payment → carrier → pickup → delivery → OTP → POD → claim → settlement). Email/SMS/push (WhatsApp later) via provider adapters that <b>never fake delivery</b> — with no live provider, sends fail honestly (<code>provider_unavailable</code>) and retry to dead-letter, never DELIVERED. Mandatory transactional notices cannot be opted out. OTP and other secrets are <b>never</b> placed in notification bodies. Requires <code>integration.catalog.view</code>.</div></div>'+
+          '<div style="margin-bottom:12px"><button class="btn line" data-act="notifDeliver">▷ Run delivery pass</button></div>'+
+          '<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Notification Policy Matrix</h3><div class="spacer"></div><span class="cnt">per-event × channel</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Event</th><th>Email</th><th>SMS</th><th>Push</th><th>WhatsApp</th></tr></thead><tbody>'+polRows+'</tbody></table></div></div>'+
+          '<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Provider Health</h3><div class="spacer"></div><span class="cnt">'+prov.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Channel</th><th>Status</th><th>Detail</th></tr></thead><tbody>'+provRows+'</tbody></table></div></div>'+
+          '<div class="panel"><div class="panel-h"><h3>Notification History</h3><div class="spacer"></div><span class="cnt">'+hist.length+' · recipients masked</span></div><div class="tblwrap" style="border:0;max-height:360px;overflow:auto"><table class="tbl"><thead><tr><th>When</th><th>Event</th><th>Channel</th><th>Status</th><th class="right">Attempts</th><th>Last error</th></tr></thead><tbody>'+hRows+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading notifications…</div></div></div>';
+    }
+    return '<div class="access-note"><span>🔔</span><div><b>Automated Customer &amp; Operational Notifications</b> — event-driven comms across the canonical lifecycle. Notification Policy Matrix (per-event × channel), mandatory transactional notices, opt-outs where legal, template versioning, provider health, retries → dead-letter, duplicate prevention, recipient masking, correlation IDs, full audit. Providers fail honestly — no fabricated delivery. Connect a backend to administer. Requires <code>integration.catalog.view</code>.</div></div>';
+  }
+  function notifDeliver(){RGO_API.notifDeliver().then(function(d){toast('Delivery pass: '+((d.delivered||0)+' delivered · '+(d.no_provider||0)+' no-provider · '+(d.retrying||0)+' retrying · '+(d.dead_letter||0)+' dead-letter'));refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Developer Portal (Platform Control -> Integrations) ----------
   function adminDevPortal(){
     if(liveMode){

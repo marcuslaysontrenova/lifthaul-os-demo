@@ -125,6 +125,8 @@ def _seed_platform(conn):
     goods_protection.init(conn); goods_protection.seed(conn)             # Cargo Insurance / Goods Protection: coverage orchestration on mkt_bookings (claims reuse mkt_claims)
     import delivery_verification
     delivery_verification.init(conn); delivery_verification.seed(conn)   # Secure Delivery Verification: recipient OTP factor + release-gate integration
+    import notifications_engine
+    notifications_engine.init(conn); notifications_engine.seed(conn)     # Automated Customer & Operational Notifications: lifecycle comms over the existing notification domain
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

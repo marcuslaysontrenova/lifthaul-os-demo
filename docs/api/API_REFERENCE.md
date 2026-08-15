@@ -391,6 +391,44 @@ customer's rental invoices accrue to their statement automatically (no account �
 simply stands alone). Front-end: a **Corporate Billing** operator console tab (accounts, charges,
 payments, statement generation, and a statement detail view with aging).
 
+## Preferred Carriers / Dedicated Capacity
+
+A shipper preference layer over the **existing** matching — steer work to trusted carriers, exclude
+unwanted ones, and reserve guaranteed capacity — without forking matching, ranking, or the
+carrier/vehicle domains.
+
+- `carrier_preferences` — a shipper's tiered carrier list:
+  `DEDICATED` (reserved capacity, highest) > `EXCLUSIVE` (when any exists, the pool is restricted to the
+  shipper's preferred carriers only) > `PREFERRED` (ranking boost; others still compete);
+  `BLOCKED` (excluded from this shipper's matches — a **business choice, never a compliance action**).
+  One preference per shipper-carrier pair (upsert).
+- `dedicated_capacity` — a commitment of N units of a vehicle category from a carrier to a shipper over
+  a period. Reserving capacity implies a `DEDICATED` preference. **Usage is counted honestly** from real
+  assignments (carrier + matching vehicle category + shipper, within the period) — never asserted.
+
+`apply_preferences` runs **after** the deterministic `rank_candidates` step and only **reorders/filters
+an already-eligible list** — it can never override a hard eligibility or compliance gate (those ran in
+`candidate_pool`), and never introduces a carrier that wasn't already eligible. The adjustment is
+transparent: each surviving candidate is annotated with `preference_tier`, `preference_bonus`, and
+`adjusted_score`. `generate_candidates` consults this layer through a guarded hook, so preferences take
+effect without matching needing to know how they're stored.
+
+Operator endpoints (RBAC `marketplace.preference.*` / `marketplace.capacity.*`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/admin/marketplace/preferences` | Set/upsert a shipper-carrier preference (`…preference.manage`) |
+| POST | `/admin/marketplace/preferences/:id/remove` | Remove a preference |
+| GET | `/admin/marketplace/preferences` | List preferences (optionally by shipper) |
+| POST | `/admin/marketplace/dedicated-capacity` | Reserve capacity (`…capacity.manage`; implies DEDICATED) |
+| POST | `/admin/marketplace/dedicated-capacity/:id/cancel` | Cancel a commitment |
+| GET | `/admin/marketplace/dedicated-capacity/:id/status` | Committed / used (from real assignments) / available |
+| GET | `/admin/marketplace/dedicated-capacity` | List commitments |
+| GET | `/admin/marketplace/preference-queues` | Tier + active-capacity counts |
+
+Front-end: a **Preferred Carriers** operator console tab (tier preferences, capacity reservations, and
+live usage).
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

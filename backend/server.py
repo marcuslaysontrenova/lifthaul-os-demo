@@ -2259,11 +2259,39 @@ def _billing_routes():
     }
 
 
+def _preference_routes():
+    import preferred_carriers as pc
+
+    def pref_set(a, b, p):   return pc.set_preference(_conn, a, int(b["shipper_id"]), int(b["carrier_id"]),
+                                                      b["tier"], priority=b.get("priority", 0), note=b.get("note"))
+    def pref_rm(a, b, p):    return pc.remove_preference(_conn, a, int(p["id"]))
+    def pref_list(a, b, p):  return {"preferences": pc.list_preferences(_conn, a, shipper_id=b.get("shipper_id"))}
+    def cap_reserve(a, b, p): return pc.reserve_capacity(_conn, a, int(b["shipper_id"]), int(b["carrier_id"]),
+                                                         b["vehicle_category"], b["committed_units"],
+                                                         period_start=b.get("period_start"), period_end=b.get("period_end"),
+                                                         rate_ref=b.get("rate_ref"))
+    def cap_cancel(a, b, p): return pc.cancel_capacity(_conn, a, int(p["id"]), reason=b.get("reason"))
+    def cap_status(a, b, p): return pc.capacity_status(_conn, a, int(p["id"]))
+    def cap_list(a, b, p):   return {"capacity": pc.list_capacity(_conn, a, shipper_id=b.get("shipper_id"), status=b.get("status"))}
+    def pref_queues(a, b, p): return pc.queues(_conn, a)
+    return {
+        ("POST", "/admin/marketplace/preferences"): pref_set,
+        ("POST", "/admin/marketplace/preferences/:id/remove"): pref_rm,
+        ("GET", "/admin/marketplace/preferences"): pref_list,
+        ("POST", "/admin/marketplace/dedicated-capacity"): cap_reserve,
+        ("POST", "/admin/marketplace/dedicated-capacity/:id/cancel"): cap_cancel,
+        ("GET", "/admin/marketplace/dedicated-capacity/:id/status"): cap_status,
+        ("GET", "/admin/marketplace/dedicated-capacity"): cap_list,
+        ("GET", "/admin/marketplace/preference-queues"): pref_queues,
+    }
+
+
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
 ROUTES.update(_reassignment_routes())
 ROUTES.update(_rental_routes())
 ROUTES.update(_billing_routes())
+ROUTES.update(_preference_routes())
 
 
 def _match(method, path):

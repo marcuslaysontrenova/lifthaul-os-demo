@@ -360,6 +360,9 @@ MARKETPLACE_PERMISSIONS = [
     # Corporate Billing & Statements — consolidated A/R over the existing revenue streams
     "marketplace.billing.view", "marketplace.billing.manage", "marketplace.billing.statement",
     "marketplace.billing.payment",
+    # Preferred Carriers / Dedicated Capacity — shipper preference layer over matching
+    "marketplace.preference.view", "marketplace.preference.manage",
+    "marketplace.capacity.view", "marketplace.capacity.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

@@ -135,6 +135,8 @@ def _seed_platform(conn):
     rental.init(conn); rental.seed(conn)                                 # Hourly/Daily/Project Rental: duration-and-usage revenue model over the existing spine (reuses Protected Payment; funds never fabricated)
     import billing
     billing.init(conn); billing.seed(conn)                               # Corporate Billing & Statements: consolidated A/R ledger + periodic statements over the existing revenue streams (A/R only; no fund movement)
+    import preferred_carriers
+    preferred_carriers.init(conn); preferred_carriers.seed(conn)         # Preferred Carriers / Dedicated Capacity: shipper preference layer over matching (reorders eligible candidates only; never overrides hard eligibility)
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

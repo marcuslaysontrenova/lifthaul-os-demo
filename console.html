@@ -576,6 +576,14 @@ window.RGO_API = (function(){
     blStatement:function(id,b){return req('POST','/admin/marketplace/billing/accounts/'+id+'/statements',b);},
     blStatements:function(){return req('GET','/admin/marketplace/billing/statements');},
     blStatementGet:function(id){return req('GET','/admin/marketplace/billing/statements/'+id);},
+    pcPrefs:function(){return req('GET','/admin/marketplace/preferences');},
+    pcQueues:function(){return req('GET','/admin/marketplace/preference-queues');},
+    pcSetPref:function(b){return req('POST','/admin/marketplace/preferences',b);},
+    pcRemovePref:function(id){return req('POST','/admin/marketplace/preferences/'+id+'/remove',{});},
+    pcCapacity:function(){return req('GET','/admin/marketplace/dedicated-capacity');},
+    pcReserve:function(b){return req('POST','/admin/marketplace/dedicated-capacity',b);},
+    pcCapStatus:function(id){return req('GET','/admin/marketplace/dedicated-capacity/'+id+'/status');},
+    pcCapCancel:function(id){return req('POST','/admin/marketplace/dedicated-capacity/'+id+'/cancel',{});},
     ltfrbPending:function(){return req('GET','/admin/marketplace/ltfrb/pending-verification');},
     ltfrbExpiring:function(){return req('GET','/admin/marketplace/ltfrb/expiring');},
     createCustomer:function(b){return req('POST','/customers',b);},
@@ -1174,6 +1182,11 @@ window.RGO_API = (function(){
     if(act==='blPay')return blPay(arg);
     if(act==='blStmt')return blStmt(arg);
     if(act==='blStmtView')return blStmtView(arg);
+    if(act==='pcSetPref')return pcSetPref();
+    if(act==='pcRemovePref')return pcRemovePref(arg);
+    if(act==='pcReserve')return pcReserve();
+    if(act==='pcCapStatus')return pcCapStatus(arg);
+    if(act==='pcCapCancel')return pcCapCancel(arg);
     if(act==='kybExpiry')return kybExpiryScan();
     if(act==='payoutApprove')return payoutApprove(arg);
     if(act==='ppCustomer')return ppCustomerModal(arg);
@@ -1240,7 +1253,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['preferred','Preferred Carriers'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1257,6 +1270,7 @@ window.RGO_API = (function(){
     if(adminTab==='reassignment')return adminReassignment();
     if(adminTab==='rental')return adminRental();
     if(adminTab==='billing')return adminBilling();
+    if(adminTab==='preferred')return adminPreferred();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1630,6 +1644,33 @@ window.RGO_API = (function(){
   function blPay(id){var amt=window.prompt('Payment amount received:','');if(!amt)return;var ref=window.prompt('Reference (OR no. etc):','');RGO_API.blPay(id,{amount:Number(amt),reference:ref}).then(function(){toast('Payment recorded (A/R · no funds moved)');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function blStmt(id){var s=window.prompt('Period start (YYYY-MM-DD):','');if(!s)return;var e=window.prompt('Period end (YYYY-MM-DD):','');if(!e)return;RGO_API.blStatement(id,{period_start:s,period_end:e}).then(function(d){toast(d.statement_no+' · closing ₱'+Number(d.closing_balance).toLocaleString()+(d.over_limit?' · OVER LIMIT':''));refreshAdmin();}).catch(function(err){toast('Rejected: '+err.message);});}
   function blStmtView(id){RGO_API.blStatementGet(id).then(function(d){var s=d.statement||{},ag=s.aging||{};var lines=(d.lines||[]).map(function(l){return '<tr><td>'+esc(l.item_date)+'</td><td>'+esc(l.kind)+'</td><td>'+esc(l.description||'')+'</td><td class="tnum">₱'+Number(l.total).toLocaleString()+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No lines.</td></tr>';modal('<div class="modal" style="max-width:640px"><div class="modal-h"><h3>'+esc(s.statement_no)+' · account #'+esc(s.account_id)+'</h3><button class="x" data-close>×</button></div><div class="modal-b"><div class="grid2" style="margin-bottom:12px"><div>Opening: <b>₱'+Number(s.opening_balance).toLocaleString()+'</b><br>Charges: ₱'+Number(s.charges_total).toLocaleString()+'<br>Payments: ₱'+Number(s.payments_total).toLocaleString()+'<br>Closing: <b>₱'+Number(s.closing_balance).toLocaleString()+'</b></div><div>Due: '+esc(s.due_date||'—')+'<br>Aging — current ₱'+Number(ag.current||0).toLocaleString()+'<br>1-30 ₱'+Number(ag.d1_30||0).toLocaleString()+' · 31-60 ₱'+Number(ag.d31_60||0).toLocaleString()+'<br>61-90 ₱'+Number(ag.d61_90||0).toLocaleString()+' · 90+ ₱'+Number(ag.d90_plus||0).toLocaleString()+'</div></div><div class="tblwrap" style="border:0;max-height:280px;overflow:auto"><table class="tbl"><thead><tr><th>Date</th><th>Kind</th><th>Description</th><th class="right">Total</th></tr></thead><tbody>'+lines+'</tbody></table></div></div><div class="modal-f"><button class="btn line" data-close>Close</button></div></div>');}).catch(function(e){toast('Error: '+e.message);});}
+  // ---------- Preferred Carriers / Dedicated Capacity ----------
+  function adminPreferred(){
+    if(liveMode){
+      Promise.all([RGO_API.pcQueues().catch(function(){return{};}),RGO_API.pcPrefs().catch(function(){return{preferences:[]};}),RGO_API.pcCapacity().catch(function(){return{capacity:[]};})]).then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='preferred')return;
+        var q=r[0]||{},prefs=(r[1]||{}).preferences||[],caps=(r[2]||{}).capacity||[];
+        var tchip=function(t){var c=({DEDICATED:'c-good',EXCLUSIVE:'c-info',PREFERRED:'c-info',BLOCKED:'c-crit'})[t]||'c-mut';return '<span class="chip '+c+'">'+esc(t)+'</span>';};
+        var prows=prefs.map(function(x){return '<tr><td>#'+esc(x.shipper_id)+'</td><td>#'+esc(x.carrier_id)+'</td><td>'+tchip(x.tier)+'</td><td class="tnum">'+esc(x.priority)+'</td><td style="font-size:11px">'+esc(x.note||'')+'</td><td><button class="btn line sm" data-act="pcRemovePref" data-arg="'+x.id+'">Remove</button></td></tr>';}).join('')||'<tr><td colspan="6" class="empty">No preferences.</td></tr>';
+        var crows=caps.map(function(x){return '<tr><td>#'+esc(x.id)+'</td><td>#'+esc(x.shipper_id)+'</td><td>#'+esc(x.carrier_id)+'</td><td>'+esc(x.vehicle_category)+'</td><td class="tnum">'+esc(x.committed_units)+'</td><td style="font-size:11px">'+esc(x.period_start||'—')+' → '+esc(x.period_end||'—')+'</td><td><span class="chip '+(x.status==='ACTIVE'?'c-good':'c-mut')+'">'+esc(x.status)+'</span></td><td><button class="btn line sm" data-act="pcCapStatus" data-arg="'+x.id+'">Usage</button>'+(x.status==='ACTIVE'?' <button class="btn line sm" data-act="pcCapCancel" data-arg="'+x.id+'">Cancel</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="8" class="empty">No dedicated capacity.</td></tr>';
+        host.innerHTML=
+          '<div class="access-note"><span>⭐</span><div><b>Preferred Carriers / Dedicated Capacity.</b> A shipper steers work to trusted carriers (PREFERRED boosts ranking; DEDICATED = reserved capacity, highest; EXCLUSIVE restricts the pool to preferred carriers only; BLOCKED excludes a carrier — a business choice, <b>never a compliance action</b>). Preferences only reorder/filter the <b>already-eligible</b> ranked list — they can never override a hard eligibility gate. Reserved capacity usage is counted honestly from real assignments. Requires <code>marketplace.preference.*</code> / <code>marketplace.capacity.*</code>.</div></div>'
+          +'<div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:14px">'
+          +[['dedicated','Dedicated','c-good'],['exclusive','Exclusive','c-info'],['preferred','Preferred','c-info'],['blocked','Blocked','c-crit'],['active_capacity','Capacity','c-good']].map(function(k){return '<div class="panel"><div class="panel-h"><h3>'+k[1]+'</h3></div><div class="panel-b"><b style="font-size:20px">'+(q[k[0]]||0)+'</b></div></div>';}).join('')+'</div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Set a preference</h3></div><div class="panel-b"><div class="frm" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end"><label><span>Shipper ID</span><input id="pcShip" type="number"></label><label><span>Carrier ID</span><input id="pcCar" type="number"></label><label><span>Tier</span><select id="pcTier"><option>PREFERRED</option><option>DEDICATED</option><option>EXCLUSIVE</option><option>BLOCKED</option></select></label><label><span>Priority</span><input id="pcPrio" type="number" value="0"></label><button class="btn" data-act="pcSetPref">Set</button></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Reserve dedicated capacity</h3></div><div class="panel-b"><div class="frm" style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:10px;align-items:end"><label><span>Shipper ID</span><input id="pcCapShip" type="number"></label><label><span>Carrier ID</span><input id="pcCapCar" type="number"></label><label><span>Category</span><input id="pcCapCat" value="truck_6w"></label><label><span>Units</span><input id="pcCapUnits" type="number" value="1"></label><label><span>Period end</span><input id="pcCapEnd" placeholder="YYYY-MM-DD"></label><button class="btn" data-act="pcReserve">Reserve</button></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Preferences</h3><div class="spacer"></div><span class="cnt">'+prefs.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>Shipper</th><th>Carrier</th><th>Tier</th><th class="right">Priority</th><th>Note</th><th></th></tr></thead><tbody>'+prows+'</tbody></table></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Dedicated capacity</h3><div class="spacer"></div><span class="cnt">'+caps.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>ID</th><th>Shipper</th><th>Carrier</th><th>Category</th><th class="right">Units</th><th>Period</th><th>Status</th><th></th></tr></thead><tbody>'+crows+'</tbody></table></div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading preferred carriers…</div></div></div>';
+    }
+    return '<div class="access-note"><span>⭐</span><div><b>Preferred Carriers / Dedicated Capacity</b> — shipper-tiered carrier preferences (PREFERRED/DEDICATED/EXCLUSIVE/BLOCKED) that reorder/filter the already-eligible ranked list (never overriding hard eligibility), plus reserved-capacity commitments with honest usage. Connect a backend to administer. Requires <code>marketplace.preference.*</code>.</div></div>';
+  }
+  function pcSetPref(){var s=$('#pcShip').value,ca=$('#pcCar').value;if(!s||!ca){toast('Shipper + Carrier ID required');return;}RGO_API.pcSetPref({shipper_id:Number(s),carrier_id:Number(ca),tier:$('#pcTier').value,priority:Number($('#pcPrio').value||0)}).then(function(){toast('Preference set');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function pcRemovePref(id){RGO_API.pcRemovePref(id).then(function(){toast('Preference removed');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
+  function pcReserve(){var s=$('#pcCapShip').value,ca=$('#pcCapCar').value,u=$('#pcCapUnits').value;if(!s||!ca||!u){toast('Shipper, Carrier, Units required');return;}var b={shipper_id:Number(s),carrier_id:Number(ca),vehicle_category:$('#pcCapCat').value.trim(),committed_units:Number(u)};var e=$('#pcCapEnd').value;if(e)b.period_end=e;RGO_API.pcReserve(b).then(function(){toast('Dedicated capacity reserved · carrier set DEDICATED');refreshAdmin();}).catch(function(err){toast('Rejected: '+err.message);});}
+  function pcCapStatus(id){RGO_API.pcCapStatus(id).then(function(d){toast('Capacity #'+id+': '+d.used_units+'/'+d.committed_units+' used · '+d.available_units+' available');}).catch(function(e){toast('Error: '+e.message);});}
+  function pcCapCancel(id){if(!window.confirm('Cancel dedicated capacity #'+id+'?'))return;RGO_API.pcCapCancel(id).then(function(){toast('Capacity cancelled');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Carrier Access (operator binds a login to a carrier; the carrier self-serves in portal.html) ----------
   function adminCarrierAccess(){
     if(liveMode){

@@ -518,6 +518,13 @@ def generate_candidates(conn, actor, booking_id):
                              weight_kg=b.get("weight_kg"), volume_cbm=b.get("volume_cbm"), dims=dims,
                              require_driver=True)
     ranked = rank_candidates(conn, b, pool["candidates"])
+    # Preferred Carriers / Dedicated Capacity: a shipper's preference layer reorders/filters the
+    # ALREADY-ELIGIBLE ranked list (never overrides hard eligibility). Best-effort + guarded.
+    try:
+        import preferred_carriers as _pc
+        ranked = _pc.apply_preferences(conn, b.get("shipper_id"), ranked, b.get("tenant_id"))
+    except Exception:
+        pass
     cur = conn.execute(
         "INSERT INTO mkt_match_runs(booking_id,ranking_version,candidates,excluded,created_by,created_at,"
         "correlation_id) VALUES(?,1,?,?,?,?,?)",

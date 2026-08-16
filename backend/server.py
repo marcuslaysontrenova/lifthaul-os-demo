@@ -2158,6 +2158,32 @@ def _carrier_portal_routes():
         ("POST", "/portal/carrier/fleet/units"): lambda a, b, p: cp.register_unit(_conn, a, b["plate_number"], b["specs"]),
         ("POST", "/portal/carrier/fleet/service-areas"): lambda a, b, p: cp.set_service_area(_conn, a, b["area_code"], scope=b.get("scope", "REGION")),
         ("POST", "/portal/carrier/fleet/capabilities"): lambda a, b, p: cp.set_capability(_conn, a, b["capability"]),
+        # carrier operations: dashboard + driver/vehicle availability
+        ("GET", "/portal/carrier/dashboard"): lambda a, b, p: cp.dashboard(_conn, a),
+        ("GET", "/portal/carrier/availability"): lambda a, b, p: cp.availability_board(_conn, a),
+        ("POST", "/portal/carrier/availability"): lambda a, b, p: cp.set_availability(_conn, a, b["resource_type"], int(b["resource_id"]), b["declared_status"], reason=b.get("reason")),
+        ("POST", "/portal/carrier/availability/blocks"): lambda a, b, p: cp.add_availability_block(_conn, a, b["resource_type"], int(b["resource_id"]), b["block_type"], b.get("start_at"), b.get("end_at"), reason=b.get("reason")),
+    }
+
+
+def _availability_routes():
+    import availability as av
+
+    def a_set(a, b, p):    return av.set_availability(_conn, a, b["resource_type"], int(b["resource_id"]),
+                                                      b["declared_status"], reason=b.get("reason"), note=b.get("note"))
+    def a_block(a, b, p):  return av.add_block(_conn, a, b["resource_type"], int(b["resource_id"]), b["block_type"],
+                                               b.get("start_at"), b.get("end_at"), reason=b.get("reason"))
+    def a_clear(a, b, p):  return av.clear_block(_conn, a, int(p["id"]))
+    def a_status(a, b, p): return av.resource_status(_conn, a, b["resource_type"], int(b["resource_id"]))
+    def a_board(a, b, p):  return av.availability_board(_conn, a, int(p["carrier_id"]))
+    def a_impacted(a, b, p): return {"impacted": av.impacted_active_work(_conn, b["resource_type"], int(b["resource_id"]))}
+    return {
+        ("POST", "/admin/marketplace/availability"): a_set,
+        ("POST", "/admin/marketplace/availability/blocks"): a_block,
+        ("POST", "/admin/marketplace/availability/blocks/:id/clear"): a_clear,
+        ("POST", "/admin/marketplace/availability/status"): a_status,
+        ("GET", "/admin/marketplace/availability/carriers/:carrier_id/board"): a_board,
+        ("POST", "/admin/marketplace/availability/impacted-work"): a_impacted,
     }
 
 
@@ -2392,6 +2418,7 @@ ROUTES.update(_preference_routes())
 ROUTES.update(_surcharge_routes())
 ROUTES.update(_driver_app_routes())
 ROUTES.update(_fleet_routes())
+ROUTES.update(_availability_routes())
 
 
 def _match(method, path):

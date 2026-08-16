@@ -42,6 +42,7 @@ import ltfrb
 import notifications_engine as ne
 import driver_reassignment as dr
 import fleet_registration as fr
+import availability as av
 
 
 # --------------------------------------------------------------------------- #
@@ -75,6 +76,8 @@ _SELF_SERVICE = {
     "register_unit":       ("marketplace.vehicle.manage",),
     "fleet_view":          ("marketplace.fleet.view",),
     "fleet_manage":        ("marketplace.fleet.manage",),
+    "availability_view":   ("marketplace.availability.view",),
+    "availability_manage": ("marketplace.availability.manage",),
 }
 
 # Permissions the portal must NEVER elevate into (defence-in-depth: a hard assertion, so a future
@@ -646,6 +649,59 @@ def classify_unit(conn, actor, specs, requested=None):
     core.require(actor, "carrier.portal.view")
     resolve_carrier(conn, actor, requested)
     return fr.classify(conn, specs, tenant_id=actor.get("tenant_id"))
+
+
+# --------------------------------------------------------------------------- #
+# Carrier Operations Dashboard + driver/vehicle availability
+# --------------------------------------------------------------------------- #
+def dashboard(conn, actor, requested=None):
+    """Consolidated Carrier Operations dashboard KPIs (company / KYB / LTFRB / eligibility + vehicle &
+    driver availability counts). Composes the existing overview + the availability overlay."""
+    core.require(actor, "carrier.portal.view")
+    cid = resolve_carrier(conn, actor, requested)
+    ov = overview(conn, actor, requested)
+    ac = av.counts(conn, cid)
+    return {
+        "carrier_id": cid, "legal_name": ov["legal_name"], "company_status": ov["status"],
+        "kyb_status": ov["company"]["kyb_status"],
+        "ltfrb_cpc_valid": ov["company"]["ltfrb_authority_valid"],
+        "business_permits_valid": ov["company"]["business_permit_valid"],
+        "marketplace_status": ov["marketplace_status"], "marketplace_reasons": ov["marketplace_reasons"],
+        "trust_score": ov.get("trust_score"),
+        "vehicles": {"total": ac["vehicles_total"], "eligible": ov["fleet"]["eligible"],
+                     "available": ac["vehicles_available"], "on_hold": ac["vehicles_on_hold"]},
+        "drivers": {"total": ac["drivers_total"], "eligible": ov["drivers"]["eligible"],
+                    "available": ac["drivers_available"], "unavailable": ac["drivers_unavailable"]},
+    }
+
+
+def _own_resource(conn, cid, resource_type, resource_id):
+    table = "mkt_vehicles" if resource_type == "VEHICLE" else "mkt_drivers"
+    r = conn.execute(f"SELECT carrier_id FROM {table} WHERE id=?", (resource_id,)).fetchone()
+    if not r or r["carrier_id"] != cid:
+        raise core.ForbiddenError("resource does not belong to your carrier")
+
+
+def availability_board(conn, actor, requested=None):
+    core.require(actor, "carrier.portal.view")
+    cid = resolve_carrier(conn, actor, requested)
+    return av.availability_board(conn, _svc(actor, *_SELF_SERVICE["availability_view"]), cid)
+
+
+def set_availability(conn, actor, resource_type, resource_id, declared_status, reason=None, requested=None):
+    core.require(actor, "carrier.portal.fleet.manage")
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    _own_resource(conn, cid, resource_type, resource_id)
+    return av.set_availability(conn, _svc(actor, *_SELF_SERVICE["availability_manage"]),
+                               resource_type, resource_id, declared_status, reason=reason)
+
+
+def add_availability_block(conn, actor, resource_type, resource_id, block_type, start_at, end_at, reason=None, requested=None):
+    core.require(actor, "carrier.portal.fleet.manage")
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    _own_resource(conn, cid, resource_type, resource_id)
+    return av.add_block(conn, _svc(actor, *_SELF_SERVICE["availability_manage"]),
+                        resource_type, resource_id, block_type, start_at, end_at, reason=reason)
 
 
 # --------------------------------------------------------------------------- #

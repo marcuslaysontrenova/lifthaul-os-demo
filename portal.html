@@ -115,10 +115,10 @@ var RGO_API=(function(){
   };
 })();
 
-var TABS=[['overview','Overview'],['fleet','Fleet'],['drivers','Drivers'],['compliance','Compliance'],
+var TABS=[['dashboard','Dashboard'],['overview','Overview'],['fleet','Fleet'],['drivers','Drivers'],['availability','Availability'],['compliance','Compliance'],
           ['invitations','Offers'],['assignments','Assignments'],['trips','Trips'],['finance','Earnings'],
           ['cases','Disputes & Claims'],['notifications','Notifications']];
-var tab='overview', live=false;
+var tab='dashboard', live=false;
 function $(s){return document.querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide');},3200);}
@@ -134,22 +134,55 @@ function doLogout(){ RGO_API.logout(); location.reload(); }
 function enterApp(){
   $('#loginView').classList.add('hide'); $('#appView').classList.remove('hide');
   $('#logoutBtn').classList.remove('hide'); $('#whoami').classList.remove('hide');
-  renderTabs(); setTab('overview');
+  renderTabs(); setTab('dashboard');
 }
 function renderTabs(){ $('#tabs').innerHTML=TABS.map(function(t){return '<button class="tab'+(tab===t[0]?' on':'')+'" onclick="setTab(\''+t[0]+'\')">'+esc(t[1])+'</button>';}).join(''); }
 function setTab(t){ tab=t; renderTabs(); render(); }
 
 function render(){
   var host=$('#body'); host.innerHTML='<div class="panel"><div class="panel-b"><div class="empty">Loading…</div></div></div>';
-  var routes={overview:'/portal/carrier/overview',fleet:'/portal/carrier/fleet',drivers:'/portal/carrier/drivers',
-    compliance:'/portal/carrier/compliance',invitations:'/portal/carrier/invitations',assignments:'/portal/carrier/assignments',
+  var routes={dashboard:'/portal/carrier/dashboard',overview:'/portal/carrier/overview',fleet:'/portal/carrier/fleet',drivers:'/portal/carrier/drivers',
+    availability:'/portal/carrier/availability',compliance:'/portal/carrier/compliance',invitations:'/portal/carrier/invitations',assignments:'/portal/carrier/assignments',
     trips:'/portal/carrier/trips',finance:'/portal/carrier/finance',cases:'/portal/carrier/cases',notifications:'/portal/carrier/notifications'};
-  RGO_API.get(routes[tab]).then(function(d){ host.innerHTML=({overview:vOverview,fleet:vFleet,drivers:vDrivers,compliance:vCompliance,
+  RGO_API.get(routes[tab]).then(function(d){ host.innerHTML=({dashboard:vDashboard,overview:vOverview,fleet:vFleet,drivers:vDrivers,availability:vAvailability,compliance:vCompliance,
     invitations:vOffers,assignments:vAssignments,trips:vTrips,finance:vFinance,cases:vCases,notifications:vNotifications})[tab](d); })
     .catch(function(err){ host.innerHTML='<div class="note" style="border-left-color:var(--crit)"><span>⚠️</span><div>'+esc(err.message)+'</div></div>'; });
 }
 
 function eligChip(ok){return '<span class="chip '+(ok?'c-good':'c-crit')+'">'+(ok?'Eligible':'Blocked')+'</span>';}
+function yn(ok){return '<span class="chip '+(ok?'c-good':'c-crit')+'">'+(ok?'✓':'✗')+'</span>';}
+
+function vDashboard(d){
+  $('#whoami').textContent=(d.legal_name||'Carrier')+' · #'+d.carrier_id;
+  var act=d.marketplace_status==='ACTIVE';
+  var company='<div class="stat"><div class="k">Company</div><div class="rows">'
+    +'<div class="r">Status: <b>'+esc(d.company_status)+'</b></div>'
+    +'<div class="r">'+yn(d.kyb_status==='VERIFIED'||d.kyb_status==='VERIFIED_WITH_CONDITION')+' KYB '+esc(d.kyb_status)+'</div>'
+    +'<div class="r">'+yn(d.ltfrb_cpc_valid)+' LTFRB / CPC</div>'
+    +'<div class="r">'+yn(d.business_permits_valid)+' Business permits</div></div></div>';
+  var mkt='<div class="stat"><div class="k">Marketplace</div><div class="rows"><div class="r"><span class="chip '+(act?'c-good':'c-crit')+'" style="font-size:15px;padding:5px 14px">'+esc(d.marketplace_status)+'</span></div>'
+    +(act?'<div class="r ok" style="margin-top:4px">Accepting work'+(d.trust_score!=null?(' · trust '+d.trust_score):'')+'</div>':'<div class="r bad" style="margin-top:4px">'+esc((d.marketplace_reasons||[]).join('; ')||'Not eligible')+'</div>')+'</div></div>';
+  var veh='<div class="stat"><div class="k">Vehicles</div><div class="rows"><div class="r"><span class="big">'+d.vehicles.total+'</span> total</div><div class="r ok">'+d.vehicles.eligible+' eligible</div><div class="r">'+d.vehicles.available+' available now</div><div class="r wn">'+d.vehicles.on_hold+' on hold</div></div></div>';
+  var drv='<div class="stat"><div class="k">Drivers</div><div class="rows"><div class="r"><span class="big">'+d.drivers.total+'</span> total</div><div class="r ok">'+d.drivers.eligible+' eligible</div><div class="r">'+d.drivers.available+' available now</div><div class="r wn">'+d.drivers.unavailable+' unavailable</div></div></div>';
+  return '<div class="note"><span>📊</span><div>Your live Carrier Operations dashboard — company & regulatory status, marketplace eligibility, and current vehicle/driver availability. All figures are computed server-side from your real fleet and compliance state.</div></div>'
+    +'<div class="grid g4">'+company+mkt+veh+drv+'</div>';
+}
+
+function availChip(s){var m={AVAILABLE:'c-good',ON_TRIP:'c-info',UNAVAILABLE:'c-warn',OFF_DUTY:'c-warn',MAINTENANCE:'c-warn',BLOCKED:'c-warn',NOT_OPERATIONAL:'c-crit'};return '<span class="chip '+(m[s]||'c-mut')+'">'+esc(s)+'</span>';}
+function vAvailability(d){
+  var vrows=(d.vehicles.items||[]).map(function(v){return '<tr><td><code>'+esc(v.plate_number)+'</code></td><td>'+availChip(v.effective)+'</td><td>'+(v.available?'<span class="chip c-good">yes</span>':'<span class="chip c-mut">no</span>')+'</td><td><button class="btn line sm" onclick="setAvail(\'VEHICLE\','+v.id+',\'AVAILABLE\')">Available</button> <button class="btn line sm" onclick="setAvail(\'VEHICLE\','+v.id+',\'UNAVAILABLE\')">Unavailable</button></td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No vehicles.</td></tr>';
+  var drows=(d.drivers.items||[]).map(function(x){return '<tr><td>'+esc(x.full_name)+'</td><td>'+availChip(x.effective)+'</td><td>'+(x.available?'<span class="chip c-good">yes</span>':'<span class="chip c-mut">no</span>')+'</td><td><button class="btn line sm" onclick="setAvail(\'DRIVER\','+x.id+',\'AVAILABLE\')">On duty</button> <button class="btn line sm" onclick="setAvail(\'DRIVER\','+x.id+',\'OFF_DUTY\')">Off duty</button></td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No drivers.</td></tr>';
+  return '<div class="note"><span>🗓️</span><div>Set which vehicles and drivers are available. Effective availability is <b>computed</b> — a unit under maintenance, on an active trip, or with a scheduled block shows automatically and can\'t be overridden. Marking a resource unavailable while it\'s on active work flags it for a <b>governed reassignment</b> (funds are never moved automatically).</div></div>'
+    +tableize('Vehicles', d.vehicles.available+' / '+d.vehicles.total+' available', ['Plate','Effective','Available now',''], vrows)
+    +tableize('Drivers', d.drivers.available+' / '+d.drivers.total+' available', ['Name','Effective','Available now',''], drows);
+}
+function setAvail(type,id,status){
+  RGO_API.post('/portal/carrier/availability',{resource_type:type,resource_id:id,declared_status:status}).then(function(r){
+    if(r.impacted_active_work){ toast('Set '+status+' — this resource has active work; opening a governed reassignment is recommended ('+r.reassignment_hint+').'); }
+    else { toast('Availability updated: '+status); }
+    render();
+  }).catch(function(e){ toast('Rejected: '+e.message); });
+}
 
 function vOverview(d){
   $('#whoami').textContent=(d.legal_name||'Carrier')+' · #'+d.carrier_id;

@@ -547,6 +547,43 @@ Front-end: a console **Fleet Registration** tab (classification preview, spec-ba
 master data). New equipment categories (forklift, telehandler) are added to the canonical catalog so the
 full taxonomy — motorcycle → truck configs → heavy-haul → crane → forklift — is registrable.
 
+## Carrier Operations Portal — Driver/Vehicle Availability & Dashboard
+
+Turns the carrier registration workspace into an operational one, over the **existing** vehicle / driver
+/ trip / reassignment domains — no new carrier, vehicle, driver, assignment or compliance model.
+
+**Availability** is an operational-readiness **overlay**, never a second source of truth. A carrier
+declares a vehicle/driver `AVAILABLE / UNAVAILABLE / OFF_DUTY` (`resource_availability`) and can schedule
+unavailability windows (`availability_blocks`: MAINTENANCE / LEAVE / BOOKED / OTHER). The **effective**
+status is **computed** — it composes the canonical vehicle/driver status (a MAINTENANCE or non-ACTIVE
+unit is not available), an active block (→ BLOCKED), whether the resource is currently ON a trip (→
+ON_TRIP, read from `mkt_trips`), then the declared status. Availability never overrides a compliance gate.
+
+**Governed reassignment closure:** setting an on-assignment resource UNAVAILABLE returns the impacted
+assignment/trip plus a reassignment hint (`DRIVER_UNAVAILABLE` / `VEHICLE_BREAKDOWN`) so an operator or
+the carrier can open the existing governed `driver_reassignment` — but it **never auto-reassigns or moves
+funds**.
+
+**Carrier Dashboard** (`/portal/carrier/dashboard`) returns the consolidated KPIs: company status, KYB
+status, LTFRB/CPC validity, marketplace eligibility (+ reasons), and vehicle & driver counts
+(total / eligible / available / on-hold / unavailable) — composed from the existing overview + the
+availability overlay.
+
+Operator endpoints (RBAC `marketplace.availability.*`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/admin/marketplace/availability` | Set declared availability (returns impacted work if on active job) |
+| POST | `/admin/marketplace/availability/blocks` · `…/blocks/:id/clear` | Add / clear a scheduled block |
+| POST | `/admin/marketplace/availability/status` | Computed effective status for a resource |
+| GET | `/admin/marketplace/availability/carriers/:carrier_id/board` | Availability board (vehicles + drivers) |
+| POST | `/admin/marketplace/availability/impacted-work` | Active assignments/trips using a resource |
+
+Carrier-portal: `GET /portal/carrier/dashboard`, `GET/POST /portal/carrier/availability`,
+`POST /portal/carrier/availability/blocks`. Front-end: `portal.html` gains **Dashboard** (KPI panel) and
+**Availability** (per-vehicle/driver toggle with computed effective status) tabs — completing the carrier
+operating workspace.
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

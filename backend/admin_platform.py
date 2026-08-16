@@ -369,6 +369,8 @@ MARKETPLACE_PERMISSIONS = [
     "driver.app.view", "driver.app.execute",
     # Service Provider & Fleet Registration Workspace — dynamic variant taxonomy + classification over existing domains
     "marketplace.fleet.view", "marketplace.fleet.manage", "marketplace.fleet.variant.manage",
+    # Carrier Operations — driver/vehicle availability overlay (feeds eligibility + governed reassignment)
+    "marketplace.availability.view", "marketplace.availability.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

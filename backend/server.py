@@ -1913,6 +1913,14 @@ def _public_booking_routes():
     def pb_levels(a, b, p):  return pb.service_levels_catalog(b.get("service_class") if b else None)
     def pb_bulk(a, b, p):    return pb.submit_bulk(_conn, a, b.get("rows"))
 
+    import public_provider as pp2
+
+    def prov_submit(a, b, p):   return pp2.submit(_conn, b)              # public provider self-registration -> contact-code challenge
+    def prov_verify(a, b, p):   return pp2.verify(_conn, b)             # verify one-time code -> activate login + session token
+    def prov_resend(a, b, p):   return pp2.resend(_conn, b)             # re-issue a one-time contact code
+    def prov_variants(a, b, p): return pp2.variants(_conn)              # public taxonomy for the reg UI
+    def prov_classify(a, b, p): return pp2.classify_preview(_conn, b.get("specs", b))   # public classify preview
+
     return {
         ("POST", "/public/bookings"): pb_submit,
         ("GET", "/public/bookings/track/:token"): pb_track,
@@ -1920,6 +1928,11 @@ def _public_booking_routes():
         ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,
         ("POST", "/admin/marketplace/public-bookings/:id/review"): pb_review,
         ("POST", "/admin/marketplace/public-bookings/bulk"): pb_bulk,
+        ("POST", "/public/providers"): prov_submit,
+        ("POST", "/public/providers/verify"): prov_verify,
+        ("POST", "/public/providers/resend"): prov_resend,
+        ("GET", "/public/vehicle-variants"): prov_variants,
+        ("POST", "/public/fleet/classify"): prov_classify,
     }
 
 

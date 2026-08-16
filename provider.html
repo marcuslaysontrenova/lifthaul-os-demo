@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiftHaul — Service Provider & Fleet Registration</title>
+<meta name="description" content="Register your transport / hauling / crane / rigging / equipment-rental business on LiftHaul. Register the company once, then add every vehicle and piece of equipment individually — LiftHaul classifies each unit automatically.">
+<style>
+:root{
+  --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
+  --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
+  --accent:#F2611A;--accent-2:#D9520F;--primary:#5FB92A;--primary-2:#4E9E20;
+  --good:#3B8F1E;--good-bg:#E4F3D6;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;--info:#2A72C9;--info-bg:#E4EEFB;
+  --radius:14px;--radius-sm:9px;--font:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(16,23,28,.06),0 8px 24px rgba(16,23,28,.09);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5}
+h1,h2,h3{margin:0;line-height:1.16;letter-spacing:-.02em}p{margin:0}code{font-family:var(--mono)}
+.top{background:rgba(234,244,224,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+.top .in{max-width:1000px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+.wm{font-weight:800;font-size:20px;letter-spacing:-.03em}.wm b:last-child{color:var(--accent)}
+.sp{flex:1}.top a{color:var(--ink-2);font-weight:600;font-size:14px;text-decoration:none}
+.wrap{max-width:1000px;margin:0 auto;padding:22px 20px 60px}
+.hero h1{font-size:clamp(24px,4vw,34px);font-weight:800}
+.hero p{color:var(--ink-2);margin-top:8px;max-width:70ch}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0}
+.step{font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
+.step.on{background:var(--primary);color:#fff}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.panel-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.panel-b{padding:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:12px}
+label span{display:block;margin-bottom:5px}
+input,select,textarea{width:100%;font-family:inherit;font-size:15px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--ink)}
+.req::after{content:" *";color:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;font-size:15px;font-weight:700;padding:13px 20px;border-radius:var(--radius-sm);border:0;background:var(--accent);color:#fff;cursor:pointer}
+.btn:hover{background:var(--accent-2)}.btn.line{background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+.note{display:flex;gap:12px;background:var(--surface-3);border-radius:var(--radius-sm);padding:13px 15px;font-size:13.5px;color:var(--ink-2);margin-bottom:16px}
+.chip{display:inline-flex;align-items:center;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
+.chip.good{background:var(--good-bg);color:var(--good)}.chip.info{background:var(--info-bg);color:var(--info)}.chip.crit{background:var(--crit-bg);color:var(--crit)}
+.result{font-size:15px}.big{font-size:22px;font-weight:800}
+.muted{color:var(--muted);font-size:13px}
+.hide{display:none}
+.classout{margin-top:12px;padding:14px;border-radius:var(--radius-sm);background:var(--surface-2);border:1px dashed var(--line)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:var(--shadow);z-index:99;max-width:92vw;text-align:center}
+.eqfields{margin-top:10px}
+ul.road{list-style:none;margin:0;padding:0}
+ul.road li{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;display:flex;gap:10px;align-items:center}
+ul.road li .n{width:22px;height:22px;border-radius:50%;background:var(--surface-3);color:var(--ink-2);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <div class="wm"><b>Lift</b><b>Haul</b></div>
+  <span class="chip">Service Provider Registration</span>
+  <span class="sp"></span>
+  <a href="index.html">← Home</a> &nbsp; <a href="portal.html">Provider portal</a>
+</div></div>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>Register your fleet &amp; equipment on LiftHaul</h1>
+    <p>For transport, hauling, lifting, rigging, logistics and equipment-rental providers. <b>Register your
+    company once</b>, then add every vehicle and piece of equipment individually — LiftHaul classifies each
+    unit automatically (you don't have to know the technical class). Compliance is verified by our team;
+    you can't self-verify regulated documents, and you're marketplace-eligible only when every check passes.</p>
+    <div class="steps">
+      <span class="step on">1 · Provider account</span>
+      <span class="step on">2 · Company</span>
+      <span class="step">3 · Fleet / Equipment</span>
+      <span class="step">4 · Drivers</span>
+      <span class="step">5 · Service areas</span>
+      <span class="step">6 · Compliance</span>
+      <span class="step">7 · Marketplace approval</span>
+    </div>
+  </div>
+
+  <!-- STAGE 1+2: provider account + company -->
+  <div id="regPanel" class="panel">
+    <div class="panel-h"><h3>1–2 · Provider account &amp; company</h3></div>
+    <div class="panel-b">
+      <div class="note"><span>🏢</span><div>This creates your <b>provider (carrier) master record</b> as an
+      application. It does not make you marketplace-eligible yet — our team verifies your documents and
+      LTFRB authority, then unlocks your Fleet Workspace.</div></div>
+      <div class="grid2">
+        <label><span class="req">Operating type</span>
+          <select id="ptype"><option value="">Select…</option></select></label>
+        <label><span class="req">Legal business name</span><input id="legal" placeholder="ABC Logistics Inc."></label>
+        <label><span>Trade name</span><input id="trade" placeholder="ABC"></label>
+        <label><span>Owner / authorized representative</span><input id="rep" placeholder="Juan Dela Cruz"></label>
+        <label><span class="req">Username (your login)</span><input id="username" autocomplete="username" placeholder="email or handle"></label>
+        <label><span class="req">Password (min 8 chars)</span><input id="password" type="password" autocomplete="new-password" placeholder="••••••••"></label>
+        <label><span class="req">Mobile</span><input id="mobile" placeholder="09xx xxx xxxx"></label>
+        <label><span>Email</span><input id="email" type="email" placeholder="ops@company.com"></label>
+        <label><span>Website</span><input id="website" placeholder="https://"></label>
+        <label><span>TIN</span><input id="tin" placeholder="000-000-000"></label>
+        <label><span>Registration type</span>
+          <select id="regtype"><option>DTI</option><option>SEC</option><option>CDA</option><option>OTHER</option></select></label>
+        <label><span>DTI / SEC registration no.</span><input id="regno" placeholder="SEC-123456"></label>
+        <label><span>Operations base (province / city)</span><input id="base" placeholder="e.g. Cavite"></label>
+        <label><span>Island group</span>
+          <select id="island"><option value="">Select…</option><option>LUZON</option><option>VISAYAS</option><option>MINDANAO</option><option>NATIONWIDE</option></select></label>
+      </div>
+      <div class="note" style="margin:8px 0 14px;border-left:3px solid var(--primary)"><span>📎</span><div>
+      You'll set a <b>username + password</b> now and confirm a <b>one-time code</b> sent to your contact —
+      that unlocks your Fleet Workspace. Business permit, LTFRB authority, insurance and payout are
+      collected and <b>verified by our team afterward</b> — never self-verified. LiftHaul stays the
+      compliance authority.</div></div>
+      <button class="btn" onclick="submitProvider()">Create account &amp; send code →</button>
+      <p id="regMsg" class="muted" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <!-- OTP verification -->
+  <div id="otpPanel" class="panel hide">
+    <div class="panel-h"><h3>Verify your contact</h3></div>
+    <div class="panel-b">
+      <p id="otpIntro" class="result"></p>
+      <div id="otpDev" class="note hide" style="border-left:3px solid var(--warn)"></div>
+      <label style="max-width:280px;margin-top:10px"><span class="req">One-time code</span>
+        <input id="otpCode" inputmode="numeric" maxlength="6" placeholder="6-digit code"></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="verifyProvider()">Verify &amp; enter workspace →</button>
+        <button class="btn line" onclick="resendCode()">Resend code</button>
+      </div>
+      <p id="otpMsg" class="muted" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div id="okPanel" class="panel hide">
+    <div class="panel-h"><h3>Account active</h3></div>
+    <div class="panel-b" id="okBody"></div>
+  </div>
+
+  <!-- STAGE 3 preview: dynamic fleet registration + live classifier -->
+  <div class="panel">
+    <div class="panel-h"><h3>3 · Add a vehicle / equipment — see it classified live</h3></div>
+    <div class="panel-b">
+      <div class="note"><span>🚚</span><div>You don't choose "Truck." Enter what you operate and LiftHaul
+      resolves the exact canonical variant + tonnage class from master data (e.g.
+      <code>6-Wheeler Closed Van — 4T Class</code>). This preview is live; full registration + documents
+      happen in your Fleet Workspace after your account is verified.</div></div>
+      <div class="grid2">
+        <label><span>Category</span><select id="cat"><option value="">Select…</option></select></label>
+        <label><span>Vehicle type (for classification)</span>
+          <select id="vtype"><option>TRUCK</option><option>MOTORCYCLE</option><option>VAN</option><option>CAR</option><option>MPV</option><option>PICKUP</option><option>TRACTOR_HEAD</option><option>TRAILER</option><option>CRANE</option><option>FORKLIFT</option><option>TANKER</option><option>DUMP</option><option>TOW</option><option>CAR_CARRIER</option></select></label>
+        <label><span>Wheels</span><input id="wheels" type="number" placeholder="6"></label>
+        <label><span>Body</span><input id="body" placeholder="closed_van / wing_van / dropside / dump"></label>
+        <label><span>Payload (kg)</span><input id="payload" type="number" placeholder="4000"></label>
+        <label><span>Refrigerated?</span><select id="ref"><option value="">No</option><option value="1">Yes</option></select></label>
+        <label><span>Crane/forklift subtype</span><input id="subtype" placeholder="mobile / rough_terrain / tower"></label>
+        <label><span>Lifting capacity (kg) — cranes/forklifts</span><input id="lift" type="number" placeholder="25000"></label>
+      </div>
+      <div style="display:flex;gap:8px"><button class="btn" onclick="classify()">Classify this unit</button></div>
+      <div id="classOut" class="classout hide"></div>
+    </div>
+  </div>
+
+  <!-- Workspace roadmap -->
+  <div class="panel">
+    <div class="panel-h"><h3>Your permanent Fleet Workspace (after verification)</h3></div>
+    <div class="panel-b">
+      <ul class="road">
+        <li><span class="n">1</span> <b>Company &amp; Compliance</b> — business docs, LTFRB/CPC, insurance, payout (verified by our team)</li>
+        <li><span class="n">2</span> <b>Fleet &amp; Equipment</b> — add 1, 10, 100 or 500 units; each auto-classified with its own spec profile</li>
+        <li><span class="n">3</span> <b>Drivers / Operators</b> — register once, pair to compatible vehicles (primary/backup)</li>
+        <li><span class="n">4</span> <b>Service areas &amp; capabilities</b> — where you operate + what jobs you do</li>
+        <li><span class="n">5</span> <b>Availability</b> — mark units available / off / on-hold</li>
+        <li><span class="n">6</span> <b>Marketplace eligibility</b> — per-unit readiness checklist with a specific reason if not yet eligible</li>
+        <li><span class="n">7</span> <b>Jobs · Payments · Claims · Notifications</b> — your live operating surface</li>
+      </ul>
+      <p class="muted" style="margin-top:12px">You never create another account — the same company adds wing
+      vans, lowbeds, cranes, drivers, permits and service areas over time under one provider record.</p>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast hide"></div>
+
+<script>
+var API=(function(){
+  var base=null; try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); }catch(e){}
+  function req(m,p,b){ if(!base) return Promise.reject(new Error('offline'));
+    return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined})
+      .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(d&&d.data!==undefined)d=d.data; if(!r.ok) throw new Error((d&&(d.error||d.detail))||('HTTP '+r.status)); return d;});}); }
+  return {configured:function(){return !!base;}, get:function(p){return req('GET',p);}, post:function(p,b){return req('POST',p,b);}};
+})();
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide');},3400);}
+function title(s){return String(s).replace(/_/g,' ').toLowerCase().replace(/\b\w/g,function(c){return c.toUpperCase();});}
+
+// load master-data taxonomy (provider types + categories) — falls back to a static list offline
+function loadTaxonomy(){
+  var PT=["OWNER_OPERATOR","TRUCK_OWNER","FLEET_OPERATOR","HAULING_COMPANY","LOGISTICS_PROVIDER","HEAVY_HAUL_COMPANY","CRANE_COMPANY","RIGGING_CONTRACTOR","EQUIPMENT_RENTAL","MOTORCYCLE_DELIVERY","VAN_OPERATOR","COURIER_LOGISTICS","SUBCONTRACTOR","SPECIALIZED_TRANSPORT"];
+  var CATS=["MOTORCYCLE","LIGHT","VAN","TRUCK","TRACTOR_HEAD","HEAVY_HAUL","CRANE","FORKLIFT","SPECIALIZED"];
+  function fill(pt,cats){ $('#ptype').innerHTML='<option value="">Select…</option>'+pt.map(function(x){return '<option value="'+esc(x)+'">'+esc(title(x))+'</option>';}).join('');
+    $('#cat').innerHTML='<option value="">Select…</option>'+cats.map(function(x){return '<option value="'+esc(x)+'">'+esc(title(x))+'</option>';}).join('');
+    try{ var pre=new URLSearchParams(location.search).get('type'); if(pre){ $('#ptype').value=pre.toUpperCase(); } }catch(e){} }
+  if(API.configured()){ API.get('/public/vehicle-variants').then(function(d){ fill(d.provider_types||PT, Object.keys(d.categories||{}).length?Object.keys(d.categories):CATS); }).catch(function(){ fill(PT,CATS); }); }
+  else fill(PT,CATS);
+}
+loadTaxonomy();
+
+var _challenge=null;   // {challenge_id, ref, username}
+
+function submitProvider(){
+  var legal=$('#legal').value.trim(), mob=$('#mobile').value.trim(), em=$('#email').value.trim(), pt=$('#ptype').value;
+  var user=$('#username').value.trim()||em, pw=$('#password').value;
+  if(!pt){toast('Choose your operating type');return;}
+  if(!legal){toast('Legal business name is required');return;}
+  if(!mob&&!em){toast('A mobile or email is required');return;}
+  if(!user){toast('Choose a username (or enter your email)');return;}
+  if(pw.length<8){toast('Password must be at least 8 characters');return;}
+  var body={provider_type:pt,legal_name:legal,trade_name:$('#trade').value.trim(),representative:$('#rep').value.trim(),
+    username:user,password:pw,mobile:mob,email:em,website:$('#website').value.trim(),tin:$('#tin').value.trim(),
+    registration_type:$('#regtype').value,registration_number:$('#regno').value.trim(),
+    operating_address:$('#base').value.trim(),island_group:$('#island').value};
+  if(!API.configured()){
+    $('#regMsg').innerHTML='This is the honest offline demo — no backend is configured. Set <code>localStorage.lifthaul_api_base</code> to a hosted LiftHaul API to create a real account.';
+    return;
+  }
+  $('#regMsg').textContent='Creating your account…';
+  API.post('/public/providers',body).then(function(r){
+    _challenge={challenge_id:r.challenge_id, ref:r.ref, username:user};
+    $('#regPanel').classList.add('hide');
+    $('#otpPanel').classList.remove('hide');
+    var note = r.delivered
+      ? ('We sent a one-time code to <b>'+esc(r.destination)+'</b>. Enter it below to activate your login.')
+      : ('Reference <b>'+esc(r.ref)+'</b> created. '+esc(r.delivery_note||'')+' ');
+    $('#otpIntro').innerHTML=note;
+    if(r.dev_code){
+      $('#otpDev').classList.remove('hide');
+      $('#otpDev').innerHTML='<span>🔑</span><div><b>Test mode</b> — no live messaging provider is connected, so here is your code: <code style="font-size:16px">'+esc(r.dev_code)+'</code>. In production this is delivered to your contact, never shown here.</div>';
+    }
+    $('#otpPanel').scrollIntoView({behavior:'smooth'});
+    $('#otpCode').focus();
+  }).catch(function(e){ $('#regMsg').textContent='Could not create account: '+e.message; });
+}
+
+function verifyProvider(){
+  if(!_challenge){toast('Register first');return;}
+  var code=$('#otpCode').value.trim();
+  if(!code){toast('Enter the one-time code');return;}
+  $('#otpMsg').textContent='Verifying…';
+  API.post('/public/providers/verify',{challenge_id:_challenge.challenge_id,username:_challenge.username,code:code}).then(function(v){
+    try{ localStorage.setItem('lifthaul_api_token', v.token); }catch(e){}
+    $('#otpPanel').classList.add('hide');
+    $('#okPanel').classList.remove('hide');
+    $('#okBody').innerHTML='<div class="result"><div class="big" style="color:var(--good)">'+esc(_challenge.ref)+' · Active</div>'
+      +'<p style="margin-top:6px">'+esc(v.message||'Your login is active.')+'</p>'
+      +'<div class="note" style="margin-top:12px"><span>✅</span><div>You are signed in. Opening your Fleet Workspace to register vehicles, equipment and drivers…</div></div>'
+      +'<p><a class="btn" href="'+esc(v.redirect||'portal.html')+'">Open my Fleet Workspace →</a></p>'
+      +'<p class="muted">Compliance documents + LTFRB authority are verified by our team; you are not marketplace-eligible until verification completes.</p></div>';
+    $('#okPanel').scrollIntoView({behavior:'smooth'});
+    setTimeout(function(){ window.location.href=v.redirect||'portal.html'; }, 2200);
+  }).catch(function(e){ $('#otpMsg').textContent=e.message; });
+}
+
+function resendCode(){
+  if(!_challenge){toast('Register first');return;}
+  $('#otpMsg').textContent='Requesting a new code…';
+  API.post('/public/providers/resend',{challenge_id:_challenge.challenge_id,username:_challenge.username}).then(function(r){
+    _challenge.challenge_id=r.challenge_id;
+    $('#otpMsg').textContent=r.delivered?('New code sent to '+r.destination):(r.delivery_note||'New code issued.');
+    if(r.dev_code){ $('#otpDev').classList.remove('hide');
+      $('#otpDev').innerHTML='<span>🔑</span><div><b>Test mode</b> — new code: <code style="font-size:16px">'+esc(r.dev_code)+'</code></div>'; }
+  }).catch(function(e){ $('#otpMsg').textContent=e.message; });
+}
+
+function specs(){
+  var s={vehicle_type:$('#vtype').value};
+  if($('#wheels').value)s.wheels=Number($('#wheels').value);
+  if($('#body').value.trim())s.body=$('#body').value.trim();
+  if($('#payload').value)s.payload_kg=Number($('#payload').value);
+  if($('#ref').value)s.refrigerated=true;
+  if($('#subtype').value.trim())s.subtype=$('#subtype').value.trim();
+  if($('#lift').value){s.lifting=true;s.lifting_capacity_kg=Number($('#lift').value);}
+  if(s.vehicle_type==='CRANE'||s.vehicle_type==='FORKLIFT')s.lifting=true;
+  return s;
+}
+function classify(){
+  var out=$('#classOut'); out.classList.remove('hide');
+  if(!API.configured()){ out.innerHTML='<span class="chip crit">offline</span> Connect a hosted LiftHaul API to run the live classifier. It resolves specs → canonical variant + tonnage class from master data.'; return; }
+  out.innerHTML='<span class="muted">Classifying…</span>';
+  API.post('/public/fleet/classify',{specs:specs()}).then(function(d){
+    if(d.classified===false||d.error){ out.innerHTML='<span class="chip crit">Could not classify</span> '+esc(d.error||'check vehicle type / wheels / body'); return; }
+    out.innerHTML='<div class="big" style="color:var(--good)">'+esc(d.class_label)+'</div>'
+      +'<p style="margin-top:6px">Category <span class="chip">'+esc(d.category)+'</span> · Variant <code>'+esc(d.variant_code)+'</code> · maps to LiftHaul class <code>'+esc(d.category_code)+'</code></p>'
+      +'<p class="muted" style="margin-top:6px">This is the canonical classification LiftHaul stores for your unit — you review it, but the class comes from LiftHaul\'s rules, not a free-text choice.</p>';
+  }).catch(function(e){ out.innerHTML='<span class="chip crit">'+esc(e.message)+'</span>'; });
+}
+</script>
+</body>
+</html>

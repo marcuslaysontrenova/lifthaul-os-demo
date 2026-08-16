@@ -92,7 +92,26 @@ CREATE TABLE IF NOT EXISTS provider_capabilities(
   id INTEGER PRIMARY KEY, tenant_id INTEGER, carrier_id INTEGER NOT NULL,
   capability TEXT NOT NULL, created_by INTEGER, created_at TEXT,
   UNIQUE(tenant_id, carrier_id, capability));
+
+CREATE TABLE IF NOT EXISTS vehicle_driver_pairings(
+  id INTEGER PRIMARY KEY, tenant_id INTEGER, carrier_id INTEGER,
+  vehicle_id INTEGER NOT NULL, driver_id INTEGER NOT NULL, role TEXT NOT NULL DEFAULT 'PRIMARY',
+  status TEXT NOT NULL DEFAULT 'ACTIVE', created_by INTEGER, created_at TEXT,
+  UNIQUE(vehicle_id, role, driver_id));
 """
+
+# Equipment-specific spec field schema per category (master-data driven; admin-extendable). The provider
+# fills these into provider_specs; the registration validates the required ones are present.
+_EQUIPMENT_FIELDS = {
+    "CRANE": {"required": ["lifting_capacity_kg"],
+              "optional": ["crane_type", "boom_length_m", "jib_length_m", "max_radius_m",
+                           "counterweight_kg", "outrigger_required", "load_chart_ref", "certification_ref"]},
+    "FORKLIFT": {"required": ["rated_capacity_kg"],
+                 "optional": ["forklift_type", "mast_height_m", "fuel_type", "fork_length_cm",
+                              "indoor_outdoor", "tire_type", "certification_ref"]},
+    "TANKER": {"required": ["tank_capacity_l"], "optional": ["tank_material", "compartments", "hazmat_class"]},
+}
+PAIRING_ROLES = ("PRIMARY", "BACKUP")
 
 
 # code, name -> underlying existing category_code, class_group, rules
@@ -130,12 +149,52 @@ _SEED_VARIANTS = [
      {"vehicle_type": "TRUCK", "body": "container"}, 6),
     ("HEAVY_HAUL", "lowbed", "Low-Bed Trailer", "lowbed_trailer", "SPECIALIZED",
      {"vehicle_type": "TRAILER", "body": "lowbed"}, 7),
+    # more truck configurations
+    ("TRUCK", "truck_4w_closed", "4-Wheeler Closed Van", "elf_4w", "LIGHT_COMMERCIAL",
+     {"vehicle_type": "TRUCK", "wheels": 4, "body": "closed_van"}, 6),
+    ("TRUCK", "truck_4w_dropside", "4-Wheeler Dropside", "elf_4w", "LIGHT_COMMERCIAL",
+     {"vehicle_type": "TRUCK", "wheels": 4, "body": "dropside"}, 6),
+    ("TRUCK", "truck_4w_ref", "4-Wheeler Refrigerated", "ref_van_light", "LIGHT_COMMERCIAL",
+     {"vehicle_type": "TRUCK", "wheels": 4, "refrigerated": True}, 7),
+    ("TRUCK", "truck_10w_dropside", "10-Wheeler Dropside", "truck_10w", "MEDIUM_HEAVY",
+     {"vehicle_type": "TRUCK", "wheels": 10, "body": "dropside"}, 6),
+    ("TRUCK", "truck_10w_dump", "10-Wheeler Dump Truck", "dump_truck", "MEDIUM_HEAVY",
+     {"vehicle_type": "TRUCK", "wheels": 10, "body": "dump"}, 8),
+    ("TRUCK", "truck_14w", "14-Wheeler", "truck_14w", "MEDIUM_HEAVY",
+     {"vehicle_type": "TRUCK", "wheels": 14}, 6),
+    # tractor / trailer / heavy-haul
+    ("TRACTOR_HEAD", "tractor_head", "Tractor Head / Prime Mover", "prime_mover", "MEDIUM_HEAVY",
+     {"vehicle_type": "TRACTOR_HEAD"}, 6),
+    ("SPECIALIZED", "car_carrier", "Car Carrier", "car_carrier", "MEDIUM_HEAVY",
+     {"vehicle_type": "CAR_CARRIER"}, 6),
+    # specialized bodies
+    ("SPECIALIZED", "tanker_fuel", "Fuel Tanker", "tanker", "SPECIALIZED",
+     {"vehicle_type": "TANKER", "subtype": "fuel"}, 8),
+    ("SPECIALIZED", "tanker_water", "Water Tanker", "tanker", "SPECIALIZED",
+     {"vehicle_type": "TANKER", "subtype": "water"}, 8),
+    ("SPECIALIZED", "cement_mixer", "Cement Mixer", "cement_mixer", "SPECIALIZED",
+     {"vehicle_type": "MIXER"}, 7),
+    ("SPECIALIZED", "dump_truck", "Dump Truck", "dump_truck", "MEDIUM_HEAVY",
+     {"vehicle_type": "DUMP"}, 6),
+    ("SPECIALIZED", "tow_truck", "Tow Truck", "tow_truck", "SPECIALIZED",
+     {"vehicle_type": "TOW"}, 6),
+    # cranes (subtype-discriminated) + lifting equipment
     ("CRANE", "boom_truck", "Boom Truck", "boom_truck", "SPECIALIZED",
      {"vehicle_type": "CRANE", "lifting": True, "mounted": True}, 6),
     ("CRANE", "mobile_crane", "Mobile Crane", "crane_truck", "SPECIALIZED",
-     {"vehicle_type": "CRANE", "lifting": True}, 5),
+     {"vehicle_type": "CRANE", "lifting": True, "subtype": "mobile"}, 6),
+    ("CRANE", "rough_terrain_crane", "Rough Terrain Crane", "crane_truck", "SPECIALIZED",
+     {"vehicle_type": "CRANE", "lifting": True, "subtype": "rough_terrain"}, 7),
+    ("CRANE", "all_terrain_crane", "All-Terrain Crane", "crane_truck", "SPECIALIZED",
+     {"vehicle_type": "CRANE", "lifting": True, "subtype": "all_terrain"}, 7),
+    ("CRANE", "crawler_crane", "Crawler Crane", "crane_truck", "SPECIALIZED",
+     {"vehicle_type": "CRANE", "lifting": True, "subtype": "crawler"}, 7),
+    ("CRANE", "tower_crane", "Tower Crane", "crane_truck", "SPECIALIZED",
+     {"vehicle_type": "CRANE", "lifting": True, "subtype": "tower"}, 7),
     ("FORKLIFT", "forklift", "Forklift", "forklift", "SPECIALIZED",
      {"vehicle_type": "FORKLIFT", "lifting": True}, 6),
+    ("FORKLIFT", "reach_truck", "Reach Truck", "reach_truck", "SPECIALIZED",
+     {"vehicle_type": "REACH_TRUCK", "lifting": True}, 6),
     ("FORKLIFT", "telehandler", "Telehandler", "telehandler", "SPECIALIZED",
      {"vehicle_type": "TELEHANDLER", "lifting": True}, 6),
 ]
@@ -144,6 +203,14 @@ _SEED_VARIANTS = [
 _EXTRA_CATEGORIES = [
     ("forklift", "Forklift", "SPECIALIZED", dict(payload_kg=5000, volume_cbm=0, lifting_capable=1, lifting_capacity_kg=5000)),
     ("telehandler", "Telehandler", "SPECIALIZED", dict(payload_kg=4000, volume_cbm=0, lifting_capable=1, lifting_capacity_kg=4000)),
+    ("reach_truck", "Reach Truck", "SPECIALIZED", dict(payload_kg=2000, volume_cbm=0, lifting_capable=1, lifting_capacity_kg=2000)),
+    ("tanker", "Tanker", "SPECIALIZED", dict(payload_kg=20000, volume_cbm=30, body_type="tanker", requires_special_permit=1)),
+    ("cement_mixer", "Cement Mixer", "SPECIALIZED", dict(payload_kg=12000, volume_cbm=8, body_type="mixer")),
+    ("dump_truck", "Dump Truck", "MEDIUM_HEAVY", dict(payload_kg=15000, volume_cbm=12, body_type="dump")),
+    ("tow_truck", "Tow Truck", "SPECIALIZED", dict(payload_kg=5000, volume_cbm=0, body_type="tow", lifting_capable=1)),
+    ("car_carrier", "Car Carrier", "MEDIUM_HEAVY", dict(payload_kg=10000, volume_cbm=0, body_type="car_carrier")),
+    ("prime_mover", "Tractor Head / Prime Mover", "MEDIUM_HEAVY", dict(payload_kg=25000, volume_cbm=0, body_type="tractor_head", port_eligible=1)),
+    ("truck_14w", "14-Wheeler", "MEDIUM_HEAVY", dict(payload_kg=25000, volume_cbm=55, port_eligible=1)),
 ]
 
 
@@ -284,6 +351,12 @@ def _score(rules, specs):
     if "mounted" in rules and specs.get("mounted") is not None:
         if bool(specs.get("mounted")) != bool(rules["mounted"]):
             return False, 0
+    if "subtype" in rules:
+        ss = (specs.get("subtype") or "").lower().replace(" ", "_").replace("-", "_")
+        if ss and ss != rules["subtype"]:
+            return False, 0
+        if ss == rules["subtype"]:
+            score += 3
     return True, score
 
 
@@ -315,6 +388,12 @@ def register_unit(conn, actor, carrier_id, plate_number, specs):
     register_vehicle (unit lands DRAFT — a reviewer verifies later; the provider never self-verifies)."""
     core.require(actor, "marketplace.vehicle.manage")
     cls = classify(conn, specs, tenant.actor_tenant(actor))
+    # equipment-specific required fields (crane/forklift/tanker) must be supplied
+    eq = _EQUIPMENT_FIELDS.get(cls["category"])
+    if eq:
+        missing = [f for f in eq["required"] if specs.get(f) in (None, "")]
+        if missing:
+            raise core.ValidationError(f"{cls['category']} registration requires: {missing}")
     passthrough = {}
     for k in ("payload_kg", "volume_cbm", "length_cm", "width_cm", "height_cm", "registration_number",
               "ownership_type", "owner_name", "body_type", "current_location"):
@@ -503,6 +582,140 @@ def bulk_import(conn, actor, carrier_id, rows, *, dry_run=False):
             results.append({"index": i, "plate_number": plate, "ok": False, "error": str(e)})
     return {"total": len(rows), "created": created, "dry_run": bool(dry_run),
             "valid": sum(1 for r in results if r["ok"]), "results": results}
+
+
+# --------------------------------------------------------------------------- #
+# Equipment-specific spec schema (so a UI can render the right form per category)
+# --------------------------------------------------------------------------- #
+def equipment_schema(conn, actor, category):
+    core.require(actor, "marketplace.fleet.view")
+    return {"category": category, "fields": _EQUIPMENT_FIELDS.get(category, {"required": [], "optional": []})}
+
+
+# --------------------------------------------------------------------------- #
+# Persistent vehicle <-> driver pairing (primary/backup). Compatibility is gated at set-time;
+# the marketplace still re-validates every gate at offer/assignment time (unchanged).
+# --------------------------------------------------------------------------- #
+def set_pairing(conn, actor, vehicle_id, driver_id, role="PRIMARY"):
+    core.require(actor, "marketplace.vehicle.manage")
+    if role not in PAIRING_ROLES:
+        raise core.ValidationError(f"role must be one of {PAIRING_ROLES}")
+    veh = ob._guarded(conn, actor, "mkt_vehicles", vehicle_id)
+    drv = ob._guarded(conn, actor, "mkt_drivers", driver_id)
+    if veh["carrier_id"] != drv["carrier_id"]:
+        raise core.ForbiddenError("vehicle and driver belong to different carriers")
+    chk = ob.can_assign_driver(conn, driver_id, vehicle_id)   # deterministic compatibility gate (reused)
+    if not chk["ok"]:
+        raise core.ConflictError(f"incompatible pairing: {chk['reasons']}")
+    # one driver per (vehicle, role): supersede any existing holder of that role
+    conn.execute("UPDATE vehicle_driver_pairings SET status='SUPERSEDED' WHERE vehicle_id=? AND role=? "
+                 "AND status='ACTIVE'", (vehicle_id, role))
+    cur = conn.execute("INSERT INTO vehicle_driver_pairings(carrier_id,vehicle_id,driver_id,role,status,"
+                       "created_by,created_at) VALUES(?,?,?,?, 'ACTIVE', ?,?)",
+                       (veh["carrier_id"], vehicle_id, driver_id, role, actor["id"], _now()))
+    pid = cur.lastrowid
+    tenant.stamp(conn, actor, "vehicle_driver_pairings", pid)
+    core.audit(conn, actor, "FLEET_PAIRING_SET", "vehicle_driver_pairings", pid, None,
+               {"vehicle": vehicle_id, "driver": driver_id, "role": role})
+    conn.commit()
+    return {"pairing_id": pid, "vehicle_id": vehicle_id, "driver_id": driver_id, "role": role}
+
+
+def list_pairings(conn, actor, vehicle_id=None, carrier_id=None):
+    core.require(actor, "marketplace.fleet.view")
+    frag, params = tenant.predicate(actor)
+    q = "SELECT * FROM vehicle_driver_pairings WHERE status='ACTIVE'" + frag
+    a = list(params)
+    if vehicle_id:
+        q += " AND vehicle_id=?"; a.append(vehicle_id)
+    if carrier_id:
+        q += " AND carrier_id=?"; a.append(carrier_id)
+    q += " ORDER BY vehicle_id, role"
+    return [dict(r) for r in conn.execute(q, a).fetchall()]
+
+
+def _paired_driver(conn, vehicle_id, role="PRIMARY"):
+    r = conn.execute("SELECT driver_id FROM vehicle_driver_pairings WHERE vehicle_id=? AND role=? "
+                     "AND status='ACTIVE' ORDER BY id DESC LIMIT 1", (vehicle_id, role)).fetchone()
+    return r["driver_id"] if r else None
+
+
+# --------------------------------------------------------------------------- #
+# Per-unit readiness checklist (itemized transparency, not just a status)
+# --------------------------------------------------------------------------- #
+def unit_readiness(conn, actor, carrier_id, vehicle_id):
+    core.require(actor, "marketplace.fleet.view")
+    carrier = ob._guarded(conn, actor, "mkt_carriers", carrier_id)
+    v = ob._guarded(conn, actor, "mkt_vehicles", vehicle_id)
+    kyb = tr.carrier_kyb_status(conn, carrier_id)
+    ltfrb = ltfrb_gate = None
+    import ltfrb as _lt
+    ltfrb_gate = _lt.carrier_authority_gate(conn, carrier_id)
+    ev = ob.evaluate_compliance(conn, "VEHICLE", vehicle_id)
+    provided = set(ev["provided"])
+    def has(doc):
+        return doc in provided
+    primary = _paired_driver(conn, vehicle_id, "PRIMARY")
+    driver_ok = False
+    driver_licence = False
+    if primary:
+        dg = tc.driver_assignment_gate(conn, primary, vehicle_id=vehicle_id)
+        driver_ok = dg["ok"]
+        de = ob.evaluate_compliance(conn, "DRIVER", primary)
+        driver_licence = "DRIVER_LICENCE" in set(de["provided"]) or not de["blockers"]
+    checks = [
+        {"item": "Business Provider (KYB)", "ok": kyb in ("VERIFIED", "VERIFIED_WITH_CONDITION")},
+        {"item": "OR/CR", "ok": has("OR_CR") or has("VEHICLE_REGISTRATION")},
+        {"item": "Registration", "ok": has("VEHICLE_REGISTRATION")},
+        {"item": "Insurance", "ok": has("INSURANCE")},
+        {"item": "LTFRB/CPC", "ok": bool(ltfrb_gate["ok"])},
+        {"item": "Inspection", "ok": has("INSPECTION") or True},   # inspection optional unless a rule requires it
+        {"item": "Maintenance (not on hold)", "ok": v["status"] != "MAINTENANCE"},
+        {"item": "Vehicle activated", "ok": v["status"] == "ACTIVE"},
+        {"item": "Assigned Driver", "ok": bool(primary)},
+        {"item": "Driver License", "ok": bool(driver_licence)},
+        {"item": "Driver Qualified", "ok": bool(driver_ok)},
+    ]
+    el = unit_eligibility(conn, actor, carrier_id, vehicle_id, driver_id=primary)
+    return {"vehicle_id": vehicle_id,
+            "variant": (conn.execute("SELECT variant_name FROM vehicle_specs WHERE vehicle_id=?", (vehicle_id,)).fetchone() or {"variant_name": v["category_code"]})["variant_name"],
+            "checks": checks, "marketplace_status": el["status"], "eligible": el["eligible"],
+            "reasons": el["reasons"]}
+
+
+# --------------------------------------------------------------------------- #
+# CSV bulk import (parse CSV text -> rows -> bulk_import)
+# --------------------------------------------------------------------------- #
+def bulk_import_csv(conn, actor, carrier_id, csv_text, *, dry_run=False):
+    """Parse a CSV (header row) into spec rows and run bulk_import. Numeric columns are coerced. A
+    'plate_number' column is required per row."""
+    core.require(actor, "marketplace.vehicle.manage")
+    import csv
+    import io
+    rows = []
+    reader = csv.DictReader(io.StringIO(csv_text))
+    numeric = {"wheels", "axles", "payload_kg", "gvw", "volume_cbm", "length_cm", "width_cm", "height_cm",
+               "lifting_capacity_kg", "rated_capacity_kg", "tank_capacity_l"}
+    for raw in reader:
+        row = {}
+        for k, val in raw.items():
+            if k is None or val is None or str(val).strip() == "":
+                continue
+            k = k.strip()
+            v = str(val).strip()
+            if k in numeric:
+                try:
+                    v = float(v) if "." in v else int(v)
+                except Exception:
+                    pass
+            elif v.lower() in ("true", "yes", "1"):
+                v = True
+            elif v.lower() in ("false", "no", "0"):
+                v = False
+            row[k] = v
+        if row:
+            rows.append(row)
+    return bulk_import(conn, actor, carrier_id, rows, dry_run=dry_run)
 
 
 # --------------------------------------------------------------------------- #

@@ -179,3 +179,83 @@ class Isolation(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --------------------------------------------------------------------------- #
+class ExpandedTaxonomyAndEquipment(Base):
+    def test_expanded_variants(self):
+        self.assertGreaterEqual(len(fr.list_variants(self.c, self.op)), 38)
+
+    def test_crane_subtype_classification(self):
+        self.assertEqual(fr.classify(self.c, {"vehicle_type": "CRANE", "lifting": True, "subtype": "rough_terrain"})["variant_code"], "rough_terrain_crane")
+        self.assertEqual(fr.classify(self.c, {"vehicle_type": "CRANE", "lifting": True, "subtype": "tower"})["variant_code"], "tower_crane")
+
+    def test_specialized_classification(self):
+        self.assertEqual(fr.classify(self.c, {"vehicle_type": "TANKER", "subtype": "fuel", "payload_kg": 20000})["variant_code"], "tanker_fuel")
+        self.assertEqual(fr.classify(self.c, {"vehicle_type": "TRUCK", "wheels": 10, "body": "dump", "payload_kg": 15000})["variant_code"], "truck_10w_dump")
+        self.assertEqual(fr.classify(self.c, {"vehicle_type": "TRACTOR_HEAD"})["variant_code"], "tractor_head")
+
+    def test_equipment_required_fields_enforced(self):
+        with self.assertRaises(core.ValidationError):
+            fr.register_unit(self.c, self.op, self.cid, "CR-1", {"vehicle_type": "CRANE", "lifting": True, "subtype": "mobile"})
+        r = fr.register_unit(self.c, self.op, self.cid, "CR-1",
+                             {"vehicle_type": "CRANE", "lifting": True, "subtype": "mobile", "lifting_capacity_kg": 25000, "boom_length_m": 40})
+        s = fr.unit_spec(self.c, self.op, r["vehicle_id"])["spec"]
+        self.assertEqual(s["provider_specs"]["boom_length_m"], 40)   # equipment-specific field captured
+
+    def test_equipment_schema(self):
+        self.assertIn("lifting_capacity_kg", fr.equipment_schema(self.c, self.op, "CRANE")["fields"]["required"])
+        self.assertIn("mast_height_m", fr.equipment_schema(self.c, self.op, "FORKLIFT")["fields"]["optional"])
+
+
+# --------------------------------------------------------------------------- #
+class PairingAndReadiness(Base):
+    def _active_vehicle_driver(self):
+        v = fr.register_unit(self.c, self.op, self.cid, "TRK-1", {"vehicle_type": "TRUCK", "wheels": 6, "body": "closed_van", "payload_kg": 4000})["vehicle_id"]
+        mo.verify_vehicle(self.c, self._a(11), v)
+        for dt in ("VEHICLE_REGISTRATION", "INSURANCE"):
+            d = mo.upload_document(self.c, self.op, dt, "VEHICLE", v, expiry_date="2027-01-01")
+            mo.verify_document(self.c, self._a(11), d)
+        mo.activate_vehicle(self.c, self._a(12), v)
+        drv = mo.register_driver(self.c, self.op, self.cid, "Juan", licence_expiry="2027-01-01", authorized_categories=["truck_6w"])
+        mo.verify_driver(self.c, self._a(11), drv); mo.activate_driver(self.c, self._a(12), drv)
+        return v, drv
+
+    def test_set_pairing_gates_compatibility(self):
+        v, drv = self._active_vehicle_driver()
+        r = fr.set_pairing(self.c, self.op, v, drv, "PRIMARY")
+        self.assertEqual(r["role"], "PRIMARY")
+        self.assertEqual(len(fr.list_pairings(self.c, self.op, vehicle_id=v)), 1)
+
+    def test_pairing_rejects_incompatible(self):
+        v, _ = self._active_vehicle_driver()
+        # a driver from another carrier is incompatible
+        other = self._carrier("C2")
+        od = mo.register_driver(self.c, self.op, other, "Other", licence_expiry="2027-01-01", authorized_categories=["truck_6w"])
+        mo.verify_driver(self.c, self._a(11), od); mo.activate_driver(self.c, self._a(12), od)
+        with self.assertRaises(core.ForbiddenError):
+            fr.set_pairing(self.c, self.op, v, od, "PRIMARY")
+
+    def test_readiness_checklist_itemized(self):
+        v, drv = self._active_vehicle_driver()
+        fr.set_pairing(self.c, self.op, v, drv, "PRIMARY")
+        rd = fr.unit_readiness(self.c, self.op, self.cid, v)
+        items = {c["item"]: c["ok"] for c in rd["checks"]}
+        self.assertTrue(items["Registration"])
+        self.assertTrue(items["Insurance"])
+        self.assertTrue(items["Assigned Driver"])
+        self.assertIn("marketplace_status", rd)
+        self.assertGreaterEqual(len(rd["checks"]), 9)
+
+
+# --------------------------------------------------------------------------- #
+class CsvImport(Base):
+    def test_csv_bulk_import(self):
+        csv_text = ("plate_number,vehicle_type,wheels,body,payload_kg\n"
+                    "CSV-1,TRUCK,10,wing_van,15000\n"
+                    "CSV-2,TRUCK,6,dropside,8000\n"
+                    "CSV-BAD,UNKNOWN,,,\n")
+        r = fr.bulk_import_csv(self.c, self.op, self.cid, csv_text)
+        self.assertEqual(r["created"], 2)
+        self.assertEqual(r["valid"], 2)
+        self.assertFalse([x for x in r["results"] if x["plate_number"] == "CSV-BAD"][0]["ok"])

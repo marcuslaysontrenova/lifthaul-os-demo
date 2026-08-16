@@ -2393,6 +2393,16 @@ def _fleet_routes():
     def cap_list(a, b, p): return {"capabilities": fr.list_capabilities(_conn, a, int(p["carrier_id"]))}
     def dash(a, b, p):     return fr.fleet_dashboard(_conn, a, int(p["carrier_id"]))
     def bulk(a, b, p):     return fr.bulk_import(_conn, a, int(b["carrier_id"]), b["rows"], dry_run=b.get("dry_run", False))
+    def bulk_csv(a, b, p): return fr.bulk_import_csv(_conn, a, int(b["carrier_id"]), b["csv"], dry_run=b.get("dry_run", False))
+    def eq_schema(a, b, p): return fr.equipment_schema(_conn, a, p["category"])
+    def pair_set(a, b, p): return fr.set_pairing(_conn, a, int(b["vehicle_id"]), int(b["driver_id"]), role=b.get("role", "PRIMARY"))
+    def pair_list(a, b, p): return {"pairings": fr.list_pairings(_conn, a, vehicle_id=int(p["id"]))}
+    def readiness(a, b, p):
+        vid = int(p["id"])
+        row = _conn.execute("SELECT carrier_id FROM mkt_vehicles WHERE id=?", (vid,)).fetchone()
+        if not row:
+            raise core.NotFoundError("vehicle not found")
+        return fr.unit_readiness(_conn, a, row["carrier_id"], vid)
     return {
         ("POST", "/admin/marketplace/fleet/variants"): v_set,
         ("GET", "/admin/marketplace/fleet/variants"): v_list,
@@ -2400,12 +2410,17 @@ def _fleet_routes():
         ("POST", "/admin/marketplace/fleet/units"): unit_reg,
         ("GET", "/admin/marketplace/fleet/units/:id/spec"): unit_spec,
         ("POST", "/admin/marketplace/fleet/units/:id/eligibility"): unit_elig,
+        ("GET", "/admin/marketplace/fleet/units/:id/readiness"): readiness,
+        ("POST", "/admin/marketplace/fleet/pairings"): pair_set,
+        ("GET", "/admin/marketplace/fleet/units/:id/pairings"): pair_list,
+        ("GET", "/admin/marketplace/fleet/equipment-schema/:category"): eq_schema,
         ("POST", "/admin/marketplace/fleet/service-areas"): area_set,
         ("GET", "/admin/marketplace/fleet/carriers/:carrier_id/service-areas"): area_list,
         ("POST", "/admin/marketplace/fleet/capabilities"): cap_set,
         ("GET", "/admin/marketplace/fleet/carriers/:carrier_id/capabilities"): cap_list,
         ("GET", "/admin/marketplace/fleet/carriers/:carrier_id/dashboard"): dash,
         ("POST", "/admin/marketplace/fleet/bulk-import"): bulk,
+        ("POST", "/admin/marketplace/fleet/bulk-import-csv"): bulk_csv,
     }
 
 

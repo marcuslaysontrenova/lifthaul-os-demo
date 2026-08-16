@@ -539,7 +539,19 @@ Operator endpoints (RBAC `marketplace.fleet.*` / `marketplace.fleet.variant.mana
 | POST/GET | `/admin/marketplace/fleet/service-areas` · `…/carriers/:id/service-areas` | Set / list coverage |
 | POST/GET | `/admin/marketplace/fleet/capabilities` · `…/carriers/:id/capabilities` | Set / list capabilities |
 | GET | `/admin/marketplace/fleet/carriers/:carrier_id/dashboard` | Fleet dashboard (counts by variant/status/eligibility) |
-| POST | `/admin/marketplace/fleet/bulk-import` | Bulk register (dry-run + real; isolates errors) |
+| POST | `/admin/marketplace/fleet/bulk-import` · `…/bulk-import-csv` | Bulk register from rows or **CSV** (dry-run + real; isolates errors) |
+| GET | `/admin/marketplace/fleet/units/:id/readiness` | **Itemized readiness checklist** (KYB/OR-CR/registration/insurance/LTFRB/inspection/maintenance/driver/license) + status + reasons |
+| POST/GET | `/admin/marketplace/fleet/pairings` · `…/units/:id/pairings` | Set / list a **vehicle↔driver pairing** (PRIMARY/BACKUP; compatibility gated at set-time; marketplace re-validates at offer time) |
+| GET | `/admin/marketplace/fleet/equipment-schema/:category` | Equipment-specific field schema (CRANE/FORKLIFT/TANKER — so a UI renders the right form) |
+
+The variant taxonomy now covers **40 variants** across motorcycle → light → van → truck configs
+(4W/6W/10W closed·dropside·wing·reefer·dump, 12W, 14W) → tractor head → heavy-haul (flatbed/container/
+lowbed/car-carrier) → crane subtypes (boom/mobile/rough-terrain/all-terrain/crawler/tower) → forklift/
+reach-truck/telehandler → specialized (fuel/water tanker, cement mixer, dump, tow). Equipment categories
+(forklift, telehandler, reach-truck, tanker, mixer, dump, tow, car-carrier, prime-mover, 14-wheeler) are
+added to the canonical catalog so every category is registrable. Crane/forklift/tanker registrations
+**require** their equipment-specific fields (e.g. crane `lifting_capacity_kg`), captured in the unit's
+spec profile.
 
 Carrier-portal (a provider self-registers its OWN fleet): `POST /portal/carrier/fleet/units`,
 `/fleet/classify`, `/fleet/service-areas`, `/fleet/capabilities`, `GET /portal/carrier/fleet-dashboard`.

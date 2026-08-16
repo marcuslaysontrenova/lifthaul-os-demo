@@ -552,6 +552,11 @@ window.RGO_API = (function(){
     cpRevoke:function(id,b){return req('POST','/admin/carrier-portal/principals/'+id+'/revoke',b||{});},
     cpOverview:function(cid){return req('GET','/admin/carrier-portal/overview/'+cid);},
     daBind:function(b){return req('POST','/admin/driver-app/bind',b);},
+    frVariants:function(){return req('GET','/admin/marketplace/fleet/variants');},
+    frClassify:function(b){return req('POST','/admin/marketplace/fleet/classify',{specs:b});},
+    frRegister:function(b){return req('POST','/admin/marketplace/fleet/units',b);},
+    frDashboard:function(cid){return req('GET','/admin/marketplace/fleet/carriers/'+cid+'/dashboard');},
+    frBulk:function(b){return req('POST','/admin/marketplace/fleet/bulk-import',b);},
     raList:function(st){return req('GET','/admin/marketplace/reassignments'+(st?('?status='+st):''));},
     raQueues:function(){return req('GET','/admin/marketplace/reassignment-queues');},
     raOpen:function(b){return req('POST','/admin/marketplace/reassignments',b);},
@@ -1174,6 +1179,9 @@ window.RGO_API = (function(){
     if(act==='cpBind')return cpBind();
     if(act==='cpPreview')return cpPreview();
     if(act==='daBind')return daBind();
+    if(act==='frClassify')return frClassify();
+    if(act==='frRegister')return frRegister();
+    if(act==='frDash')return frDash();
     if(act==='raOpen')return raOpen();
     if(act==='raSub')return raSub(arg);
     if(act==='raRematch')return raRematch(arg);
@@ -1263,7 +1271,7 @@ window.RGO_API = (function(){
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
-    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['preferred','Preferred Carriers'],['surcharge','Surcharges'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['preferred','Preferred Carriers'],['surcharge','Surcharges'],['fleetreg','Fleet Registration'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1282,6 +1290,7 @@ window.RGO_API = (function(){
     if(adminTab==='billing')return adminBilling();
     if(adminTab==='preferred')return adminPreferred();
     if(adminTab==='surcharge')return adminSurcharge();
+    if(adminTab==='fleetreg')return adminFleetReg();
     if(adminTab==='devportal')return adminDevPortal();
     if(adminTab==='org')return adminOrg();
     if(adminTab==='cal')return adminCalendars();
@@ -1709,6 +1718,28 @@ window.RGO_API = (function(){
   function scSet(){var code=$('#scCode').value.trim();if(!code){toast('Code required');return;}var rate=Number($('#scRate').value||0);var b={code:code,name:code,surcharge_type:$('#scType').value,basis:$('#scBasis').value,rate:rate,priority:Number($('#scPrio').value||0)};var z=$('#scZone').value.trim();if(z)b.applies_when={origin_zones:[z]};RGO_API.scSetRule(b).then(function(){toast('Rule '+code+' set');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function scOff(id){RGO_API.scOffRule(id).then(function(){toast('Rule deactivated');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});}
   function scPreview(){var b={subtotal:Number($('#scQSub').value||0)};var z=$('#scQZone').value.trim();if(z)b.origin_zone=z;var km=$('#scQKm').value;if(km)b.distance_km=Number(km);RGO_API.scQuote(b).then(function(d){var rows=(d.surcharges||[]).map(function(s){return s.code+' ('+s.basis+' '+s.rate+') → ₱'+Number(s.amount).toLocaleString();}).join('<br>')||'No surcharges apply.';$('#scPreviewOut').innerHTML=rows+'<br><b>Total surcharge: ₱'+Number(d.total).toLocaleString()+'</b>';}).catch(function(e){toast('Rejected: '+e.message);});}
+  // ---------- Service Provider & Fleet Registration Workspace ----------
+  function adminFleetReg(){
+    if(liveMode){
+      RGO_API.frVariants().then(function(r){
+        var host=$('#adminBody');if(!host||adminTab!=='fleetreg')return;
+        var vars=(r||{}).variants||[];
+        var byCat={};vars.forEach(function(v){(byCat[v.category]=byCat[v.category]||[]).push(v);});
+        var catBlocks=Object.keys(byCat).map(function(cat){return '<div style="margin-bottom:8px"><b style="font-size:12px;color:var(--primary-2)">'+esc(cat)+'</b> '+byCat[cat].map(function(v){return '<span class="chip c-info" title="'+esc(v.category_code)+'">'+esc(v.variant_name)+'</span>';}).join(' ')+'</div>';}).join('');
+        host.innerHTML=
+          '<div class="access-note"><span>🏢</span><div><b>Service Provider & Fleet Registration.</b> A provider registers once, then adds unlimited units. The <b>classification engine</b> takes physical specs (wheels / body / payload) and resolves the canonical LiftHaul variant + tonnage class (e.g. <code>6-Wheeler Closed Van - 4T Class</code>). Variants are <b>master-data driven</b> (admins add variants without code). Units land <b>DRAFT</b> — a reviewer verifies; providers never self-verify. Requires <code>marketplace.fleet.*</code>.</div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Classification preview</h3><div class="spacer"></div><span class="cnt">specs → canonical variant</span></div><div class="panel-b"><div class="frm" style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:10px;align-items:end"><label><span>Type</span><select id="frType"><option>TRUCK</option><option>MOTORCYCLE</option><option>VAN</option><option>CAR</option><option>MPV</option><option>PICKUP</option><option>TRAILER</option><option>CRANE</option><option>FORKLIFT</option></select></label><label><span>Wheels</span><input id="frWheels" type="number" placeholder="6"></label><label><span>Body</span><input id="frBody" placeholder="closed_van"></label><label><span>Payload kg</span><input id="frPayload" type="number" placeholder="4000"></label><label><span>Refrigerated</span><select id="frRef"><option value="">no</option><option value="1">yes</option></select></label><button class="btn" data-act="frClassify">Classify</button></div><div id="frClassifyOut" style="margin-top:10px;font-size:14px"></div></div></div>'
+          +'<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3>Register a unit under a provider</h3></div><div class="panel-b"><div class="frm" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><label><span>Carrier ID</span><input id="frCarrier" type="number"></label><label><span>Plate</span><input id="frPlate" placeholder="ABC-001"></label><button class="btn line" data-act="frRegister">Classify + Register (DRAFT)</button><button class="btn line" data-act="frDash">Fleet dashboard</button></div><div id="frRegOut" style="margin-top:10px;font-size:14px"></div></div></div>'
+          +'<div class="panel"><div class="panel-h"><h3>Vehicle variant master data</h3><div class="spacer"></div><span class="cnt">'+vars.length+' variants</span></div><div class="panel-b">'+catBlocks+'</div></div>';
+      }).catch(apiErr);
+      return '<div class="panel"><div class="panel-b"><div class="empty">Loading fleet registration…</div></div></div>';
+    }
+    return '<div class="access-note"><span>🏢</span><div><b>Service Provider & Fleet Registration Workspace</b> — master-data vehicle-variant taxonomy + a rules-driven classification engine (specs → canonical variant + tonnage class), spec-based unit registration (lands DRAFT), service areas / capabilities, per-unit eligibility with coded reasons, and bulk import. Connect a backend to administer. Requires <code>marketplace.fleet.*</code>.</div></div>';
+  }
+  function _frSpecs(){var s={vehicle_type:$('#frType').value};var w=$('#frWheels').value;if(w)s.wheels=Number(w);var b=$('#frBody').value.trim();if(b)s.body=b;var p=$('#frPayload').value;if(p)s.payload_kg=Number(p);if($('#frRef').value)s.refrigerated=true;if(s.vehicle_type==='CRANE'||s.vehicle_type==='FORKLIFT')s.lifting=true;return s;}
+  function frClassify(){RGO_API.frClassify(_frSpecs()).then(function(d){$('#frClassifyOut').innerHTML='<b style="color:var(--good)">'+esc(d.class_label)+'</b> · variant <code>'+esc(d.variant_code)+'</code> → category <code>'+esc(d.category_code)+'</code> (confidence '+esc(d.confidence)+')';}).catch(function(e){$('#frClassifyOut').innerHTML='<span class="chip c-crit">'+esc(e.message)+'</span>';});}
+  function frRegister(){var cid=$('#frCarrier').value,plate=$('#frPlate').value.trim();if(!cid||!plate){toast('Carrier ID + plate required');return;}RGO_API.frRegister({carrier_id:Number(cid),plate_number:plate,specs:_frSpecs()}).then(function(d){$('#frRegOut').innerHTML='Registered <b>'+esc(d.classification.class_label)+'</b> · vehicle #'+esc(d.vehicle_id)+' · <span class="chip c-mut">'+esc(d.status)+'</span>';toast('Unit registered (DRAFT)');}).catch(function(e){$('#frRegOut').innerHTML='<span class="chip c-crit">'+esc(e.message)+'</span>';});}
+  function frDash(){var cid=$('#frCarrier').value;if(!cid){toast('Carrier ID required');return;}RGO_API.frDashboard(cid).then(function(d){var bv=Object.keys(d.by_variant||{}).map(function(k){return esc(k)+': '+d.by_variant[k];}).join(' · ')||'—';$('#frRegOut').innerHTML='<b>Fleet:</b> '+d.total_units+' units · '+d.marketplace_eligible+' eligible<br><span class="muted">'+bv+'</span><br>Areas: '+((d.service_areas||[]).map(function(a){return esc(a.area_code);}).join(', ')||'—')+' · Capabilities: '+((d.capabilities||[]).join(', ')||'—');}).catch(function(e){toast('Rejected: '+e.message);});}
   // ---------- Carrier Access (operator binds a login to a carrier; the carrier self-serves in portal.html) ----------
   function adminCarrierAccess(){
     if(liveMode){

@@ -41,6 +41,7 @@ import goods_protection as gp
 import ltfrb
 import notifications_engine as ne
 import driver_reassignment as dr
+import fleet_registration as fr
 
 
 # --------------------------------------------------------------------------- #
@@ -71,6 +72,9 @@ _SELF_SERVICE = {
     "submit_pod":       ("marketplace.pod.submit",),
     "open_reassignment":   ("marketplace.reassignment.open",),
     "propose_substitute":  ("marketplace.reassignment.substitute", "marketplace.assignment.confirm"),
+    "register_unit":       ("marketplace.vehicle.manage",),
+    "fleet_view":          ("marketplace.fleet.view",),
+    "fleet_manage":        ("marketplace.fleet.manage",),
 }
 
 # Permissions the portal must NEVER elevate into (defence-in-depth: a hard assertion, so a future
@@ -607,6 +611,41 @@ def propose_substitute(conn, actor, reassignment_id, new_driver_id=None, new_veh
         raise core.ForbiddenError("reassignment does not belong to your carrier")
     return dr.propose_substitute(conn, _svc(actor, *_SELF_SERVICE["propose_substitute"]), reassignment_id,
                                  new_driver_id=new_driver_id, new_vehicle_id=new_vehicle_id)
+
+
+# --------------------------------------------------------------------------- #
+# Fleet Registration Workspace (register units by spec; classified canonically; DRAFT only)
+# --------------------------------------------------------------------------- #
+def register_unit(conn, actor, plate_number, specs, requested=None):
+    """Register a fleet unit from provider specs into the carrier's OWN fleet. Classified canonically;
+    lands DRAFT (a reviewer verifies — the carrier never self-activates)."""
+    core.require(actor, "carrier.portal.fleet.manage")
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    return fr.register_unit(conn, _svc(actor, *_SELF_SERVICE["register_unit"]), cid, plate_number, specs)
+
+
+def fleet_dashboard(conn, actor, requested=None):
+    core.require(actor, "carrier.portal.view")
+    cid = resolve_carrier(conn, actor, requested)
+    return fr.fleet_dashboard(conn, _svc(actor, *_SELF_SERVICE["fleet_view"]), cid)
+
+
+def set_service_area(conn, actor, area_code, scope="REGION", requested=None):
+    core.require(actor, "carrier.portal.fleet.manage")
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    return fr.set_service_area(conn, _svc(actor, *_SELF_SERVICE["fleet_manage"]), cid, area_code, scope=scope)
+
+
+def set_capability(conn, actor, capability, requested=None):
+    core.require(actor, "carrier.portal.fleet.manage")
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    return fr.set_capability(conn, _svc(actor, *_SELF_SERVICE["fleet_manage"]), cid, capability)
+
+
+def classify_unit(conn, actor, specs, requested=None):
+    core.require(actor, "carrier.portal.view")
+    resolve_carrier(conn, actor, requested)
+    return fr.classify(conn, specs, tenant_id=actor.get("tenant_id"))
 
 
 # --------------------------------------------------------------------------- #

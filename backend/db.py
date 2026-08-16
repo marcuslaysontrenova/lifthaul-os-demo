@@ -141,6 +141,8 @@ def _seed_platform(conn):
     surcharge.init(conn); surcharge.seed(conn)                           # Dynamic Surcharge Engine: governed effective-dated surcharge rules over pricing (config-gated OFF by default; pricing unchanged until enabled)
     import driver_app
     driver_app.init(conn); driver_app.seed(conn)                         # Driver Mobile App: driver-facing surface over existing trip/POD/OTP domains (principal binding + minimal elevation; never sees OTP)
+    import fleet_registration
+    fleet_registration.init(conn); fleet_registration.seed(conn)         # Service Provider & Fleet Registration Workspace: master-data vehicle-variant taxonomy + classification engine + spec-based registration over existing carrier/vehicle domains
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

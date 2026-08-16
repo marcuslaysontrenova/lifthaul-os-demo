@@ -367,6 +367,8 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.surcharge.view", "marketplace.surcharge.manage",
     # Driver Mobile App — driver self-service over own trips (no verify/approve; never sees OTP)
     "driver.app.view", "driver.app.execute",
+    # Service Provider & Fleet Registration Workspace — dynamic variant taxonomy + classification over existing domains
+    "marketplace.fleet.view", "marketplace.fleet.manage", "marketplace.fleet.variant.manage",
 ]
 for _code in MARKETPLACE_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))

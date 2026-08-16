@@ -2152,6 +2152,12 @@ def _carrier_portal_routes():
         # carrier-portal reassignment (intra-carrier only; never re-match)
         ("POST", "/portal/carrier/reassignments"): lambda a, b, p: cp.open_reassignment(_conn, a, int(b["assignment_id"]), b["reason"], evidence=b.get("evidence")),
         ("POST", "/portal/carrier/reassignments/:id/substitute"): lambda a, b, p: cp.propose_substitute(_conn, a, int(p["id"]), new_driver_id=b.get("driver_id"), new_vehicle_id=b.get("vehicle_id")),
+        # carrier-portal fleet registration workspace (own fleet; classified; DRAFT only)
+        ("GET", "/portal/carrier/fleet-dashboard"): lambda a, b, p: cp.fleet_dashboard(_conn, a),
+        ("POST", "/portal/carrier/fleet/classify"): lambda a, b, p: cp.classify_unit(_conn, a, b.get("specs", b)),
+        ("POST", "/portal/carrier/fleet/units"): lambda a, b, p: cp.register_unit(_conn, a, b["plate_number"], b["specs"]),
+        ("POST", "/portal/carrier/fleet/service-areas"): lambda a, b, p: cp.set_service_area(_conn, a, b["area_code"], scope=b.get("scope", "REGION")),
+        ("POST", "/portal/carrier/fleet/capabilities"): lambda a, b, p: cp.set_capability(_conn, a, b["capability"]),
     }
 
 
@@ -2343,6 +2349,40 @@ def _driver_app_routes():
     }
 
 
+def _fleet_routes():
+    import fleet_registration as fr
+
+    def v_set(a, b, p):    return fr.set_variant(_conn, a, b["category"], b["variant_code"], b["variant_name"],
+                                                 b["category_code"], class_group=b.get("class_group"),
+                                                 rules=b.get("rules"), priority=b.get("priority", 0))
+    def v_list(a, b, p):   return {"variants": fr.list_variants(_conn, a, category=b.get("category"))}
+    def classify(a, b, p): return fr.classify(_conn, b.get("specs", b), tenant_id=a.get("tenant_id"))
+    def unit_reg(a, b, p): return fr.register_unit(_conn, a, int(b["carrier_id"]), b["plate_number"], b["specs"])
+    def unit_spec(a, b, p): return fr.unit_spec(_conn, a, int(p["id"]))
+    def unit_elig(a, b, p): return fr.unit_eligibility(_conn, a, int(b["carrier_id"]), int(p["id"]),
+                                                       driver_id=b.get("driver_id"), job_area=b.get("job_area"))
+    def area_set(a, b, p): return fr.set_service_area(_conn, a, int(b["carrier_id"]), b["area_code"], scope=b.get("scope", "REGION"))
+    def area_list(a, b, p): return {"areas": fr.list_service_areas(_conn, a, int(p["carrier_id"]))}
+    def cap_set(a, b, p):  return fr.set_capability(_conn, a, int(b["carrier_id"]), b["capability"])
+    def cap_list(a, b, p): return {"capabilities": fr.list_capabilities(_conn, a, int(p["carrier_id"]))}
+    def dash(a, b, p):     return fr.fleet_dashboard(_conn, a, int(p["carrier_id"]))
+    def bulk(a, b, p):     return fr.bulk_import(_conn, a, int(b["carrier_id"]), b["rows"], dry_run=b.get("dry_run", False))
+    return {
+        ("POST", "/admin/marketplace/fleet/variants"): v_set,
+        ("GET", "/admin/marketplace/fleet/variants"): v_list,
+        ("POST", "/admin/marketplace/fleet/classify"): classify,
+        ("POST", "/admin/marketplace/fleet/units"): unit_reg,
+        ("GET", "/admin/marketplace/fleet/units/:id/spec"): unit_spec,
+        ("POST", "/admin/marketplace/fleet/units/:id/eligibility"): unit_elig,
+        ("POST", "/admin/marketplace/fleet/service-areas"): area_set,
+        ("GET", "/admin/marketplace/fleet/carriers/:carrier_id/service-areas"): area_list,
+        ("POST", "/admin/marketplace/fleet/capabilities"): cap_set,
+        ("GET", "/admin/marketplace/fleet/carriers/:carrier_id/capabilities"): cap_list,
+        ("GET", "/admin/marketplace/fleet/carriers/:carrier_id/dashboard"): dash,
+        ("POST", "/admin/marketplace/fleet/bulk-import"): bulk,
+    }
+
+
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
 ROUTES.update(_reassignment_routes())
@@ -2351,6 +2391,7 @@ ROUTES.update(_billing_routes())
 ROUTES.update(_preference_routes())
 ROUTES.update(_surcharge_routes())
 ROUTES.update(_driver_app_routes())
+ROUTES.update(_fleet_routes())
 
 
 def _match(method, path):

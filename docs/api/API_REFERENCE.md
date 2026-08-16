@@ -502,6 +502,51 @@ Front-end: `driver.html` — a mobile-first driver app (assigned trips, one-tap 
 the device, POD capture, and a recipient-code entry field). Operators bind driver logins from the
 console **Carrier Access** tab.
 
+## Service Provider & Fleet Registration Workspace
+
+A dynamic, master-data-driven registration layer over the **existing** carrier / vehicle / driver /
+compliance domains. A provider registers once (the `mkt_carriers` record) and then adds unlimited
+individual units — without forking any of those domains.
+
+- `vehicle_variants` — a **master-data taxonomy** (category → variant → class) that maps a rich variant
+  ("6-Wheeler Closed Van") onto an existing marketplace `category_code`, so pricing/matching keep
+  working unchanged. **Admin-extendable** (`set_variant`) — new variants without a code change.
+- **Classification engine** (`classify`) — the provider supplies physical specs (wheels / axles / body /
+  payload / refrigerated / lifting) and LiftHaul **deterministically** resolves the canonical variant +
+  tonnage class, e.g. `{TRUCK, 6 wheels, closed_van, 4000kg}` → **"6-Wheeler Closed Van - 4T Class"**.
+  Both provider-entered specs and the canonical classification are stored (`vehicle_specs`).
+  Unclassifiable specs are rejected (the engine never guesses beyond the governed rules).
+- `register_unit` classifies then delegates to the canonical `register_vehicle`; the unit lands **DRAFT**
+  (a reviewer verifies — a provider never self-verifies).
+- **Service areas + capabilities** (`provider_service_areas` / `provider_capabilities`) influence
+  eligibility.
+- **Per-unit eligibility** returns **specific coded reasons** composed from the existing gates:
+  `ELIGIBLE / REGISTRATION_EXPIRED / INSURANCE_EXPIRED / CPC_INVALID / MAINTENANCE_HOLD /
+  DRIVER_UNQUALIFIED / DRIVER_UNAVAILABLE / OUTSIDE_SERVICE_AREA / PROVIDER_SUSPENDED / COMPLIANCE_HOLD /
+  NOT_ACTIVATED`. Server-side rules stay authoritative — a front-end selection never determines
+  eligibility.
+- **Bulk import** classifies → validates → creates, isolating bad rows (dry-run supported).
+
+Operator endpoints (RBAC `marketplace.fleet.*` / `marketplace.fleet.variant.manage`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST/GET | `/admin/marketplace/fleet/variants` | Add/upsert (admin) / list the variant taxonomy |
+| POST | `/admin/marketplace/fleet/classify` | Classify specs → canonical variant (preview) |
+| POST | `/admin/marketplace/fleet/units` | Register a unit from specs (→DRAFT) |
+| GET | `/admin/marketplace/fleet/units/:id/spec` | Unit spec profile (provider + canonical) |
+| POST | `/admin/marketplace/fleet/units/:id/eligibility` | Per-unit eligibility with coded reasons |
+| POST/GET | `/admin/marketplace/fleet/service-areas` · `…/carriers/:id/service-areas` | Set / list coverage |
+| POST/GET | `/admin/marketplace/fleet/capabilities` · `…/carriers/:id/capabilities` | Set / list capabilities |
+| GET | `/admin/marketplace/fleet/carriers/:carrier_id/dashboard` | Fleet dashboard (counts by variant/status/eligibility) |
+| POST | `/admin/marketplace/fleet/bulk-import` | Bulk register (dry-run + real; isolates errors) |
+
+Carrier-portal (a provider self-registers its OWN fleet): `POST /portal/carrier/fleet/units`,
+`/fleet/classify`, `/fleet/service-areas`, `/fleet/capabilities`, `GET /portal/carrier/fleet-dashboard`.
+Front-end: a console **Fleet Registration** tab (classification preview, spec-based registration, variant
+master data). New equipment categories (forklift, telehandler) are added to the canonical catalog so the
+full taxonomy — motorcycle → truck configs → heavy-haul → crane → forklift — is registrable.
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

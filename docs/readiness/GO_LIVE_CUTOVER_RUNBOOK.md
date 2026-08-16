@@ -11,10 +11,18 @@ Automation shipped for this sprint:
   LAUNCH-SAFE against a live backend (all four revenue/regulated flags OFF).**
 - `scripts/go_live/backup_restore.py` — backup→destroy→restore→reconcile drill + PostgreSQL playbook.
   **Verified: reconciliation identical (RTO ~0.3s, RPO 0).**
+- `scripts/go_live/pg_lifecycle.py` — the **full controlled synthetic acceptance lifecycle** against
+  whatever `DATABASE_URL` points at (PostgreSQL in CI/prod, SQLite locally): onboarding (verified
+  shipper/carrier/vehicle/driver + KYB + lane) → booking → validate → price → matching → offer → select →
+  assignment → confirm → **Protected Payment MOCK: FUNDING → FUNDS_PROTECTED → … → SETTLED** → carrier
+  settlement → recipient OTP, then **two-tenant isolation** (Tenant B denied on Tenant A booking/carrier/
+  vehicle/protected-payment). **Verified: 29/29 locally.** This is the owner's "one controlled synthetic
+  lifecycle + Tenant-B denial" go-live proof, runnable on the real stack.
 - `.github/workflows/go-live-postgres.yml` — CI job that runs the app against a **real PostgreSQL 16
-  service container**, migrates, boots in `APP_ENV=production`, runs the E2E over HTTP, proves restart
-  persistence, and runs the backup/restore drill — **executing Gates 1/2/3/2b/5 against Postgres on every
-  push**. This is the automated stand-in for a hosted DB until the managed host exists.
+  service container**: migrate, boot in `APP_ENV=production`, E2E over HTTP, restart persistence, the
+  backup/restore drill, and **`pg_lifecycle.py` (full acceptance + isolation) against Postgres** —
+  executing Gates 1/2/3/3b/4/2b/5 on every push. The automated stand-in for a hosted DB until the managed
+  host exists.
 
 ---
 

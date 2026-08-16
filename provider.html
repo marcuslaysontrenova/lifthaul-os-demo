@@ -249,11 +249,16 @@ function verifyProvider(){
     try{ localStorage.setItem('lifthaul_api_token', v.token); }catch(e){}
     $('#otpPanel').classList.add('hide');
     $('#okPanel').classList.remove('hide');
-    $('#okBody').innerHTML='<div class="result"><div class="big" style="color:var(--good)">'+esc(_challenge.ref)+' · Active</div>'
-      +'<p style="margin-top:6px">'+esc(v.message||'Your login is active.')+'</p>'
-      +'<div class="note" style="margin-top:12px"><span>✅</span><div>You are signed in. Opening your Fleet Workspace to register vehicles, equipment and drivers…</div></div>'
-      +'<p><a class="btn" href="'+esc(v.redirect||'portal.html')+'">Open my Fleet Workspace →</a></p>'
-      +'<p class="muted">Compliance documents + LTFRB authority are verified by our team; you are not marketplace-eligible until verification completes.</p></div>';
+    $('#okBody').innerHTML='<div class="result"><div class="big" style="color:var(--good)">'+esc(_challenge.ref)+' · Contact verified</div>'
+      +'<div class="note" style="margin-top:12px;border-left:3px solid var(--good)"><span>✅</span><div><b>Account verified. Company compliance review pending.</b><br>'
+      +'You may now complete your fleet profile, but marketplace assignments remain disabled until required compliance checks are approved.</div></div>'
+      +'<div class="note" style="margin-top:10px;border-left:3px solid var(--warn)"><span>ℹ️</span><div>Verifying your contact is not the same as approving your company. These are separate and independent:'
+      +'<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;font-size:13px">'
+      +'<span><span class="chip good">✓ Email / mobile verified</span></span>'
+      +'<span><span class="chip">◻ KYB verified</span> <span class="chip">◻ LTFRB / CPC verified</span> <span class="chip">◻ Insurance verified</span></span>'
+      +'<span><span class="chip">◻ Marketplace eligible</span> — enabled only after independent review</span></div></div></div>'
+      +'<p style="margin-top:14px"><a class="btn" href="'+esc(v.redirect||'portal.html')+'">Open my Fleet Workspace →</a></p>'
+      +'<p class="muted">LiftHaul remains the compliance authority — you can submit documents but cannot self-verify them.</p></div>';
     $('#okPanel').scrollIntoView({behavior:'smooth'});
     setTimeout(function(){ window.location.href=v.redirect||'portal.html'; }, 2200);
   }).catch(function(e){ $('#otpMsg').textContent=e.message; });

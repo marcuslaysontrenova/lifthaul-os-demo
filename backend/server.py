@@ -47,6 +47,21 @@ def validate_config():
         if missing:
             log.error("startup blocked: missing required config: %s", ",".join(missing))
             sys.exit(2)
+    _guard_env_posture()
+
+
+def _guard_env_posture():
+    """Startup guard so an ambiguous or missing APP_ENV cannot accidentally behave like development.
+    Security-sensitive surfaces (e.g. the one-time signup code) fail closed unless APP_ENV is an
+    explicitly-recognised dev/test value; here we make that posture loud and auditable at boot."""
+    import public_provider as _pp
+    posture = _pp.env_posture()
+    if not posture["recognised"]:
+        log.warning('unrecognised APP_ENV=%s -> treating as PRODUCTION for security decisions '
+                    '(one-time codes will not be surfaced). Set APP_ENV explicitly to development/'
+                    'test/staging/production.', posture["app_env"])
+    log.info('env posture: app_env=%s dev_code_allowed=%s treated_as_production=%s',
+             posture["app_env"], posture["dev_code_allowed"], posture["treated_as_production"])
 
 
 validate_config()

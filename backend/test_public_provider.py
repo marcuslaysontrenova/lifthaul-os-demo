@@ -133,6 +133,73 @@ class PublicProviderRegistration(unittest.TestCase):
         self.assertIn("PROVIDER_SIGNUP_VERIFIED", acts)
 
 
+class OtpProductionBoundary(unittest.TestCase):
+    """The one-time code must fail CLOSED: never surfaced/logged in production or an ambiguous env,
+    and delivery-unavailable must leave the account PENDING."""
+
+    def setUp(self):
+        self.conn = db.connect("sqlite:///:memory:")
+        self._env = os.environ.get("APP_ENV")
+        self._cap = os.environ.get("OTP_TEST_CAPTURE")
+
+    def tearDown(self):
+        for k, v in (("APP_ENV", self._env), ("OTP_TEST_CAPTURE", self._cap)):
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        pp._CODE_CAPTURE.clear()
+
+    def test_production_never_returns_dev_code_and_stays_pending(self):
+        os.environ["APP_ENV"] = "production"
+        os.environ.pop("OTP_TEST_CAPTURE", None)
+        r = pp.submit(self.conn, _payload())
+        self.assertNotIn("dev_code", r)
+        self.assertFalse(r["delivered"])
+        self.assertIn("VERIFICATION DELIVERY UNAVAILABLE", r["delivery_note"])
+        u = self.conn.execute("SELECT status FROM users WHERE email=?", ("ops@abc.test",)).fetchone()
+        self.assertEqual(u["status"], "PENDING_VERIFICATION")
+
+    def test_unknown_env_is_treated_as_production(self):
+        os.environ["APP_ENV"] = "whatever"
+        r = pp.submit(self.conn, _payload())
+        self.assertNotIn("dev_code", r)
+        self.assertFalse(pp.env_posture()["recognised"])
+        self.assertTrue(pp.env_posture()["treated_as_production"])
+
+    def test_missing_env_is_treated_as_production(self):
+        os.environ.pop("APP_ENV", None)
+        r = pp.submit(self.conn, _payload())
+        self.assertNotIn("dev_code", r)
+        self.assertTrue(pp.env_posture()["treated_as_production"])
+
+    def test_capture_is_opt_in_only(self):
+        os.environ["APP_ENV"] = "production"
+        os.environ.pop("OTP_TEST_CAPTURE", None)
+        r = pp.submit(self.conn, _payload())
+        self.assertIsNone(pp.peek_code(self.conn, r["challenge_id"]))   # capture off -> no peek
+
+    def test_production_flow_completes_via_capture_harness(self):
+        os.environ["APP_ENV"] = "production"
+        os.environ["OTP_TEST_CAPTURE"] = "1"
+        r = pp.submit(self.conn, _payload())
+        self.assertNotIn("dev_code", r)                                 # still never leaked over the API
+        code = pp.peek_code(self.conn, r["challenge_id"])
+        self.assertTrue(code)
+        v = pp.verify(self.conn, {"challenge_id": r["challenge_id"], "code": code})
+        self.assertEqual(v["status"], "ACTIVE")
+
+    def test_code_never_written_to_audit(self):
+        os.environ["APP_ENV"] = "production"
+        os.environ["OTP_TEST_CAPTURE"] = "1"
+        r = pp.submit(self.conn, _payload())
+        code = pp.peek_code(self.conn, r["challenge_id"])
+        rows = self.conn.execute("SELECT new_value FROM audit_logs WHERE action=?",
+                                 ("PROVIDER_SIGNUP_CODE_ISSUED",)).fetchall()
+        blob = " ".join((x["new_value"] or "") for x in rows)
+        self.assertNotIn(code, blob)
+
+
 class PublicPreviews(unittest.TestCase):
     def setUp(self):
         self.conn = db.connect("sqlite:///:memory:")

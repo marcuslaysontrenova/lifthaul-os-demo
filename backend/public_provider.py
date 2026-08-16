@@ -79,8 +79,48 @@ def _carrier_type(provider_type):
     return "CORPORATION"
 
 
+# --------------------------------------------------------------------------- #
+# Environment posture — FAIL CLOSED. The one-time code may only ever be surfaced
+# in an explicitly-declared development/test environment. An ambiguous, unknown,
+# empty, staging or production APP_ENV is treated as production for every security
+# decision, so a mis-set or missing environment can NEVER behave like development.
+# --------------------------------------------------------------------------- #
+_DEV_ENVS = frozenset({"development", "dev", "local", "test", "testing"})
+_KNOWN_ENVS = _DEV_ENVS | frozenset({"production", "prod", "staging", "stage", "ci"})
+
+
+def _env():
+    return os.environ.get("APP_ENV", "").strip().lower()
+
+
+def _dev_code_allowed():
+    """True ONLY when APP_ENV is an explicitly recognised development/test value.
+    Missing/unknown/staging/production -> False (never leak the code)."""
+    return _env() in _DEV_ENVS
+
+
 def _is_production():
-    return os.environ.get("APP_ENV", "development") == "production"
+    """Production posture for messaging/UX wording: anything that is NOT an explicit
+    dev/test environment is treated as production (fail closed)."""
+    return not _dev_code_allowed()
+
+
+def _capture_enabled():
+    """In-process test capture of the plaintext code for the acceptance-lifecycle harness.
+    Opt-in ONLY via OTP_TEST_CAPTURE=1 — never on by default, never exposed over HTTP,
+    and never read unless the harness explicitly asks. Real production leaves this unset."""
+    return os.environ.get("OTP_TEST_CAPTURE", "") == "1"
+
+
+# module-local capture sink: {challenge_id: code}. Populated only when _capture_enabled().
+_CODE_CAPTURE = {}
+
+
+def env_posture():
+    """Startup/report helper: the resolved posture and whether the env value is recognised."""
+    e = _env()
+    return {"app_env": e or "(unset)", "recognised": e in _KNOWN_ENVS,
+            "dev_code_allowed": _dev_code_allowed(), "treated_as_production": _is_production()}
 
 
 def _seconds_from(iso, seconds):
@@ -201,31 +241,53 @@ def _issue_code(conn, actor, carrier_id, user_id, login, email, mobile):
                   now, _seconds_from(now, _CODE_TTL_SECONDS), now))
     cid_row = conn.execute("SELECT id FROM provider_signup WHERE user_id=? AND status='PENDING' "
                            "ORDER BY id DESC LIMIT 1", (user_id,)).fetchone()
+    challenge_id = cid_row["id"]
     delivered, note = _deliver_code(conn, channel, destination, code)
-    core.audit(conn, actor, "PROVIDER_SIGNUP_CODE_ISSUED", "provider_signup", cid_row["id"], None,
+    # NOTE: the plaintext code is NEVER written to the audit ledger or any log.
+    core.audit(conn, actor, "PROVIDER_SIGNUP_CODE_ISSUED", "provider_signup", challenge_id, None,
                {"channel": channel, "destination": _mask(destination), "delivered": delivered})
-    out = {"challenge_id": cid_row["id"], "channel": channel, "destination": destination,
+    out = {"challenge_id": challenge_id, "channel": channel, "destination": destination,
            "delivered": delivered, "delivery_note": note}
-    if not _is_production():
-        out["dev_code"] = code                     # honest dev convenience; never in production
+    # In-process test capture (opt-in only) so the acceptance harness can complete the flow
+    # without a live provider. Never reachable over HTTP; unset in real production.
+    if _capture_enabled():
+        _CODE_CAPTURE[challenge_id] = code
+    # dev_code is returned ONLY in an explicitly-declared dev/test environment.
+    if _dev_code_allowed():
+        out["dev_code"] = code
     return out
 
 
 def _deliver_code(conn, channel, destination, code):
     """Honest delivery: only claims 'sent' if a messaging provider is actually connected. With none
-    connected the code is NOT faked as delivered — the UI surfaces the honest state (and in non-production
-    the code itself is returned so the flow is testable)."""
+    connected the code is NOT faked as delivered. In production with no provider the account stays
+    PENDING_VERIFICATION and the caller surfaces VERIFICATION DELIVERY UNAVAILABLE — it fails closed."""
+    if _provider_active(conn, channel):
+        return True, f"A one-time code was sent to your {channel}."
+    if _dev_code_allowed():
+        return False, "Development environment: no messaging provider connected; use the code shown for testing."
+    return False, ("VERIFICATION DELIVERY UNAVAILABLE — no messaging provider is connected, so the code "
+                   "could not be delivered. Your account stays pending; contact support to verify your contact.")
+
+
+def _provider_active(conn, channel):
+    """True only if a real messaging provider is connected for this channel (default OFF).
+    The seam a real email/SMS provider plugs into via the notification engine."""
     try:
         import notifications_engine as ne
-        active = bool(getattr(ne, "provider_active", lambda *a, **k: False)(conn, channel))
+        fn = getattr(ne, "provider_active", None)
+        return bool(fn(conn, channel)) if callable(fn) else False
     except Exception:
-        active = False
-    if active:
-        return True, f"A one-time code was sent to your {channel}."
-    if _is_production():
-        return False, ("No messaging provider is connected yet, so the code could not be delivered "
-                       "automatically. Contact support to complete verification.")
-    return False, "Non-production environment: no messaging provider connected; use the code shown for testing."
+        return False
+
+
+def peek_code(conn, challenge_id):
+    """TEST-ONLY, in-process: return the plaintext code for a challenge so the acceptance-lifecycle
+    harness can complete verification without a live provider. Returns None unless OTP_TEST_CAPTURE=1.
+    There is NO HTTP route to this; it is never callable by a public client."""
+    if not _capture_enabled():
+        return None
+    return _CODE_CAPTURE.get(int(challenge_id))
 
 
 # --------------------------------------------------------------------------- #

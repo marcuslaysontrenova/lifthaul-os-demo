@@ -81,6 +81,15 @@ jobs:
         # Onboarding -> booking -> pricing -> matching -> assignment -> Protected Payment (MOCK) ->
         # SETTLED -> carrier settlement -> recipient OTP, then Tenant B denied on every Tenant A resource.
 
+      - name: Provider Activation lifecycle — public signup -> OTP -> workspace (production posture, on PostgreSQL)
+        env:
+          APP_ENV: production        # OTP code is NEVER surfaced/logged; harness uses the in-process capture seam
+          OTP_TEST_CAPTURE: "1"
+        run: python scripts/go_live/provider_activation_e2e.py
+        # Public registration -> PENDING login -> OTP verify -> ACTIVE -> /login -> own carrier workspace
+        # -> add vehicle/driver/service area -> submit compliance -> provider CANNOT self-verify ->
+        # independent reviewer verifies -> marketplace eligibility; then cross-provider isolation.
+
       - name: Gate 2b — restart persistence (data survives a restart on PostgreSQL)
         working-directory: backend
         run: |

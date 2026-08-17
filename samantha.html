@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>LiftHaul — Samantha · Business Development</title>
+<style>
+  :root{
+    --bg:#F6F8F4; --card:#fff; --ink:#12210b; --ink2:#5b6b52; --line:#e2e8dc;
+    --primary:#2E7D32; --primary-d:#245c28; --accent:#F2611A; --accent-d:#d9520f;
+    --good:#16A34A; --warn:#D97706; --bad:#DC2626; --hot:#F2611A; --soft:#eef3ea;
+  }
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+    --bg:#0c130a; --card:#131c10; --ink:#e6efe0; --ink2:#93a389; --line:#243020; --soft:#1a2416;
+  }}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  .top{background:var(--primary);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px;position:sticky;top:0;z-index:10}
+  .top b{font-weight:800}.top .tag{background:rgba(255,255,255,.18);padding:3px 10px;border-radius:20px;font-size:12.5px;font-weight:600}
+  .top .who{margin-left:auto;font-size:13px;opacity:.9}
+  .wrap{max-width:1200px;margin:0 auto;padding:18px 20px 60px}
+  h1{font-size:19px;margin:2px 0 2px}.sub{color:var(--ink2);font-size:13px;margin-bottom:16px}
+  .board{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+  @media(max-width:820px){.board{grid-template-columns:1fr}}
+  .col{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .col h2{font-size:14px;display:flex;align-items:center;gap:8px}
+  .col h2 .n{margin-left:auto;background:var(--soft);color:var(--ink2);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700}
+  .statline{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .pchip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--soft);color:var(--ink2)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  .panel h3{font-size:14px;margin-bottom:10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr}}
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:8px}
+  label span{display:block;margin-bottom:3px}
+  input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+  .btn{background:var(--primary);color:#fff;border:0;border-radius:9px;padding:9px 16px;font:inherit;font-weight:700;font-size:13px;cursor:pointer}
+  .btn.acc{background:var(--accent)}.btn.line{background:transparent;color:var(--primary);border:1px solid var(--primary)}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:7px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--ink2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:8px 8px;border-bottom:1px solid var(--line)}
+  td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .tier{font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px}
+  .tier.HOT{background:rgba(242,97,26,.16);color:var(--accent-d)}
+  .tier.WARM{background:rgba(217,119,6,.16);color:var(--warn)}
+  .tier.COOL{background:var(--soft);color:var(--ink2)}
+  .st{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft);color:var(--ink2)}
+  .st.QUALIFIED{background:rgba(46,125,50,.14);color:var(--primary-d)}
+  .st.CONTACTED{background:rgba(22,163,74,.16);color:var(--good)}
+  .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .modal{position:fixed;inset:0;background:rgba(8,15,6,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:30}
+  .modal.on{display:flex}
+  .modal .box{background:var(--card);border-radius:14px;max-width:560px;width:100%;padding:20px;max-height:88vh;overflow:auto}
+  .msg{background:var(--soft);border-radius:10px;padding:12px 14px;font-size:13px;white-space:pre-wrap;margin:10px 0}
+  .note{background:var(--soft);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;color:var(--ink2);font-size:12.5px;margin:10px 0}
+  .muted{color:var(--ink2);font-size:12.5px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:40}
+  .hide{display:none}
+</style>
+</head>
+<body>
+  <div class="top"><b>LiftHaul</b><span class="tag">Samantha · Business Development</span>
+    <span class="who" id="who">—</span></div>
+  <div class="wrap">
+    <h1>Business Development pipeline</h1>
+    <div class="sub">Samantha runs governed BD across both sides of the marketplace — enterprise shippers
+      (demand) and carriers/fleets (supply). Qualify → draft → <b>human-approve</b> → send. Outbound is
+      never autonomous.</div>
+
+    <div class="board">
+      <div class="col"><h2>🎯 Demand — enterprise shippers <span class="n" id="c-demand">0</span></h2>
+        <div class="statline" id="s-demand"></div></div>
+      <div class="col"><h2>🚚 Supply — carriers / fleets <span class="n" id="c-supply">0</span></h2>
+        <div class="statline" id="s-supply"></div></div>
+    </div>
+
+    <div class="panel">
+      <h3>Add a prospect</h3>
+      <div class="grid2">
+        <label><span>Side</span><select id="f-side"><option value="DEMAND">Demand — enterprise shipper</option><option value="SUPPLY">Supply — carrier / fleet</option></select></label>
+        <label><span>Company</span><input id="f-company" placeholder="Apex Mining Corp"></label>
+        <label><span>Contact name</span><input id="f-contact" placeholder="Maria Cruz"></label>
+        <label><span>Contact title</span><input id="f-title" placeholder="VP Operations"></label>
+        <label><span>Email</span><input id="f-email" type="email" placeholder="ops@company.com"></label>
+        <label><span>Sector</span><input id="f-sector" placeholder="mining / trucking / construction…"></label>
+        <label><span>Region</span><input id="f-region" placeholder="Luzon / Visayas / Mindanao"></label>
+        <label><span>Profile / signal</span><input id="f-profile" placeholder="oversized cargo, Q4 expansion / 25 units, CPC"></label>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px"><button class="btn" onclick="addProspect()">Add prospect</button>
+        <button class="btn line" onclick="loadPlaybooks()">View playbooks</button></div>
+      <p id="addMsg" class="muted" style="margin-top:8px"></p>
+    </div>
+
+    <div class="panel">
+      <h3>Prospects</h3>
+      <div style="overflow-x:auto"><table id="tbl"><thead><tr>
+        <th>Company</th><th>Side</th><th>Contact</th><th>Sector</th><th>Score</th><th>Status</th><th></th>
+      </tr></thead><tbody id="rows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- outreach modal -->
+  <div class="modal" id="modal"><div class="box">
+    <h3 id="m-title">Outreach</h3>
+    <p class="muted" id="m-angle"></p>
+    <div class="msg" id="m-body"></div>
+    <div class="note" id="m-note"></div>
+    <div class="row-actions" id="m-actions"></div>
+    <p style="margin-top:12px"><button class="btn line sm" onclick="closeModal()">Close</button></p>
+  </div></div>
+
+  <div class="toast hide" id="toast"></div>
+
+<script>
+var API=(function(){
+  var base=null,token=null;
+  try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  function req(m,p,b){ if(!base) return Promise.reject(new Error('offline'));
+    var h={'Content-Type':'application/json'}; if(token) h['Authorization']='Bearer '+token;
+    return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:h,body:b?JSON.stringify(b):undefined})
+      .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(d&&d.data!==undefined)d=d.data; if(!r.ok) throw new Error((d&&(d.error||d.detail))||('HTTP '+r.status)); return d;});}); }
+  return {configured:function(){return !!base;},get:function(p){return req('GET',p);},post:function(p,b){return req('POST',p,b);}};
+})();
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide');},3200);}
+var LAST={};   // outreach id -> draft object
+
+function refresh(){
+  if(!API.configured()){ $('#rows').innerHTML='<tr><td colspan="7" class="muted">Offline demo — set <code>localStorage.lifthaul_api_base</code> + <code>lifthaul_api_token</code> (sign in as a BD manager) to load your real pipeline.</td></tr>'; return; }
+  API.get('/samantha/summary').then(function(s){
+    $('#c-demand').textContent=sum(s.by_side.DEMAND); $('#c-supply').textContent=sum(s.by_side.SUPPLY);
+    $('#s-demand').innerHTML=chips(s.by_side.DEMAND); $('#s-supply').innerHTML=chips(s.by_side.SUPPLY);
+  }).catch(function(){});
+  API.get('/samantha/prospects').then(function(d){ renderRows(d.prospects||[]); }).catch(function(e){ $('#rows').innerHTML='<tr><td colspan="7" class="muted">Could not load: '+esc(e.message)+'</td></tr>'; });
+}
+function sum(o){return Object.keys(o||{}).reduce(function(a,k){return a+(o[k]||0);},0);}
+function chips(o){return Object.keys(o||{}).filter(function(k){return o[k]>0;}).map(function(k){return '<span class="pchip">'+esc(k)+' '+o[k]+'</span>';}).join('')||'<span class="muted">no prospects yet</span>';}
+
+function renderRows(list){
+  if(!list.length){ $('#rows').innerHTML='<tr><td colspan="7" class="muted">No prospects yet — add one above.</td></tr>'; return; }
+  $('#rows').innerHTML=list.map(function(p){
+    var acts='<button class="btn sm line" onclick="qualify('+p.id+')">Qualify</button>';
+    if(p.status!=='NEW') acts+=' <button class="btn sm" onclick="draft('+p.id+')">Draft outreach</button>';
+    return '<tr><td><b>'+esc(p.company)+'</b></td><td>'+esc(p.side)+'</td>'
+      +'<td>'+esc(p.contact_name||'—')+'<br><span class="muted">'+esc(p.contact_title||'')+'</span></td>'
+      +'<td>'+esc(p.sector||'—')+'</td>'
+      +'<td>'+(p.score?('<b>'+p.score+'</b> <span class="tier '+esc(p.tier||'')+'">'+esc(p.tier||'')+'</span>'):'—')+'</td>'
+      +'<td><span class="st '+esc(p.status)+'">'+esc(p.status)+'</span></td>'
+      +'<td><div class="row-actions">'+acts+'</div></td></tr>';
+  }).join('');
+}
+
+function addProspect(){
+  var body={side:$('#f-side').value,company:$('#f-company').value.trim(),contact_name:$('#f-contact').value.trim(),
+    contact_title:$('#f-title').value.trim(),contact_email:$('#f-email').value.trim(),sector:$('#f-sector').value.trim(),
+    region:$('#f-region').value.trim(),profile:$('#f-profile').value.trim()};
+  if(!body.company){toast('Company is required');return;}
+  if(!API.configured()){$('#addMsg').textContent='Offline demo — connect an API to add prospects.';return;}
+  API.post('/samantha/prospects',body).then(function(){ $('#addMsg').textContent='Added.'; ['company','contact','title','email','sector','region','profile'].forEach(function(k){$('#f-'+k).value='';}); refresh(); }).catch(function(e){$('#addMsg').textContent='Error: '+e.message;});
+}
+function qualify(id){ API.post('/samantha/prospects/'+id+'/qualify',{}).then(function(q){ toast('Qualified: '+q.tier+' ('+q.score+')'); refresh(); }).catch(function(e){toast(e.message);}); }
+
+function draft(id){
+  API.post('/samantha/prospects/'+id+'/draft',{channel:'email'}).then(function(o){ LAST[o.id]=o; showOutreach(o); refresh(); }).catch(function(e){toast(e.message);});
+}
+function showOutreach(o){
+  $('#m-title').textContent='Outreach · '+o.status;
+  $('#m-angle').textContent='Angle: '+(o.angle||'');
+  $('#m-body').textContent=(o.subject?('Subject: '+o.subject+'\n\n'):'')+(o.body||'');
+  var note='', acts='';
+  if(o.status==='PENDING_APPROVAL'){ note='Draft only — a different user must approve before it can be sent (separation of duties).';
+    acts='<button class="btn sm" onclick="approve('+o.id+')">Approve (as another user)</button> <button class="btn sm line" onclick="reject('+o.id+')">Reject</button>'; }
+  else if(o.status==='APPROVED'){ note='Approved. Sending requires a connected messaging provider; otherwise the copy is ready for a manual human send.';
+    acts='<button class="btn sm acc" onclick="send('+o.id+')">Send</button>'; }
+  else if(o.status==='SENT'){ note='Delivered via connected provider.'; }
+  $('#m-note').textContent=note; $('#m-actions').innerHTML=acts;
+  $('#modal').classList.add('on');
+}
+function approve(id){ API.post('/samantha/outreach/'+id+'/approve',{}).then(function(r){ LAST[id]=Object.assign(LAST[id]||{},{id:id,status:'APPROVED'}); toast('Approved'); showOutreach(LAST[id]); refresh(); }).catch(function(e){toast(e.message);}); }
+function reject(id){ API.post('/samantha/outreach/'+id+'/reject',{reason:'not a fit'}).then(function(){ toast('Rejected'); closeModal(); refresh(); }).catch(function(e){toast(e.message);}); }
+function send(id){
+  API.post('/samantha/outreach/'+id+'/send',{}).then(function(r){
+    if(r.delivered){ toast('Sent'); LAST[id].status='SENT'; showOutreach(LAST[id]); }
+    else { $('#m-note').textContent=r.note; $('#m-actions').innerHTML='';
+      if(r.ready_to_send_copy){ $('#m-body').textContent='TO: '+(r.ready_to_send_copy.recipient||'(no email on file)')+'\nSubject: '+r.ready_to_send_copy.subject+'\n\n'+r.ready_to_send_copy.body; } }
+    refresh();
+  }).catch(function(e){toast(e.message);});
+}
+function closeModal(){ $('#modal').classList.remove('on'); }
+function loadPlaybooks(){
+  if(!API.configured()){toast('Connect an API to view playbooks');return;}
+  API.get('/samantha/playbooks').then(function(pb){
+    $('#m-title').textContent='Sector playbooks'; $('#m-angle').textContent='';
+    var html=''; ['DEMAND','SUPPLY'].forEach(function(side){ html+='<b>'+side+'</b>\n'+(pb.playbooks[side]||[]).map(function(x){return '  · '+x.sector+' — '+x.angle;}).join('\n')+'\n\n'; });
+    $('#m-body').textContent=html; $('#m-note').textContent=''; $('#m-actions').innerHTML=''; $('#modal').classList.add('on');
+  }).catch(function(e){toast(e.message);});
+}
+try{ var em=localStorage.getItem('lifthaul_user_email'); if(em) $('#who').textContent=em; }catch(e){}
+refresh();
+</script>
+</body>
+</html>

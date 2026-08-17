@@ -340,6 +340,11 @@ PERMISSIONS = {
     # Driver Mobile App principal — own trips only. Holds NO operational marketplace.* perm and NO
     # verify/approve/activate; can verify a recipient OTP but never issue/see it. See driver_app.
     "driver_principal": {"driver.app.view", "driver.app.execute"},
+    # Samantha — AI Business Development Manager. Manages the BD pipeline (both marketplace sides) and
+    # drafts/sends outreach. Sends are human-approved with separation of duties enforced at the row
+    # level (a user can never approve their own draft — see samantha_bd.approve_outreach).
+    "bd_manager": {"bd.prospect.view", "bd.prospect.manage", "bd.outreach.draft",
+                   "bd.outreach.approve", "bd.outreach.send"},
 }
 
 

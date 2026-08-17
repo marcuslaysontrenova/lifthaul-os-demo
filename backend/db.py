@@ -147,6 +147,8 @@ def _seed_platform(conn):
     availability.init(conn); availability.seed(conn)                     # Carrier Operations: driver/vehicle availability overlay (computed effective status; feeds eligibility + governed reassignment closure; never a second source of truth)
     import public_provider
     public_provider.init(conn); public_provider.seed(conn)               # Public Service-Provider self-registration: carrier APPLICATION + PENDING carrier_principal login + one-time contact-code verification (reuses users/sessions/carrier_principals; no new domain)
+    import samantha_bd
+    samantha_bd.init(conn); samantha_bd.seed(conn)                       # Samantha — AI Business Development Manager: governed BD pipeline (demand + supply) with deterministic qualification + human-approved outreach (sends fail closed with no provider; reuses core/tenant/audit/notifications)
     import core, rates
     core._migrate_pricing(conn)                              # quotation pricing: add line columns on existing DBs
     rates.seed_default_rate_cards(conn)                      # governed baseline rate catalog (idempotent)

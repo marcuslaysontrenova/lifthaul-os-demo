@@ -1686,6 +1686,38 @@ def _marketplace_trip_routes():
 ROUTES.update(_marketplace_trip_routes())
 
 
+def _samantha_bd_routes():
+    """Samantha — AI Business Development Manager. Governed BD pipeline across both marketplace sides
+    (demand enterprise shippers + supply carriers): add -> qualify -> draft -> human-approve (SoD) ->
+    send. RBAC-gated, tenant-scoped, audited; sends fail closed with no messaging provider connected."""
+    import samantha_bd as sb
+
+    def bd_add(a, b, p):      return sb.add_prospect(_conn, a, b)
+    def bd_list(a, b, p):     return {"prospects": sb.list_prospects(_conn, a, side=b.get("side"), status=b.get("status"))}
+    def bd_qualify(a, b, p):  return sb.qualify(_conn, a, int(p["id"]))
+    def bd_draft(a, b, p):    return sb.draft_outreach(_conn, a, int(p["id"]), channel=b.get("channel", "email"))
+    def bd_approve(a, b, p):  return sb.approve_outreach(_conn, a, int(p["id"]))
+    def bd_reject(a, b, p):   return sb.reject_outreach(_conn, a, int(p["id"]), reason=b.get("reason"))
+    def bd_send(a, b, p):     return sb.send_outreach(_conn, a, int(p["id"]))
+    def bd_playbooks(a, b, p): return sb.playbooks(a)
+    def bd_summary(a, b, p):  return sb.pipeline_summary(_conn, a)
+
+    return {
+        ("GET", "/samantha/prospects"): bd_list,
+        ("POST", "/samantha/prospects"): bd_add,
+        ("POST", "/samantha/prospects/:id/qualify"): bd_qualify,
+        ("POST", "/samantha/prospects/:id/draft"): bd_draft,
+        ("POST", "/samantha/outreach/:id/approve"): bd_approve,
+        ("POST", "/samantha/outreach/:id/reject"): bd_reject,
+        ("POST", "/samantha/outreach/:id/send"): bd_send,
+        ("GET", "/samantha/playbooks"): bd_playbooks,
+        ("GET", "/samantha/summary"): bd_summary,
+    }
+
+
+ROUTES.update(_samantha_bd_routes())
+
+
 def _marketplace_trust_routes():
     import marketplace_trust as mt
 

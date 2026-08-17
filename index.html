@@ -52,15 +52,17 @@ img,svg{max-width:100%}
 .mark{display:flex;align-items:center;gap:10px}
 .wordmark{font-weight:800;font-size:21px;letter-spacing:-.03em}
 .wordmark b:last-child{color:var(--accent)}
-.snav .links{display:flex;gap:22px;margin-left:8px}
-.snav .links a{font-size:14.5px;font-weight:600;color:var(--ink-2);padding:6px 0;border-bottom:2px solid transparent}
+.snav .links{display:flex;align-items:center;gap:20px;margin-left:16px}
+.snav .links a{font-size:14.5px;font-weight:600;color:var(--ink-2);padding:6px 0;border-bottom:2px solid transparent;white-space:nowrap}
 .snav .links a:hover,.snav .links a.on{color:var(--ink);border-color:var(--primary)}
+.snav .navdiv{width:1px;height:20px;background:var(--line);flex:0 0 auto}
 .snav .sp{flex:1}
 .navtoggle{display:none;background:none;border:0;cursor:pointer;padding:8px}
 @media(max-width:900px){
   .snav .links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 22px 14px}
   .snav .links.open{display:flex}
-  .snav .links a{padding:11px 0;border-bottom:1px solid var(--line)}
+  .snav .links a{padding:11px 0;border-bottom:1px solid var(--line);white-space:normal}
+  .snav .navdiv{display:none}
   .navtoggle{display:inline-flex}
   .snav .hidesm{display:none}
 }
@@ -208,17 +210,16 @@ footer a:hover{color:#fff}
       <span class="wordmark"><b>Lift</b><b>Haul</b></span>
     </a>
     <div class="links" id="navlinks">
-      <a href="book.html">Book delivery</a>
+      <a href="#how">How it works</a>
+      <a href="#who">Who joins</a>
+      <a href="#trust">Why LiftHaul</a>
+      <span class="navdiv" aria-hidden="true"></span>
       <a href="track.html">Track</a>
       <a href="portal.html">Carrier portal</a>
       <a href="driver.html">Driver app</a>
-      <a href="#who">Who joins</a>
-      <a href="#how">How it works</a>
-      <a href="#register">Register</a>
-      <a href="#trust">Why LiftHaul</a>
     </div>
     <div class="sp"></div>
-    <a class="btn line sm hidesm" href="book.html">Book delivery</a>
+    <a class="btn line sm hidesm" href="book.html">Book a delivery</a>
     <button class="btn sm" data-scroll="#register">Register free</button>
     <button class="navtoggle" id="navtoggle" aria-label="Menu" aria-expanded="false">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>

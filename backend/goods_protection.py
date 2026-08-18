@@ -110,6 +110,78 @@ def active_provider(conn):
 
 
 # --------------------------------------------------------------------------- #
+# Operating model: UPLOAD-ONLY by default.
+#
+# Coverage PROCESSING (quote / bind / premium / claims orchestration) is a gated capability that is OFF
+# by default. In the default posture LiftHaul is NOT an insurer or broker: the company obtains cargo
+# insurance from its OWN licensed insurer/broker and uploads the certificate/policy; LiftHaul only stores
+# the documentary proof and runs an independent compliance review. It never quotes, prices, binds,
+# collects premium, or makes insurer claim decisions unless the owner deliberately enables processing
+# with a licensed-insurer arrangement (`insurance.processing_enabled=true`). Kept separate from Protected
+# Payment — two independent controls. The processing engine below is preserved but exposure is gated.
+# --------------------------------------------------------------------------- #
+UPLOAD_STATES = ("COMPANY_UPLOADED", "INSURANCE_VERIFIED", "INSURANCE_REJECTED")
+
+
+def processing_enabled(conn):
+    """True only when the owner has deliberately activated system-side insurance processing."""
+    return str(_cfg(conn, "insurance.processing_enabled", "false")).lower() == "true"
+
+
+def require_processing(conn):
+    """Fail closed at the exposure layer when processing is disabled (the default)."""
+    if not processing_enabled(conn):
+        raise core.ForbiddenError(
+            "insurance processing is disabled — LiftHaul does not quote, bind, price, or process cargo "
+            "insurance. The company uploads its own insurer's cargo-insurance certificate instead "
+            "(POST /admin/marketplace/bookings/{id}/cargo-insurance/upload).")
+
+
+def upload_cargo_insurance(conn, actor, booking_id, insurer, policy_ref, document_ref,
+                           coverage_amount=None, effective_from=None, effective_to=None):
+    """Upload-only cargo insurance: the company provides its OWN insurer's certificate/policy. LiftHaul
+    stores the documentary proof (no quoting/pricing/binding) and it lands COMPANY_UPLOADED for
+    independent review. This is never marketplace-eligibility on its own — a reviewer must verify it."""
+    core.require(actor, _MANAGE) if core.can(actor, _MANAGE) else core.require(actor, "marketplace.booking.manage")
+    if not (str(insurer or "").strip() and str(policy_ref or "").strip() and str(document_ref or "").strip()):
+        raise core.ValidationError("insurer, policy reference and an uploaded document are all required")
+    _booking(conn, booking_id)
+    conn.execute(
+        "UPDATE mkt_bookings SET gp_status='COMPANY_UPLOADED', gp_provider=?, gp_policy_ref=?, "
+        "gp_coverage_limit=?, gp_premium=NULL, gp_effective_from=?, gp_effective_to=?, gp_evidence=?, "
+        "updated_at=? WHERE id=?",
+        (str(insurer)[:200], str(policy_ref)[:120],
+         (float(coverage_amount) if coverage_amount not in (None, "") else None),
+         effective_from, effective_to,
+         json.dumps({"document_ref": str(document_ref)[:400], "source": "COMPANY_UPLOAD"}),
+         _now(), booking_id))
+    core.audit(conn, actor, "GP_CARGO_INSURANCE_UPLOADED", "mkt_bookings", booking_id, None,
+               {"insurer": insurer, "policy_ref": policy_ref})
+    conn.commit()
+    return {"booking_id": booking_id, "gp_status": "COMPANY_UPLOADED",
+            "note": ("Cargo-insurance certificate stored for independent review. LiftHaul does not "
+                     "underwrite, price, or process this policy.")}
+
+
+def review_cargo_insurance(conn, actor, booking_id, decision, notes=None):
+    """Independent review of an uploaded cargo-insurance certificate — VERIFY or REJECT. Separation of
+    duties: requires the insurance-manage (staff) permission, which a provider/booking manager does not
+    hold, so the company can never verify its own upload."""
+    core.require(actor, _MANAGE)
+    b = _booking(conn, booking_id)
+    if (b.get("gp_status") or "") != "COMPANY_UPLOADED":
+        raise core.ConflictError("no uploaded cargo insurance is pending review")
+    d = str(decision or "").upper()
+    if d not in ("VERIFY", "REJECT"):
+        raise core.ValidationError("decision must be VERIFY or REJECT")
+    status = "INSURANCE_VERIFIED" if d == "VERIFY" else "INSURANCE_REJECTED"
+    _set_status(conn, booking_id, status)
+    core.audit(conn, actor, "GP_CARGO_INSURANCE_REVIEWED", "mkt_bookings", booking_id, None,
+               {"decision": d, "notes": notes})
+    return {"booking_id": booking_id, "gp_status": status}
+
+
+# --------------------------------------------------------------------------- #
 # Coverage request + eligibility (server-authoritative)
 # --------------------------------------------------------------------------- #
 def _booking(conn, booking_id):

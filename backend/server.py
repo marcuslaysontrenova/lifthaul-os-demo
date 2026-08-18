@@ -2099,23 +2099,38 @@ def _delivery_verification_routes():
 def _goods_protection_routes():
     import goods_protection as gp
 
-    def g_request(a, b, p): return gp.request_coverage(_conn, a, int(p["id"]), b.get("declared_value"), b.get("cargo_category", "GENERAL"))
-    def g_quote(a, b, p):   return gp.quote_coverage(_conn, a, int(p["id"]))
-    def g_bind(a, b, p):    return gp.bind(_conn, a, int(p["id"]), b.get("insurer"), b.get("policy_ref"),
-                                           b.get("coverage_amount"), b.get("premium"), b.get("deductible"),
-                                           b.get("effective_from"), b.get("effective_to"), b.get("evidence"))
+    # UPLOAD-ONLY by default: the company uploads its own insurer's cargo-insurance certificate and staff
+    # review it. System-side PROCESSING (request/quote/bind/claims) is gated OFF (insurance.processing_
+    # enabled) so LiftHaul never quotes, prices, binds or processes insurance unless deliberately enabled.
+    def g_upload(a, b, p):  return gp.upload_cargo_insurance(_conn, a, int(p["id"]), b.get("insurer"),
+                                                             b.get("policy_ref"), b.get("document_ref"),
+                                                             coverage_amount=b.get("coverage_amount"),
+                                                             effective_from=b.get("effective_from"),
+                                                             effective_to=b.get("effective_to"))
+    def g_review(a, b, p):  return gp.review_cargo_insurance(_conn, a, int(p["id"]), b.get("decision"), notes=b.get("notes"))
     def g_get(a, b, p):     return gp.get_coverage(_conn, int(p["id"]))
     def g_requests(a, b, p): return gp.coverage_requests(_conn, a)
-    def g_claim(a, b, p):   return gp.link_claim(_conn, a, int(p["id"]), b.get("incident_ref"), b.get("claimed_amount"))
-    def g_claim_adv(a, b, p): return gp.advance_gp_claim(_conn, a, int(p["id"]), b["to_status"],
+
+    # --- gated processing surface (fail-closed unless insurance.processing_enabled) ---
+    def g_request(a, b, p): gp.require_processing(_conn); return gp.request_coverage(_conn, a, int(p["id"]), b.get("declared_value"), b.get("cargo_category", "GENERAL"))
+    def g_quote(a, b, p):   gp.require_processing(_conn); return gp.quote_coverage(_conn, a, int(p["id"]))
+    def g_bind(a, b, p):    gp.require_processing(_conn); return gp.bind(_conn, a, int(p["id"]), b.get("insurer"), b.get("policy_ref"),
+                                           b.get("coverage_amount"), b.get("premium"), b.get("deductible"),
+                                           b.get("effective_from"), b.get("effective_to"), b.get("evidence"))
+    def g_claim(a, b, p):   gp.require_processing(_conn); return gp.link_claim(_conn, a, int(p["id"]), b.get("incident_ref"), b.get("claimed_amount"))
+    def g_claim_adv(a, b, p): gp.require_processing(_conn); return gp.advance_gp_claim(_conn, a, int(p["id"]), b["to_status"],
                                                          adjuster_reference=b.get("adjuster_reference"),
                                                          approved_amount=b.get("approved_amount"))
     return {
+        # upload-only cargo insurance (always available)
+        ("POST", "/admin/marketplace/bookings/:id/cargo-insurance/upload"): g_upload,
+        ("POST", "/admin/marketplace/bookings/:id/cargo-insurance/review"): g_review,
+        ("GET", "/admin/marketplace/bookings/:id/insurance"): g_get,
+        ("GET", "/admin/marketplace/insurance/requests"): g_requests,
+        # gated processing surface (403 unless deliberately enabled)
         ("POST", "/admin/marketplace/bookings/:id/insurance/request"): g_request,
         ("POST", "/admin/marketplace/bookings/:id/insurance/quote"): g_quote,
         ("POST", "/admin/marketplace/bookings/:id/insurance/bind"): g_bind,
-        ("GET", "/admin/marketplace/bookings/:id/insurance"): g_get,
-        ("GET", "/admin/marketplace/insurance/requests"): g_requests,
         ("POST", "/admin/marketplace/bookings/:id/insurance/claim"): g_claim,
         ("POST", "/admin/marketplace/insurance/claims/:id/advance"): g_claim_adv,
     }

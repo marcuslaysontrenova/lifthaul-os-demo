@@ -99,8 +99,14 @@
   .hero .copy{min-width:0}
   .hero .heroLogo{justify-self:center;width:min(100%,440px);height:auto;filter:drop-shadow(0 20px 34px rgba(0,0,0,.30));animation:heroLogoIn .8s cubic-bezier(.2,.7,.2,1) both}
   @keyframes heroLogoIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
-  @media(min-width:920px){.hero .in{grid-template-columns:1.1fr .9fr}.hero .heroLogo{justify-self:end}}
+  @media(min-width:920px){.hero .in{grid-template-columns:1.1fr .9fr}.hero .heroLogo{justify-self:end}.hero .heroPanel{justify-self:end}}
   @media(max-width:560px){.hero .heroLogo{width:min(80%,300px)}}
+  .hero .heroPanel{width:min(100%,420px);justify-self:center;background:linear-gradient(160deg,#12200c,#0b1408);border:1px solid rgba(95,190,42,.28);border-radius:20px;padding:26px 26px 22px;box-shadow:0 22px 40px rgba(0,0,0,.34);animation:heroLogoIn .8s cubic-bezier(.2,.7,.2,1) both;overflow:hidden}
+  .hero .heroPanel .hexmark{width:64px;height:64px;display:block;margin-bottom:14px}
+  .hero .heroPanel .pk{color:#fff}.hero .heroPanel .pk b{display:block;font-size:44px;line-height:1;color:#F2611A;letter-spacing:-.02em}
+  .hero .heroPanel .pk span{display:block;color:#cfe3bf;font-size:13.5px;margin-top:6px}
+  .hero .heroPanel .prow{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .hero .heroPanel .prow span{font-size:12px;font-weight:700;color:#eaf4e0;background:rgba(95,190,42,.14);border:1px solid rgba(95,190,42,.3);border-radius:999px;padding:5px 11px}
   .hero .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
   .hero h1{font-size:clamp(2.1rem,5vw,3.5rem);font-weight:800;line-height:1.05;letter-spacing:-.02em;margin:16px 0;max-width:16ch}
   .hero p{color:var(--steel-muted);font-size:clamp(15px,1.6vw,18px);max-width:52ch}
@@ -309,7 +315,11 @@
     <div class="cta"><button class="btn" data-act="scrollBook">Request a booking →</button><button class="btn line" data-act="scrollServices">Explore services</button></div>
     <div class="stats"><div><b>350 t</b><span>Max crane capacity</span></div><div><b>25+</b><span>Cranes &amp; trailers</span></div><div><b>In-house</b><span>Permits &amp; rigging</span></div><div><b>24/7</b><span>Dispatch &amp; support</span></div></div>
     </div>
-    <img class="heroLogo" src="rgo-logo.png" alt="RGO Machine Rigging Services" width="928" height="929">
+    <div class="heroPanel">
+      <svg class="hexmark" viewBox="0 0 48 48" fill="none" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><text x="24" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="900" fill="#F2611A">RGO</text><text x="24" y="34.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="4.3" font-weight="700" letter-spacing="0.4" fill="#F2C21A">RIGGING</text></svg>
+      <div class="pk"><b>350&nbsp;t</b><span>Maximum crane capacity — every lift engineered and supervised.</span></div>
+      <div class="prow"><span>Lift plans</span><span>Permits</span><span>Rigging crews</span><span>Lowbed transport</span></div>
+    </div>
   </div></header>
 
   <section class="sec" id="services"><div class="wrap">
@@ -352,7 +362,6 @@
   </div></section>
 
   <section class="cta-band"><div class="hazard"></div>
-    <img class="watermark" src="rgo-logo.png" alt="" aria-hidden="true">
     <div class="in">
       <div class="cta-copy"><div class="eyebrow">Ready when it matters</div><h2>Too heavy, too big, too critical? <span>Let's move it.</span></h2></div>
       <div class="cta-actions"><button class="btn solid" data-act="scrollBook">Request a booking →</button><button class="btn ghost" data-act="scrollServices">Explore services</button></div>

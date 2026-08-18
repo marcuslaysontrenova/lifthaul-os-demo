@@ -158,6 +158,62 @@ class Separation(unittest.TestCase):
         self.assertIn(row["gp_requested"], (None, 0))
 
 
+class UploadOnly(unittest.TestCase):
+    """Default operating model: the company uploads its own cargo-insurance certificate; LiftHaul does
+    NOT quote/bind/price/process. Processing is a gated capability, OFF by default."""
+
+    def setUp(self):
+        self.c = db.connect(":memory:")
+        self.b = _booking(self.c)
+
+    def test_processing_disabled_by_default(self):
+        self.assertFalse(gp.processing_enabled(self.c))
+        with self.assertRaises(core.ForbiddenError):
+            gp.require_processing(self.c)
+
+    def test_upload_stores_document_without_pricing(self):
+        r = gp.upload_cargo_insurance(self.c, SUP, self.b, "ACME Insurance", "POL-1",
+                                      "s3://cargo-cert.pdf", coverage_amount=500000)
+        self.assertEqual(r["gp_status"], "COMPANY_UPLOADED")
+        row = self.c.execute("SELECT gp_status,gp_provider,gp_policy_ref,gp_premium,gp_evidence "
+                             "FROM mkt_bookings WHERE id=?", (self.b,)).fetchone()
+        self.assertEqual(row["gp_status"], "COMPANY_UPLOADED")
+        self.assertEqual(row["gp_provider"], "ACME Insurance")
+        self.assertIsNone(row["gp_premium"])                 # LiftHaul never prices/underwrites
+        self.assertIn("s3://cargo-cert.pdf", row["gp_evidence"])
+
+    def test_upload_requires_insurer_policy_document(self):
+        for bad in ({"insurer": "", "policy_ref": "P", "doc": "d"},
+                    {"insurer": "I", "policy_ref": "", "doc": "d"},
+                    {"insurer": "I", "policy_ref": "P", "doc": ""}):
+            with self.assertRaises(core.ValidationError):
+                gp.upload_cargo_insurance(self.c, SUP, self.b, bad["insurer"], bad["policy_ref"], bad["doc"])
+
+    def test_independent_review_verify_and_reject(self):
+        gp.upload_cargo_insurance(self.c, SUP, self.b, "ACME", "POL-1", "cert.pdf")
+        v = gp.review_cargo_insurance(self.c, SUP, self.b, "VERIFY")
+        self.assertEqual(v["gp_status"], "INSURANCE_VERIFIED")
+        b2 = _booking(self.c)
+        gp.upload_cargo_insurance(self.c, SUP, b2, "ACME", "POL-2", "cert2.pdf")
+        self.assertEqual(gp.review_cargo_insurance(self.c, SUP, b2, "REJECT")["gp_status"], "INSURANCE_REJECTED")
+
+    def test_review_requires_pending_upload(self):
+        with self.assertRaises(core.ConflictError):
+            gp.review_cargo_insurance(self.c, SUP, self.b, "VERIFY")   # nothing uploaded
+
+    def test_provider_cannot_self_verify_upload(self):
+        # a booking-manager (provider-side) may upload but NOT review — review needs insurance.manage
+        prov = {"id": 5, "role": "ops", "perms": {"marketplace.booking.manage"}, "tenant_id": None}
+        gp.upload_cargo_insurance(self.c, prov, self.b, "ACME", "POL-1", "cert.pdf")
+        with self.assertRaises(core.ForbiddenError):
+            gp.review_cargo_insurance(self.c, prov, self.b, "VERIFY")
+
+    def test_processing_can_be_enabled_deliberately(self):
+        ap.set_config(self.c, "platform", "", "insurance.processing_enabled", "true", actor=SUP)
+        self.assertTrue(gp.processing_enabled(self.c))
+        gp.require_processing(self.c)   # no longer raises
+
+
 class AccessControl(unittest.TestCase):
     def setUp(self): self.c = db.connect(":memory:"); _with_provider(self.c)
 

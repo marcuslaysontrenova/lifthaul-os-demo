@@ -160,6 +160,39 @@ def main():
           lambda: (not fr.unit_eligibility(conn, op, cid, vid)["eligible"])
                   or (_ for _ in ()).throw(AssertionError("eligible before verification!")))
 
+    # ---- commercial accreditation + cargo-insurance compliance (gates enabled for this run) ----
+    import admin_platform as ap, accreditation as acc, cargo_insurance as ci
+    fin = {"id": 9200, "role": "finance", "perms": {"payment.confirm"}, "tenant_id": op["tenant_id"]}
+    stage("Enable commercial gates (accreditation fee + cargo insurance required)",
+          lambda: (ap.set_config(conn, "platform", "", "accreditation.gate_enabled", "true", actor=op),
+                   ap.set_config(conn, "platform", "", "cargo_insurance.required", "true", actor=op)) and True)
+    asmt = stage("Accreditation fee assessed (server-authoritative, from canonical variant)",
+                 lambda: acc.assess_fee(conn, op, cid, vid))
+    stage("  -> transparent fee breakdown (payment != approval)", lambda: acc.fee_breakdown(conn, op, vid))
+    stage("Unpaid unit is NOT eligible (ACCREDITATION_FEE_UNPAID)",
+          lambda: ("ACCREDITATION_FEE_UNPAID" in fr.unit_eligibility(conn, op, cid, vid)["reasons"])
+                  or (_ for _ in ()).throw(AssertionError("unpaid unit not gated")))
+    stage("Finance records payment (a carrier can never pay its own fee)",
+          lambda: acc.record_payment(conn, fin, asmt["id"], "gcash", "PAY-E2E-1", receipt_ref="OR-1"))
+    stage("PAID but STILL not eligible (payment != approval)",
+          lambda: (not fr.unit_eligibility(conn, op, cid, vid)["eligible"])
+                  or (_ for _ in ()).throw(AssertionError("payment granted eligibility!")))
+    ciup = stage("Provider uploads its own cargo-insurance certificate (compliance document)",
+                 lambda: ci.upload(conn, op, cid, "ACME Insurance Co", "CI-POL-1", "s3://cargo-cert.pdf",
+                                   vehicle_id=vid, coverage_amount=1_000_000, effective_from="2026-01-01",
+                                   expiry_date="2030-01-01"))
+    stage("Provider CANNOT self-verify cargo insurance (independent review only)",
+          lambda: _denied(lambda: ci.review(conn, {"id": op["id"], "role": "carrier_principal",
+                          "perms": {"marketplace.vehicle.manage"}, "tenant_id": op["tenant_id"]},
+                          ciup["id"], "VERIFY")))
+    stage("Independent reviewer VERIFIES cargo insurance",
+          lambda: ci.review(conn, vf, ciup["id"], "VERIFY", verification_source="insurer confirmation"))
+    stage("After pay + cargo verify: fee & cargo gates cleared (remaining gates stay independent)",
+          lambda: (not any(r in fr.unit_eligibility(conn, op, cid, vid, driver_id=did)["reasons"]
+                   for r in ("ACCREDITATION_FEE_UNPAID", "CARGO_INSURANCE_MISSING",
+                             "CARGO_INSURANCE_PENDING", "CARGO_INSURANCE_EXPIRED")))
+                  or (_ for _ in ()).throw(AssertionError("fee/cargo gates not cleared after settlement")))
+
     def _independent_review():
         # staff/reviewer path — maker (op) uploads, independent checker (vf) verifies (maker/checker SoD)
         mo.verify_vehicle(conn, vf, vid)

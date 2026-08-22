@@ -143,6 +143,10 @@ def _seed_platform(conn):
     driver_app.init(conn); driver_app.seed(conn)                         # Driver Mobile App: driver-facing surface over existing trip/POD/OTP domains (principal binding + minimal elevation; never sees OTP)
     import fleet_registration
     fleet_registration.init(conn); fleet_registration.seed(conn)         # Service Provider & Fleet Registration Workspace: master-data vehicle-variant taxonomy + classification engine + spec-based registration over existing carrier/vehicle domains
+    import accreditation
+    accreditation.init(conn); accreditation.seed(conn)                   # Provider Vehicle/Equipment Accreditation Fee Engine: master-data effective-dated variant fee schedule + volume tiers + historical snapshots; payment is never approval (marketplace eligibility stays independent)
+    import cargo_insurance
+    cargo_insurance.init(conn); cargo_insurance.seed(conn)               # Cargo Insurance Compliance: provider-uploaded certificate + independent review + expiry monitoring as a marketplace-eligibility gate (NOT an insurance product; separate from vehicle insurance; config-gated)
     import availability
     availability.init(conn); availability.seed(conn)                     # Carrier Operations: driver/vehicle availability overlay (computed effective status; feeds eligibility + governed reassignment closure; never a second source of truth)
     import public_provider

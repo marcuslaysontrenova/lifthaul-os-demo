@@ -2288,6 +2288,73 @@ def _reassignment_routes():
 ROUTES.update(_dev_portal_routes())
 ROUTES.update(_api_v1_routes())
 ROUTES.update(_goods_protection_routes())
+
+
+def _accreditation_routes():
+    """Provider Vehicle/Equipment Accreditation Fee Engine — assess (server-authoritative), pay (finance;
+    payment is never approval), waive/refund, transparent breakdown, and admin fee-schedule/volume-tier
+    management. RBAC/SoD: a carrier cannot pay/waive/manipulate its own fee."""
+    import accreditation as acc
+
+    def _carrier_of(vid):
+        r = _conn.execute("SELECT carrier_id FROM mkt_vehicles WHERE id=?", (int(vid),)).fetchone()
+        if not r:
+            raise core.NotFoundError("vehicle not found")
+        return r["carrier_id"]
+
+    def ac_assess(a, b, p):   return acc.assess_fee(_conn, a, _carrier_of(p["id"]), int(p["id"]))
+    def ac_get(a, b, p):      return acc.fee_breakdown(_conn, a, int(p["id"]))
+    def ac_pay(a, b, p):      return acc.record_payment(_conn, a, int(p["id"]), b.get("method"), b.get("payment_ref"), receipt_ref=b.get("receipt_ref"))
+    def ac_waive(a, b, p):    return acc.waive_fee(_conn, a, int(p["id"]), b.get("reason"))
+    def ac_refund(a, b, p):   return acc.refund(_conn, a, int(p["id"]), b.get("reason"), refund_ref=b.get("refund_ref"))
+    def ac_sched_list(a, b, p): return acc.list_schedule(_conn, a, include_history=bool(b.get("history")))
+    def ac_sched_set(a, b, p): return acc.set_fee(_conn, a, b["key_type"], b["key_code"], base_fee=b.get("base_fee"), components=b.get("components"), manual_quote=bool(b.get("manual_quote")), effective_from=b.get("effective_from"), tenant_id=b.get("tenant_id"))
+    def ac_tier_set(a, b, p): return acc.set_volume_tier(_conn, a, b["min_units"], b.get("max_units"), discount_pct=b.get("discount_pct", 0), fixed_discount=b.get("fixed_discount", 0), label=b.get("label"))
+
+    return {
+        ("POST", "/admin/marketplace/vehicles/:id/accreditation/assess"): ac_assess,
+        ("GET", "/admin/marketplace/vehicles/:id/accreditation"): ac_get,
+        ("POST", "/admin/marketplace/accreditation/:id/pay"): ac_pay,
+        ("POST", "/admin/marketplace/accreditation/:id/waive"): ac_waive,
+        ("POST", "/admin/marketplace/accreditation/:id/refund"): ac_refund,
+        ("GET", "/admin/marketplace/accreditation/schedule"): ac_sched_list,
+        ("POST", "/admin/marketplace/accreditation/schedule"): ac_sched_set,
+        ("POST", "/admin/marketplace/accreditation/volume-tiers"): ac_tier_set,
+    }
+
+
+ROUTES.update(_accreditation_routes())
+
+
+def _cargo_insurance_routes():
+    """Cargo Insurance Compliance — provider uploads its own insurer's certificate; independent reviewer
+    verifies/rejects; expiry-monitored eligibility gate. Not an insurance product; separate from vehicle
+    insurance. Provider can never self-verify."""
+    import cargo_insurance as ci
+
+    def ci_upload(a, b, p):  return ci.upload(_conn, a, int(p["id"]), b.get("insurer"), b.get("policy_ref"),
+                                              b.get("document_ref"), vehicle_id=b.get("vehicle_id"),
+                                              insured_company=b.get("insured_company"),
+                                              coverage_type=b.get("coverage_type", "CARGO"),
+                                              coverage_amount=b.get("coverage_amount"),
+                                              effective_from=b.get("effective_from"), expiry_date=b.get("expiry_date"),
+                                              vehicle_scope=b.get("vehicle_scope"), cargo_scope=b.get("cargo_scope"))
+    def ci_review(a, b, p):  return ci.review(_conn, a, int(p["id"]), b.get("decision"),
+                                              verification_source=b.get("verification_source"),
+                                              verification_evidence=b.get("verification_evidence"),
+                                              rejection_reason=b.get("rejection_reason"))
+    def ci_summary(a, b, p): return ci.summary(_conn, int(p["id"]), vehicle_id=b.get("vehicle_id"))
+    def ci_expiring(a, b, p): return ci.expiring_queue(_conn, a)
+
+    return {
+        ("POST", "/admin/marketplace/carriers/:id/cargo-insurance"): ci_upload,
+        ("GET", "/admin/marketplace/carriers/:id/cargo-insurance"): ci_summary,
+        ("POST", "/admin/marketplace/cargo-insurance/:id/review"): ci_review,
+        ("GET", "/admin/marketplace/cargo-insurance/expiring"): ci_expiring,
+    }
+
+
+ROUTES.update(_cargo_insurance_routes())
 ROUTES.update(_delivery_verification_routes())
 def _rental_routes():
     import rental as rt

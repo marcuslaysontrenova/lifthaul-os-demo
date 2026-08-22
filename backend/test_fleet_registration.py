@@ -242,8 +242,10 @@ class PairingAndReadiness(Base):
         rd = fr.unit_readiness(self.c, self.op, self.cid, v)
         items = {c["item"]: c["ok"] for c in rd["checks"]}
         self.assertTrue(items["Registration"])
-        self.assertTrue(items["Insurance"])
+        self.assertTrue(items["Vehicle Insurance"])
         self.assertTrue(items["Assigned Driver"])
+        self.assertIn("Accreditation Fee", items)     # commercial line
+        self.assertIn("Cargo Insurance", items)        # compliance line (separate from vehicle insurance)
         self.assertIn("marketplace_status", rd)
         self.assertGreaterEqual(len(rd["checks"]), 9)
 

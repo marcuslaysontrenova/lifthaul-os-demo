@@ -416,7 +416,17 @@ def register_unit(conn, actor, carrier_id, plate_number, specs):
     core.audit(conn, actor, "FLEET_UNIT_REGISTERED", "mkt_vehicles", vid, None,
                {"plate": plate_number, "variant": cls["variant_code"], "class": cls["class_label"]})
     conn.commit()
+    # assess the one-time accreditation fee from the canonical classification (server-authoritative;
+    # payment is never approval). Best-effort: a pricing gap must not block unit registration.
+    fee = None
+    try:
+        import accreditation as _acc
+        fee = _acc.assess_fee(conn, actor, carrier_id, vid)
+    except Exception:  # noqa: BLE001
+        fee = None
     return {"vehicle_id": vid, "status": "DRAFT", "classification": cls,
+            "accreditation": ({"status": fee["status"], "total": fee.get("total"),
+                               "currency": fee.get("currency")} if fee else None),
             "note": "registered as DRAFT — a reviewer must verify + activate before it can accept work"}
 
 
@@ -508,6 +518,23 @@ def unit_eligibility(conn, actor, carrier_id, vehicle_id, *, driver_id=None, job
         reasons.append("MAINTENANCE_HOLD")
     elif v["status"] != "ACTIVE":
         reasons.append("NOT_ACTIVATED")
+    # commercial gate (config-driven, default off): the one-time accreditation fee must be settled
+    # (PAID or WAIVED). Payment is NEVER approval on its own — one independent gate among the many below.
+    try:
+        import accreditation as _acc
+        if _acc.gate_enabled(conn) and not _acc.fee_paid(conn, vehicle_id):
+            reasons.append("ACCREDITATION_FEE_UNPAID")
+    except Exception:  # noqa: BLE001
+        pass
+    # cargo-insurance compliance gate (distinct from vehicle insurance; a provider-uploaded document,
+    # independently verified, expiry-monitored)
+    try:
+        import cargo_insurance as _ci
+        cig = _ci.eligibility_gate(conn, carrier_id, vehicle_id)
+        if cig != "PASS":
+            reasons.append(cig)
+    except Exception:  # noqa: BLE001
+        pass
     # document-level compliance (registration/insurance expiry) via the existing compliance engine
     ev = ob.evaluate_compliance(conn, "VEHICLE", vehicle_id)
     for b in ev["blockers"]:
@@ -663,11 +690,18 @@ def unit_readiness(conn, actor, carrier_id, vehicle_id):
         driver_ok = dg["ok"]
         de = ob.evaluate_compliance(conn, "DRIVER", primary)
         driver_licence = "DRIVER_LICENCE" in set(de["provided"]) or not de["blockers"]
+    import accreditation as _acc, cargo_insurance as _ci
+    fee_st = _acc.fee_status(conn, vehicle_id) or "NOT_ASSESSED"
+    fee_ok = (not _acc.gate_enabled(conn)) or _acc.fee_paid(conn, vehicle_id)
+    ci_st = _ci.status_for(conn, carrier_id, vehicle_id)
+    ci_ok = ci_st in ("NOT_REQUIRED", "VERIFIED", "EXPIRING")
     checks = [
+        {"item": "Accreditation Fee", "ok": fee_ok, "detail": fee_st},
         {"item": "Business Provider (KYB)", "ok": kyb in ("VERIFIED", "VERIFIED_WITH_CONDITION")},
         {"item": "OR/CR", "ok": has("OR_CR") or has("VEHICLE_REGISTRATION")},
         {"item": "Registration", "ok": has("VEHICLE_REGISTRATION")},
-        {"item": "Insurance", "ok": has("INSURANCE")},
+        {"item": "Vehicle Insurance", "ok": has("INSURANCE")},
+        {"item": "Cargo Insurance", "ok": ci_ok, "detail": ci_st},
         {"item": "LTFRB/CPC", "ok": bool(ltfrb_gate["ok"])},
         {"item": "Inspection", "ok": has("INSPECTION") or True},   # inspection optional unless a rule requires it
         {"item": "Maintenance (not on hold)", "ok": v["status"] != "MAINTENANCE"},

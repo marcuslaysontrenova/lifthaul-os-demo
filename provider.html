@@ -199,6 +199,17 @@ function loadTaxonomy(){
   function fill(pt,cats){ $('#ptype').innerHTML='<option value="">Select…</option>'+pt.map(function(x){return '<option value="'+esc(x)+'">'+esc(title(x))+'</option>';}).join('');
     $('#cat').innerHTML='<option value="">Select…</option>'+cats.map(function(x){return '<option value="'+esc(x)+'">'+esc(title(x))+'</option>';}).join('');
     try{ var pre=new URLSearchParams(location.search).get('type'); if(pre){ $('#ptype').value=pre.toUpperCase(); } }catch(e){} }
+
+var _refCode='';
+(function(){
+  try{ _refCode=(new URLSearchParams(location.search).get('ref')||'').trim(); }catch(e){}
+  if(_refCode && API.configured()){
+    API.post('/public/referral/validate',{code:_refCode}).then(function(d){
+      if(d && d.valid){ toast('Referral applied'); $('#regMsg').innerHTML='<span style="color:var(--good,#16A34A);font-weight:700">🎁 Referral applied</span> — you were referred to LiftHaul. Registration is free; your referrer earns a reward only after your company completes the qualifying activity.'; }
+      else { _refCode=''; $('#regMsg').textContent='Referral code not valid — you can still register without one.'; }
+    }).catch(function(){});
+  }
+})();
   if(API.configured()){ API.get('/public/vehicle-variants').then(function(d){ fill(d.provider_types||PT, Object.keys(d.categories||{}).length?Object.keys(d.categories):CATS); }).catch(function(){ fill(PT,CATS); }); }
   else fill(PT,CATS);
 }
@@ -217,7 +228,7 @@ function submitProvider(){
   var body={provider_type:pt,legal_name:legal,trade_name:$('#trade').value.trim(),representative:$('#rep').value.trim(),
     username:user,password:pw,mobile:mob,email:em,website:$('#website').value.trim(),tin:$('#tin').value.trim(),
     registration_type:$('#regtype').value,registration_number:$('#regno').value.trim(),
-    operating_address:$('#base').value.trim(),island_group:$('#island').value};
+    operating_address:$('#base').value.trim(),island_group:$('#island').value,referral_code:_refCode||undefined};
   if(!API.configured()){
     $('#regMsg').innerHTML='This is the honest offline demo — no backend is configured. Set <code>localStorage.lifthaul_api_base</code> to a hosted LiftHaul API to create a real account.';
     return;

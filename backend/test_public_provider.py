@@ -200,6 +200,31 @@ class OtpProductionBoundary(unittest.TestCase):
         self.assertNotIn(code, blob)
 
 
+class ReferralAttribution(unittest.TestCase):
+    """Registration with ?ref= attributes the referral server-side; a bad code never blocks registration."""
+
+    def setUp(self):
+        self.conn = db.connect("sqlite:///:memory:")
+
+    def test_valid_referral_code_attributes(self):
+        import referral as rf
+        import marketplace_onboarding as mo
+        sup = {"id": 1, "role": "super_admin", "perms": {"*"}, "tenant_id": None}
+        a = mo.create_carrier_application(self.conn, sup, "FLEET_OPERATOR", "Referrer",
+                                          registration_type="SEC", registration_number="R1")
+        code = rf.issue_code(self.conn, sup, "CARRIER", a, referrer_label="Ref")["code"]
+        r = pp.submit(self.conn, _payload(referral_code=code))
+        self.assertTrue(r["referral_applied"])
+        row = self.conn.execute("SELECT referred_ref,status FROM referrals").fetchone()
+        self.assertEqual(row["referred_ref"], str(r["carrier_id"]))
+        self.assertEqual(row["status"], "REGISTERED")   # registered != earned
+
+    def test_invalid_referral_code_never_blocks(self):
+        r = pp.submit(self.conn, _payload(referral_code="LH-BAD-000000"))
+        self.assertEqual(r["status"], "VERIFY_CONTACT")
+        self.assertFalse(r["referral_applied"])
+
+
 class PublicPreviews(unittest.TestCase):
     def setUp(self):
         self.conn = db.connect("sqlite:///:memory:")

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>LiftHaul — Referral Program Administration</title>
+<style>
+  :root{--bg:#F6F8F4;--card:#fff;--ink:#12210b;--ink2:#5b6b52;--line:#e2e8dc;--primary:#2E7D32;--primary-d:#245c28;--accent:#F2611A;--good:#16A34A;--warn:#D97706;--bad:#DC2626;--soft:#eef3ea;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0c130a;--card:#131c10;--ink:#e6efe0;--ink2:#93a389;--line:#243020;--soft:#1a2416;}}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  .top{background:var(--primary);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px;position:sticky;top:0;z-index:10}
+  .top b{font-weight:800}.top .tag{background:rgba(255,255,255,.18);padding:3px 10px;border-radius:20px;font-size:12.5px;font-weight:600}
+  .top .who{margin-left:auto;font-size:13px;opacity:.9}
+  .wrap{max-width:1120px;margin:0 auto;padding:18px 20px 70px}
+  h1{font-size:19px;margin:2px 0}.sub{color:var(--ink2);font-size:13px;margin-bottom:14px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs button{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;color:var(--ink)}
+  .tabs button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;display:none}
+  .panel.on{display:block}
+  .panel h3{font-size:15px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--ink2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:8px;border-bottom:1px solid var(--line)}
+  td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink2)}
+  label span{display:block;margin-bottom:3px}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+  .btn{background:var(--primary);color:#fff;border:0;border-radius:9px;padding:9px 16px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;margin-top:8px}
+  .btn.acc{background:var(--accent)} .btn.sm{padding:4px 9px;font-size:11.5px;margin:2px}
+  .btn.line{background:transparent;color:var(--primary);border:1px solid var(--primary)}
+  .chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft);color:var(--ink2)}
+  .chip.good{background:rgba(22,163,74,.14);color:var(--good)} .chip.warn{background:rgba(217,119,6,.16);color:var(--warn)} .chip.bad{background:rgba(220,38,38,.14);color:var(--bad)}
+  .note{background:var(--soft);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;color:var(--ink2);font-size:12.5px;margin:10px 0}
+  .flag{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+  .switch{position:relative;width:46px;height:26px} .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#bbb;border-radius:20px;transition:.2s;cursor:pointer}
+  .slider:before{content:"";position:absolute;height:20px;width:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+  input:checked+.slider{background:var(--good)} input:checked+.slider:before{transform:translateX(20px)}
+  .muted{color:var(--ink2)} .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:40}
+  .hide{display:none}
+</style>
+</head>
+<body>
+  <div class="top"><b>LiftHaul</b><span class="tag">Administration · Referral Program</span><span class="who" id="who">—</span></div>
+  <div class="wrap">
+    <h1>Referral Program</h1>
+    <div class="sub">Single-level direct referral rewards. A refers B; when B completes the qualifying
+      commercial activity, A may earn a configured reward. No downlines, no override, no reward for
+      recruitment alone. Program is inactive until you enable it below.</div>
+
+    <div class="tabs">
+      <button data-t="settings" class="on">Program Settings</button>
+      <button data-t="campaigns">Campaigns</button>
+      <button data-t="codes">Codes</button>
+      <button data-t="referrals">Referrals &amp; Finance</button>
+      <button data-t="leaderboard">Leaderboard</button>
+    </div>
+
+    <!-- SETTINGS -->
+    <section id="p-settings" class="panel on">
+      <h3>Activation &amp; defaults</h3>
+      <div class="flag"><label class="switch"><input type="checkbox" id="enabled" onchange="toggleEnabled()"><span class="slider"></span></label>
+        <span id="enabledLabel">Referral program: <b>checking…</b></span></div>
+      <div class="note" style="margin-top:12px">Even a fully qualified referral cannot become payable until this is ON. Activation is a deliberate Legal/Finance decision — keep it OFF until program terms and payout treatment are approved.</div>
+      <div class="grid" style="margin-top:8px">
+        <label><span>Default reward amount (₱)</span><input id="d-amount" type="number" placeholder="150"></label>
+        <label><span>Default validation days</span><input id="d-vdays" type="number" placeholder="14"></label>
+        <label><span>Terms version</span><input id="d-terms" placeholder="v1"></label>
+      </div>
+      <button class="btn" onclick="saveDefaults()">Save defaults</button>
+    </section>
+
+    <!-- CAMPAIGNS -->
+    <section id="p-campaigns" class="panel">
+      <h3>Campaigns</h3>
+      <div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Event</th><th>Reward</th><th class="num">Budget</th><th class="num">Remaining</th><th>Status</th></tr></thead>
+        <tbody id="campRows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table></div>
+      <h3 style="margin-top:18px">New campaign</h3>
+      <div class="grid">
+        <label><span>Name</span><input id="c-name" placeholder="Luzon Fleet Expansion"></label>
+        <label><span>Qualifying event</span><select id="c-event">
+          <option>FIRST_ACCREDITED_VEHICLE</option><option>FIRST_MARKETPLACE_ELIGIBLE_UNIT</option>
+          <option>FIRST_COMPLETED_BOOKING</option><option>FIRST_SETTLED_MARKETPLACE_JOB</option>
+          <option>ENTERPRISE_FLEET_ACTIVATION</option><option>MANUAL_STRATEGIC_QUALIFICATION</option></select></label>
+        <label><span>Reward type</span><select id="c-rtype"><option>FIXED</option><option>PERCENTAGE</option><option>CREDIT</option></select></label>
+        <label><span>Reward amount (₱) / %</span><input id="c-amount" type="number" placeholder="150"></label>
+        <label><span>Validation days</span><input id="c-vdays" type="number" placeholder="14"></label>
+        <label><span>Total budget (₱)</span><input id="c-budget" type="number" placeholder="50000"></label>
+        <label><span>Per-user cap</span><input id="c-ucap" type="number" placeholder="5"></label>
+      </div>
+      <button class="btn" onclick="newCampaign()">Create campaign</button>
+    </section>
+
+    <!-- CODES -->
+    <section id="p-codes" class="panel">
+      <h3>Issue a referral code</h3>
+      <div class="grid">
+        <label><span>Referrer type</span><select id="k-type"><option>CARRIER</option><option>SHIPPER</option><option>PARTNER</option><option>AFFILIATE</option></select></label>
+        <label><span>Referrer ref (carrier/customer id)</span><input id="k-ref" placeholder="12"></label>
+        <label><span>Campaign id (optional)</span><input id="k-camp" type="number"></label>
+        <label><span>Label (optional)</span><input id="k-label" placeholder="Alpha Fleet"></label>
+      </div>
+      <button class="btn" onclick="issueCode()">Issue code</button>
+      <p id="codeMsg" class="muted" style="margin-top:10px"></p>
+    </section>
+
+    <!-- REFERRALS -->
+    <section id="p-referrals" class="panel">
+      <h3>Referrals</h3>
+      <label style="max-width:220px"><span>Filter by status</span>
+        <select id="r-filter" onchange="loadReferrals()"><option value="">All</option>
+          <option>REGISTERED</option><option>REVIEW_REQUIRED</option><option>QUALIFIED</option>
+          <option>EARNED</option><option>PAYABLE</option><option>PAID</option><option>REVERSED</option></select></label>
+      <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>#</th><th>Referrer</th><th>Referred</th><th>Status</th><th>Risk</th><th class="num">Reward</th><th>Actions</th></tr></thead>
+        <tbody id="refRows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody></table></div>
+      <p id="refMsg" class="muted" style="margin-top:8px"></p>
+    </section>
+
+    <!-- LEADERBOARD -->
+    <section id="p-leaderboard" class="panel">
+      <h3>Top referrers (qualified count — no genealogy)</h3>
+      <div style="overflow-x:auto"><table><thead><tr><th>Referrer</th><th class="num">Qualified</th></tr></thead>
+        <tbody id="lbRows"><tr><td colspan="2" class="muted">Loading…</td></tr></tbody></table></div>
+    </section>
+  </div>
+  <div class="toast hide" id="toast"></div>
+
+<script>
+var API=(function(){
+  var base=null,token=null;
+  try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  function req(m,p,b){ if(!base) return Promise.reject(new Error('offline'));
+    var h={'Content-Type':'application/json'}; if(token) h['Authorization']='Bearer '+token;
+    return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:h,body:b?JSON.stringify(b):undefined})
+      .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(d&&d.data!==undefined)d=d.data; if(!r.ok) throw new Error((d&&(d.error||d.detail))||('HTTP '+r.status)); return d;});}); }
+  return {configured:function(){return !!base;},get:function(p){return req('GET',p);},post:function(p,b){return req('POST',p,b);}};
+})();
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide');},3200);}
+function peso(n){ if(n==null) return '—'; return '₱'+Number(n).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function stChip(s){var g=['QUALIFIED','EARNED','APPROVED','PAYABLE','PAID'],b=['REVERSED','REJECTED'];return '<span class="chip '+(g.indexOf(s)>=0?'good':(b.indexOf(s)>=0?'bad':(s==='REVIEW_REQUIRED'?'warn':'')))+'">'+esc(s)+'</span>';}
+function riskChip(r){return r&&r!=='NONE'?'<span class="chip '+(r==='CRITICAL'||r==='HIGH'?'bad':'warn')+'">'+esc(r)+'</span>':'<span class="muted">—</span>';}
+
+document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener('click',function(){
+  document.querySelectorAll('.tabs button').forEach(function(x){x.classList.toggle('on',x===b);});
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('on',p.id==='p-'+b.dataset.t);});
+  if(b.dataset.t==='referrals') loadReferrals(); if(b.dataset.t==='leaderboard') loadBoard();
+});});
+
+function loadEnabled(){
+  API.get('/admin/config').then(function(d){ var rows=Array.isArray(d.config)?d.config:(Array.isArray(d)?d:[]); var on=false;
+    rows.forEach(function(r){ if((r.key||'')==='referral.program.enabled') on=String(r.value).toLowerCase()==='true'; if((r.key||'')==='referral.reward_amount')$('#d-amount').value=r.value; if((r.key||'')==='referral.validation_days')$('#d-vdays').value=r.value; if((r.key||'')==='referral.terms_version')$('#d-terms').value=r.value; });
+    $('#enabled').checked=on; $('#enabledLabel').innerHTML='Referral program: <b style="color:'+(on?'var(--good)':'var(--bad)')+'">'+(on?'ACTIVE':'OFF')+'</b>';
+  }).catch(function(){ $('#enabledLabel').innerHTML='Referral program: <b>unknown</b> (sign in as admin)'; });
+}
+function toggleEnabled(){
+  var v=$('#enabled').checked?'true':'false';
+  API.post('/admin/config',{scope:'platform',scope_ref:'',key:'referral.program.enabled',value:v}).then(function(){toast('Program '+(v==='true'?'ACTIVATED':'disabled'));loadEnabled();}).catch(function(e){toast(e.message);$('#enabled').checked=!$('#enabled').checked;});
+}
+function saveDefaults(){
+  var m=[['referral.reward_amount',$('#d-amount').value],['referral.validation_days',$('#d-vdays').value],['referral.terms_version',$('#d-terms').value]].filter(function(x){return x[1]!=='';});
+  Promise.all(m.map(function(x){return API.post('/admin/config',{scope:'platform',scope_ref:'',key:x[0],value:String(x[1])});})).then(function(){toast('Defaults saved');}).catch(function(e){toast(e.message);});
+}
+function loadCampaigns(){
+  if(!API.configured()){ $('#campRows').innerHTML='<tr><td colspan="6" class="muted">Offline — set <code>localStorage.lifthaul_api_base</code> + token (admin) to manage campaigns.</td></tr>'; return; }
+  API.get('/admin/marketplace/referral/campaigns').then(function(d){
+    $('#campRows').innerHTML=(d.campaigns||[]).map(function(c){
+      var reward=c.reward_type==='PERCENTAGE'?((c.reward_pct||0)+'%'):peso(c.reward_amount);
+      return '<tr><td><b>'+esc(c.name)+'</b></td><td class="muted" style="font-size:12px">'+esc(c.qualifying_event)+'</td><td>'+esc(c.reward_type)+' '+reward+'</td>'
+        +'<td class="num">'+peso(c.total_budget)+'</td><td class="num">'+peso(c.remaining_budget)+'</td><td>'+stChip(c.status)+'</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="muted">No campaigns yet.</td></tr>';
+  }).catch(function(e){ $('#campRows').innerHTML='<tr><td colspan="6" class="muted">'+esc(e.message)+'</td></tr>'; });
+}
+function newCampaign(){
+  var b={name:$('#c-name').value.trim(),qualifying_event:$('#c-event').value,reward_type:$('#c-rtype').value,status:'ACTIVE',
+    validation_days:Number($('#c-vdays').value||14)};
+  if($('#c-rtype').value==='PERCENTAGE') b.reward_pct=Number($('#c-amount').value||0); else b.reward_amount=Number($('#c-amount').value||0);
+  if($('#c-budget').value) b.total_budget=Number($('#c-budget').value);
+  if($('#c-ucap').value) b.per_user_cap=Number($('#c-ucap').value);
+  if(!b.name){toast('Name required');return;}
+  API.post('/admin/marketplace/referral/campaigns',b).then(function(){toast('Campaign created');loadCampaigns();}).catch(function(e){toast(e.message);});
+}
+function issueCode(){
+  var b={referrer_type:$('#k-type').value,referrer_ref:$('#k-ref').value.trim(),referrer_label:$('#k-label').value.trim()};
+  if($('#k-camp').value) b.campaign_id=Number($('#k-camp').value);
+  if(!b.referrer_ref){toast('Referrer ref required');return;}
+  API.post('/admin/marketplace/referral/codes',b).then(function(r){$('#codeMsg').innerHTML='Issued: <b style="font-size:16px">'+esc(r.code)+'</b> · link <code>'+esc(r.link)+'</code>';}).catch(function(e){$('#codeMsg').textContent=e.message;});
+}
+function loadReferrals(){
+  var f=$('#r-filter').value; var q='/admin/marketplace/referrals'+(f?('?status='+f):'');
+  API.get(q).then(function(d){
+    $('#refRows').innerHTML=(d.referrals||[]).map(function(r){
+      var acts='';
+      if(['REGISTERED','VERIFIED','REVIEW_REQUIRED'].indexOf(r.status)>=0) acts+='<button class="btn sm line" onclick="act('+r.id+',\'qualify\')">Qualify</button>';
+      if(r.status==='EARNED') acts+='<button class="btn sm" onclick="act('+r.id+',\'approve\')">Approve</button>';
+      if(r.status==='PAYABLE') acts+='<button class="btn sm acc" onclick="act('+r.id+',\'pay\')">Pay</button>';
+      if(['EARNED','APPROVED','PAYABLE','PAID'].indexOf(r.status)>=0) acts+='<button class="btn sm line" onclick="act('+r.id+',\'reverse\')">Reverse</button>';
+      return '<tr><td>'+r.id+'</td><td>'+esc(r.referrer_type)+' #'+esc(r.referrer_ref)+'</td><td>'+esc(r.referred_label||(r.referred_type+' #'+r.referred_ref))+'</td>'
+        +'<td>'+stChip(r.status)+'</td><td>'+riskChip(r.risk_status)+'</td><td class="num">'+peso(r.reward_amount)+'</td><td>'+(acts||'—')+'</td></tr>';
+    }).join('')||'<tr><td colspan="7" class="muted">No referrals.</td></tr>';
+  }).catch(function(e){ $('#refRows').innerHTML='<tr><td colspan="7" class="muted">'+esc(e.message)+'</td></tr>'; });
+}
+function act(id,which){
+  var body={}; if(which==='reverse') body.reason=prompt('Reversal reason?')||'admin reversal'; if(which==='qualify') body.force=false;
+  API.post('/admin/marketplace/referral/'+id+'/'+which,body).then(function(r){$('#refMsg').textContent='#'+id+' → '+r.status;loadReferrals();}).catch(function(e){$('#refMsg').textContent='#'+id+': '+e.message;});
+}
+function loadBoard(){ API.get('/admin/marketplace/referral/leaderboard').then(function(d){
+  $('#lbRows').innerHTML=(d.leaderboard||[]).map(function(x){return '<tr><td>'+esc(x.referrer_type)+' #'+esc(x.referrer_ref)+'</td><td class="num">'+x.qualified+'</td></tr>';}).join('')||'<tr><td colspan="2" class="muted">No qualified referrals yet.</td></tr>';
+}).catch(function(){}); }
+try{ var em=localStorage.getItem('lifthaul_user_email'); if(em) $('#who').textContent=em; }catch(e){}
+loadEnabled(); loadCampaigns();
+</script>
+</body>
+</html>

@@ -214,8 +214,22 @@ def submit(conn, payload):
     challenge = _issue_code(conn, actor, cid, uid, login, email, mobile)
     conn.commit()
 
+    # --- referral attribution (server = source of truth; runs through the canonical registration flow,
+    # not browser localStorage). Best-effort: a bad/expired code never blocks registration. §5/§6 ---
+    referral_applied = False
+    ref_code = str(payload.get("referral_code", "")).strip()
+    if ref_code:
+        try:
+            import referral as _rf
+            if _rf.validate_code(conn, ref_code).get("valid"):
+                _rf.attribute(conn, actor, ref_code, "CARRIER", cid, referred_label=legal_name,
+                              source="PROVIDER_REGISTRATION")
+                referral_applied = True
+        except Exception:  # noqa: BLE001
+            referral_applied = False
+
     resp = {"ref": f"SP-{cid}", "carrier_id": cid, "user_id": uid, "login": login,
-            "provider_type": provider_type, "status": "VERIFY_CONTACT",
+            "provider_type": provider_type, "status": "VERIFY_CONTACT", "referral_applied": referral_applied,
             "challenge_id": challenge["challenge_id"], "channel": challenge["channel"],
             "destination": _mask(challenge["destination"]),
             "delivered": challenge["delivered"], "delivery_note": challenge["delivery_note"],

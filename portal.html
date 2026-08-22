@@ -121,7 +121,7 @@ var RGO_API=(function(){
 
 var TABS=[['dashboard','Dashboard'],['overview','Overview'],['fleet','Fleet'],['accreditation','Accreditation & Fees'],['drivers','Drivers'],['availability','Availability'],['compliance','Compliance'],
           ['invitations','Offers'],['assignments','Assignments'],['trips','Trips'],['finance','Earnings'],
-          ['cases','Disputes & Claims'],['notifications','Notifications']];
+          ['cases','Disputes & Claims'],['referrals','Referral Rewards'],['notifications','Notifications']];
 var tab='dashboard', live=false;
 function $(s){return document.querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -148,9 +148,9 @@ function render(){
   var routes={dashboard:'/portal/carrier/dashboard',overview:'/portal/carrier/overview',fleet:'/portal/carrier/fleet',drivers:'/portal/carrier/drivers',
     availability:'/portal/carrier/availability',compliance:'/portal/carrier/compliance',invitations:'/portal/carrier/invitations',assignments:'/portal/carrier/assignments',
     trips:'/portal/carrier/trips',finance:'/portal/carrier/finance',cases:'/portal/carrier/cases',notifications:'/portal/carrier/notifications',
-    accreditation:'/portal/carrier/accreditation'};
+    accreditation:'/portal/carrier/accreditation',referrals:'/portal/carrier/referrals'};
   RGO_API.get(routes[tab]).then(function(d){ host.innerHTML=({dashboard:vDashboard,overview:vOverview,fleet:vFleet,drivers:vDrivers,availability:vAvailability,compliance:vCompliance,
-    invitations:vOffers,assignments:vAssignments,trips:vTrips,finance:vFinance,cases:vCases,notifications:vNotifications,accreditation:vAccreditation})[tab](d); })
+    invitations:vOffers,assignments:vAssignments,trips:vTrips,finance:vFinance,cases:vCases,notifications:vNotifications,accreditation:vAccreditation,referrals:vReferral})[tab](d); })
     .catch(function(err){ host.innerHTML='<div class="note" style="border-left-color:var(--crit)"><span>⚠️</span><div>'+esc(err.message)+'</div></div>'; });
 }
 
@@ -191,6 +191,29 @@ function vAccreditation(d){
   return head+cards;
 }
 function row(k,v){return '<tr><td>'+esc(k)+'</td><td>'+v+'</td></tr>';}
+
+function vReferral(d){
+  function stat(n,k){return '<div class="stat"><div class="rows"><div class="r"><span class="big">'+esc(n)+'</span> '+esc(k)+'</div></div></div>';}
+  var code=d.primary_code;
+  var head=code
+    ? '<div class="panel"><div class="panel-b"><div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.05em">Your referral code</div>'
+      +'<div style="font-size:28px;font-weight:800;letter-spacing:.02em;margin:4px 0">'+esc(code)+'</div>'
+      +'<div class="muted" style="font-size:13px">Share: <code>'+esc((location.origin||'https://lifthaul')+ (d.share_link||''))+'</code></div>'
+      +'<div class="note" style="margin-top:10px"><span>🎁</span><div>Refer a qualified business. You earn a reward only after they complete the required qualifying commercial activity — registration alone earns nothing.</div></div></div></div>'
+    : '<div class="note"><span>🎁</span><div>No referral code issued yet. Ask your account manager to enable Referral Rewards for your company.</div></div>';
+  var tiles='<div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0">'
+    +stat(d.referred_businesses,'Referred')+stat(d.qualified,'Qualified')+stat(d.pending_review,'In review')
+    +stat('₱'+Number(d.total_earned||0).toLocaleString('en-PH'),'Earned')
+    +stat('₱'+Number(d.payable||0).toLocaleString('en-PH'),'Payable')
+    +stat('₱'+Number(d.paid||0).toLocaleString('en-PH'),'Paid')+'</div>';
+  var rows=(d.referrals||[]).map(function(r){
+    var cls=({QUALIFIED:'c-good',EARNED:'c-good',APPROVED:'c-good',PAYABLE:'c-good',PAID:'c-good',REVIEW_REQUIRED:'c-warn',REVERSED:'c-crit',REJECTED:'c-crit'})[r.status]||'c-mut';
+    return '<tr><td>'+esc(r.business)+'</td><td><span class="chip '+cls+'">'+esc(r.status)+'</span></td></tr>';
+  }).join('')||'<tr><td colspan="2" class="muted">No referred businesses yet.</td></tr>';
+  return head+tiles+'<div class="panel"><div class="panel-h"><h3>Your referrals</h3></div><div class="panel-b" style="overflow-x:auto">'
+    +'<table><thead><tr><th>Business</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<p class="muted" style="font-size:12px;margin-top:8px">Only business names + statuses are shown — never a referred company\'s confidential data.</p></div></div>';
+}
 
 function vDashboard(d){
   $('#whoami').textContent=(d.legal_name||'Carrier')+' · #'+d.carrier_id;

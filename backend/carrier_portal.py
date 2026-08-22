@@ -336,6 +336,15 @@ def accreditation(conn, actor, requested=None):
                            "requires successful, independent compliance verification.")}
 
 
+def referral(conn, actor, requested=None):
+    """Carrier-facing Referral Rewards dashboard — the carrier's OWN code, share link and reward totals.
+    Never exposes any referred company's confidential data (labels + statuses only)."""
+    core.require(actor, "carrier.portal.view")
+    cid = resolve_carrier(conn, actor, requested)
+    import referral as _rf
+    return _rf.referrer_dashboard(conn, _svc(actor, "referral.view"), "CARRIER", cid)
+
+
 def _driver_eligibility(conn, d):
     reasons = []
     status = d["status"]

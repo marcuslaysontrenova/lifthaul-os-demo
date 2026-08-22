@@ -2172,6 +2172,7 @@ def _carrier_portal_routes():
     def notif(a, b, p):     return cp.notifications(_conn, a)
     def perf(a, b, p):      return cp.performance(_conn, a)
     def accr(a, b, p):      return cp.accreditation(_conn, a)
+    def refr(a, b, p):      return cp.referral(_conn, a)
 
     def veh_add(a, b, p):   return cp.add_vehicle(_conn, a, b["category_code"], b["plate_number"],
                                                   **{k: v for k, v in b.items() if k not in ("category_code", "plate_number")})
@@ -2213,6 +2214,7 @@ def _carrier_portal_routes():
         ("GET", "/portal/carrier/notifications"): notif,
         ("GET", "/portal/carrier/performance"): perf,
         ("GET", "/portal/carrier/accreditation"): accr,
+        ("GET", "/portal/carrier/referrals"): refr,
         ("POST", "/portal/carrier/vehicles"): veh_add,
         ("POST", "/portal/carrier/drivers"): drv_add,
         ("POST", "/portal/carrier/vehicles/:id/maintenance"): veh_maint,
@@ -2357,6 +2359,58 @@ def _cargo_insurance_routes():
 
 
 ROUTES.update(_cargo_insurance_routes())
+
+
+def _referral_routes():
+    """Referral Rewards — single-level. Admin manages campaigns/codes; ops/compliance qualify; fraud
+    reviews; finance approves/pays/reverses. Public code validation never leaks the referrer. RBAC/SoD:
+    a referrer can never qualify/approve/pay its own reward."""
+    import referral as rf
+
+    # campaigns + codes (admin)
+    def c_new(a, b, p):   return rf.create_campaign(_conn, a, b["name"], b["qualifying_event"], **{k: v for k, v in b.items() if k not in ("name", "qualifying_event")})
+    def c_upd(a, b, p):   return rf.update_campaign(_conn, a, int(p["id"]), **{k: v for k, v in b.items()})
+    def c_budget(a, b, p): return rf.set_campaign_budget(_conn, a, int(p["id"]), b["total_budget"])
+    def c_list(a, b, p):  return rf.list_campaigns(_conn, a)
+    def code_new(a, b, p): return rf.issue_code(_conn, a, b["referrer_type"], b["referrer_ref"], campaign_id=b.get("campaign_id"), referrer_label=b.get("referrer_label"), expires_at=b.get("expires_at"))
+    def code_rev(a, b, p): return rf.revoke_code(_conn, a, p["code"])
+    def attr(a, b, p):    return rf.attribute(_conn, a, b["code"], b["referred_type"], b["referred_ref"], referred_label=b.get("referred_label"), source=b.get("source", "REGISTRATION"))
+    # qualification / review
+    def r_verify(a, b, p): return rf.mark_verified(_conn, a, int(p["id"]))
+    def r_qual(a, b, p):  return rf.qualify(_conn, a, int(p["id"]), event=b.get("event"), txn_ref=b.get("txn_ref"), force=bool(b.get("force")))
+    def r_reject(a, b, p): return rf.reject(_conn, a, int(p["id"]), b.get("reason"))
+    def r_flag(a, b, p):  return rf.flag_review(_conn, a, int(p["id"]), reason=b.get("reason"))
+    # finance
+    def r_appr(a, b, p):  return rf.approve(_conn, a, int(p["id"]), force=bool(b.get("force")))
+    def r_pay(a, b, p):   return rf.pay(_conn, a, int(p["id"]), method=b.get("method", "CASH"), payout_ref=b.get("payout_ref"))
+    def r_rev(a, b, p):   return rf.reverse(_conn, a, int(p["id"]), b.get("reason"))
+    # reads
+    def r_list(a, b, p):  return rf.admin_list(_conn, a, status=b.get("status"), campaign_id=b.get("campaign_id"))
+    def r_board(a, b, p): return rf.leaderboard(_conn, a, limit=int(b.get("limit", 10)))
+    def r_validate(a, b, p): return rf.validate_code(_conn, (b or {}).get("code") or p.get("code"))
+
+    return {
+        ("POST", "/admin/marketplace/referral/campaigns"): c_new,
+        ("PATCH", "/admin/marketplace/referral/campaigns/:id"): c_upd,
+        ("POST", "/admin/marketplace/referral/campaigns/:id/budget"): c_budget,
+        ("GET", "/admin/marketplace/referral/campaigns"): c_list,
+        ("POST", "/admin/marketplace/referral/codes"): code_new,
+        ("POST", "/admin/marketplace/referral/codes/:code/revoke"): code_rev,
+        ("POST", "/admin/marketplace/referral/attribute"): attr,
+        ("POST", "/admin/marketplace/referral/:id/verify"): r_verify,
+        ("POST", "/admin/marketplace/referral/:id/qualify"): r_qual,
+        ("POST", "/admin/marketplace/referral/:id/reject"): r_reject,
+        ("POST", "/admin/marketplace/referral/:id/flag-review"): r_flag,
+        ("POST", "/admin/marketplace/referral/:id/approve"): r_appr,
+        ("POST", "/admin/marketplace/referral/:id/pay"): r_pay,
+        ("POST", "/admin/marketplace/referral/:id/reverse"): r_rev,
+        ("GET", "/admin/marketplace/referrals"): r_list,
+        ("GET", "/admin/marketplace/referral/leaderboard"): r_board,
+        ("POST", "/public/referral/validate"): r_validate,
+    }
+
+
+ROUTES.update(_referral_routes())
 ROUTES.update(_delivery_verification_routes())
 def _rental_routes():
     import rental as rt

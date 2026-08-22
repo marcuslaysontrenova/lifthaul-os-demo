@@ -312,7 +312,7 @@ PERMISSIONS = {
                  "quotation.return", "quotation.customer_price.view", "quotation.carrier_cost.view",
                  "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
                  "quotation.print", "booking.read", "booking.view", "booking.audit.view"},
-    "finance": {"payment.*", "quotation.read", "booking.read", "customer.read"},
+    "finance": {"payment.*", "quotation.read", "booking.read", "customer.read", "referral.finance"},
     "finance_admin": {"payment.*", "finance.*", "quotation.read", "quotation.view", "booking.read",
                       "booking.view", "customer.read", "quotation.customer_price.view",
                       "quotation.carrier_cost.view", "quotation.carrier_cost.edit",
@@ -336,7 +336,7 @@ PERMISSIONS = {
     "carrier_principal": {"carrier.portal.view", "carrier.portal.fleet.manage",
                           "carrier.portal.compliance.submit", "carrier.portal.offers.manage",
                           "carrier.portal.trips.execute", "carrier.portal.settings.manage",
-                          "carrier.portal.reassign"},
+                          "carrier.portal.reassign", "referral.view"},
     # Driver Mobile App principal — own trips only. Holds NO operational marketplace.* perm and NO
     # verify/approve/activate; can verify a recipient OTP but never issue/see it. See driver_app.
     "driver_principal": {"driver.app.view", "driver.app.execute"},

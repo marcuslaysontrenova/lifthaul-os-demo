@@ -147,6 +147,8 @@ def _seed_platform(conn):
     accreditation.init(conn); accreditation.seed(conn)                   # Provider Vehicle/Equipment Accreditation Fee Engine: master-data effective-dated variant fee schedule + volume tiers + historical snapshots; payment is never approval (marketplace eligibility stays independent)
     import cargo_insurance
     cargo_insurance.init(conn); cargo_insurance.seed(conn)               # Cargo Insurance Compliance: provider-uploaded certificate + independent review + expiry monitoring as a marketplace-eligibility gate (NOT an insurance product; separate from vehicle insurance; config-gated)
+    import referral
+    referral.init(conn); referral.seed(conn)                             # Referral Rewards: SINGLE-LEVEL direct referral (no downline/override); codes + server-side attribution + real-event qualification + fraud screen + finance-approved payout + campaigns/budget/caps; feature-flagged OFF by default
     import availability
     availability.init(conn); availability.seed(conn)                     # Carrier Operations: driver/vehicle availability overlay (computed effective status; feeds eligibility + governed reassignment closure; never a second source of truth)
     import public_provider

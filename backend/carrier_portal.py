@@ -301,6 +301,41 @@ def fleet(conn, actor, requested=None):
     return {"carrier_id": cid, "vehicles": out}
 
 
+def accreditation(conn, actor, requested=None):
+    """Carrier-facing Accreditation & Fees view — per own unit: canonical variant, fee breakdown, volume
+    discount, VAT, total, payment status, cargo-insurance status, compliance status, eligibility + exact
+    blockers. Read-only projection over the existing engines (no pricing/eligibility logic here); scoped
+    to the caller's OWN carrier via resolve_carrier + minimal-elevation."""
+    core.require(actor, "carrier.portal.view")
+    cid = resolve_carrier(conn, actor, requested)
+    import accreditation as _acc, cargo_insurance as _ci, fleet_registration as _fr
+    svc = _svc(actor, "marketplace.fleet.view", "marketplace.vehicle.view")
+    vs = ob.list_vehicles(conn, _svc(actor, "marketplace.vehicle.view"), carrier_id=cid)
+    units = []
+    for v in vs:
+        fee = _acc.fee_breakdown(conn, svc, v["id"])
+        rd = _fr.unit_readiness(conn, svc, cid, v["id"])
+        ci = _ci.summary(conn, cid, vehicle_id=v["id"])
+        checks = {c["item"]: c for c in rd["checks"]}
+        units.append({
+            "vehicle_id": v["id"], "plate_number": v["plate_number"], "status": v["status"],
+            "variant": rd.get("variant"),
+            "fee": {"assessed": fee.get("assessed"), "status": fee.get("status"),
+                    "manual_quote": fee.get("manual_quote"), "components": fee.get("components"),
+                    "subtotal": fee.get("subtotal"), "discount": fee.get("discount"),
+                    "discount_label": fee.get("discount_label"), "vat_pct": fee.get("vat_pct"),
+                    "vat": fee.get("vat"), "total": fee.get("total"), "currency": fee.get("currency")},
+            "payment_status": fee.get("status"),
+            "cargo_insurance_status": ci.get("status"),
+            "compliance_status": checks.get("Business Provider (KYB)", {}).get("ok"),
+            "marketplace_status": rd["marketplace_status"], "eligible": rd["eligible"],
+            "blockers": rd["reasons"], "checks": rd["checks"],
+        })
+    return {"carrier_id": cid, "units": units,
+            "disclaimer": ("Payment does not guarantee marketplace approval. Marketplace activation "
+                           "requires successful, independent compliance verification.")}
+
+
 def _driver_eligibility(conn, d):
     reasons = []
     status = d["status"]
@@ -484,7 +519,15 @@ def add_vehicle(conn, actor, category_code, plate_number, requested=None, **attr
     core.require(actor, "carrier.portal.fleet.manage")
     cid = resolve_carrier(conn, actor, requested, write=True)
     vid = ob.register_vehicle(conn, _svc(actor, *_SELF_SERVICE["add_vehicle"]), cid, category_code, plate_number, **attrs)
+    # assess the one-time accreditation fee from the canonical category (server-authoritative; best-effort)
+    fee = None
+    try:
+        import accreditation as _acc
+        fee = _acc.assess_fee(conn, _svc(actor, "marketplace.vehicle.manage"), cid, vid)
+    except Exception:  # noqa: BLE001
+        fee = None
     return {"vehicle_id": vid, "status": "DRAFT",
+            "accreditation": ({"status": fee["status"], "total": fee.get("total")} if fee else None),
             "note": "registered as DRAFT — a reviewer must verify + activate before it can accept work"}
 
 

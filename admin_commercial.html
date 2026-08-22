@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>LiftHaul — Provider Commercial Configuration</title>
+<style>
+  :root{--bg:#F6F8F4;--card:#fff;--ink:#12210b;--ink2:#5b6b52;--line:#e2e8dc;--primary:#2E7D32;--primary-d:#245c28;--accent:#F2611A;--accent-d:#d9520f;--good:#16A34A;--warn:#D97706;--bad:#DC2626;--soft:#eef3ea;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0c130a;--card:#131c10;--ink:#e6efe0;--ink2:#93a389;--line:#243020;--soft:#1a2416;}}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  .top{background:var(--primary);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px;position:sticky;top:0;z-index:10}
+  .top b{font-weight:800}.top .tag{background:rgba(255,255,255,.18);padding:3px 10px;border-radius:20px;font-size:12.5px;font-weight:600}
+  .top .who{margin-left:auto;font-size:13px;opacity:.9}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 20px 70px}
+  h1{font-size:19px;margin:2px 0}.sub{color:var(--ink2);font-size:13px;margin-bottom:16px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs button{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;color:var(--ink)}
+  .tabs button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;display:none}
+  .panel.on{display:block}
+  .panel h3{font-size:15px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--ink2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:8px;border-bottom:1px solid var(--line)}
+  td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink2)}
+  label span{display:block;margin-bottom:3px}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+  .btn{background:var(--primary);color:#fff;border:0;border-radius:9px;padding:9px 16px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;margin-top:8px}
+  .btn.acc{background:var(--accent)}.btn.sm{padding:5px 10px;font-size:12px;margin:0}
+  .chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--soft);color:var(--ink2)}
+  .chip.act{background:rgba(46,125,50,.14);color:var(--primary-d)} .chip.man{background:rgba(242,97,26,.16);color:var(--accent-d)}
+  .note{background:var(--soft);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;color:var(--ink2);font-size:12.5px;margin:10px 0}
+  .muted{color:var(--ink2)} .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:40}
+  .hide{display:none} .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+</style>
+</head>
+<body>
+  <div class="top"><b>LiftHaul</b><span class="tag">Administration · Provider Commercial Configuration</span>
+    <span class="who" id="who">—</span></div>
+  <div class="wrap">
+    <h1>Provider Commercial Configuration</h1>
+    <div class="sub">Manage the accreditation fee schedule, variant/category pricing, manual-quote items,
+      volume tiers, VAT, waivers, refunds and historical versions. This screen configures the existing
+      fee engine — fees are always computed server-side from the canonical vehicle classification.</div>
+    <div class="note">Company registration is free. Accreditation is a one-time per-unit fee. <b>Payment
+      never grants marketplace approval</b> — independent compliance decides eligibility.</div>
+
+    <div class="tabs">
+      <button data-t="schedule" class="on">Fee Schedule</button>
+      <button data-t="tiers">Volume Tiers</button>
+      <button data-t="tax">VAT &amp; Rules</button>
+      <button data-t="actions">Waivers &amp; Refunds</button>
+      <button data-t="history">Historical Versions</button>
+    </div>
+
+    <!-- SCHEDULE -->
+    <section id="p-schedule" class="panel on">
+      <h3>Active fee schedule</h3>
+      <div style="overflow-x:auto"><table><thead><tr><th>Key</th><th>Code</th><th class="num">Base fee</th><th>Components</th><th>Manual</th><th class="num">Ver</th></tr></thead>
+        <tbody id="schedRows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table></div>
+      <h3 style="margin-top:18px">Add / update a fee</h3>
+      <div class="grid">
+        <label><span>Key type</span><select id="f-kt"><option value="CATEGORY">Category</option><option value="VARIANT">Variant</option></select></label>
+        <label><span>Code (e.g. truck_6w / tower_crane)</span><input id="f-code" placeholder="truck_6w"></label>
+        <label><span>Base fee (₱)</span><input id="f-fee" type="number" placeholder="799"></label>
+        <label><span>Manual quote</span><select id="f-man"><option value="">No</option><option value="1">Yes</option></select></label>
+        <label><span>Effective from</span><input id="f-eff" type="date"></label>
+      </div>
+      <button class="btn" onclick="setFee()">Save fee (new version)</button>
+      <p class="muted" style="margin-top:6px;font-size:12px">Saving supersedes the current active row and records a new version — historical assessments are never re-priced.</p>
+    </section>
+
+    <!-- TIERS -->
+    <section id="p-tiers" class="panel">
+      <h3>Fleet volume tiers</h3>
+      <div style="overflow-x:auto"><table><thead><tr><th>Band</th><th class="num">Min</th><th class="num">Max</th><th class="num">Discount %</th><th class="num">Fixed</th></tr></thead>
+        <tbody id="tierRows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table></div>
+      <h3 style="margin-top:18px">Add a tier</h3>
+      <div class="grid">
+        <label><span>Min units</span><input id="t-min" type="number" placeholder="10"></label>
+        <label><span>Max units (blank = ∞)</span><input id="t-max" type="number" placeholder="24"></label>
+        <label><span>Discount %</span><input id="t-pct" type="number" placeholder="5"></label>
+        <label><span>Fixed discount ₱</span><input id="t-fix" type="number" placeholder="0"></label>
+        <label><span>Label</span><input id="t-label" placeholder="10–24 units"></label>
+      </div>
+      <button class="btn" onclick="setTier()">Add tier</button>
+    </section>
+
+    <!-- TAX -->
+    <section id="p-tax" class="panel">
+      <h3>VAT &amp; commercial rules</h3>
+      <div class="two">
+        <label><span>VAT / tax percentage</span><input id="c-vat" type="number" placeholder="12"></label>
+        <label><span>Re-accreditation fee % of base (renewal)</span><input id="c-reac" type="number" placeholder="0"></label>
+      </div>
+      <button class="btn" onclick="setConfig()">Save VAT &amp; rules</button>
+      <div class="note" style="margin-top:14px">Refund policy is published in the provider terms. Recommended model: duplicate/error → refundable; accreditation work performed → non-refundable; withdrawal before review → configurable; rejected after completed review → no automatic full refund. Never imply payment guarantees approval.</div>
+    </section>
+
+    <!-- ACTIONS -->
+    <section id="p-actions" class="panel">
+      <h3>Waive / refund an assessment</h3>
+      <p class="muted" style="font-size:12.5px;margin-bottom:8px">Enter the assessment ID (from the provider's Accreditation &amp; Fees view or audit ledger).</p>
+      <div class="two">
+        <div>
+          <label><span>Assessment ID</span><input id="w-id" type="number"></label>
+          <label style="margin-top:8px"><span>Waiver reason</span><input id="w-reason" placeholder="enterprise agreement"></label>
+          <button class="btn" onclick="waive()">Waive fee</button>
+        </div>
+        <div>
+          <label><span>Assessment ID</span><input id="r-id" type="number"></label>
+          <label style="margin-top:8px"><span>Refund reason / reference</span><input id="r-reason" placeholder="duplicate payment"></label>
+          <button class="btn acc" onclick="refundFee()">Refund fee</button>
+        </div>
+      </div>
+      <p id="actMsg" class="muted" style="margin-top:10px"></p>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="p-history" class="panel">
+      <h3>Historical fee-schedule versions</h3>
+      <div style="overflow-x:auto"><table><thead><tr><th>Key</th><th>Code</th><th class="num">Base fee</th><th class="num">Ver</th><th>Status</th><th>Effective</th></tr></thead>
+        <tbody id="histRows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table></div>
+    </section>
+  </div>
+  <div class="toast hide" id="toast"></div>
+
+<script>
+var API=(function(){
+  var base=null,token=null;
+  try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  function req(m,p,b){ if(!base) return Promise.reject(new Error('offline'));
+    var h={'Content-Type':'application/json'}; if(token) h['Authorization']='Bearer '+token;
+    return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:h,body:b?JSON.stringify(b):undefined})
+      .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(d&&d.data!==undefined)d=d.data; if(!r.ok) throw new Error((d&&(d.error||d.detail))||('HTTP '+r.status)); return d;});}); }
+  return {configured:function(){return !!base;},get:function(p){return req('GET',p);},post:function(p,b){return req('POST',p,b);}};
+})();
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide');},3200);}
+function peso(n){ if(n==null) return '—'; return '₱'+Number(n).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function comp(j){ try{var c=typeof j==='string'?JSON.parse(j):j; if(!c) return '—'; return Object.keys(c).map(function(k){return k.replace(/_/g,' ')+': '+peso(c[k]);}).join(' · ');}catch(e){return '—';} }
+
+document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener('click',function(){
+  document.querySelectorAll('.tabs button').forEach(function(x){x.classList.toggle('on',x===b);});
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('on',p.id==='p-'+b.dataset.t);});
+});});
+
+function load(){
+  if(!API.configured()){ $('#schedRows').innerHTML='<tr><td colspan="6" class="muted">Offline — set <code>localStorage.lifthaul_api_base</code> + <code>lifthaul_api_token</code> (sign in via the operator console as an administrator) to manage the schedule.</td></tr>'; return; }
+  API.get('/admin/marketplace/accreditation/schedule').then(function(d){
+    var act=(d.schedule||[]).filter(function(r){return r.status==='ACTIVE';});
+    $('#schedRows').innerHTML=act.length?act.map(function(r){
+      return '<tr><td><span class="chip">'+esc(r.key_type)+'</span></td><td><b>'+esc(r.key_code)+'</b></td>'
+        +'<td class="num">'+(r.manual_quote?'<span class="chip man">MANUAL</span>':peso(r.base_fee))+'</td>'
+        +'<td class="muted" style="font-size:12px">'+(r.manual_quote?'—':esc(comp(r.components)))+'</td>'
+        +'<td>'+(r.manual_quote?'Yes':'No')+'</td><td class="num">'+r.version+'</td></tr>';
+    }).join(''):'<tr><td colspan="6" class="muted">No fees configured.</td></tr>';
+    $('#tierRows').innerHTML=(d.volume_tiers||[]).map(function(t){
+      return '<tr><td>'+esc(t.label||'')+'</td><td class="num">'+t.min_units+'</td><td class="num">'+(t.max_units==null?'∞':t.max_units)+'</td>'
+        +'<td class="num">'+(t.discount_pct||0)+'%</td><td class="num">'+peso(t.fixed_discount||0)+'</td></tr>';
+    }).join('')||'<tr><td colspan="5" class="muted">No tiers.</td></tr>';
+  }).catch(function(e){ $('#schedRows').innerHTML='<tr><td colspan="6" class="muted">Could not load: '+esc(e.message)+'</td></tr>'; });
+  API.get('/admin/marketplace/accreditation/schedule?history=1').then(function(d){
+    $('#histRows').innerHTML=(d.schedule||[]).map(function(r){
+      return '<tr><td>'+esc(r.key_type)+'</td><td>'+esc(r.key_code)+'</td><td class="num">'+(r.manual_quote?'MANUAL':peso(r.base_fee))+'</td>'
+        +'<td class="num">'+r.version+'</td><td><span class="chip '+(r.status==='ACTIVE'?'act':'')+'">'+esc(r.status)+'</span></td>'
+        +'<td class="muted" style="font-size:12px">'+esc((r.effective_from||'').slice(0,10))+(r.effective_to?(' → '+esc((r.effective_to||'').slice(0,10))):'')+'</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="muted">None.</td></tr>';
+  }).catch(function(){});
+  // VAT current value (best-effort)
+  API.get('/admin/config').then(function(d){ var rows=d.config||d.items||d||[]; try{ (Array.isArray(rows)?rows:[]).forEach(function(r){ if((r.key||'')==='accreditation.vat_pct') $('#c-vat').value=r.value; }); }catch(e){} }).catch(function(){});
+}
+function setFee(){
+  var b={key_type:$('#f-kt').value,key_code:$('#f-code').value.trim()};
+  if($('#f-man').value){ b.manual_quote=true; } else { b.base_fee=Number($('#f-fee').value); }
+  if($('#f-eff').value) b.effective_from=$('#f-eff').value;
+  if(!b.key_code){toast('Code required');return;}
+  API.post('/admin/marketplace/accreditation/schedule',b).then(function(){toast('Fee saved (v'+'new'+')');load();}).catch(function(e){toast(e.message);});
+}
+function setTier(){
+  var b={min_units:Number($('#t-min').value),max_units:$('#t-max').value?Number($('#t-max').value):null,discount_pct:Number($('#t-pct').value||0),fixed_discount:Number($('#t-fix').value||0),label:$('#t-label').value.trim()};
+  if(!b.min_units){toast('Min units required');return;}
+  API.post('/admin/marketplace/accreditation/volume-tiers',b).then(function(){toast('Tier added');load();}).catch(function(e){toast(e.message);});
+}
+function setConfig(){
+  var vat=$('#c-vat').value, reac=$('#c-reac').value, done=0, n=(vat!==''?1:0)+(reac!==''?1:0);
+  function fin(){done++;if(done>=n)toast('Saved');}
+  if(vat!=='') API.post('/admin/config',{scope:'platform',scope_ref:'',key:'accreditation.vat_pct',value:String(vat)}).then(fin).catch(function(e){toast(e.message);});
+  if(reac!=='') API.post('/admin/config',{scope:'platform',scope_ref:'',key:'accreditation.reaccreditation_pct',value:String(reac)}).then(fin).catch(function(e){toast(e.message);});
+  if(n===0) toast('Nothing to save');
+}
+function waive(){
+  var id=$('#w-id').value; if(!id){toast('Assessment ID required');return;}
+  API.post('/admin/marketplace/accreditation/'+id+'/waive',{reason:$('#w-reason').value}).then(function(r){$('#actMsg').textContent='Assessment '+id+' → '+r.status;}).catch(function(e){$('#actMsg').textContent=e.message;});
+}
+function refundFee(){
+  var id=$('#r-id').value; if(!id){toast('Assessment ID required');return;}
+  API.post('/admin/marketplace/accreditation/'+id+'/refund',{reason:$('#r-reason').value,refund_ref:$('#r-reason').value}).then(function(r){$('#actMsg').textContent='Assessment '+id+' → '+r.status;}).catch(function(e){$('#actMsg').textContent=e.message;});
+}
+try{ var em=localStorage.getItem('lifthaul_user_email'); if(em) $('#who').textContent=em; }catch(e){}
+load();
+</script>
+</body>
+</html>

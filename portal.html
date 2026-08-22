@@ -28,6 +28,10 @@ h1,h2,h3{line-height:1.16;letter-spacing:-.02em;margin:0}p{margin:0}code{font-fa
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
 .chip.c-good{background:var(--good-bg);color:var(--good)}.chip.c-warn{background:var(--warn-bg);color:var(--warn)}
 .chip.c-crit{background:var(--crit-bg);color:var(--crit)}.chip.c-info{background:var(--info-bg);color:var(--info)}.chip.c-mut{background:var(--surface-3);color:var(--muted)}
+.feetbl{width:100%;max-width:420px;border-collapse:collapse;margin:2px 0 4px}
+.feetbl td{padding:5px 0;font-size:13px;border-bottom:1px solid var(--surface-3)}
+.feetbl td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.feetbl tr.tot td{font-weight:800;border-bottom:none;padding-top:8px;font-size:15px}
 .sp{flex:1}
 .btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;font-family:inherit;font-size:14.5px;font-weight:700;padding:11px 18px;border-radius:var(--radius-sm);border:1.5px solid transparent;background:var(--accent);color:var(--accent-ink);cursor:pointer;transition:.12s}
 .btn:hover{background:var(--accent-2)}.btn.line{background:rgba(255,255,255,.18);border-color:rgba(12,20,6,.28);color:var(--ink)}
@@ -115,7 +119,7 @@ var RGO_API=(function(){
   };
 })();
 
-var TABS=[['dashboard','Dashboard'],['overview','Overview'],['fleet','Fleet'],['drivers','Drivers'],['availability','Availability'],['compliance','Compliance'],
+var TABS=[['dashboard','Dashboard'],['overview','Overview'],['fleet','Fleet'],['accreditation','Accreditation & Fees'],['drivers','Drivers'],['availability','Availability'],['compliance','Compliance'],
           ['invitations','Offers'],['assignments','Assignments'],['trips','Trips'],['finance','Earnings'],
           ['cases','Disputes & Claims'],['notifications','Notifications']];
 var tab='dashboard', live=false;
@@ -143,14 +147,50 @@ function render(){
   var host=$('#body'); host.innerHTML='<div class="panel"><div class="panel-b"><div class="empty">Loading…</div></div></div>';
   var routes={dashboard:'/portal/carrier/dashboard',overview:'/portal/carrier/overview',fleet:'/portal/carrier/fleet',drivers:'/portal/carrier/drivers',
     availability:'/portal/carrier/availability',compliance:'/portal/carrier/compliance',invitations:'/portal/carrier/invitations',assignments:'/portal/carrier/assignments',
-    trips:'/portal/carrier/trips',finance:'/portal/carrier/finance',cases:'/portal/carrier/cases',notifications:'/portal/carrier/notifications'};
+    trips:'/portal/carrier/trips',finance:'/portal/carrier/finance',cases:'/portal/carrier/cases',notifications:'/portal/carrier/notifications',
+    accreditation:'/portal/carrier/accreditation'};
   RGO_API.get(routes[tab]).then(function(d){ host.innerHTML=({dashboard:vDashboard,overview:vOverview,fleet:vFleet,drivers:vDrivers,availability:vAvailability,compliance:vCompliance,
-    invitations:vOffers,assignments:vAssignments,trips:vTrips,finance:vFinance,cases:vCases,notifications:vNotifications})[tab](d); })
+    invitations:vOffers,assignments:vAssignments,trips:vTrips,finance:vFinance,cases:vCases,notifications:vNotifications,accreditation:vAccreditation})[tab](d); })
     .catch(function(err){ host.innerHTML='<div class="note" style="border-left-color:var(--crit)"><span>⚠️</span><div>'+esc(err.message)+'</div></div>'; });
 }
 
 function eligChip(ok){return '<span class="chip '+(ok?'c-good':'c-crit')+'">'+(ok?'Eligible':'Blocked')+'</span>';}
 function yn(ok){return '<span class="chip '+(ok?'c-good':'c-crit')+'">'+(ok?'✓':'✗')+'</span>';}
+function peso(n,cur){ if(n==null) return '—'; return (cur==='PHP'||!cur?'₱':cur+' ')+Number(n).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function payChip(s){ var m={PAID:'c-good',WAIVED:'c-good',ASSESSED:'c-warn',MANUAL_QUOTE:'c-warn',REFUNDED:'c-crit'}; return '<span class="chip '+(m[s]||'c-crit')+'">'+esc(s||'Not assessed')+'</span>'; }
+function ciChip(s){ var ok=(s==='VERIFIED'||s==='NOT_REQUIRED'||s==='EXPIRING'); var warn=(s==='SUBMITTED'||s==='UNDER_REVIEW'||s==='EXPIRING'); return '<span class="chip '+(ok?'c-good':(warn?'c-warn':'c-crit'))+'">'+esc(s||'—')+'</span>'; }
+
+function vAccreditation(d){
+  $('#whoami').textContent && 0;
+  var units=d.units||[];
+  var head='<div class="note" style="border-left-color:var(--accent)"><span>🧾</span><div><b>Accreditation &amp; Fees.</b> '+esc(d.disclaimer||'')+'</div></div>';
+  if(!units.length) return head+'<div class="panel"><div class="panel-b"><div class="empty">No vehicles yet. Register a unit under the Fleet tab to see its accreditation fee.</div></div></div>';
+  var cards=units.map(function(u){
+    var f=u.fee||{}, comp=f.components||null;
+    var feeBody;
+    if(f.manual_quote){ feeBody='<div class="r"><b>Manual accreditation quote</b> — our team prepares a custom quote for this specialized unit.</div>'; }
+    else if(!f.assessed && f.total==null && !comp){ feeBody='<div class="r muted">Not assessed yet.</div>'; }
+    else {
+      var lines='';
+      if(comp){ lines+=row('Vehicle Accreditation',peso(comp.vehicle_accreditation,f.currency))
+        +row('Compliance Administration',peso(comp.compliance_administration,f.currency))
+        +row('Platform Activation',peso(comp.platform_activation,f.currency)); }
+      if(f.discount>0) lines+=row('Discount'+(f.discount_label?' ('+esc(f.discount_label)+')':''),'-'+peso(f.discount,f.currency));
+      lines+=row('VAT'+(f.vat_pct?' ('+f.vat_pct+'%)':''),peso(f.vat,f.currency));
+      feeBody='<table class="feetbl">'+lines+'<tr class="tot"><td>Total due</td><td>'+peso(f.total,f.currency)+'</td></tr></table>';
+    }
+    var blockers=(u.blockers&&u.blockers.length)?('<div class="r" style="margin-top:6px"><b>Blockers:</b> '+u.blockers.map(function(b){return '<span class="chip c-crit" style="margin:2px">'+esc(b)+'</span>';}).join(' ')+'</div>'):'<div class="r c-good" style="margin-top:6px">No outstanding blockers.</div>';
+    return '<div class="panel"><div class="panel-h"><h3>'+esc(u.plate_number||('Unit #'+u.vehicle_id))+' — '+esc(u.variant||'')+'</h3>'
+      +'<div>'+payChip(u.payment_status)+' '+eligChip(u.eligible)+'</div></div>'
+      +'<div class="panel-b"><div class="rows">'+feeBody
+      +'<div class="r" style="margin-top:10px">Payment: '+payChip(u.payment_status)
+      +' &nbsp; Cargo Insurance: '+ciChip(u.cargo_insurance_status)
+      +' &nbsp; Marketplace: <b>'+esc(u.marketplace_status)+'</b></div>'
+      +blockers+'</div></div></div>';
+  }).join('');
+  return head+cards;
+}
+function row(k,v){return '<tr><td>'+esc(k)+'</td><td>'+v+'</td></tr>';}
 
 function vDashboard(d){
   $('#whoami').textContent=(d.legal_name||'Carrier')+' · #'+d.carrier_id;

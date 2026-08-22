@@ -2171,6 +2171,7 @@ def _carrier_portal_routes():
     def cas(a, b, p):       return cp.cases(_conn, a)
     def notif(a, b, p):     return cp.notifications(_conn, a)
     def perf(a, b, p):      return cp.performance(_conn, a)
+    def accr(a, b, p):      return cp.accreditation(_conn, a)
 
     def veh_add(a, b, p):   return cp.add_vehicle(_conn, a, b["category_code"], b["plate_number"],
                                                   **{k: v for k, v in b.items() if k not in ("category_code", "plate_number")})
@@ -2211,6 +2212,7 @@ def _carrier_portal_routes():
         ("GET", "/portal/carrier/cases"): cas,
         ("GET", "/portal/carrier/notifications"): notif,
         ("GET", "/portal/carrier/performance"): perf,
+        ("GET", "/portal/carrier/accreditation"): accr,
         ("POST", "/portal/carrier/vehicles"): veh_add,
         ("POST", "/portal/carrier/drivers"): drv_add,
         ("POST", "/portal/carrier/vehicles/:id/maintenance"): veh_maint,

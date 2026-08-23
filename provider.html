@@ -179,9 +179,12 @@ ul.road li .n{width:22px;height:22px;border-radius:50%;background:var(--surface-
 </div>
 <div id="toast" class="toast hide"></div>
 
+<script src="config.js"></script>
 <script>
 var API=(function(){
-  var base=null; try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); }catch(e){}
+  // Production config (config.js -> window.RGO_CONFIG.apiBase) wins; localStorage is a dev/demo override.
+  var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null;
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); }catch(e){}
   function req(m,p,b){ if(!base) return Promise.reject(new Error('offline'));
     return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined})
       .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(d&&d.data!==undefined)d=d.data; if(!r.ok) throw new Error((d&&(d.error||d.detail))||('HTTP '+r.status)); return d;});}); }

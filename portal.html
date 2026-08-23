@@ -99,10 +99,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="toast" class="toast hide"></div>
 
+<script src="config.js"></script>
 <script>
 var RGO_API=(function(){
-  var base=null, token=null;
-  try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  // Production config (config.js -> window.RGO_CONFIG.apiBase) wins; localStorage is a dev/demo override.
+  var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null, token=null;
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
   function req(method,path,body){
     if(!base) return Promise.reject(new Error('offline'));
     var h={'Content-Type':'application/json'};

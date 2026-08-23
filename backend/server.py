@@ -73,10 +73,19 @@ _store = pdfgen.MemStore()                           # swap for S3/local disk in
 
 def _seed_users():
     try:
-        core.create_user(_conn, "admin@rgo.demo", "demo1234", "admin", "Admin")
-        core.create_user(_conn, "est@rgo.demo", "demo1234", "estimator", "Estimator")
-        core.create_user(_conn, "appr@rgo.demo", "demo1234", "approver", "Approver")
-        core.create_user(_conn, "fin@rgo.demo", "demo1234", "finance", "Finance")
+        # LiftHaul-branded demo accounts (primary). The legacy @rgo.demo aliases are kept below so
+        # existing go-live scripts/CI that reference them keep working.
+        for em, role, name in (("admin@lifthaul.demo", "admin", "Admin"),
+                               ("finance@lifthaul.demo", "finance", "Finance"),
+                               ("ops@lifthaul.demo", "operations_manager", "Operations"),
+                               ("admin@rgo.demo", "admin", "Admin"),
+                               ("est@rgo.demo", "estimator", "Estimator"),
+                               ("appr@rgo.demo", "approver", "Approver"),
+                               ("fin@rgo.demo", "finance", "Finance")):
+            try:
+                core.create_user(_conn, em, "demo1234", role, name)
+            except core.ConflictError:
+                pass
     except core.ConflictError:
         pass
 

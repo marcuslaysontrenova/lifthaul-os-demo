@@ -66,7 +66,7 @@
     <h1>LiftHaul&nbsp;OS <span style="color:var(--accent)">Administration</span></h1>
     <p>Enterprise Administration Portal · Platform 1</p>
     <label>Backend URL</label><input id="api" placeholder="http://localhost:8787">
-    <label>Email</label><input id="email" placeholder="admin@rgo.demo">
+    <label>Email</label><input id="email" placeholder="admin@lifthaul.demo">
     <label>Password</label><input id="pw" type="password" placeholder="••••••••">
     <label>MFA code <span style="text-transform:none;color:#9aa">(if enrolled)</span></label><input id="mfa" placeholder="optional">
     <div style="margin-top:16px"><button class="btn" onclick="doLogin()">Sign in →</button></div>
@@ -1372,7 +1372,7 @@ function dlgUnit(kind){ openDlg('edit','New '+kind.replace('_',' '),'Creates a t
   field('u_code','Code','MNL')+field('u_name','Name','Manila Branch')+field('u_parent','Parent id (optional)',''),
   ()=>api('POST','/admin/org/units',{kind,code:val('u_code'),name:val('u_name'),parent_id:val('u_parent')?parseInt(val('u_parent')):undefined})); }
 function dlgUser(){ openDlg('edit','Invite user','New user is created ACTIVE and assigned the matching system role.',
-  field('nu_email','Email','ops@rgo.demo')+field('nu_name','Name','')+field('nu_pw','Temp password','Min 10, upper+lower+digit')+
+  field('nu_email','Email','ops@lifthaul.demo')+field('nu_name','Name','')+field('nu_pw','Temp password','Min 10, upper+lower+digit')+
   `<label>Role</label><select id="nu_role"><option>estimator</option><option>approver</option><option>finance</option><option>dispatcher</option><option>operations_manager</option></select>`,
   ()=>api('POST','/admin/users',{email:val('nu_email'),name:val('nu_name'),password:val('nu_pw'),role:val('nu_role')})); }
 function dlgRole(){ openDlg('edit','New role','Grants use the wildcard grammar (e.g. quotation.*).',

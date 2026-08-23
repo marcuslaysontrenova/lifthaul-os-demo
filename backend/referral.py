@@ -642,7 +642,23 @@ def _notify(conn, event, rid):
 def referrer_dashboard(conn, actor, referrer_type, referrer_ref):
     """A referrer's own view — counts + reward totals only; never the referred company's confidential data."""
     core.require(actor, P_VIEW)
-    rt, rr = str(referrer_type).upper(), str(referrer_ref)
+    return _dashboard(conn, str(referrer_type).upper(), str(referrer_ref))
+
+
+def dashboard_by_code(conn, code):
+    """Privacy-safe referrer self-service dashboard authorised by the referral code itself (a bearer
+    handle the referrer holds, like a booking tracking token). Lets shippers/customers WITHOUT an account
+    see their own referral rewards. Returns only the referrer's own aggregates + privacy-safe labels."""
+    cr = conn.execute("SELECT referrer_type,referrer_ref,status FROM referral_codes WHERE code=?",
+                      (str(code or ""),)).fetchone()
+    if not cr or cr["status"] != "ACTIVE":
+        return {"valid": False, "reason": "Referral code not valid"}
+    d = _dashboard(conn, cr["referrer_type"], str(cr["referrer_ref"]))
+    d["valid"] = True
+    return d
+
+
+def _dashboard(conn, rt, rr):
     codes = [dict(r) for r in conn.execute("SELECT code,status,campaign_id FROM referral_codes WHERE "
              "referrer_type=? AND referrer_ref=? AND status='ACTIVE'", (rt, rr)).fetchall()]
     rows = conn.execute("SELECT status,referred_label,reward_amount,currency FROM referrals WHERE "

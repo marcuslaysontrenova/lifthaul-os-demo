@@ -2388,6 +2388,7 @@ def _referral_routes():
     def r_list(a, b, p):  return rf.admin_list(_conn, a, status=b.get("status"), campaign_id=b.get("campaign_id"))
     def r_board(a, b, p): return rf.leaderboard(_conn, a, limit=int(b.get("limit", 10)))
     def r_validate(a, b, p): return rf.validate_code(_conn, (b or {}).get("code") or p.get("code"))
+    def r_dash(a, b, p):     return rf.dashboard_by_code(_conn, (b or {}).get("code") or p.get("code"))
 
     return {
         ("POST", "/admin/marketplace/referral/campaigns"): c_new,
@@ -2407,6 +2408,7 @@ def _referral_routes():
         ("GET", "/admin/marketplace/referrals"): r_list,
         ("GET", "/admin/marketplace/referral/leaderboard"): r_board,
         ("POST", "/public/referral/validate"): r_validate,
+        ("POST", "/public/referral/dashboard"): r_dash,
     }
 
 

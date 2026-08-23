@@ -350,6 +350,19 @@ def create_shipper_application(conn, actor, applicant_type, legal_name, **attrs)
     tenant.stamp(conn, actor, "mkt_shippers", sid)
     core.audit(conn, actor, "MKT_SHIPPER_CREATED", "mkt_shippers", sid, None, {"legal_name": legal_name})
     conn.commit()
+    # referral attribution through the canonical shipper-registration path (server = source of truth;
+    # SHIPPER referred entity). Best-effort: a bad/expired code never blocks the registration.
+    ref_code = str(attrs.get("referral_code", "") or "").strip()
+    if ref_code:
+        try:
+            import referral as _rf
+            if _rf.validate_code(conn, ref_code).get("valid"):
+                _svc = {"id": actor.get("id"), "role": "system", "perms": {"*"},
+                        "tenant_id": actor.get("tenant_id")}
+                _rf.attribute(conn, _svc, ref_code, "SHIPPER", sid, referred_label=legal_name,
+                              source="SHIPPER_REGISTRATION")
+        except Exception:  # noqa: BLE001
+            pass
     return sid
 
 

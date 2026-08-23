@@ -50,6 +50,24 @@ refund reversal, self/duplicate/circular fraud + weak-signal-not-accused, budget
 **single-level red-team (A earns nothing from C) + no-downline-column**, tenant isolation, audit.
 Full regression green.
 
+## Pre-go-live closure (2026-08-23) — verified
+
+| Item | Status |
+|---|---|
+| Provider referral attribution | PASS (pre-existing) |
+| Shipper/customer referral attribution | PASS — `create_shipper_application(referral_code=…)`, server-side, immutable, bad code never blocks |
+| Provider Referral Portal | PASS |
+| Shipper/Customer Referral Portal | PASS — `track.html` code-bearer view + public `POST /public/referral/dashboard` (privacy-safe, no account needed) |
+| Referral Admin UI | PASS |
+| Single-Level Red-Team (A earns nothing from C) | PASS |
+| REGISTERED ≠ EARNED (shipper) | PASS |
+| Program activation flag OFF by default | PASS |
+| Surcharge weekday/date-window regression | PASS — `test_weekday_and_date_window` + 14 surcharge tests green; **no code change** |
+
+No shipper self-service *account/portal* exists (no `shipper_principals`), so the shipper referral view
+is delivered on the canonical customer-facing page (`track.html`) authorised by the referral code itself
+(a bearer handle, like a booking tracking token) — reuse-only, no new customer portal or model.
+
 ## Activation gate
 `referral.program.enabled=false` by default. Even a fully qualified referral cannot EARN until the flag is
 turned on — deliberate Legal/Finance activation. Marketing copy guard: single-level, no MLM/downline

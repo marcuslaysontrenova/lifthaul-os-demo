@@ -101,6 +101,51 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
 
 <div class="wrap"><div class="result" id="result"></div></div>
 
+<!-- Referral Rewards (customer/shipper self-service by referral code) -->
+<div class="wrap"><section id="refCard" style="margin:8px 0 26px;background:var(--card,#fff);border:1px solid var(--line,#e2e8dc);border-radius:14px;padding:18px">
+  <div class="eyebrow" style="opacity:.75">Referral Rewards</div>
+  <h2 style="font-size:19px;margin:2px 0 4px">Track your referral rewards</h2>
+  <p class="muted" style="font-size:13px;margin-bottom:10px">Refer a qualified business to LiftHaul. You earn a reward only after that business completes the qualifying commercial activity — registration alone earns nothing. Enter your referral code to see your rewards.</p>
+  <form id="refForm" style="display:flex;gap:8px;flex-wrap:wrap;max-width:520px">
+    <input id="refInput" placeholder="Your referral code (e.g. LH-…)" autocomplete="off" spellcheck="false" style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--line,#e2e8dc);border-radius:9px;font:inherit">
+    <button class="btn" type="submit">View rewards →</button>
+  </form>
+  <div id="refErr" class="err" style="margin-top:8px"></div>
+  <div id="refOut" style="margin-top:12px"></div>
+</section></div>
+
+<script>
+(function(){
+  var $=function(s){return document.querySelector(s);};
+  function esc(s){return String(s==null?"":s).replace(/[<>&"]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];});}
+  function peso(n){return "₱"+Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});}
+  var base=null;try{base=localStorage.getItem("lifthaul_api_base");}catch(_){}
+  var pre="";try{pre=(new URLSearchParams(location.search).get("ref")||"").trim();}catch(_){}
+  if(pre) $("#refInput").value=pre;
+  function tile(n,k){return '<div style="background:var(--soft,#eef3ea);border-radius:10px;padding:12px 14px;min-width:110px"><div style="font-size:22px;font-weight:800">'+esc(n)+'</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em">'+esc(k)+'</div></div>';}
+  function stChip(s){var g=["QUALIFIED","EARNED","APPROVED","PAYABLE","PAID"];var col=g.indexOf(s)>=0?"#16A34A":(s==="REVERSED"||s==="REJECTED"?"#DC2626":(s==="REVIEW_REQUIRED"?"#D97706":"#6b7a62"));return '<span style="font-size:11px;font-weight:700;color:'+col+'">'+esc(s)+'</span>';}
+  function load(code){
+    $("#refErr").textContent=""; $("#refOut").innerHTML='<span class="muted">Loading…</span>';
+    if(!base){ $("#refOut").innerHTML='<span class="muted">Connect a hosted LiftHaul API (localStorage.lifthaul_api_base) to view your real referral rewards.</span>'; return; }
+    fetch(base.replace(/\/+$/,"")+"/public/referral/dashboard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:code})})
+      .then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{}; if(d&&d.data!==undefined)d=d.data; return d;});})
+      .then(function(d){
+        if(!d||d.valid===false){ $("#refOut").innerHTML=""; $("#refErr").textContent="Referral code not valid."; return; }
+        var share=(location.origin||"https://lifthaul")+(d.share_link||("/register?ref="+code));
+        var tiles='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">'
+          +tile(d.referred_businesses,"Referred")+tile(d.qualified,"Qualified")+tile(d.pending_review,"In review")
+          +tile(peso(d.total_earned),"Earned")+tile(peso(d.payable),"Payable")+tile(peso(d.paid),"Paid")+'</div>';
+        var rows=(d.referrals||[]).map(function(x){return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--line,#eee)">'+esc(x.business)+'</td><td style="padding:6px 8px;border-bottom:1px solid var(--line,#eee)">'+stChip(x.status)+'</td></tr>';}).join("")||'<tr><td colspan="2" class="muted" style="padding:6px 8px">No referred businesses yet.</td></tr>';
+        $("#refOut").innerHTML='<div class="muted" style="font-size:12px">Share link</div><div style="font-family:monospace;font-size:13px;word-break:break-all;margin-bottom:6px">'+esc(share)+'</div>'
+          +tiles+'<table style="width:100%;border-collapse:collapse;font-size:13px;max-width:520px"><thead><tr><th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--muted,#6b7a62);text-transform:uppercase">Business</th><th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--muted,#6b7a62);text-transform:uppercase">Status</th></tr></thead><tbody>'+rows+'</tbody></table>'
+          +'<p class="muted" style="font-size:12px;margin-top:8px">A referral reward is earned only after the referred business completes the applicable qualifying commercial activity. Only business names and statuses are shown — never a referred company\'s confidential data.</p>';
+      }).catch(function(){ $("#refOut").innerHTML=""; $("#refErr").textContent="Could not load referral rewards."; });
+  }
+  $("#refForm").addEventListener("submit",function(e){e.preventDefault();var c=$("#refInput").value.trim();if(c)load(c);});
+  if(pre) load(pre);
+})();
+</script>
+
 <footer><div class="in">
   <span>© <span id="yr"></span> LiftHaul Enterprise · Powered by LiftHaul · Developed by TrenovaTech.ai</span>
   <span>Demo prototype · Protected Payment live funds OFF</span>

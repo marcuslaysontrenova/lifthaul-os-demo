@@ -259,6 +259,85 @@ class SingleLevelRedTeam(Base):
             self.assertNotIn(banned, cols)
 
 
+class ShipperReferral(unittest.TestCase):
+    """Shipper/customer referral attribution through the canonical create_shipper_application path,
+    plus the privacy-safe code-bearer dashboard for shippers without an account."""
+
+    def setUp(self):
+        self.c = db.connect(":memory:")
+        ap.set_config(self.c, "platform", "", "referral.program.enabled", "true", actor=SUP)
+        self.camp = rf.create_campaign(self.c, SUP, "Shipper", "FIRST_SETTLED_MARKETPLACE_JOB",
+                                       reward_type="FIXED", reward_amount=100, validation_days=0,
+                                       status="ACTIVE")
+        self.code = rf.issue_code(self.c, SUP, "SHIPPER", 50, campaign_id=self.camp["id"],
+                                  referrer_label="Ref Shipper")["code"]
+
+    def _shipper(self, name, reg, code=None):
+        return mo.create_shipper_application(self.c, SUP, "CORPORATION", name, registration_type="SEC",
+                                             registration_number=reg, registered_address="Makati",
+                                             referral_code=code)
+
+    def _settle(self, sid):
+        cols = {r[1] for r in self.c.execute("PRAGMA table_info(mkt_bookings)").fetchall()}
+        base = {"shipper_id": sid, "status": "SETTLED", "cargo_code": "general", "origin_zone": "MM",
+                "dest_zone": "CAV", "requested_vehicle_category": "truck_6w", "service_class": "STANDARD"}
+        use = {k: v for k, v in base.items() if k in cols}
+        self.c.execute("INSERT INTO mkt_bookings(" + ",".join(use) + ") VALUES(" +
+                       ",".join("?" for _ in use) + ")", tuple(use.values()))
+        self.c.commit()
+
+    def test_valid_code_attributes_shipper(self):
+        sid = self._shipper("Referred Shipper Inc", "SH1", code=self.code)
+        row = self.c.execute("SELECT referred_type,referred_ref,status FROM referrals").fetchone()
+        self.assertEqual(row["referred_type"], "SHIPPER")
+        self.assertEqual(row["referred_ref"], str(sid))
+        self.assertEqual(row["status"], "REGISTERED")     # registered != earned
+
+    def test_invalid_code_never_blocks_shipper_registration(self):
+        sid = self._shipper("NoRef Shipper", "SH2", code="LH-BAD-000000")
+        self.assertTrue(sid)
+        self.assertEqual(self.c.execute("SELECT COUNT(*) n FROM referrals").fetchone()["n"], 0)
+
+    def test_attribution_immutable(self):
+        self._shipper("Referred Shipper Inc", "SH1", code=self.code)
+        rid = self.c.execute("SELECT id FROM referrals LIMIT 1").fetchone()["id"]
+        sid = self.c.execute("SELECT referred_ref FROM referrals WHERE id=?", (rid,)).fetchone()["referred_ref"]
+        code2 = rf.issue_code(self.c, SUP, "SHIPPER", 99, referrer_label="Other")["code"]
+        with self.assertRaises(core.ConflictError):
+            rf.attribute(self.c, SUP, code2, "SHIPPER", int(sid))   # no silent reassignment
+
+    def test_registered_does_not_earn_until_settled(self):
+        sid = self._shipper("Referred Shipper Inc", "SH1", code=self.code)
+        rid = self.c.execute("SELECT id FROM referrals WHERE referred_ref=?", (str(sid),)).fetchone()["id"]
+        with self.assertRaises(core.ConflictError):
+            rf.qualify(self.c, SUP, rid)                   # no settled booking yet
+        self._settle(sid)
+        self.assertEqual(rf.qualify(self.c, SUP, rid)["status"], "EARNED")
+
+    def test_program_off_blocks_shipper_earning(self):
+        ap.set_config(self.c, "platform", "", "referral.program.enabled", "false", actor=SUP)
+        sid = self._shipper("Referred Shipper Inc", "SH1", code=self.code)
+        self._settle(sid)
+        rid = self.c.execute("SELECT id FROM referrals WHERE referred_ref=?", (str(sid),)).fetchone()["id"]
+        with self.assertRaises(core.ConflictError):
+            rf.qualify(self.c, SUP, rid)
+
+    def test_dashboard_by_code_privacy_safe(self):
+        sid = self._shipper("Referred Shipper Inc", "SH1", code=self.code)
+        self._settle(sid)
+        rid = self.c.execute("SELECT id FROM referrals WHERE referred_ref=?", (str(sid),)).fetchone()["id"]
+        rf.qualify(self.c, SUP, rid)
+        d = rf.dashboard_by_code(self.c, self.code)        # no auth — code is the bearer
+        self.assertTrue(d["valid"])
+        self.assertEqual(d["referred_businesses"], 1)
+        self.assertEqual(d["total_earned"], 100.0)
+        # privacy-safe: only business label + status, never TIN/registration/financials
+        item = d["referrals"][0]
+        self.assertEqual(set(item), {"business", "status"})
+        # an invalid/unknown code reveals nothing
+        self.assertFalse(rf.dashboard_by_code(self.c, "LH-NOPE-000000")["valid"])
+
+
 class TenantAndAudit(Base):
     def test_tenant_isolation(self):
         owner = {"id": 5, "role": "ops", "perms": {"*"}, "tenant_id": 101}

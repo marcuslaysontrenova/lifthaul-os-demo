@@ -220,7 +220,7 @@ footer a:hover{color:#fff}
     </div>
     <div class="sp"></div>
     <a class="btn line sm hidesm" href="book.html">Book a delivery</a>
-    <button class="btn sm" data-scroll="#register">Register free</button>
+    <a class="btn sm" href="provider.html">Register free</a>
     <button class="navtoggle" id="navtoggle" aria-label="Menu" aria-expanded="false">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
@@ -235,7 +235,7 @@ footer a:hover{color:#fff}
       <h1>Drive, haul and <span class="hl">lift</span> — with a network that keeps you moving.</h1>
       <p class="lead">LiftHaul connects drivers, owner-operators, truckers and heavy-equipment operators to real jobs — with document verification, LTFRB-aware compliance, and payments protected until the work is done.</p>
       <div class="cta">
-        <button class="btn lg" data-scroll="#register">Register as a partner →</button>
+        <a class="btn lg" href="provider.html">Register as a partner →</a>
         <a class="btn line lg" href="book.html">Book a delivery →</a>
       </div>
       <div class="pillrow">
@@ -307,7 +307,7 @@ footer a:hover{color:#fff}
         </svg>
       </div>
       <p class="mapcap muted">Luzon · Visayas · Mindanao — one verified network</p>
-      <button class="btn accent" style="width:100%;margin-top:14px" data-scroll="#register">Start your registration →</button>
+      <a class="btn accent" style="width:100%;margin-top:14px" href="provider.html">Start your registration →</a>
     </aside>
   </div>
 </header>
@@ -325,7 +325,7 @@ footer a:hover{color:#fff}
         <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="3.2"/><path d="M5 21c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></div>
         <h3>Driver</h3>
         <p>You hold a professional licence and want steady driving jobs on trucks and trailers you don't own.</p>
-        <button class="go" data-scroll="#register" data-role="driver">Register as a driver →</button>
+        <button class="go" onclick="location.href='provider.html?type=DRIVER'">Register as a driver →</button>
       </article>
       <article class="rolecard acc">
         <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16V7h11v9M14 10h4l3 3v3M3 16h18"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></div>
@@ -366,121 +366,154 @@ footer a:hover{color:#fff}
   </div>
 </section>
 
-<!-- REGISTRATION PORTAL -->
+<!-- JOIN THE NETWORK -->
 <section id="register">
+  <style>
+    #register .fleet-wrap{margin-top:24px}
+    #register .fleet-stage{position:relative;overflow:hidden;height:150px;
+      -webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);
+              mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
+    #register .fleet-ground{position:absolute;left:0;right:0;bottom:24px;height:2px;
+      background:linear-gradient(90deg,transparent,rgba(95,185,42,.4) 12%,rgba(95,185,42,.4) 88%,transparent)}
+    #register .fleet-ground:after{content:"";position:absolute;left:0;right:0;top:7px;height:2px;
+      background:repeating-linear-gradient(90deg,rgba(95,185,42,.5) 0 22px,transparent 22px 56px);
+      animation:lhdash 1s linear infinite}
+    @keyframes lhdash{to{background-position:-56px 0}}
+    #register .fleet-belt{position:absolute;bottom:18px;left:0;display:flex;width:max-content;
+      animation:lhroll 36s linear infinite}
+    #register .fleet-belt:hover{animation-play-state:paused}
+    #register .fleet-group{display:flex;align-items:flex-end;gap:58px;padding-right:58px}
+    @keyframes lhroll{to{transform:translateX(-50%)}}
+    #register .veh{height:66px;width:auto;display:block;filter:drop-shadow(0 7px 9px rgba(16,22,10,.16))}
+    #register .fleet-belt .wheel{transform-box:fill-box;transform-origin:50% 50%;
+      animation:lhspin 1.25s linear infinite}
+    @keyframes lhspin{to{transform:rotate(-360deg)}}
+    #register .fleet-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+    #register .fleet-types{text-align:center;margin-top:12px;font-size:13.5px;letter-spacing:.01em}
+    @media (prefers-reduced-motion:reduce){
+      #register .fleet-belt,#register .fleet-ground:after,#register .fleet-belt .wheel{animation:none}
+    }
+  </style>
   <div class="wrap">
     <div class="sec-h">
-      <div class="eyebrow">Registration portal</div>
-      <h2>Join the network — it's free.</h2>
-      <p>Tell us who you are. We tailor the form to your role, then our team reviews and reaches out. Registering places no obligation and creates no charge.</p>
+      <div class="eyebrow">Join the network — it's free</div>
+      <h2>The fleet that moves the Philippines — powered by operators like you.</h2>
+      <p>From professional drivers to fleet operators and crane companies, LiftHaul hosts a verified network of heavy-haul and lifting units. Register your company to get verified and start receiving matched work — no obligation, no charge to join.</p>
     </div>
 
-    <div class="portal">
-      <div class="rtabs" role="tablist" aria-label="Choose your role">
-        <button class="rtab on" role="tab" data-tab="driver" aria-selected="true">
-          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="3.2"/><path d="M5 21c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></span>Driver</button>
-        <button class="rtab" role="tab" data-tab="individual" aria-selected="false">
-          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16V7h11v9M14 10h4l3 3v3M3 16h18"/></svg></span>Owner-Operator</button>
-        <button class="rtab" role="tab" data-tab="trucker" aria-selected="false">
-          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="8" width="13" height="9" rx="1"/><path d="M15 11h4l3 3v3h-7z"/></svg></span>Trucker / Fleet</button>
-        <button class="rtab" role="tab" data-tab="equipment" aria-selected="false">
-          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V6l10 3M4 6l10 3"/><rect x="10" y="13" width="8" height="6" rx="1"/></svg></span>Equipment Op</button>
-        <button class="rtab" role="tab" data-tab="shipper" aria-selected="false">
-          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M3 11h18"/></svg></span>Book a haul</button>
-      </div>
+    <div class="fleet-wrap">
+      <!-- shared wheel symbol (spins in place) -->
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <g id="lh-wheel">
+          <circle r="9" fill="#0e1307"/><circle r="3.4" fill="#c7d4b6"/>
+          <path d="M0 -8V8M-8 0H8M-5.6 -5.6L5.6 5.6M5.6 -5.6L-5.6 5.6" stroke="#39491f" stroke-width="1.2"/>
+        </g>
+      </defs></svg>
 
-      <div class="pbody">
-        <div class="roledesc" id="roledesc"></div>
+      <div class="fleet-stage" role="img" aria-label="A moving line of the vehicles LiftHaul hosts — prime movers and trailers, wing vans, mobile cranes, lowbed heavy-haul rigs and forklifts.">
+        <div class="fleet-ground"></div>
+        <div class="fleet-belt">
+          <div class="fleet-group">
 
-        <form id="regform" novalidate>
-          <div class="grid2">
-            <!-- COMMON -->
-            <div class="field"><label>Full name <span class="req">*</span></label><input name="full_name" autocomplete="name" required><div class="err">Please enter your name.</div></div>
-            <div class="field only company"><label>Company / business name <span class="req">*</span></label><input name="company"><div class="err">Company name is required for this role.</div></div>
-            <div class="field"><label>Email <span class="req">*</span></label><input name="email" type="email" autocomplete="email" required><div class="err">Enter a valid email.</div></div>
-            <div class="field"><label>Mobile number <span class="req">*</span></label><input name="phone" inputmode="tel" placeholder="09xx xxx xxxx" required><div class="err">Enter a valid PH mobile number.</div></div>
-            <div class="field"><label>Island group <span class="req">*</span></label>
-              <select name="island" required><option value="">Select…</option><option>Luzon</option><option>Visayas</option><option>Mindanao</option></select><div class="err">Select your base island group.</div></div>
-            <div class="field"><label>Province / city base <span class="req">*</span></label><input name="base" placeholder="e.g. Cavite" required><div class="err">Tell us your base.</div></div>
+            <!-- Prime mover + container trailer -->
+            <svg class="veh" viewBox="0 0 226 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="42" y="49" width="176" height="4" rx="2" fill="#0e1307"/>
+              <rect x="62" y="12" width="150" height="37" rx="2" fill="#19210f"/>
+              <rect x="62" y="12" width="150" height="5" fill="#F2611A"/>
+              <g stroke="#2c3a18" stroke-width="1.3"><path d="M78 18v30M94 18v30M110 18v30M126 18v30M142 18v30M158 18v30M174 18v30M190 18v30"/></g>
+              <path d="M6 51V30a3 3 0 0 1 1-2l7-8a3 3 0 0 1 2-1h20a3 3 0 0 1 3 3v29z" fill="#19210f"/>
+              <path d="M13 23h18a2 2 0 0 1 2 2v8H9v-4z" fill="#8fae74"/>
+              <use class="wheel" href="#lh-wheel" x="24" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="60" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="78" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="176" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="194" y="58"/>
+            </svg>
 
-            <!-- DRIVER / INDIVIDUAL: licence -->
-            <div class="field only lic"><label>Professional licence no. <span class="req">*</span></label><input name="licence_no"><div class="err">Licence number is required.</div></div>
-            <div class="field only lic"><label>Restriction / DL codes</label><input name="licence_codes" placeholder="e.g. B, C, CE"><div class="hint">Codes you're licensed to drive.</div></div>
-            <div class="field only lic"><label>Licence expiry <span class="req">*</span></label><input name="licence_expiry" type="date"><div class="err">Licence expiry is required.</div></div>
-            <div class="field only lic"><label>Years of experience</label><input name="experience" inputmode="numeric" placeholder="e.g. 6"></div>
+            <!-- Wing van (10-wheeler) -->
+            <svg class="veh" viewBox="0 0 196 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="8" y="49" width="180" height="4" rx="2" fill="#0e1307"/>
+              <rect x="48" y="14" width="140" height="35" rx="2" fill="#19210f"/>
+              <rect x="48" y="14" width="140" height="5" fill="#F2611A"/>
+              <path d="M48 31h140" stroke="#2c3a18" stroke-width="1.3"/>
+              <path d="M118 19v30" stroke="#2c3a18" stroke-width="1.3"/>
+              <path d="M8 49V24a3 3 0 0 1 3-3h30a3 3 0 0 1 3 3v25z" fill="#19210f"/>
+              <path d="M12 26h27v10H12z" fill="#8fae74"/>
+              <use class="wheel" href="#lh-wheel" x="28" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="150" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="168" y="58"/>
+            </svg>
 
-            <!-- INDIVIDUAL / TRUCKER: vehicle -->
-            <div class="field only veh"><label>Plate number <span class="req">*</span></label><input name="plate"><div class="err">Plate number is required.</div></div>
-            <div class="field only veh"><label>OR/CR registration no.</label><input name="orcr" placeholder="LTO OR/CR"><div class="hint">Proof of vehicle registration.</div></div>
+            <!-- Mobile crane -->
+            <svg class="veh" viewBox="0 0 236 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="18" y="42" width="196" height="9" rx="2" fill="#19210f"/>
+              <rect x="18" y="46" width="196" height="5" fill="#0e1307"/>
+              <path d="M18 42V33a2 2 0 0 1 2-2h16v11z" fill="#19210f"/>
+              <path d="M22 33h13v7H21z" fill="#8fae74"/>
+              <rect x="92" y="24" width="30" height="18" rx="2" fill="#19210f"/>
+              <path d="M96 27h13v9H96z" fill="#8fae74"/>
+              <rect x="122" y="26" width="20" height="18" rx="1" fill="#10160a"/>
+              <path d="M104 30 L220 8 L223 15 L107 37 Z" fill="#19210f"/>
+              <path d="M118 27.5 L210 10 M126 30 L214 13" stroke="#2c3a18" stroke-width="1.2"/>
+              <path d="M220 12 V30" stroke="#0e1307" stroke-width="1.4"/>
+              <path d="M217 30h6v4h-6z" fill="#0e1307"/>
+              <use class="wheel" href="#lh-wheel" x="30" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="50" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="150" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="170" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="190" y="58"/>
+            </svg>
 
-            <!-- TRUCKER: company registration -->
-            <div class="field only fleet"><label>Registration type</label>
-              <select name="reg_type"><option value="">Select…</option><option>SEC</option><option>DTI</option><option>Cooperative</option></select></div>
-            <div class="field only fleet"><label>SEC / DTI registration no.</label><input name="reg_no"></div>
-            <div class="field only fleet"><label>Fleet size (units)</label><input name="fleet_size" inputmode="numeric" placeholder="e.g. 12"></div>
+            <!-- Lowbed heavy-haul + excavator -->
+            <svg class="veh" viewBox="0 0 246 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M6 51V30a3 3 0 0 1 1-2l7-8a3 3 0 0 1 2-1h20a3 3 0 0 1 3 3v29z" fill="#19210f"/>
+              <path d="M13 23h18a2 2 0 0 1 2 2v8H9v-4z" fill="#8fae74"/>
+              <path d="M44 34h20v6l-6 6H44z" fill="#19210f"/>
+              <rect x="52" y="50" width="150" height="6" rx="1" fill="#0e1307"/>
+              <rect x="58" y="47" width="140" height="4" fill="#19210f"/>
+              <path d="M198 51V44h14v7z" fill="#19210f"/>
+              <rect x="78" y="42" width="74" height="6" rx="3" fill="#10160a"/>
+              <path d="M96 42V30a3 3 0 0 1 3-3h30a3 3 0 0 1 3 3v12z" fill="#19210f"/>
+              <path d="M100 30h16v8h-16z" fill="#8fae74"/>
+              <rect x="128" y="30" width="8" height="12" fill="#F2611A"/>
+              <path d="M98 34 L70 16 l5 -4 L104 30 Z" fill="#19210f"/>
+              <path d="M72 16 l-6 12 l6 2 l4 -10 Z" fill="#19210f"/>
+              <path d="M66 30 l-4 8 l10 1 z" fill="#10160a"/>
+              <use class="wheel" href="#lh-wheel" x="26" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="58" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="74" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="210" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="226" y="58"/>
+            </svg>
 
-            <!-- TRUCKER / EQUIPMENT: LTFRB authority -->
-            <div class="field only ltfrb"><label>LTFRB CPC / case number</label><input name="cpc_number" placeholder="Certificate of Public Convenience"><div class="hint">Verified by our team against official LTFRB sources — never assumed.</div></div>
-            <div class="field only ltfrb"><label>Area of operation</label><input name="area_op" placeholder="e.g. Luzon / MM–Region IV-A"></div>
+            <!-- Forklift -->
+            <svg class="veh" viewBox="0 0 118 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M16 52V38a3 3 0 0 1 3-3h30v17z" fill="#19210f"/>
+              <rect x="16" y="45" width="34" height="7" fill="#10160a"/>
+              <rect x="24" y="12" width="26" height="4" rx="1" fill="#19210f"/>
+              <path d="M26 16v20M48 16v22" stroke="#19210f" stroke-width="3"/>
+              <path d="M34 35h12v-6h-6z" fill="#10160a"/>
+              <rect x="55" y="10" width="4" height="44" fill="#19210f"/>
+              <rect x="60" y="10" width="3" height="44" fill="#10160a"/>
+              <rect x="63" y="30" width="24" height="16" fill="#19210f"/>
+              <path d="M63 38h24" stroke="#2c3a18" stroke-width="1.3"/>
+              <rect x="63" y="46" width="24" height="4" fill="#10160a"/>
+              <path d="M63 50h22v3H63z" fill="#0e1307"/>
+              <use class="wheel" href="#lh-wheel" x="30" y="58"/>
+              <use class="wheel" href="#lh-wheel" x="52" y="58"/>
+            </svg>
 
-            <!-- EQUIPMENT -->
-            <div class="field only equip"><label>Max lifting capacity (tonnes)</label><input name="capacity" inputmode="numeric" placeholder="e.g. 50"></div>
-            <div class="field only equip"><label>TESDA / accreditation cert no.</label><input name="cert_no" placeholder="e.g. NC II certificate"></div>
-
-            <!-- SHIPPER -->
-            <div class="field only ship"><label>What needs moving? <span class="req">*</span></label><input name="cargo"><div class="err">Tell us what to move.</div></div>
-            <div class="field only ship"><label>Estimated weight (tonnes)</label><input name="weight" inputmode="numeric"></div>
-            <div class="field only ship"><label>Pickup location</label><input name="pickup"></div>
-            <div class="field only ship"><label>Delivery / site</label><input name="dropoff"></div>
-            <div class="field only ship"><label>Preferred date</label><input name="ship_date" type="date"></div>
           </div>
-
-          <!-- role-specific multi-select -->
-          <div class="field full only equipsel"><label>Equipment you operate</label>
-            <div class="checks" data-name="equipment">
-              <label class="chk"><input type="checkbox" value="Mobile crane">Mobile crane</label>
-              <label class="chk"><input type="checkbox" value="Crawler crane">Crawler crane</label>
-              <label class="chk"><input type="checkbox" value="Boom truck">Boom truck</label>
-              <label class="chk"><input type="checkbox" value="Forklift">Forklift</label>
-              <label class="chk"><input type="checkbox" value="Excavator">Excavator</label>
-              <label class="chk"><input type="checkbox" value="Reach stacker">Reach stacker</label>
-            </div>
-          </div>
-          <div class="field full only unitsel"><label>Unit types you can run</label>
-            <div class="checks" data-name="units">
-              <label class="chk"><input type="checkbox" value="6-wheeler">6-wheeler</label>
-              <label class="chk"><input type="checkbox" value="10-wheeler">10-wheeler</label>
-              <label class="chk"><input type="checkbox" value="Prime mover">Prime mover</label>
-              <label class="chk"><input type="checkbox" value="Trailer">Trailer</label>
-              <label class="chk"><input type="checkbox" value="Lowbed">Lowbed</label>
-              <label class="chk"><input type="checkbox" value="Wing van">Wing van</label>
-            </div>
-          </div>
-
-          <div class="field full"><label>Anything else? (optional)</label><textarea name="notes" placeholder="Lanes you prefer, availability, questions…"></textarea></div>
-
-          <label class="consent"><input type="checkbox" name="consent" required>
-            <span>I agree that LiftHaul may contact me about my registration and process my information for verification and job matching, in line with the Data Privacy Act. <span class="req">*</span></span></label>
-          <div class="field" style="margin:6px 0 0"><div class="err" id="consenterr">Please agree to continue.</div></div>
-
-          <div class="formfoot">
-            <button class="btn lg" type="submit" id="submitbtn">Submit registration →</button>
-            <span class="muted" style="font-size:13px">Free · no obligation · reviewed by our team</span>
-          </div>
-          <p class="notew">🔒 Prototype intake — your entry is saved to this browser only. No account is created, no payment is taken, and no data is sent anywhere until LiftHaul's verified onboarding backend is connected. We never enter your passwords or card details on your behalf.</p>
-        </form>
-
-        <!-- SUCCESS -->
-        <div class="success" id="success" role="status" aria-live="polite">
-          <div class="badge"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg></div>
-          <h3>Registration received</h3>
-          <p class="muted" style="max-width:30em;margin:8px auto 0">Thanks — your details are captured. Once LiftHaul's onboarding backend is live, our compliance team reviews your documents and reaches out with next steps.</p>
-          <div class="ref" id="refcode"></div>
-          <div class="recap" id="recap"></div>
-          <button class="btn line" style="margin-top:18px" id="again">Register another →</button>
         </div>
       </div>
+      <p class="fleet-types muted">Prime movers &amp; trailers · Wing vans · Lowbed heavy haul · Mobile &amp; crawler cranes · Boom trucks · Forklifts</p>
     </div>
+
+    <div class="fleet-cta">
+      <a class="btn lg" href="provider.html">Register your company →</a>
+      <a class="btn line lg" href="book.html">Book a delivery →</a>
+    </div>
+    <p class="notew" style="text-align:center;max-width:44em;margin:16px auto 0">🔒 Free to join · no obligation · reviewed by LiftHaul's compliance team. Registration opens the verified onboarding workspace — we never fabricate verification, and never ask for your passwords or card details.</p>
   </div>
 </section>
 
@@ -506,7 +539,7 @@ footer a:hover{color:#fff}
       <h2>Ready to put your wheels — or your crane — to work?</h2>
       <p>Register in a few minutes. Get verified. Start receiving matched jobs.</p>
       <div class="cta">
-        <button class="btn accent lg" data-scroll="#register">Register free →</button>
+        <a class="btn accent lg" href="provider.html">Register free →</a>
         <a class="btn line lg" style="border-color:rgba(255,255,255,.3);color:#fff" href="book.html">Book a delivery instead</a>
       </div>
     </div>
@@ -530,14 +563,14 @@ footer a:hover{color:#fff}
         <div class="demoflag" style="margin-top:16px">● Demo prototype — pre-launch</div>
       </div>
       <div><h4>Join as</h4>
-        <a href="#register" data-role="driver">Driver</a>
+        <a href="provider.html?type=DRIVER">Driver</a>
         <a href="provider.html?type=OWNER_OPERATOR">Owner-Operator</a>
         <a href="provider.html?type=FLEET_OPERATOR">Trucker / Fleet</a>
         <a href="provider.html?type=CRANE_COMPANY">Equipment Operator</a></div>
       <div><h4>Platform</h4>
         <a href="#how">How it works</a>
         <a href="#trust">Why LiftHaul</a>
-        <a href="#register" data-role="shipper">Book a haul</a>
+        <a href="book.html">Book a haul</a>
         <a href="console.html" id="oplogin">Staff login</a></div>
       <div><h4>Contact</h4>
         <a href="#">hello@lifthaul.demo</a>
@@ -557,145 +590,14 @@ footer a:hover{color:#fff}
   var $=function(s,r){return (r||document).querySelector(s);};
   var $$=function(s,r){return [].slice.call((r||document).querySelectorAll(s));};
 
-  // ---- role definitions: which field groups + which are required ----
-  var ROLES={
-    driver:{desc:"For professional drivers seeking driving jobs on trucks and trailers you don't own. Bring your licence.",
-      show:["lic","unitsel"], require:["licence_no","licence_expiry"], company:false},
-    individual:{desc:"For owner-operators who own and drive their own unit. List your vehicle and licence; add your for-hire authority if you have one.",
-      show:["lic","veh","ltfrb"], require:["licence_no","licence_expiry","plate"], company:false},
-    trucker:{desc:"For fleet operators running units under an LTFRB CPC. Register your company, authority and fleet.",
-      show:["fleet","veh","ltfrb","unitsel"], require:["plate"], company:true},
-    equipment:{desc:"For heavy-equipment operators — cranes, boom trucks, forklifts, excavators. Bring your certifications and authority.",
-      show:["equip","ltfrb","equipsel"], require:[], company:false},
-    shipper:{desc:"Need something moved? Tell us the load and we'll match you to a verified operator. No account needed.",
-      show:["ship"], require:["cargo"], company:false}
-  };
-  var GROUPS=["lic","veh","fleet","ltfrb","equip","ship","equipsel","unitsel","company"];
-  var current="driver";
-
-  function applyRole(role){
-    if(!ROLES[role]) role="driver";
-    current=role;
-    var def=ROLES[role];
-    $("#roledesc").textContent=def.desc;
-    $$(".rtab").forEach(function(t){var on=t.getAttribute("data-tab")===role;t.classList.toggle("on",on);t.setAttribute("aria-selected",on?"true":"false");});
-    // toggle field groups
-    GROUPS.forEach(function(g){
-      var vis = def.show.indexOf(g)>-1 || (g==="company"&&def.company);
-      $$(".only."+g).forEach(function(el){el.style.display=vis?"":"none";});
-    });
-    // reset required flags: clear all "only" requireds, set common always
-    $$("#regform .field").forEach(function(f){f.classList.remove("bad");});
-    $("#submitbtn").textContent = role==="shipper" ? "Send booking request →" : "Submit registration →";
-    // show form, hide success
-    $("#regform").style.display="";
-    $("#success").classList.remove("show");
-  }
-
-  function isVisible(el){return el && el.offsetParent!==null;}
-
-  function validate(){
-    var form=$("#regform"), ok=true, firstBad=null;
-    var def=ROLES[current];
-    // clear
-    $$(".field").forEach(function(f){f.classList.remove("bad");});
-    // common required (only if visible)
-    var reqNames=["full_name","email","phone","island","base"].concat(def.require);
-    if(def.company) reqNames.push("company");
-    reqNames.forEach(function(n){
-      var el=form.elements[n]; if(!el) return;
-      var field=el.closest(".field"); if(field && !isVisible(field)) return;
-      var v=(el.value||"").trim();
-      var bad=!v;
-      if(n==="email" && v) bad=!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-      if(n==="phone" && v) bad=!/^(\+?63|0)\d{9,10}$/.test(v.replace(/[\s-]/g,""));
-      if(bad){field.classList.add("bad");ok=false;el.setAttribute("aria-invalid","true");firstBad=firstBad||el;}
-      else el.removeAttribute("aria-invalid");
-    });
-    // consent
-    if(!form.elements["consent"].checked){$("#consenterr").style.display="block";ok=false;firstBad=firstBad||form.elements["consent"];}
-    else $("#consenterr").style.display="none";
-    if(firstBad) firstBad.focus();
-    return ok;
-  }
-
-  function collect(){
-    var form=$("#regform"), out={role:current}, def=ROLES[current];
-    $$("#regform input,#regform select,#regform textarea").forEach(function(el){
-      if(el.type==="checkbox") return;
-      var f=el.closest(".field"); if(f && !isVisible(f)) return;
-      if(el.name && el.value && el.value.trim()) out[el.name]=el.value.trim();
-    });
-    // multiselects
-    $$(".checks").forEach(function(c){
-      if(!isVisible(c)) return;
-      var vals=$$("input:checked",c).map(function(i){return i.value;});
-      if(vals.length) out[c.getAttribute("data-name")]=vals;
-    });
-    delete out.consent;
-    return out;
-  }
-
-  function refCode(){
-    var p={driver:"DRV",individual:"OWN",trucker:"FLT",equipment:"EQP",shipper:"BKG"}[current]||"REG";
-    return "HL-"+p+"-"+Date.now().toString(36).toUpperCase().slice(-6);
-  }
-
-  var LABELS={full_name:"Name",company:"Company",email:"Email",phone:"Mobile",island:"Island group",base:"Base",
-    licence_no:"Licence no.",licence_expiry:"Licence expiry",plate:"Plate",cpc_number:"LTFRB CPC",area_op:"Area of operation",
-    capacity:"Capacity (t)",cert_no:"Certificate",cargo:"Cargo",units:"Unit types",equipment:"Equipment",fleet_size:"Fleet size"};
-
-  function showSuccess(data){
-    var ref=refCode();
-    // persist locally (honest prototype store)
-    try{
-      var key="lifthaul_applications";
-      var arr=JSON.parse(localStorage.getItem(key)||"[]");
-      arr.push({ref:ref,at:new Date().toISOString(),data:data});
-      localStorage.setItem(key,JSON.stringify(arr));
-    }catch(e){}
-    $("#refcode").textContent="Reference: "+ref;
-    var recap=$("#recap"); recap.innerHTML="";
-    var order=["role","full_name","company","email","phone","island","base","licence_no","plate","cpc_number","area_op","capacity","cargo","units","equipment","fleet_size"];
-    order.forEach(function(k){
-      if(data[k]==null) return;
-      var v=Array.isArray(data[k])?data[k].join(", "):data[k];
-      var label = k==="role" ? "Registering as" : (LABELS[k]||k);
-      if(k==="role") v=({driver:"Driver",individual:"Owner-Operator",trucker:"Trucker / Fleet",equipment:"Equipment Operator",shipper:"Shipper (booking)"}[v]||v);
-      var row=document.createElement("div");
-      row.innerHTML="<span>"+label+"</span><span>"+String(v).replace(/[<>&]/g,"")+"</span>";
-      recap.appendChild(row);
-    });
-    $("#regform").style.display="none";
-    var s=$("#success"); s.classList.add("show");
-    s.scrollIntoView({behavior:"smooth",block:"center"});
-  }
-
   // ---- events ----
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-scroll],[data-role],.rtab,#again,#oplogin,#navtoggle");
+    var t=e.target.closest("[data-scroll],#navtoggle");
     if(!t) return;
     if(t.id==="navtoggle"){var l=$("#navlinks");var open=l.classList.toggle("open");t.setAttribute("aria-expanded",open?"true":"false");return;}
-    if(t.id==="oplogin"){return;}  /* let the anchor navigate to the operator console */
-    if(t.id==="again"){applyRole(current);$("#regform").reset();$$(".chk").forEach(function(c){c.classList.remove("on");});$("#register").scrollIntoView({behavior:"smooth"});return;}
-    if(t.classList.contains("rtab")){applyRole(t.getAttribute("data-tab"));return;}
-    // data-role (+ optional data-scroll)
-    var role=t.getAttribute("data-role");
-    var target=t.getAttribute("data-scroll")|| (role?"#register":null);
-    if(role) applyRole(role);
+    // smooth-scroll for any in-page anchor buttons
+    var target=t.getAttribute("data-scroll");
     if(target){e.preventDefault();$("#navlinks").classList.remove("open");var el=$(target);if(el)el.scrollIntoView({behavior:"smooth"});}
-  });
-
-  // chip toggle styling
-  document.addEventListener("change",function(e){
-    if(e.target.matches(".chk input")){e.target.closest(".chk").classList.toggle("on",e.target.checked);}
-    if(e.target.name==="consent"&&e.target.checked){$("#consenterr").style.display="none";}
-  });
-
-  $("#regform").addEventListener("submit",function(e){
-    e.preventDefault();
-    if(!validate()) return;
-    showSuccess(collect());
   });
 
   // active-link highlight on scroll
@@ -710,7 +612,10 @@ footer a:hover{color:#fff}
   secIds.forEach(function(id){var el=$("#"+id);if(el)obs.observe(el);});
 
   $("#yr").textContent=new Date().getFullYear();
-  applyRole("driver");
+
+  // duplicate the fleet group so the CSS marquee loops seamlessly
+  var fg=$(".fleet-group");
+  if(fg){var clone=fg.cloneNode(true);clone.setAttribute("aria-hidden","true");fg.parentNode.appendChild(clone);}
 })();
 </script>
 </body>

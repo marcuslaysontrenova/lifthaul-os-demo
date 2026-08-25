@@ -149,6 +149,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 .fnote{margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#93a684}
 .demoflag{display:inline-flex;align-items:center;gap:7px;background:var(--warn-bg);color:#7a4a04;border:1px solid #e9c98a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
 </style>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -438,7 +439,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
     if(payload.schedule_type==="SCHEDULED"){payload.scheduled_at=(document.getElementById("schedAt")||{}).value||"";}
     var st=collectStops();if(st.length)payload.stops=st;
     if(contact.indexOf("@")>-1)payload.contact_email=contact; else payload.contact_phone=contact;
-    var base=null;try{base=localStorage.getItem("lifthaul_api_base");}catch(_){}
+    var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null;try{if(!base)base=localStorage.getItem("lifthaul_api_base")||localStorage.getItem("rgo_api_base");}catch(_){}
     showMatch();
     if(base){
       fetch(base.replace(/\/+$/,"")+"/public/bookings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})

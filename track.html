@@ -74,6 +74,7 @@ h1,h2,h3{line-height:1.14;letter-spacing:-.02em;margin:0}p{margin:0}a{color:inhe
 footer{background:var(--ink);color:#c9d8bd;padding:28px 0;margin-top:20px;font-size:12.5px}
 footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
 </style>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -119,7 +120,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
   var $=function(s){return document.querySelector(s);};
   function esc(s){return String(s==null?"":s).replace(/[<>&"]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];});}
   function peso(n){return "₱"+Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});}
-  var base=null;try{base=localStorage.getItem("lifthaul_api_base");}catch(_){}
+  var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null;try{if(!base)base=localStorage.getItem("lifthaul_api_base")||localStorage.getItem("rgo_api_base");}catch(_){}
   var pre="";try{pre=(new URLSearchParams(location.search).get("ref")||"").trim();}catch(_){}
   if(pre) $("#refInput").value=pre;
   function tile(n,k){return '<div style="background:var(--soft,#eef3ea);border-radius:10px;padding:12px 14px;min-width:110px"><div style="font-size:22px;font-weight:800">'+esc(n)+'</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em">'+esc(k)+'</div></div>';}
@@ -199,7 +200,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
   function lookup(token){
     token=(token||"").trim();
     if(!token){showErr("Please enter your tracking code.");return;}
-    var base=null;try{base=localStorage.getItem("lifthaul_api_base");}catch(_){}
+    var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null;try{if(!base)base=localStorage.getItem("lifthaul_api_base")||localStorage.getItem("rgo_api_base");}catch(_){}
     if(!base){
       showErr("Live tracking connects to the LiftHaul backend, which isn't configured in this demo. Once the API is hosted (localStorage.lifthaul_api_base), this page shows the real, persisted status of booking "+token+".");
       return;

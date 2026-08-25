@@ -46,6 +46,7 @@ input{width:100%;margin-top:5px;font-family:inherit;font-size:16px;padding:13px;
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:var(--shadow);z-index:99;max-width:92vw;text-align:center}
 .back{background:none;border:0;color:#fff;font-size:15px;font-weight:700;cursor:pointer;padding:0}
 </style>
+  <script src="config.js"></script>
 </head>
 <body>
 <div class="app">
@@ -78,8 +79,8 @@ input{width:100%;margin-top:5px;font-family:inherit;font-size:16px;padding:13px;
 
 <script>
 var RGO_API=(function(){
-  var base=null, token=null;
-  try{ base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_driver_token'); }catch(e){}
+  var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null, token=null;
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_driver_token'); }catch(e){}
   function req(m,p,b){
     if(!base) return Promise.reject(new Error('offline'));
     var h={'Content-Type':'application/json'};

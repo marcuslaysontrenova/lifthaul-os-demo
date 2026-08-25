@@ -57,6 +57,7 @@
   .dlg .body{padding:16px 18px;max-height:60vh;overflow:auto} .dlg .foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
   .dlg h3{font-size:16px} .dlg .rule{color:var(--muted);font-size:12px;margin-top:3px}
 </style>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -98,7 +99,7 @@
 
 <script>
 // ------------------------------------------------------------------ state
-let API = localStorage.getItem('lh_api') || (window.RGO_CONFIG && window.RGO_CONFIG.apiBase) || 'http://localhost:8787';
+let API = (window.RGO_CONFIG && window.RGO_CONFIG.apiBase) || localStorage.getItem('lifthaul_api_base') || localStorage.getItem('lh_api') || 'http://localhost:8787';
 let TOKEN = sessionStorage.getItem('lh_tok') || null;
 let EMAIL = sessionStorage.getItem('lh_email') || null;
 document.getElementById('api').value = API;
@@ -115,7 +116,7 @@ async function api(method, path, body){
 
 // ------------------------------------------------------------------ auth
 async function doLogin(){
-  API = document.getElementById('api').value.trim(); localStorage.setItem('lh_api', API);
+  API = document.getElementById('api').value.trim(); localStorage.setItem('lifthaul_api_base', API); localStorage.setItem('lh_api', API);
   const email = document.getElementById('email').value.trim();
   const pw = document.getElementById('pw').value;
   const mfa = document.getElementById('mfa').value.trim();

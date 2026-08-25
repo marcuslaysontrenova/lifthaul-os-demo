@@ -20,39 +20,42 @@ Keep this current when adding/removing a page. Last organized: 2026-08-23.
 |---|---|---|
 | `portal.html` | Carrier / fleet owner portal (own fleet, compliance, accreditation, referrals) | landing "Carrier portal"; post-registration redirect |
 | `driver.html` | Driver app (assignments, PODs) | landing "Driver app" |
-| `console.html` | **Staff / Operator Console** — the single staff hub (dispatch, fleet, finance, users, etc.) | landing/book/track "Staff login" |
+| `console.html` | **Enterprise Operations Console** — CRM, booking, dispatch, fleet, maintenance, finance, users (the frozen "Enterprise Operations" plane) | landing/book/track "Staff login" |
+| `admin-console.html` | **Platform Administration Console** — the "Platform Control" plane: master data, workflow builder, form/document templates, configuration resolve, audit correlation, tenant backfill, reporting, SaaS subscriptions/licensing, tenant-health, marketplace-eligibility | `console.html` nav → "Platform Administration" |
 
-## Staff admin tools (reached from inside the Operator Console)
+> **The two consoles are NOT duplicates.** They are the two distinct control planes in
+> the frozen architecture: `console.html` = **Enterprise Operations**; `admin-console.html`
+> = **Platform Control / Administration**. An earlier audit mistook the second for a
+> duplicate to retire — corrected 2026-08-25. Do not delete it.
 
-Linked from `console.html` left-nav ("Admin & Commercial" group) — no longer orphaned:
+## Staff admin tools (reached from inside the Operations Console)
+
+Linked from `console.html` left-nav ("Platform Control & Commercial" group) — no longer orphaned:
 
 | Page | Purpose |
 |---|---|
+| `admin-console.html` | Platform Administration control plane (see above) |
 | `admin_commercial.html` | Provider accreditation fees & commercial configuration |
 | `admin_referral.html` | Referral program administration |
 | `samantha.html` | Samantha BD (business-development) surface |
 
-## Frontend → backend wiring
+## Frontend → backend wiring (normalized 2026-08-25)
 
-- Production API origin: `config.js` → `window.RGO_CONFIG.apiBase` (the one switch that
-  turns the public pages from offline demo into the live app — see
-  `docs/go_live/BACKEND_HOSTING_RUNBOOK.md`).
-- Per-browser dev override: `localStorage.lifthaul_api_base`.
-- `provider.html`, `portal.html`, `console.html` resolve `RGO_CONFIG.apiBase` first, then
-  the localStorage override.
+- **One canonical config contract**, resolved in this order by every API-calling page:
+  `window.RGO_CONFIG.apiBase` (production, from `config.js`) → `localStorage.lifthaul_api_base`
+  (dev override) → legacy `localStorage.lh_api` / `localStorage.rgo_api_base` (backward compat).
+- **Every** API page now loads `config.js`, so setting `apiBase` there flips the whole site
+  (public + staff) from offline-demo to the live hosted API in one edit — see
+  `docs/go_live/BACKEND_HOSTING_RUNBOOK.md`.
 
-## Known cleanup / decisions outstanding (devil's-advocate findings)
+## Known cleanup / decisions outstanding
 
-1. **Duplicate console — `admin-console.html`** ("Enterprise Administration", 143 KB) is a
-   second admin surface that shadows the canonical `console.html` ("Operator Console").
-   It is orphaned (linked from nowhere) and uses a *different* API key (`lh_api` instead of
-   `lifthaul_api_base`). **Recommendation:** delete it (git-recoverable) or fold anything
-   unique into `console.html`. Left in place pending owner call — not part of the live IA.
-2. **API-config key drift:** most pages use `lifthaul_api_base` / `RGO_CONFIG`; `admin-console.html`
-   uses `lh_api`. Standardize on `RGO_CONFIG.apiBase` + `lifthaul_api_base`.
-3. **Legacy `RGO_*` identifiers** remain as internal JS variable names (`RGO_API`,
-   `RGO_CONFIG`) — functional, not user-visible; rename opportunistically, not urgently.
-4. **Removed:** `rgo-logo.png` (480 KB, orphaned, old brand) — deleted 2026-08-23.
+1. **Legacy `RGO_*` identifiers** remain as internal JS variable names (`RGO_API`,
+   `RGO_CONFIG`) and the internal tenant id (`TENANT.id="RGO"`, the backend tenant key for
+   Tenant Zero) — functional, not user-visible; rename opportunistically, not urgently.
+2. **Removed:** `rgo-logo.png` (480 KB, orphaned, old brand) — deleted 2026-08-23.
+3. **Visible RGO branding:** none remaining in product UI — the last "RGO tenant" labels in
+   `console.html` were reworded to "Tenant Zero" (2026-08-25).
 
 ## Naming convention (going forward)
 

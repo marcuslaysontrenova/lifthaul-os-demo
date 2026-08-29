@@ -54,6 +54,20 @@ class TestHttpE2E(unittest.TestCase):
         finally:
             srv.shutdown()
 
+    def test_graceful_shutdown_runs_outside_signal_thread(self):
+        caller = threading.get_ident()
+        shutdown_threads = []
+
+        class FakeServer:
+            def shutdown(self):
+                shutdown_threads.append(threading.get_ident())
+
+        worker = server._shutdown_async(FakeServer())
+        worker.join(timeout=1)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(shutdown_threads), 1)
+        self.assertNotEqual(shutdown_threads[0], caller)
+
     def test_security_headers_and_server_side_logout(self):
         srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
         port = srv.server_address[1]

@@ -14,6 +14,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2856,12 +2857,24 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def _shutdown_async(srv):
+    """Request ``serve_forever`` shutdown without deadlocking a signal handler.
+
+    ``BaseServer.shutdown`` must be invoked from a thread other than the one
+    running ``serve_forever``.  POSIX signal handlers execute on that main
+    thread, so calling it inline makes rolling restarts hang indefinitely.
+    """
+    worker = threading.Thread(target=srv.shutdown, name="lifthaul-shutdown", daemon=True)
+    worker.start()
+    return worker
+
+
 def main():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
 
     def _shutdown(*_):
         log.info("graceful shutdown")
-        srv.shutdown()
+        _shutdown_async(srv)
 
     signal.signal(signal.SIGINT, _shutdown)
     try:

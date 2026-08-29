@@ -383,7 +383,7 @@
 window.RGO_CONFIG = window.RGO_CONFIG || {};
 window.RGO_API = (function(){
   var base=(window.RGO_CONFIG.apiBase)||null, token=null;
-  try{ if(!base) base=localStorage.getItem('rgo_api_base'); token=localStorage.getItem('rgo_api_token'); }catch(e){}
+  try{ if(!base) base=localStorage.getItem('rgo_api_base'); token=sessionStorage.getItem('rgo_api_token')||localStorage.getItem('rgo_api_token'); if(token){sessionStorage.setItem('rgo_api_token',token);localStorage.removeItem('rgo_api_token');} }catch(e){}
   function req(method, path, body){
     if(!base) return Promise.reject(new Error('API not configured (demo mock mode). Set localStorage.rgo_api_base to the deployed backend origin to go live.'));
     var h={'Content-Type':'application/json'};
@@ -394,8 +394,8 @@ window.RGO_API = (function(){
   return {
     configured:function(){return !!base;},
     setBase:function(b){base=b; try{localStorage.setItem('rgo_api_base',b);}catch(e){}},
-    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('rgo_api_token',token);}catch(e){} return d;});},
-    logout:function(){token=null; try{localStorage.removeItem('rgo_api_token');}catch(e){}},
+    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{sessionStorage.setItem('rgo_api_token',token);}catch(e){} return d;});},
+    logout:function(){function clear(){token=null;try{sessionStorage.removeItem('rgo_api_token');localStorage.removeItem('rgo_api_token');}catch(e){}}if(!token){clear();return Promise.resolve();}return req('POST','/logout',{}).catch(function(){}).then(clear);},
     createCustomer:function(b){return req('POST','/customers',b);},
     createBooking:function(b){return req('POST','/bookings',b);},
     getBooking:function(id){return req('GET','/bookings/'+id);},
@@ -590,7 +590,7 @@ window.RGO_API = (function(){
     document.querySelectorAll('.seg button').forEach(function(x){x.setAttribute('aria-pressed','false')});
     b.setAttribute('aria-pressed','true');role=b.dataset.role;$('#u').value=role==='Driver'?'driver':role==='Dispatcher'?'dispatch':'admin';});});
   $('#loginForm').addEventListener('submit',function(e){e.preventDefault();$('#roleBadge').textContent=role;showScreen('dash');go(role==='Driver'?'driver':'dashboard');badges();});
-  $('#signout').addEventListener('click',function(){showScreen('login')});
+  $('#signout').addEventListener('click',function(){RGO_API.logout().then(function(){showScreen('login')});});
   document.querySelectorAll('.nav').forEach(function(n){n.addEventListener('click',function(){go(n.dataset.mod)})});
   function setActive(mod){document.querySelectorAll('.nav').forEach(function(x){x.removeAttribute('aria-current');if(x.dataset.mod===mod)x.setAttribute('aria-current','true')});}
   function badges(){

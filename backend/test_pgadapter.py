@@ -48,6 +48,33 @@ class TestPgSql(unittest.TestCase):
         self.assertIn("tablename='equipment'", out)
         self.assertNotIn("sqlite_master", out)
 
+    def test_table_info_pragma_preserves_sqlite_row_contract(self):
+        out = dbconn.pg_sql("PRAGMA table_info(quotation_lines)")
+        self.assertIn("information_schema.columns", out)
+        self.assertIn("AS cid", out)
+        self.assertIn("AS name", out)
+        self.assertIn("table_name='quotation_lines'", out)
+        self.assertIn("ORDER BY ordinal_position", out)
+        self.assertNotIn("PRAGMA", out.upper())
+
+    def test_incremental_create_table_uses_postgres_identity_and_numeric_types(self):
+        out = dbconn.pg_sql("CREATE TABLE notify_policy(id INTEGER PRIMARY KEY, rate REAL)")
+        self.assertIn("id SERIAL PRIMARY KEY", out)
+        self.assertIn("rate DOUBLE PRECISION", out)
+        self.assertNotIn("INTEGER PRIMARY KEY", out)
+
+    def test_additive_column_migration_is_idempotent_on_postgres(self):
+        out = dbconn.pg_sql("ALTER TABLE notifications ADD COLUMN tenant_id INTEGER")
+        self.assertEqual(out, "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tenant_id INTEGER")
+        already_safe = dbconn.pg_sql(
+            "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tenant_id INTEGER")
+        self.assertEqual(already_safe.count("IF NOT EXISTS"), 1)
+
+    def test_sqlite_null_safe_parameter_comparison_is_postgres_safe(self):
+        out = dbconn.pg_sql("WHERE vehicle_id IS ? OR tenant_id IS NOT ?")
+        self.assertEqual(
+            out, "WHERE vehicle_id IS NOT DISTINCT FROM %s OR tenant_id IS DISTINCT FROM %s")
+
     def test_returning_target(self):
         self.assertEqual(dbconn._returning_target("INSERT INTO jobs(a) VALUES(?)"), "jobs")
         self.assertIsNone(dbconn._returning_target("INSERT INTO sessions(token) VALUES(?)"))     # no id PK
@@ -84,10 +111,11 @@ class TestPgConnection(unittest.TestCase):
         self.assertIn("%s", sql)
 
     def test_executescript_splits(self):
-        self.conn.executescript("CREATE TABLE a(id INTEGER); PRAGMA x; CREATE TABLE b(id INTEGER);")
+        self.conn.executescript("CREATE TABLE a(id INTEGER PRIMARY KEY); PRAGMA x; CREATE TABLE b(id INTEGER);")
         stmts = [s for s, _ in self.raw.log]
         self.assertEqual(len([s for s in stmts if s.upper().startswith("CREATE")]), 2)
         self.assertFalse(any("PRAGMA" in s.upper() for s in stmts))   # PRAGMA dropped
+        self.assertIn("SERIAL PRIMARY KEY", stmts[0])
 
     def test_context_manager_commits_and_rolls_back(self):
         with self.conn:

@@ -21,8 +21,10 @@ except Exception:
     pass
 
 BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8787").rstrip("/")
-ADMIN_EMAIL = os.environ.get("LH_ADMIN_EMAIL", "admin@rgo.demo")
-ADMIN_PW = os.environ.get("LH_ADMIN_PASSWORD", "demo1234")
+ADMIN_EMAIL = os.environ.get("LH_ADMIN_EMAIL")
+ADMIN_PW = os.environ.get("LH_ADMIN_PASSWORD")
+if not ADMIN_EMAIL or not ADMIN_PW:
+    raise SystemExit("LH_ADMIN_EMAIL and LH_ADMIN_PASSWORD are required; production preflight has no demo defaults")
 _ok = _fail = _warn = 0
 
 

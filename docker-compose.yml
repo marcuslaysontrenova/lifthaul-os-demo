@@ -26,6 +26,8 @@ services:
       APP_SECRET: ${APP_SECRET:?set APP_SECRET in .env}
       DATABASE_URL: postgresql://${POSTGRES_USER:-lifthaul}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-lifthaul}
       CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS in .env}
+      LH_ADMIN_EMAIL: ${LH_ADMIN_EMAIL:?set LH_ADMIN_EMAIL in .env}
+      LH_ADMIN_PASSWORD: ${LH_ADMIN_PASSWORD:?set LH_ADMIN_PASSWORD in .env}
     ports:
       - "${WEB_PORT:-8787}:8787"
     restart: unless-stopped

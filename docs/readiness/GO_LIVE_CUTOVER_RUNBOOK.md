@@ -28,7 +28,7 @@ Automation shipped for this sprint:
 
 ## Gate 1 — Hosted PostgreSQL
 ```bash
-cp .env.example .env          # fill APP_SECRET, POSTGRES_PASSWORD, CORS_ORIGINS (no '*')
+cp .env.example .env          # fill DB/secret/origin/bootstrap admin (no '*' or demo credentials)
 docker compose up --build     # brings up postgres:16 + the web service (runs migrate then server)
 ```
 Verify: `docker compose logs web | grep schema_version` shows the stamp.
@@ -38,7 +38,8 @@ Verify: `docker compose logs web | grep schema_version` shows the stamp.
 
 ## Gate 2 — Production HTTP / TLS + config
 Set on the host: `APP_ENV=production`, `APP_SECRET` (long random), `DATABASE_URL` (postgres), `CORS_ORIGINS`
-(explicit origins, **no `*`**). The app **refuses to boot** (`sys.exit(2)`) if any is missing.
+(explicit origins, **no `*`**), `LH_ADMIN_EMAIL` (real address), and `LH_ADMIN_PASSWORD` (strong bootstrap
+credential). The app **refuses to boot** (`sys.exit(2)`) if any is missing or unsafe.
 ```bash
 curl -sf https://<backend-origin>/healthz    # {"status":"ok"}
 curl -sf https://<backend-origin>/readyz      # {"status":"ready","schema_version":NN}

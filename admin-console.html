@@ -125,10 +125,16 @@ async function doLogin(){
     const d = await api('POST','/login',{email, password:pw, mfa_code:mfa||undefined});
     TOKEN = d.token; EMAIL = email;
     sessionStorage.setItem('lh_tok',TOKEN); sessionStorage.setItem('lh_email',EMAIL);
+    sessionStorage.setItem('lifthaul_api_token',TOKEN);
     enterApp();
   }catch(e){ document.getElementById('loginErr').textContent = 'Sign-in failed: '+e.message; }
 }
-function logout(){ TOKEN=null; sessionStorage.clear(); document.getElementById('app').style.display='none'; document.getElementById('login').style.display='grid'; }
+async function logout(){
+  try{ if(TOKEN) await api('POST','/logout',{}); }catch(e){}
+  TOKEN=null; EMAIL=null;
+  sessionStorage.removeItem('lh_tok'); sessionStorage.removeItem('lh_email'); sessionStorage.removeItem('lifthaul_api_token');
+  document.getElementById('app').style.display='none'; document.getElementById('login').style.display='grid';
+}
 function enterApp(){
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='grid';

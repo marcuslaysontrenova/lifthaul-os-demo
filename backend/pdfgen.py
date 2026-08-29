@@ -9,6 +9,9 @@ swap the writer for reportlab/WeasyPrint — callers don't change.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+
 import core
 from core import require, audit, now, NotFoundError, ForbiddenError
 
@@ -75,6 +78,34 @@ class MemStore(DocumentStore):
         return self._d[ref]
 
 
+class DbStore(DocumentStore):
+    """Durable, immutable document bytes stored in the system-of-record DB."""
+    def __init__(self, conn):
+        self.conn = conn
+
+    def put(self, ref, data):
+        raw = bytes(data)
+        checksum = hashlib.sha256(raw).hexdigest()
+        encoded = base64.b64encode(raw).decode("ascii")
+        self.conn.execute(
+            "INSERT INTO document_contents(storage_ref,content_base64,checksum,created_at) VALUES(?,?,?,?) "
+            "ON CONFLICT(storage_ref) DO NOTHING", (ref, encoded, checksum, now()))
+        row = self.conn.execute(
+            "SELECT checksum FROM document_contents WHERE storage_ref=?", (ref,)).fetchone()
+        if not row or row["checksum"] != checksum:
+            self.conn.rollback()
+            raise ValueError("document reference already exists with different immutable content")
+        self.conn.commit()
+        return ref
+
+    def get(self, ref):
+        row = self.conn.execute(
+            "SELECT content_base64 FROM document_contents WHERE storage_ref=?", (ref,)).fetchone()
+        if not row:
+            raise NotFoundError("document not found in store")
+        return base64.b64decode(row["content_base64"].encode("ascii"), validate=True)
+
+
 def _peso(n):
     return "PHP " + format(round(n or 0), ",d")
 
@@ -114,7 +145,9 @@ def generate_quotation_pdf(conn, actor, quotation_id, store: DocumentStore,
         "Exclusions: permits and escorts unless stated. Quotation subject to site conditions.",
     ]
     pdf = render_pdf(txt)
-    ref = "quote_%s_v%d.pdf" % (q["no"], q["version"])
+    # Include the immutable quotation id so two tenants using the same displayed
+    # quotation number can never collide in the shared document store.
+    ref = "quote_%s_%s_v%d.pdf" % (quotation_id, q["no"], q["version"])
     store.put(ref, pdf)
     cur = conn.execute(
         "INSERT INTO documents(entity,entity_id,filename,content_type,size,category,scan_status,"

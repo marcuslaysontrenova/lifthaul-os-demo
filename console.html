@@ -398,12 +398,12 @@
     <form class="card" id="loginForm">
       <a class="backlink" data-act="backSite"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Back to site</a>
       <h2>Staff sign in</h2><div class="sub" id="loginSub">LiftHaul Enterprise · Demo workspace</div>
-      <label class="fld"><span>Demo role</span><select id="demoRole" class="role-select" aria-label="Demo role"><option value="booking_admin">Booking &amp; Quotation Administrator</option><option value="approver">Approver</option><option value="finance_admin">Finance Administrator</option><option value="executive">Executive View</option><option value="user_admin">User Administrator</option><option value="super_admin">Super Administrator</option><option value="operational_user">Operational User</option></select></label>
+      <label class="fld" id="demoRoleField"><span>Demo role</span><select id="demoRole" class="role-select" aria-label="Demo role"><option value="booking_admin">Booking &amp; Quotation Administrator</option><option value="approver">Approver</option><option value="finance_admin">Finance Administrator</option><option value="executive">Executive View</option><option value="user_admin">User Administrator</option><option value="super_admin">Super Administrator</option><option value="operational_user">Operational User</option></select></label>
       <label class="fld"><span>Username</span><input id="u" type="text" value="encoder-1" autocomplete="username" spellcheck="false"></label>
       <label class="fld"><span>Password</span><input id="p" type="password" value="demo1234" autocomplete="current-password"></label>
-      <div class="hint">🔑&nbsp;<div>Select a role to test its exact access. Password <code>demo1234</code>; any values sign you in.</div></div>
+      <div class="hint" id="loginHint">🔑&nbsp;<div>Select a role to test its exact access. Password <code>demo1234</code>; any values sign you in.</div></div>
       <button class="btn block" type="submit">Sign in →</button>
-      <div class="fine">Working demo · data lives in your browser only</div>
+      <div class="fine" id="loginMode">Working demo · data lives in your browser only</div>
       <div class="fine" style="margin-top:6px">Developed by <a href="https://trenovatech.ai" target="_blank" rel="noopener" style="color:var(--accent);font-weight:800;text-decoration:none">TrenovaTech.ai</a></div>
     </form>
   </div>
@@ -476,7 +476,7 @@ function applyBranding(){try{
 try{applyBranding();}catch(e){}
 window.RGO_API = (function(){
   var base=(window.RGO_CONFIG.apiBase)||null, token=null;
-  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token')||localStorage.getItem('rgo_api_token'); }catch(e){}
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=sessionStorage.getItem('lifthaul_api_token')||localStorage.getItem('lifthaul_api_token')||localStorage.getItem('rgo_api_token'); if(token){sessionStorage.setItem('lifthaul_api_token',token);localStorage.removeItem('lifthaul_api_token');localStorage.removeItem('rgo_api_token');} }catch(e){}
   function req(method, path, body){
     if(!base) return Promise.reject(new Error('API not configured (demo mock mode). Set localStorage.lifthaul_api_base to the deployed backend origin to go live.'));
     var h={'Content-Type':'application/json'};
@@ -487,8 +487,12 @@ window.RGO_API = (function(){
   return {
     configured:function(){return !!base;},
     setBase:function(b){base=b; try{localStorage.setItem('lifthaul_api_base',b);}catch(e){}},
-    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('lifthaul_api_token',token);}catch(e){} return d;});},
-    logout:function(){token=null; try{localStorage.removeItem('lifthaul_api_token');localStorage.removeItem('rgo_api_token');}catch(e){}},
+    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{sessionStorage.setItem('lifthaul_api_token',token);}catch(e){} return d;});},
+    logout:function(){
+      function clear(){token=null;try{sessionStorage.removeItem('lifthaul_api_token');localStorage.removeItem('lifthaul_api_token');localStorage.removeItem('rgo_api_token');}catch(e){}}
+      if(!base||!token){clear();return Promise.resolve();}
+      return req('POST','/logout',{}).catch(function(){/* local sign-out must still complete */}).then(clear);
+    },
     /* authoritative effective-permission payload — the frontend gates on THIS, not a JS engine */
     myPermissions:function(){return req('GET','/me/permissions');},
     /* user administration (Gap 3) — paths match backend/server.py route table exactly */
@@ -498,7 +502,7 @@ window.RGO_API = (function(){
     resetUserPw:function(id,b){return req('POST','/admin/users/'+id+'/reset-password',b);},
     assignUserRole:function(id,b){return req('POST','/admin/users/'+id+'/roles',b);},
     listSessions:function(){return req('GET','/admin/sessions');},
-    revokeSession:function(tok){return req('POST','/admin/sessions/revoke',{token:tok});},
+    revokeSession:function(ref){return req('POST','/admin/sessions/revoke',{session_ref:ref});},
     effectiveAccess:function(id){return req('GET','/admin/users/'+id+'/effective-access');},
     mfaStatus:function(id){return req('GET','/admin/users/'+id+'/mfa');},
     loginHistory:function(){return req('GET','/admin/login-history');},
@@ -684,6 +688,13 @@ window.RGO_API = (function(){
   // never on a JS role engine. ROLE_DEFS is only the offline-demo fallback. livePerms==null => mock mode.
   var livePerms=null;      // array of granted permission codes resolved by the backend
   var liveMode=false;      // true once authenticated against a real backend
+  if(window.RGO_API&&RGO_API.configured()){
+    $('#demoRoleField').style.display='none'; $('#u').value=''; $('#p').value='';
+    $('#u').placeholder='Work email'; $('#loginSub').textContent='LiftHaul Enterprise · Secure operations workspace';
+    $('#loginHint').innerHTML='🔐&nbsp;<div>Use your authorized LiftHaul account. Access is enforced and audited by the backend.</div>';
+    $('#loginMode').textContent='Connected production workspace · server-persisted data';
+    $('#demoRibbon').style.display='none';
+  }
   function canPerm(p,code){
     // Asking about the CURRENT actor while connected: the backend payload is the sole authority.
     if(!code && liveMode && livePerms){ return livePerms.indexOf('*')>-1 || livePerms.indexOf(p)>-1; }
@@ -884,13 +895,17 @@ window.RGO_API = (function(){
         $('#roleBadge').textContent=role; $('#userName').textContent=currentActor.name;
         $('#userAvatar').textContent=(currentActor.name||'?').slice(0,2).toUpperCase();
         document.querySelectorAll('.nav[data-mod]').forEach(function(n){n.style.display=canAny(MODULE_PERMS[n.dataset.mod]||[])?'flex':'none';});
+        var reset=$('[data-act="resetDemo"]');if(reset)reset.style.display=canPerm('platform.settings')?'inline-flex':'none';
         toast('Connected · backend-authoritative permissions'); enterApp();
-      }).catch(function(err){ toast('Live sign-in failed: '+err.message+' — using demo role'); demoLogin(); });
+      }).catch(function(err){ toast('Live sign-in failed: '+err.message); });
       return;
     }
     demoLogin();
   });
-  $('#signout').addEventListener('click',function(){showScreen('login')});
+  $('#signout').addEventListener('click',function(){
+    if(window.RGO_API&&RGO_API.configured())RGO_API.logout().then(function(){liveMode=false;livePerms=null;showScreen('login')});
+    else showScreen('login');
+  });
   document.querySelectorAll('.nav').forEach(function(n){n.addEventListener('click',function(){go(n.dataset.mod)})});
   function setActive(mod){document.querySelectorAll('.nav').forEach(function(x){x.removeAttribute('aria-current');if(x.dataset.mod===mod)x.setAttribute('aria-current','true')});}
   function badges(){
@@ -1372,7 +1387,7 @@ window.RGO_API = (function(){
     if(/separation-of-duties/i.test(e.message)){var reason=window.prompt('SoD conflict:\n'+e.message+'\n\nEnter governed override reason to proceed (or Cancel):','');if(!reason)return;RGO_API.assignUserRole(id,{role:picked,allow_sod_exception:true,reason:reason}).then(function(){toast('Assigned with governed SoD exception');luRefresh();}).catch(function(e2){toast('Rejected: '+e2.message);});}
     else toast('Rejected: '+e.message);
   });}
-  function luRevokeSess(id){RGO_API.listSessions().then(function(d){var toks=(d.sessions||[]).filter(function(s){return String(s.user_id)===String(id);}).map(function(s){return s.token;});if(!toks.length){toast('No active sessions for this user');return;}Promise.all(toks.map(function(t){return RGO_API.revokeSession(t);})).then(function(){toast('Revoked '+toks.length+' session(s)');});}).catch(function(e){toast('Error: '+e.message);});}
+  function luRevokeSess(id){RGO_API.listSessions().then(function(d){var refs=(d.sessions||[]).filter(function(s){return String(s.user_id)===String(id);}).map(function(s){return s.session_ref;});if(!refs.length){toast('No active sessions for this user');return;}Promise.all(refs.map(function(ref){return RGO_API.revokeSession(ref);})).then(function(){toast('Revoked '+refs.length+' session(s)');});}).catch(function(e){toast('Error: '+e.message);});}
   function luEffective(id){RGO_API.effectiveAccess(id).then(function(d){
     var byMod={};(d.effective_permissions||[]).forEach(function(p){var m=p.split('.')[0];(byMod[m]=byMod[m]||[]).push(p);});
     var mods=Object.keys(byMod).sort().map(function(m){return '<div style="margin-bottom:8px"><b>'+esc(m)+'</b> <span class="cnt">'+byMod[m].length+'</span><div style="font-size:12px;color:var(--ink-2);word-break:break-word">'+byMod[m].map(esc).join(', ')+'</div></div>';}).join('');
@@ -1887,7 +1902,7 @@ window.RGO_API = (function(){
       var lh=r[0].history||[], ss=r[1].sessions||[], au=r[2].audit||[];
       var canRevoke=canPerm('security.manage');
       var lrows=lh.slice(0,50).map(function(x){return '<tr><td>'+esc(x.ts||'')+'</td><td>'+esc(x.email||'')+'</td><td><span class="chip '+(x.success?'c-good':'c-crit')+'">'+(x.success?'OK':'FAIL')+'</span></td><td style="font-size:12px">'+esc(x.reason||'')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No login history.</td></tr>';
-      var srows=ss.map(function(s){return '<tr><td>'+esc(String(s.token||'').slice(0,10))+'…</td><td>'+esc(s.user_id)+'</td><td>'+esc(s.created_at||'')+'</td><td>'+(canRevoke?'<button class="btn line sm" data-act="luRevokeTok" data-arg="'+esc(s.token)+'">Revoke</button>':'—')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No active sessions.</td></tr>';
+      var srows=ss.map(function(s){return '<tr><td>'+esc(s.token_hint||'protected')+'</td><td>'+esc(s.user_id)+'</td><td>'+esc(s.created_at||'')+'</td><td>'+(canRevoke?'<button class="btn line sm" data-act="luRevokeTok" data-arg="'+esc(s.session_ref)+'">Revoke</button>':'—')+'</td></tr>';}).join('')||'<tr><td colspan="4" class="empty">No active sessions.</td></tr>';
       var arows=au.slice(0,80).map(function(x){return '<tr><td style="white-space:nowrap">'+esc(x.ts||'')+'</td><td>'+esc(x.actor||'')+'</td><td>'+esc(x.action||'')+'</td><td>'+esc((x.entity||'')+(x.entity_id!=null?'#'+x.entity_id:''))+'</td><td style="font-size:11px;color:var(--ink-2)">'+esc(x.reason||'')+'</td></tr>';}).join('')||'<tr><td colspan="5" class="empty">No audit entries.</td></tr>';
       var host=$('#adminBody');if(host&&adminTab==='gov')host.innerHTML='<div class="grid2"><div class="panel"><div class="panel-h"><h3>Login history · live</h3></div><div class="tblwrap" style="border:0;max-height:320px;overflow:auto"><table class="tbl"><thead><tr><th>When</th><th>Email</th><th>Result</th><th>Reason</th></tr></thead><tbody>'+lrows+'</tbody></table></div></div><div class="panel"><div class="panel-h"><h3>Active sessions</h3></div><div class="tblwrap" style="border:0;max-height:320px;overflow:auto"><table class="tbl"><thead><tr><th>Token</th><th>User</th><th>Since</th><th></th></tr></thead><tbody>'+srows+'</tbody></table></div></div>'+
         '<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>Audit ledger · live</h3><div class="spacer"></div><span class="cnt">'+au.length+' recent · <code>/admin/audit</code></span></div><div class="tblwrap" style="border:0;max-height:360px;overflow:auto"><table class="tbl"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Reason</th></tr></thead><tbody>'+arows+'</tbody></table></div></div>';

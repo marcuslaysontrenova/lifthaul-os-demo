@@ -9,7 +9,7 @@ from core import (create_user, login, actor_for, create_customer, create_booking
                   ValidationError, ForbiddenError)
 from ops import (reserve_resource, transition_job, create_change_order, approve_change_order,
                  generate_final_invoice, invoice_lines, calendar)
-from pdfgen import generate_quotation_pdf, get_quotation_pdf, MemStore, render_pdf
+from pdfgen import generate_quotation_pdf, get_quotation_pdf, DbStore, MemStore, render_pdf
 
 
 def lines(rate=200000):
@@ -86,6 +86,15 @@ class TestQuotationPDF(Base):
         other = actor_for(self.c, login(self.c, "b@o", "pw"))
         with self.assertRaises(ForbiddenError):
             get_quotation_pdf(self.c, other, qid, self.store)
+
+    def test_database_store_survives_store_recreation_and_is_immutable(self):
+        _, qid = self.sent_quote()
+        first_store = DbStore(self.c)
+        generated = generate_quotation_pdf(self.c, self.est, qid, first_store)
+        restarted_store = DbStore(self.c)  # equivalent to rebuilding the web-process store
+        self.assertEqual(restarted_store.get(generated["ref"]), generated["bytes"])
+        with self.assertRaises(ValueError):
+            restarted_store.put(generated["ref"], b"different bytes")
 
 
 class TestInvoiceLines(Base):

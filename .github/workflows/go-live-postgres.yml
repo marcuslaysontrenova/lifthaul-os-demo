@@ -14,6 +14,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: go-live-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   regression-sqlite:
     name: Full regression (SQLite)
@@ -44,11 +51,12 @@ jobs:
     env:
       DATABASE_URL: postgresql://lifthaul:lifthaul_ci@localhost:5432/lifthaul
       APP_ENV: production
-      APP_SECRET: ci-only-not-a-real-secret-000000
+      APP_SECRET: CI-LiftHaul-Application-Secret-2026-000000000
       CORS_ORIGINS: http://localhost:3000
       PORT: "8787"
-      LH_ADMIN_EMAIL: admin@rgo.demo
-      LH_ADMIN_PASSWORD: demo1234
+      LIFTHAUL_CI: "true"
+      LH_ADMIN_EMAIL: admin@ci.lifthaul.invalid
+      LH_ADMIN_PASSWORD: CI-LiftHaul-Admin-2026-Strong
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,7 +82,7 @@ jobs:
         run: BASE_URL=http://localhost:8787 python scripts/go_live/prod_e2e.py
 
       - name: Preflight — launch posture (fail-closed flags OFF)
-        run: BASE_URL=http://localhost:8787 python scripts/go_live/preflight.py || true
+        run: BASE_URL=http://localhost:8787 python scripts/go_live/preflight.py
 
       - name: Gates 3b/4 — full acceptance lifecycle + two-tenant isolation (on PostgreSQL)
         run: python scripts/go_live/pg_lifecycle.py
@@ -95,16 +103,17 @@ jobs:
         run: |
           # count public bookings, restart the server, confirm they persist
           TOK=$(curl -s -X POST http://localhost:8787/login -H 'Content-Type: application/json' \
-                -d '{"email":"admin@rgo.demo","password":"demo1234"}' | python -c "import sys,json;print(json.load(sys.stdin)['data']['token'])")
+                -d "{\"email\":\"$LH_ADMIN_EMAIL\",\"password\":\"$LH_ADMIN_PASSWORD\"}" | python -c "import sys,json;print(json.load(sys.stdin)['data']['token'])")
           BEFORE=$(curl -s http://localhost:8787/admin/marketplace/public-booking-queue -H "Authorization: Bearer $TOK" | wc -c)
           kill "$(cat /tmp/srv.pid)"; sleep 2
           python server.py & echo $! > /tmp/srv.pid
           for i in $(seq 1 30); do curl -sf http://localhost:8787/readyz && break; sleep 1; done
           TOK2=$(curl -s -X POST http://localhost:8787/login -H 'Content-Type: application/json' \
-                 -d '{"email":"admin@rgo.demo","password":"demo1234"}' | python -c "import sys,json;print(json.load(sys.stdin)['data']['token'])")
+                 -d "{\"email\":\"$LH_ADMIN_EMAIL\",\"password\":\"$LH_ADMIN_PASSWORD\"}" | python -c "import sys,json;print(json.load(sys.stdin)['data']['token'])")
           AFTER=$(curl -s http://localhost:8787/admin/marketplace/public-booking-queue -H "Authorization: Bearer $TOK2" | wc -c)
           echo "queue bytes before restart=$BEFORE after restart=$AFTER"
-          test "$AFTER" -ge 2
+          test "$BEFORE" -ge 2
+          test "$AFTER" -eq "$BEFORE"
           kill "$(cat /tmp/srv.pid)" || true
 
       - name: Gate 5 — backup/restore reconciliation drill

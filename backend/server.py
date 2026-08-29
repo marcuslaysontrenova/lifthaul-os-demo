@@ -14,6 +14,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,13 +41,52 @@ logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO,
 log = logging.getLogger("rgo")
 
 
+def _production_config_errors(env=None):
+    """Return deploy-blocking production configuration errors.
+
+    Kept pure so CI can prove the fail-closed contract without spawning a server.
+    """
+    env = os.environ if env is None else env
+    # A missing value preserves the documented local-development default;
+    # any explicit non-development value (including staging/unknown) fails closed.
+    app_env = str(env.get("APP_ENV", "development")).strip().lower() or "development"
+    if app_env in ("development", "dev", "local", "test", "testing"):
+        return []
+    required = ("APP_SECRET", "DATABASE_URL", "CORS_ORIGINS", "LH_ADMIN_EMAIL", "LH_ADMIN_PASSWORD")
+    errors = [f"missing {k}" for k in required if not str(env.get(k, "")).strip()]
+    secret = str(env.get("APP_SECRET", ""))
+    if secret and (len(secret) < 32 or any(x in secret.lower() for x in ("change_me", "local_dev", "not-a-real-secret"))):
+        errors.append("APP_SECRET must be 32+ characters and not a placeholder")
+    db_url = str(env.get("DATABASE_URL", ""))
+    if db_url and not db_url.startswith(("postgres://", "postgresql://")):
+        errors.append("DATABASE_URL must use PostgreSQL in production")
+    origins = [o.strip() for o in str(env.get("CORS_ORIGINS", "")).split(",") if o.strip()]
+    if "*" in origins:
+        errors.append("CORS_ORIGINS must not contain '*'")
+    ci_mode = str(env.get("LIFTHAUL_CI", "")).lower() == "true"
+    for origin in origins:
+        local_ci = ci_mode and origin.startswith(("http://localhost", "http://127.0.0.1"))
+        if not origin.startswith("https://") and not local_ci:
+            errors.append(f"CORS origin must use HTTPS: {origin}")
+    email = str(env.get("LH_ADMIN_EMAIL", "")).strip().lower()
+    if email and ("@" not in email or (email.endswith((".demo", ".invalid")) and
+                                       str(env.get("LIFTHAUL_CI", "")).lower() != "true")):
+        errors.append("LH_ADMIN_EMAIL must be a real operational address")
+    bootstrap_pw = str(env.get("LH_ADMIN_PASSWORD", ""))
+    weak = bootstrap_pw.lower() in {"demo1234", "password", "password123", "changeme"}
+    strong_classes = (any(c.islower() for c in bootstrap_pw), any(c.isupper() for c in bootstrap_pw),
+                      any(c.isdigit() for c in bootstrap_pw))
+    if bootstrap_pw and (len(bootstrap_pw) < 14 or weak or not all(strong_classes)):
+        errors.append("LH_ADMIN_PASSWORD must be 14+ characters with upper, lower and numeric characters")
+    return errors
+
+
 def validate_config():
-    """Fail fast + safe when required production configuration is missing."""
-    if APP_ENV == "production":
-        missing = [k for k in ("APP_SECRET", "DATABASE_URL", "CORS_ORIGINS") if not os.environ.get(k)]
-        if missing:
-            log.error("startup blocked: missing required config: %s", ",".join(missing))
-            sys.exit(2)
+    """Fail fast + safe when production configuration is missing or unsafe."""
+    errors = _production_config_errors()
+    if errors:
+        log.error("startup blocked: unsafe production config: %s", "; ".join(errors))
+        sys.exit(2)
     _guard_env_posture()
 
 
@@ -68,26 +108,39 @@ validate_config()
 import threading
 _conn = db.connect(os.environ.get("DATABASE_URL"))   # sqlite (dev) or postgres (prod)
 _DB_LOCK = threading.Lock()                          # serialize DB access across worker threads
-_store = pdfgen.MemStore()                           # swap for S3/local disk in prod
+_store = pdfgen.DbStore(_conn)                       # durable across process/container restarts
 
 
 def _seed_users():
-    try:
-        # LiftHaul-branded demo accounts (primary). The legacy @rgo.demo aliases are kept below so
-        # existing go-live scripts/CI that reference them keep working.
-        for em, role, name in (("admin@lifthaul.demo", "admin", "Admin"),
-                               ("finance@lifthaul.demo", "finance", "Finance"),
-                               ("ops@lifthaul.demo", "operations_manager", "Operations"),
-                               ("admin@rgo.demo", "admin", "Admin"),
-                               ("est@rgo.demo", "estimator", "Estimator"),
-                               ("appr@rgo.demo", "approver", "Approver"),
-                               ("fin@rgo.demo", "finance", "Finance")):
-            try:
-                core.create_user(_conn, em, "demo1234", role, name)
-            except core.ConflictError:
-                pass
-    except core.ConflictError:
-        pass
+    production = APP_ENV.strip().lower() not in ("development", "dev", "local", "test", "testing")
+    if production:
+        # Production receives exactly one explicitly-configured bootstrap admin.
+        # Known demo credentials must never be created on a live database.
+        users = ((os.environ["LH_ADMIN_EMAIL"], os.environ["LH_ADMIN_PASSWORD"], "admin", "Bootstrap Admin"),)
+    else:
+        users = tuple((em, "demo1234", role, name) for em, role, name in (
+            ("admin@lifthaul.demo", "admin", "Admin"),
+            ("finance@lifthaul.demo", "finance", "Finance"),
+            ("ops@lifthaul.demo", "operations_manager", "Operations"),
+            ("admin@rgo.demo", "admin", "Admin"),
+            ("est@rgo.demo", "estimator", "Estimator"),
+            ("appr@rgo.demo", "approver", "Approver"),
+            ("fin@rgo.demo", "finance", "Finance"),
+        ))
+    for em, pw, role, name in users:
+        if _conn.execute("SELECT 1 FROM users WHERE email=?", (em.lower(),)).fetchone():
+            continue
+        try:
+            core.create_user(_conn, em, pw, role, name)
+        except core.ConflictError:
+            pass
+        except Exception:
+            # PostgreSQL aborts a transaction on a concurrent unique violation.
+            # Recover only when another instance successfully created the same
+            # bootstrap user; otherwise preserve the real startup failure.
+            _conn.rollback()
+            if not _conn.execute("SELECT 1 FROM users WHERE email=?", (em.lower(),)).fetchone():
+                raise
 
 
 _seed_users()
@@ -98,7 +151,9 @@ def _actor(handler):
     auth = handler.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise core.AuthError("missing bearer token")
-    actor = core.actor_for(_conn, auth[7:])
+    import security
+    actor = security.actor_checked(_conn, auth[7:])
+    actor["_session_token"] = auth[7:]  # private request context; never returned by API payloads
     admin_platform.apply_rbac(_conn, actor)   # C-005: data-driven RBAC (flag-gated, reversible)
     return actor
 
@@ -109,6 +164,11 @@ def _routes():
         # C-007: guarded login (lockout -> credentials -> status -> MFA -> session + history)
         return {"token": admin_platform.guarded_login(
             _conn, body["email"], body["password"], mfa_code=body.get("mfa_code"))}
+
+    def logout(actor, body, _):
+        import security
+        security.logout(_conn, actor["_session_token"])
+        return {"ok": True}
 
     def create_customer(actor, body, _):
         return {"id": core.create_customer(_conn, actor, body["name"], body.get("contact"), body.get("email"))}
@@ -246,6 +306,7 @@ def _routes():
 
     return {
         ("POST", "/login"): login,
+        ("POST", "/logout"): logout,
         ("GET", "/me/permissions"): me_perms,
         ("POST", "/customers"): create_customer,
         ("POST", "/bookings"): create_booking,
@@ -430,7 +491,10 @@ def _admin_routes():
     def assignments(a, b, p):    R(a, "user_admin.view");   return {"assignments": _rows(org.user_assignments(_conn, int(p["id"])))}
     def assign(a, b, p):         R(a, "user_admin.manage"); return {"id": org.assign_user(_conn, a, _tid(), int(p["id"]), b["scope_kind"], b["scope_id"], b.get("assignment_type", "PRIMARY"), reason=b.get("reason"))}
     def sessions(a, b, p):       R(a, "security.view");     return {"sessions": _rows(admin_platform.list_sessions(_conn))}
-    def session_revoke(a, b, p): R(a, "security.manage");   admin_platform.revoke_session(_conn, b["token"], actor=a); return {"ok": True}
+    def session_revoke(a, b, p):
+        R(a, "security.manage")
+        admin_platform.revoke_session(_conn, b.get("session_ref") or b.get("token"), actor=a)
+        return {"ok": True}
     def login_history(a, b, p):  R(a, "security.view");     return {"history": _rows(admin_platform.list_login_history(_conn, limit=b.get("limit", 100)))}
     def mfa_status(a, b, p):     R(a, "user_admin.view");   return {"enrolled": admin_platform.mfa_enrolled(_conn, int(p["id"]))}
     def effective_access(a, b, p):
@@ -1998,17 +2062,25 @@ ROUTES.update(_public_booking_routes())
 _PUBLIC_HITS = {}
 _PUBLIC_RATE_MAX = 20      # requests per window per IP
 _PUBLIC_RATE_WINDOW = 60   # seconds
+_PUBLIC_RATE_LOCK = threading.Lock()
 
 
 def _public_rate_ok(ip):
     now = time.time()
-    q = _PUBLIC_HITS.setdefault(ip, [])
-    while q and q[0] < now - _PUBLIC_RATE_WINDOW:
-        q.pop(0)
-    if len(q) >= _PUBLIC_RATE_MAX:
-        return False
-    q.append(now)
-    return True
+    cutoff = now - _PUBLIC_RATE_WINDOW
+    with _PUBLIC_RATE_LOCK:
+        q = _PUBLIC_HITS.setdefault(ip, [])
+        while q and q[0] < cutoff:
+            q.pop(0)
+        if len(q) >= _PUBLIC_RATE_MAX:
+            return False
+        q.append(now)
+        # Bound memory when a public endpoint is scanned from many one-off IPs.
+        if len(_PUBLIC_HITS) > 10000:
+            stale = [addr for addr, hits in _PUBLIC_HITS.items() if not hits or hits[-1] < cutoff]
+            for addr in stale:
+                _PUBLIC_HITS.pop(addr, None)
+        return True
 
 
 # Platform Control -> Integrations: B2B Developer Portal (admin) + /api/v1 gateway (API-key auth).
@@ -2672,6 +2744,16 @@ def _cors_origin(req_origin):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _security_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+        if self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower() == "https":
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
     def _cors(self):
         origin = _cors_origin(self.headers.get("Origin"))
         if origin:
@@ -2686,6 +2768,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Request-ID", getattr(self, "_rid", "-"))
+        self._security_headers()
         self._cors()
         self.end_headers()
         self.wfile.write(body)
@@ -2696,6 +2779,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(204)
+        self._security_headers()
         self._cors()
         self.end_headers()
 
@@ -2710,8 +2794,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 self._conn_ping()
                 return self._send(200, {"status": "ready", "schema_version": db.current_version(_conn)})
-            except Exception as e:
-                return self._send(503, {"status": "not-ready", "detail": str(e)})
+            except Exception:
+                log.exception("readiness probe failed")
+                return self._send(503, {"status": "not-ready"})
         # public (unauthenticated) marketplace intake: payload cap + basic per-IP rate limit
         if path.startswith("/public/"):
             if int(self.headers.get("Content-Length", 0) or 0) > 32768:
@@ -2732,24 +2817,32 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "invalid JSON"})
         try:
             with _DB_LOCK:                      # serialize DB access across worker threads
-                core.set_correlation_id(self._rid)   # tag every audited write in this request
-                if path.startswith("/api/v1/"):
-                    import api_platform as _api
-                    _key = (self.headers.get("Authorization", "").replace("Bearer ", "").strip()
-                            or self.headers.get("X-API-Key", "").strip())
-                    actor = _api.authenticate(_conn, _key, self.client_address[0] if self.client_address else None)
-                    _api.check_rate(actor)
-                    actor["_idem"] = self.headers.get("Idempotency-Key")
-                else:
-                    actor = None if (self.path == "/login" or path.startswith("/public/")) else _actor(self)
-                result = fn(actor, body, params)
+                try:
+                    core.set_correlation_id(self._rid)   # tag every audited write in this request
+                    if path.startswith("/api/v1/"):
+                        import api_platform as _api
+                        _key = (self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+                                or self.headers.get("X-API-Key", "").strip())
+                        actor = _api.authenticate(_conn, _key, self.client_address[0] if self.client_address else None)
+                        _api.check_rate(actor)
+                        actor["_idem"] = self.headers.get("Idempotency-Key")
+                    else:
+                        actor = None if (path == "/login" or path.startswith("/public/")) else _actor(self)
+                    result = fn(actor, body, params)
+                except Exception:
+                    # PostgreSQL keeps a connection transaction-aborted after a
+                    # statement error. Roll back before releasing the shared DB
+                    # lock so the next request always receives a healthy session.
+                    _conn.rollback()
+                    raise
             return self._send(200, {"data": result})
         except core.AppError as e:
             return self._send(e.http, {"error": str(e)})
         except KeyError as e:
             return self._send(422, {"error": f"missing field {e}"})
-        except Exception as e:  # pragma: no cover
-            return self._send(500, {"error": "server error", "detail": str(e)})
+        except Exception:  # pragma: no cover
+            log.exception("unhandled request failure req_id=%s", self._rid)
+            return self._send(500, {"error": "server error"})
 
     def _conn_ping(self):
         _conn.execute("SELECT 1").fetchone()
@@ -2764,12 +2857,24 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def _shutdown_async(srv):
+    """Request ``serve_forever`` shutdown without deadlocking a signal handler.
+
+    ``BaseServer.shutdown`` must be invoked from a thread other than the one
+    running ``serve_forever``.  POSIX signal handlers execute on that main
+    thread, so calling it inline makes rolling restarts hang indefinitely.
+    """
+    worker = threading.Thread(target=srv.shutdown, name="lifthaul-shutdown", daemon=True)
+    worker.start()
+    return worker
+
+
 def main():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
 
     def _shutdown(*_):
         log.info("graceful shutdown")
-        srv.shutdown()
+        _shutdown_async(srv)
 
     signal.signal(signal.SIGINT, _shutdown)
     try:

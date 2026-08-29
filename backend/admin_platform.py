@@ -103,12 +103,13 @@ def init(conn):
 
 
 def _ensure_columns(conn, table, cols_spec):
-    """Idempotent additive migration for pre-existing SQLite DBs (C-006/C-007).
-    Fresh DBs get columns from core.SCHEMA; Postgres from the translated DDL."""
-    try:
-        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-    except Exception:
-        return                                             # non-SQLite: columns come from DDL
+    """Idempotent additive migration for pre-existing SQLite and PostgreSQL DBs.
+
+    The PostgreSQL adapter translates the table-info query.  Do not hide schema
+    inspection failures here: a swallowed PostgreSQL error leaves the transaction
+    aborted and makes every later bootstrap statement fail less clearly.
+    """
+    have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if not have:
         return
     for col, spec in cols_spec.items():
@@ -960,6 +961,12 @@ def resolve_config_chain(conn, key, chain):
     for scope, ref in list(chain) + [("platform", "")]:
         if ref is None:
             continue
+        # ``platform_config.scope_ref`` is deliberately text because references
+        # may be tenant codes, org codes, or user IDs.  SQLite silently compares
+        # integer parameters with TEXT columns; PostgreSQL correctly rejects that
+        # operator mismatch.  Normalize at this boundary so callers may pass an
+        # authoritative numeric tenant/user ID without poisoning the transaction.
+        ref = str(ref)
         path.append(f"{scope}:{ref or '-'}")
         row = conn.execute(
             "SELECT value, updated_at, effective_to FROM platform_config"
@@ -1270,14 +1277,31 @@ def guarded_login(conn, email, password, ip=None, tenant="RGO", mfa_code=None) -
 # ---- session administration ------------------------------------------------ #
 def list_sessions(conn, user_id=None):
     if user_id is not None:
-        return conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
+        rows = conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
                             " WHERE user_id=? ORDER BY created_at DESC", (user_id,)).fetchall()
-    return conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
-                        " ORDER BY created_at DESC").fetchall()
+    else:
+        rows = conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
+                            " ORDER BY created_at DESC").fetchall()
+    # A session-management screen needs a stable revocation handle, never the
+    # bearer credential itself.  Returning raw tokens turned read-only security
+    # access into session-hijacking capability.
+    return [{"session_ref": hashlib.sha256(r["token"].encode()).hexdigest(),
+             "token_hint": r["token"][:6] + "…", "user_id": r["user_id"],
+             "ip": r["ip"], "created_at": r["created_at"], "last_seen": r["last_seen"]}
+            for r in rows]
 
 
-def revoke_session(conn, token, actor=None):
-    conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+def revoke_session(conn, token_or_ref, actor=None):
+    """Revoke by raw token (logout/internal callers) or its non-secret SHA-256 reference."""
+    if not token_or_ref:
+        raise core.ValidationError("session_ref required")
+    token = token_or_ref
+    if re.fullmatch(r"[0-9a-f]{64}", str(token_or_ref or "")):
+        token = next((r["token"] for r in conn.execute("SELECT token FROM sessions").fetchall()
+                      if hmac.compare_digest(hashlib.sha256(r["token"].encode()).hexdigest(), token_or_ref)), None)
+    if token:
+        conn.execute("DELETE FROM sessions WHERE token=?", (token,))
     if actor:
-        core.audit(conn, actor, "SESSION_REVOKED", "sessions", 0, new={"token": token[:6] + "…"})
+        core.audit(conn, actor, "SESSION_REVOKED", "sessions", 0,
+                   new={"session_ref": hashlib.sha256(str(token_or_ref).encode()).hexdigest()[:12]})
     conn.commit()

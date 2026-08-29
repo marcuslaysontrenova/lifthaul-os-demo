@@ -115,6 +115,11 @@ class TestConfigCascade(Base):                                    # C-008
         val, src = ap.resolve_config(self.c, self.KEY, tenant="RGO", user="42")
         self.assertEqual((val, src), ("250000", "user"))
 
+    def test_numeric_scope_reference_is_normalized_to_text(self):
+        ap.set_config(self.c, "tenant", "42", self.KEY, "750000")
+        val, src = ap.resolve_config(self.c, self.KEY, tenant=42)
+        self.assertEqual((val, src), ("750000", "tenant"))
+
     def test_unset_key_returns_none(self):
         self.assertEqual(ap.resolve_config(self.c, "nope.key", tenant="RGO"), (None, None))
 
@@ -311,8 +316,12 @@ class TestSessionsAndLockout(Base):                              # C-007 session
     def test_session_admin_list_and_revoke(self):
         uid = ap.create_user(self.c, self.actor, "sa@rgo.demo", "Demo1234Xy", "estimator")
         tok = ap.guarded_login(self.c, "sa@rgo.demo", "Demo1234Xy")
-        self.assertEqual(len(ap.list_sessions(self.c, uid)), 1)
-        ap.revoke_session(self.c, tok, actor=self.actor)
+        sessions = ap.list_sessions(self.c, uid)
+        self.assertEqual(len(sessions), 1)
+        self.assertNotIn("token", sessions[0])
+        self.assertNotIn(tok, str(sessions[0]))
+        self.assertEqual(len(sessions[0]["session_ref"]), 64)
+        ap.revoke_session(self.c, sessions[0]["session_ref"], actor=self.actor)
         self.assertEqual(len(ap.list_sessions(self.c, uid)), 0)
         with self.assertRaises(core.AuthError):
             core.actor_for(self.c, tok)

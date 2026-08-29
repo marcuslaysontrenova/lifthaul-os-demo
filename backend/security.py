@@ -96,7 +96,12 @@ def actor_checked(conn, token, ttl=SESSION_TTL_SECONDS):
         conn.execute("DELETE FROM sessions WHERE token=?", (token,))
         conn.commit()
         raise AuthError("session expired")
-    return {"id": row["id"], "role": row["role"], "email": row["email"], "customer_id": row["customer_id"]}
+    actor = {"id": row["id"], "role": row["role"], "email": row["email"],
+             "customer_id": row["customer_id"],
+             "tenant_id": row["tenant_id"] if "tenant_id" in row.keys() else None}
+    import tenant
+    tenant.enrich_cross_access(conn, actor)
+    return actor
 
 
 def logout(conn, token):

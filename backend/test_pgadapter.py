@@ -48,6 +48,15 @@ class TestPgSql(unittest.TestCase):
         self.assertIn("tablename='equipment'", out)
         self.assertNotIn("sqlite_master", out)
 
+    def test_table_info_pragma_preserves_sqlite_row_contract(self):
+        out = dbconn.pg_sql("PRAGMA table_info(quotation_lines)")
+        self.assertIn("information_schema.columns", out)
+        self.assertIn("AS cid", out)
+        self.assertIn("AS name", out)
+        self.assertIn("table_name='quotation_lines'", out)
+        self.assertIn("ORDER BY ordinal_position", out)
+        self.assertNotIn("PRAGMA", out.upper())
+
     def test_incremental_create_table_uses_postgres_identity_and_numeric_types(self):
         out = dbconn.pg_sql("CREATE TABLE notify_policy(id INTEGER PRIMARY KEY, rate REAL)")
         self.assertIn("id SERIAL PRIMARY KEY", out)

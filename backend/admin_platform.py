@@ -103,12 +103,13 @@ def init(conn):
 
 
 def _ensure_columns(conn, table, cols_spec):
-    """Idempotent additive migration for pre-existing SQLite DBs (C-006/C-007).
-    Fresh DBs get columns from core.SCHEMA; Postgres from the translated DDL."""
-    try:
-        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-    except Exception:
-        return                                             # non-SQLite: columns come from DDL
+    """Idempotent additive migration for pre-existing SQLite and PostgreSQL DBs.
+
+    The PostgreSQL adapter translates the table-info query.  Do not hide schema
+    inspection failures here: a swallowed PostgreSQL error leaves the transaction
+    aborted and makes every later bootstrap statement fail less clearly.
+    """
+    have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if not have:
         return
     for col, spec in cols_spec.items():

@@ -27,10 +27,30 @@ NO_ID_TABLES = {"sessions", "system_config", "schema_version", "config_definitio
 _SQLITE_MASTER = re.compile(
     r"SELECT\s+name\s+FROM\s+sqlite_master\s+WHERE\s+type='table'\s+AND\s+name='(\w+)'",
     re.IGNORECASE)
+_PRAGMA_TABLE_INFO = re.compile(
+    r"^\s*PRAGMA\s+table_info\(\s*([A-Za-z_]\w*)\s*\)\s*;?\s*$",
+    re.IGNORECASE)
 _INSERT_TABLE = re.compile(r"INSERT\s+INTO\s+(\w+)", re.IGNORECASE)
 
 
 def pg_sql(sql: str) -> str:
+    # A few additive migrations inspect the current table shape through SQLite's
+    # PRAGMA table_info result contract.  Translate that contract centrally so
+    # callers continue to receive both positional ``row[1]`` and named
+    # ``row["name"]`` access without issuing invalid SQL (and aborting the
+    # surrounding PostgreSQL transaction).
+    pragma = _PRAGMA_TABLE_INFO.match(sql)
+    if pragma:
+        table = pragma.group(1)
+        return (
+            "SELECT (ordinal_position - 1)::INTEGER AS cid, "
+            "column_name AS name, data_type AS type, "
+            "CASE WHEN is_nullable='NO' THEN 1 ELSE 0 END AS notnull, "
+            "column_default AS dflt_value, 0::INTEGER AS pk "
+            "FROM information_schema.columns "
+            "WHERE table_schema=current_schema() "
+            f"AND table_name='{table}' ORDER BY ordinal_position"
+        )
     sql = _SQLITE_MASTER.sub(r"SELECT tablename AS name FROM pg_tables WHERE tablename='\1'", sql)
     # Module schemas are applied incrementally through ``conn.executescript`` and
     # some newer modules create tables imperatively with ``conn.execute``.  The

@@ -115,6 +115,11 @@ class TestConfigCascade(Base):                                    # C-008
         val, src = ap.resolve_config(self.c, self.KEY, tenant="RGO", user="42")
         self.assertEqual((val, src), ("250000", "user"))
 
+    def test_numeric_scope_reference_is_normalized_to_text(self):
+        ap.set_config(self.c, "tenant", "42", self.KEY, "750000")
+        val, src = ap.resolve_config(self.c, self.KEY, tenant=42)
+        self.assertEqual((val, src), ("750000", "tenant"))
+
     def test_unset_key_returns_none(self):
         self.assertEqual(ap.resolve_config(self.c, "nope.key", tenant="RGO"), (None, None))
 

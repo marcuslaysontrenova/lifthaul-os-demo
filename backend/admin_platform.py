@@ -961,6 +961,12 @@ def resolve_config_chain(conn, key, chain):
     for scope, ref in list(chain) + [("platform", "")]:
         if ref is None:
             continue
+        # ``platform_config.scope_ref`` is deliberately text because references
+        # may be tenant codes, org codes, or user IDs.  SQLite silently compares
+        # integer parameters with TEXT columns; PostgreSQL correctly rejects that
+        # operator mismatch.  Normalize at this boundary so callers may pass an
+        # authoritative numeric tenant/user ID without poisoning the transaction.
+        ref = str(ref)
         path.append(f"{scope}:{ref or '-'}")
         row = conn.execute(
             "SELECT value, updated_at, effective_to FROM platform_config"

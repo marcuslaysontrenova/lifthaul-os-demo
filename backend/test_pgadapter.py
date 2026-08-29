@@ -63,6 +63,13 @@ class TestPgSql(unittest.TestCase):
         self.assertIn("rate DOUBLE PRECISION", out)
         self.assertNotIn("INTEGER PRIMARY KEY", out)
 
+    def test_additive_column_migration_is_idempotent_on_postgres(self):
+        out = dbconn.pg_sql("ALTER TABLE notifications ADD COLUMN tenant_id INTEGER")
+        self.assertEqual(out, "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tenant_id INTEGER")
+        already_safe = dbconn.pg_sql(
+            "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tenant_id INTEGER")
+        self.assertEqual(already_safe.count("IF NOT EXISTS"), 1)
+
     def test_returning_target(self):
         self.assertEqual(dbconn._returning_target("INSERT INTO jobs(a) VALUES(?)"), "jobs")
         self.assertIsNone(dbconn._returning_target("INSERT INTO sessions(token) VALUES(?)"))     # no id PK

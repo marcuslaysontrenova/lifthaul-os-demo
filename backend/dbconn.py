@@ -30,6 +30,9 @@ _SQLITE_MASTER = re.compile(
 _PRAGMA_TABLE_INFO = re.compile(
     r"^\s*PRAGMA\s+table_info\(\s*([A-Za-z_]\w*)\s*\)\s*;?\s*$",
     re.IGNORECASE)
+_ALTER_ADD_COLUMN = re.compile(
+    r"(ALTER\s+TABLE\s+[A-Za-z_]\w*\s+ADD\s+COLUMN\s+)(?!IF\s+NOT\s+EXISTS\b)",
+    re.IGNORECASE)
 _INSERT_TABLE = re.compile(r"INSERT\s+INTO\s+(\w+)", re.IGNORECASE)
 
 
@@ -61,6 +64,11 @@ def pg_sql(sql: str) -> str:
     if re.match(r"^\s*CREATE\s+TABLE\b", sql, re.IGNORECASE):
         import pgcompat
         sql = pgcompat.to_postgres_ddl(sql)
+    # Module-level additive migrations are deliberately safe to rerun.  SQLite
+    # modules historically achieved this by catching duplicate-column errors;
+    # PostgreSQL treats any such error as transaction-fatal until rollback.
+    # Preserve the idempotent intent natively and avoid exception-driven DDL.
+    sql = _ALTER_ADD_COLUMN.sub(r"\1IF NOT EXISTS ", sql)
     return sql.replace("?", "%s")
 
 

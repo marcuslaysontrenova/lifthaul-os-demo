@@ -33,6 +33,8 @@ _PRAGMA_TABLE_INFO = re.compile(
 _ALTER_ADD_COLUMN = re.compile(
     r"(ALTER\s+TABLE\s+[A-Za-z_]\w*\s+ADD\s+COLUMN\s+)(?!IF\s+NOT\s+EXISTS\b)",
     re.IGNORECASE)
+_IS_NOT_PARAM = re.compile(r"\bIS\s+NOT\s+\?", re.IGNORECASE)
+_IS_PARAM = re.compile(r"\bIS\s+\?", re.IGNORECASE)
 _INSERT_TABLE = re.compile(r"INSERT\s+INTO\s+(\w+)", re.IGNORECASE)
 
 
@@ -69,6 +71,11 @@ def pg_sql(sql: str) -> str:
     # PostgreSQL treats any such error as transaction-fatal until rollback.
     # Preserve the idempotent intent natively and avoid exception-driven DDL.
     sql = _ALTER_ADD_COLUMN.sub(r"\1IF NOT EXISTS ", sql)
+    # SQLite's ``IS ?`` / ``IS NOT ?`` are null-safe equality operators.
+    # PostgreSQL reserves IS for predicates; its exact semantic equivalents are
+    # IS [NOT] DISTINCT FROM.  Translate before converting placeholders.
+    sql = _IS_NOT_PARAM.sub("IS DISTINCT FROM ?", sql)
+    sql = _IS_PARAM.sub("IS NOT DISTINCT FROM ?", sql)
     return sql.replace("?", "%s")
 
 

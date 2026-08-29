@@ -70,6 +70,11 @@ class TestPgSql(unittest.TestCase):
             "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tenant_id INTEGER")
         self.assertEqual(already_safe.count("IF NOT EXISTS"), 1)
 
+    def test_sqlite_null_safe_parameter_comparison_is_postgres_safe(self):
+        out = dbconn.pg_sql("WHERE vehicle_id IS ? OR tenant_id IS NOT ?")
+        self.assertEqual(
+            out, "WHERE vehicle_id IS NOT DISTINCT FROM %s OR tenant_id IS DISTINCT FROM %s")
+
     def test_returning_target(self):
         self.assertEqual(dbconn._returning_target("INSERT INTO jobs(a) VALUES(?)"), "jobs")
         self.assertIsNone(dbconn._returning_target("INSERT INTO sessions(token) VALUES(?)"))     # no id PK

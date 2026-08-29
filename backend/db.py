@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 20  # bump when any module schema changes (20 = Marketplace Inc.5: trip execution/GPS/geofence/POD)
+SCHEMA_VERSION = 21  # persistent documents + PostgreSQL-safe incremental module DDL
 
 
 def _now():

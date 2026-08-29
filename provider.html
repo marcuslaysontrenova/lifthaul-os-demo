@@ -260,7 +260,7 @@ function verifyProvider(){
   if(!code){toast('Enter the one-time code');return;}
   $('#otpMsg').textContent='Verifying…';
   API.post('/public/providers/verify',{challenge_id:_challenge.challenge_id,username:_challenge.username,code:code}).then(function(v){
-    try{ localStorage.setItem('lifthaul_api_token', v.token); }catch(e){}
+    try{ sessionStorage.setItem('lifthaul_api_token', v.token); localStorage.removeItem('lifthaul_api_token'); }catch(e){}
     $('#otpPanel').classList.add('hide');
     $('#okPanel').classList.remove('hide');
     $('#okBody').innerHTML='<div class="result"><div class="big" style="color:var(--good)">'+esc(_challenge.ref)+' · Contact verified</div>'

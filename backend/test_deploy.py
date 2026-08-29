@@ -54,6 +54,50 @@ class TestCors(unittest.TestCase):
         for bad in ("password =", "api_key =", "secret = \"", "wise_key ="):
             self.assertNotIn(bad, src)
 
+    def test_production_config_rejects_demo_credentials_and_unsafe_origins(self):
+        import server
+        env = {
+            "APP_ENV": "production", "APP_SECRET": "x" * 48,
+            "DATABASE_URL": "postgresql://u:p@db/lifthaul",
+            "CORS_ORIGINS": "*", "LH_ADMIN_EMAIL": "admin@rgo.demo",
+            "LH_ADMIN_PASSWORD": "demo1234",
+        }
+        errors = server._production_config_errors(env)
+        self.assertTrue(any("CORS" in e for e in errors))
+        self.assertTrue(any("EMAIL" in e for e in errors))
+        self.assertTrue(any("PASSWORD" in e for e in errors))
+
+    def test_production_config_accepts_strong_postgres_bootstrap(self):
+        import server
+        env = {
+            "APP_ENV": "production", "APP_SECRET": "S" * 48,
+            "DATABASE_URL": "postgresql://u:p@db/lifthaul",
+            "CORS_ORIGINS": "https://app.lifthaul.example",
+            "LH_ADMIN_EMAIL": "platform-admin@lifthaul.example",
+            "LH_ADMIN_PASSWORD": "LiftHaul-Admin-2026-Strong",
+        }
+        self.assertEqual(server._production_config_errors(env), [])
+
+    def test_staging_and_unknown_environments_also_fail_closed(self):
+        import server
+        for app_env in ("staging", "unexpected"):
+            errors = server._production_config_errors({"APP_ENV": app_env})
+            self.assertTrue(errors, app_env)
+            self.assertTrue(any("missing APP_SECRET" in e for e in errors))
+
+    def test_plain_http_localhost_is_ci_only(self):
+        import server
+        env = {
+            "APP_ENV": "production", "APP_SECRET": "S" * 48,
+            "DATABASE_URL": "postgresql://u:p@db/lifthaul",
+            "CORS_ORIGINS": "http://localhost:3000",
+            "LH_ADMIN_EMAIL": "platform-admin@lifthaul.example",
+            "LH_ADMIN_PASSWORD": "LiftHaul-Admin-2026-Strong",
+        }
+        self.assertTrue(any("HTTPS" in e for e in server._production_config_errors(env)))
+        env["LIFTHAUL_CI"] = "true"
+        self.assertEqual(server._production_config_errors(env), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

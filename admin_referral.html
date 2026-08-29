@@ -133,7 +133,7 @@
 <script>
 var API=(function(){
   var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null,token=null;
-  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=sessionStorage.getItem('lifthaul_api_token')||localStorage.getItem('lifthaul_api_token'); if(token){sessionStorage.setItem('lifthaul_api_token',token);localStorage.removeItem('lifthaul_api_token');} }catch(e){}
   function req(m,p,b){ if(!base) return Promise.reject(new Error('offline'));
     var h={'Content-Type':'application/json'}; if(token) h['Authorization']='Bearer '+token;
     return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:h,body:b?JSON.stringify(b):undefined})
@@ -168,7 +168,7 @@ function saveDefaults(){
   Promise.all(m.map(function(x){return API.post('/admin/config',{scope:'platform',scope_ref:'',key:x[0],value:String(x[1])});})).then(function(){toast('Defaults saved');}).catch(function(e){toast(e.message);});
 }
 function loadCampaigns(){
-  if(!API.configured()){ $('#campRows').innerHTML='<tr><td colspan="6" class="muted">Offline — set <code>localStorage.lifthaul_api_base</code> + token (admin) to manage campaigns.</td></tr>'; return; }
+  if(!API.configured()){ $('#campRows').innerHTML='<tr><td colspan="6" class="muted">Offline — configure the LiftHaul API and sign in as an administrator to manage campaigns.</td></tr>'; return; }
   API.get('/admin/marketplace/referral/campaigns').then(function(d){
     $('#campRows').innerHTML=(d.campaigns||[]).map(function(c){
       var reward=c.reward_type==='PERCENTAGE'?((c.reward_pct||0)+'%'):peso(c.reward_amount);

@@ -21,7 +21,8 @@ import re
 NO_ID_TABLES = {"sessions", "system_config", "schema_version", "config_definitions",
                 "setting_definitions", "modules",   # Phase 6: key/code-keyed, id-less
                 "ai_tools",                          # Phase 9: code-keyed, id-less
-                "usage_meters"}                      # Phase 10: code-keyed, id-less
+                "usage_meters",                      # Phase 10: code-keyed, id-less
+                "document_contents"}                 # immutable DB-backed document bytes
 
 _SQLITE_MASTER = re.compile(
     r"SELECT\s+name\s+FROM\s+sqlite_master\s+WHERE\s+type='table'\s+AND\s+name='(\w+)'",
@@ -31,6 +32,15 @@ _INSERT_TABLE = re.compile(r"INSERT\s+INTO\s+(\w+)", re.IGNORECASE)
 
 def pg_sql(sql: str) -> str:
     sql = _SQLITE_MASTER.sub(r"SELECT tablename AS name FROM pg_tables WHERE tablename='\1'", sql)
+    # Module schemas are applied incrementally through ``conn.executescript`` and
+    # some newer modules create tables imperatively with ``conn.execute``.  The
+    # original PostgreSQL bootstrap translated only the legacy aggregate schema,
+    # leaving later ``id INTEGER PRIMARY KEY`` columns without an auto-generated
+    # value on PostgreSQL.  Translate every CREATE TABLE at the adapter boundary
+    # so new modules cannot accidentally be SQLite-only.
+    if re.match(r"^\s*CREATE\s+TABLE\b", sql, re.IGNORECASE):
+        import pgcompat
+        sql = pgcompat.to_postgres_ddl(sql)
     return sql.replace("?", "%s")
 
 

@@ -1,1 +1,9 @@
 __pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+.work/
+*.sqlite
+*.sqlite3
+rgo_e2e_state.json
+.env

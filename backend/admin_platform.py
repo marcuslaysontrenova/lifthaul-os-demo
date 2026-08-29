@@ -1270,14 +1270,31 @@ def guarded_login(conn, email, password, ip=None, tenant="RGO", mfa_code=None) -
 # ---- session administration ------------------------------------------------ #
 def list_sessions(conn, user_id=None):
     if user_id is not None:
-        return conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
+        rows = conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
                             " WHERE user_id=? ORDER BY created_at DESC", (user_id,)).fetchall()
-    return conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
-                        " ORDER BY created_at DESC").fetchall()
+    else:
+        rows = conn.execute("SELECT token,user_id,ip,created_at,last_seen FROM sessions"
+                            " ORDER BY created_at DESC").fetchall()
+    # A session-management screen needs a stable revocation handle, never the
+    # bearer credential itself.  Returning raw tokens turned read-only security
+    # access into session-hijacking capability.
+    return [{"session_ref": hashlib.sha256(r["token"].encode()).hexdigest(),
+             "token_hint": r["token"][:6] + "…", "user_id": r["user_id"],
+             "ip": r["ip"], "created_at": r["created_at"], "last_seen": r["last_seen"]}
+            for r in rows]
 
 
-def revoke_session(conn, token, actor=None):
-    conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+def revoke_session(conn, token_or_ref, actor=None):
+    """Revoke by raw token (logout/internal callers) or its non-secret SHA-256 reference."""
+    if not token_or_ref:
+        raise core.ValidationError("session_ref required")
+    token = token_or_ref
+    if re.fullmatch(r"[0-9a-f]{64}", str(token_or_ref or "")):
+        token = next((r["token"] for r in conn.execute("SELECT token FROM sessions").fetchall()
+                      if hmac.compare_digest(hashlib.sha256(r["token"].encode()).hexdigest(), token_or_ref)), None)
+    if token:
+        conn.execute("DELETE FROM sessions WHERE token=?", (token,))
     if actor:
-        core.audit(conn, actor, "SESSION_REVOKED", "sessions", 0, new={"token": token[:6] + "…"})
+        core.audit(conn, actor, "SESSION_REVOKED", "sessions", 0,
+                   new={"session_ref": hashlib.sha256(str(token_or_ref).encode()).hexdigest()[:12]})
     conn.commit()

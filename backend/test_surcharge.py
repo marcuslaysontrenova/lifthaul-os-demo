@@ -70,7 +70,10 @@ class Evaluate(Base):
         self.assertEqual(sc.evaluate(self.c, {"origin_zone": "CEBU"}, 1000, tenant_id=self.rgo)["total"], 0)
 
     def test_weekday_and_date_window(self):
-        sc.set_rule(self.c, self.op, "SUN", "s", "PEAK", "FLAT", 300, applies_when={"weekdays": [6]})   # Sunday
+        # Pin the effective date so this historical evaluation never depends on
+        # the wall clock date on which the suite happens to run.
+        sc.set_rule(self.c, self.op, "SUN", "s", "PEAK", "FLAT", 300,
+                    applies_when={"weekdays": [6]}, effective_from="2026-01-01")   # Sunday
         self.assertEqual(sc.evaluate(self.c, {}, 1000, tenant_id=self.rgo, as_of="2026-08-16")["total"], 300)  # a Sunday
         self.assertEqual(sc.evaluate(self.c, {}, 1000, tenant_id=self.rgo, as_of="2026-08-17")["total"], 0)    # Monday
         sc.set_rule(self.c, self.op, "HOL", "h", "HOLIDAY", "FLAT", 400, applies_when={"date_from": "2026-12-24", "date_to": "2026-12-26"})

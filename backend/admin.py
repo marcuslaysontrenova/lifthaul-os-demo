@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS documents(
   size INTEGER, category TEXT, scan_status TEXT, storage_ref TEXT,
   uploaded_by INTEGER, created_at TEXT);
 
+CREATE TABLE IF NOT EXISTS document_contents(
+  storage_ref TEXT PRIMARY KEY, content_base64 TEXT NOT NULL, checksum TEXT NOT NULL,
+  created_at TEXT NOT NULL);
+
 CREATE TABLE IF NOT EXISTS notification_templates(
   id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL, subject TEXT, body TEXT);
 

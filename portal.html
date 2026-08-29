@@ -104,7 +104,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 var RGO_API=(function(){
   // Production config (config.js -> window.RGO_CONFIG.apiBase) wins; localStorage is a dev/demo override.
   var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null, token=null;
-  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=sessionStorage.getItem('lifthaul_api_token')||localStorage.getItem('lifthaul_api_token'); if(token){sessionStorage.setItem('lifthaul_api_token',token);localStorage.removeItem('lifthaul_api_token');} }catch(e){}
   function req(method,path,body){
     if(!base) return Promise.reject(new Error('offline'));
     var h={'Content-Type':'application/json'};
@@ -114,8 +114,8 @@ var RGO_API=(function(){
   }
   return {
     configured:function(){return !!base;},
-    login:function(e,pw){return req('POST','/login',{email:e,password:pw}).then(function(d){token=d.token; try{localStorage.setItem('lifthaul_api_token',token);}catch(x){} return d;});},
-    logout:function(){token=null; try{localStorage.removeItem('lifthaul_api_token');}catch(x){}},
+    login:function(e,pw){return req('POST','/login',{email:e,password:pw}).then(function(d){token=d.token; try{sessionStorage.setItem('lifthaul_api_token',token);}catch(x){} return d;});},
+    logout:function(){function clear(){token=null;try{sessionStorage.removeItem('lifthaul_api_token');localStorage.removeItem('lifthaul_api_token');}catch(x){}}if(!token){clear();return Promise.resolve();}return req('POST','/logout',{}).catch(function(){}).then(clear);},
     get:function(p){return req('GET',p);},
     post:function(p,b){return req('POST',p,b);}
   };
@@ -135,7 +135,7 @@ function doLogin(){
   $('#loginMsg').textContent='Signing in…';
   RGO_API.login(e,pw).then(function(){ live=true; enterApp(); }).catch(function(err){ $('#loginMsg').textContent='Sign-in failed: '+err.message; });
 }
-function doLogout(){ RGO_API.logout(); location.reload(); }
+function doLogout(){ RGO_API.logout().then(function(){location.reload();}); }
 
 function enterApp(){
   $('#loginView').classList.add('hide'); $('#appView').classList.remove('hide');

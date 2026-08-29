@@ -66,6 +66,12 @@ class TestSessions(Base):
         with self.assertRaises(AuthError):
             actor_checked(self.c, tok2)
 
+    def test_checked_actor_retains_tenant_scope(self):
+        self.c.execute("UPDATE users SET tenant_id=7 WHERE email='admin@r'")
+        self.c.commit()
+        tok = login(self.c, "admin@r", "Strong1Pass")
+        self.assertEqual(actor_checked(self.c, tok)["tenant_id"], 7)
+
 
 class TestSecretsBackup(Base):
     def test_secret_from_env_only(self):

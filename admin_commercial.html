@@ -133,7 +133,7 @@
 <script>
 var API=(function(){
   var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null,token=null;
-  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=localStorage.getItem('lifthaul_api_token'); }catch(e){}
+  try{ if(!base) base=localStorage.getItem('lifthaul_api_base')||localStorage.getItem('rgo_api_base'); token=sessionStorage.getItem('lifthaul_api_token')||localStorage.getItem('lifthaul_api_token'); if(token){sessionStorage.setItem('lifthaul_api_token',token);localStorage.removeItem('lifthaul_api_token');} }catch(e){}
   function req(m,p,b){ if(!base) return Promise.reject(new Error('offline'));
     var h={'Content-Type':'application/json'}; if(token) h['Authorization']='Bearer '+token;
     return fetch(base.replace(/\/+$/,'')+p,{method:m,headers:h,body:b?JSON.stringify(b):undefined})
@@ -152,7 +152,7 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener
 });});
 
 function load(){
-  if(!API.configured()){ $('#schedRows').innerHTML='<tr><td colspan="6" class="muted">Offline — set <code>localStorage.lifthaul_api_base</code> + <code>lifthaul_api_token</code> (sign in via the operator console as an administrator) to manage the schedule.</td></tr>'; return; }
+  if(!API.configured()){ $('#schedRows').innerHTML='<tr><td colspan="6" class="muted">Offline — configure the LiftHaul API and sign in through the operator console as an administrator to manage the schedule.</td></tr>'; return; }
   API.get('/admin/marketplace/accreditation/schedule').then(function(d){
     var act=(d.schedule||[]).filter(function(r){return r.status==='ACTIVE';});
     $('#schedRows').innerHTML=act.length?act.map(function(r){

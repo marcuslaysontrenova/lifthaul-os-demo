@@ -21,4 +21,4 @@ EXPOSE 8787
 CMD ["sh", "-c", "python migrate.py && python server.py"]
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
-    CMD curl -fsS http://localhost:${PORT}/health || exit 1
+    CMD curl -fsS http://localhost:${PORT}/readyz || exit 1

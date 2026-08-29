@@ -48,6 +48,12 @@ class TestPgSql(unittest.TestCase):
         self.assertIn("tablename='equipment'", out)
         self.assertNotIn("sqlite_master", out)
 
+    def test_incremental_create_table_uses_postgres_identity_and_numeric_types(self):
+        out = dbconn.pg_sql("CREATE TABLE notify_policy(id INTEGER PRIMARY KEY, rate REAL)")
+        self.assertIn("id SERIAL PRIMARY KEY", out)
+        self.assertIn("rate DOUBLE PRECISION", out)
+        self.assertNotIn("INTEGER PRIMARY KEY", out)
+
     def test_returning_target(self):
         self.assertEqual(dbconn._returning_target("INSERT INTO jobs(a) VALUES(?)"), "jobs")
         self.assertIsNone(dbconn._returning_target("INSERT INTO sessions(token) VALUES(?)"))     # no id PK
@@ -84,10 +90,11 @@ class TestPgConnection(unittest.TestCase):
         self.assertIn("%s", sql)
 
     def test_executescript_splits(self):
-        self.conn.executescript("CREATE TABLE a(id INTEGER); PRAGMA x; CREATE TABLE b(id INTEGER);")
+        self.conn.executescript("CREATE TABLE a(id INTEGER PRIMARY KEY); PRAGMA x; CREATE TABLE b(id INTEGER);")
         stmts = [s for s, _ in self.raw.log]
         self.assertEqual(len([s for s in stmts if s.upper().startswith("CREATE")]), 2)
         self.assertFalse(any("PRAGMA" in s.upper() for s in stmts))   # PRAGMA dropped
+        self.assertIn("SERIAL PRIMARY KEY", stmts[0])
 
     def test_context_manager_commits_and_rolls_back(self):
         with self.conn:

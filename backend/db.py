@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 21  # persistent documents + PostgreSQL-safe incremental module DDL
+SCHEMA_VERSION = 22  # provider-backed payment sessions, webhooks, certification + reconciliation
 
 
 def _now():
@@ -87,6 +87,7 @@ def _seed_platform(conn):
     import marketplace_onboarding
     import marketplace_matching
     import marketplace_payments
+    import payment_gateway
     import marketplace_trips
     admin_platform.init(conn)
     config_registry.init(conn); config_registry.seed(conn)   # definitions before values (Phase 2)
@@ -108,6 +109,7 @@ def _seed_platform(conn):
     marketplace_onboarding.init(conn); marketplace_onboarding.seed(conn)  # Marketplace Inc.2: shipper/carrier/vehicle/driver onboarding + compliance
     marketplace_matching.init(conn); marketplace_matching.seed(conn)     # Marketplace Inc.3: booking/pricing/matching/offers/assignment
     marketplace_payments.init(conn); marketplace_payments.seed(conn)     # Marketplace Inc.4: protected payment/release/payout/disputes/refunds
+    payment_gateway.init(conn); payment_gateway.seed(conn)               # Licensed-gateway edge: checkout sessions, verified webhooks, channel certification + reconciliation
     marketplace_trips.init(conn); marketplace_trips.seed(conn)           # Marketplace Inc.5: trip execution/GPS/geofence/proof-of-delivery
     import marketplace_trust
     marketplace_trust.init(conn); marketplace_trust.seed(conn)           # Trust: KYB verification/fraud/trust-score/eligibility gate

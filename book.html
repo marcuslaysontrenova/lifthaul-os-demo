@@ -7,7 +7,7 @@
 <meta name="description" content="On-demand booking across Luzon, Visayas and Mindanao with transparent quotes, verified carriers, Philippine address selection, and provider-governed Protected Payment.">
 <style>
 :root{
-  --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
+  --bg:#F6F8F3;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
   --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
   --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
   --primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;
@@ -254,27 +254,26 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
           <div class="estimate" id="estimate" hidden></div>
 
-          <div class="payment-title"><label>Preferred payment method</label><span>Provider availability and final fees are confirmed before authorization.</span></div>
-          <div class="pay" id="pay">
-            <label class="payopt on"><input type="radio" name="pm" value="gcash" checked><span class="pay-icon">G</span><div><b>GCash<span class="badge-rec">Popular</span></b><span>E-wallet checkout through the configured Philippine gateway.</span></div></label>
-            <label class="payopt"><input type="radio" name="pm" value="maya"><span class="pay-icon">M</span><div><b>Maya</b><span>Maya Wallet or QRPh through hosted checkout when activated.</span></div></label>
-            <label class="payopt"><input type="radio" name="pm" value="bank_transfer"><span class="pay-icon">↔</span><div><b>Online bank transfer</b><span>Participating Philippine banks via InstaPay or PESONet.</span></div></label>
-            <label class="payopt"><input type="radio" name="pm" value="other_wallet"><span class="pay-icon">◈</span><div><b>Other e-wallet / QRPh</b><span>Supported wallets are displayed by the activated gateway.</span></div></label>
-            <label class="payopt"><input type="radio" name="pm" value="card"><span class="pay-icon">▰</span><div><b>Debit or credit card</b><span>Visa, Mastercard or JCB on a PCI-compliant hosted page.</span></div></label>
-            <label class="payopt"><input type="radio" name="pm" value="otc"><span class="pay-icon">₱</span><div><b>Over-the-counter</b><span>Retail payment channels and limits shown before reference creation.</span></div></label>
-            <label class="payopt"><input type="radio" name="pm" value="operator"><span class="pay-icon">✓</span><div><b>Operator-verified transfer</b><span>Controlled-pilot bank transfer with proof and Finance verification.</span></div></label>
-          </div>
-
-          <div class="pay-summary" aria-live="polite">
-            <div class="pay-summary-head"><b>Protected-payment review</b><span>No payment is taken on this booking form</span></div>
-            <dl>
-              <div><dt>Payment method</dt><dd id="payMethodValue">GCash</dd></div><div><dt>Provider / institution</dt><dd id="payProviderValue">Configured Philippine payment gateway</dd></div>
-              <div><dt>Transaction amount</dt><dd id="payAmountValue">Awaiting vehicle &amp; distance</dd></div><div><dt>Processing fee</dt><dd id="payFeeValue">Provider-calculated before payment</dd></div>
-              <div><dt>Payment status</dt><dd id="payStatusValue">Selection only — no charge at booking</dd></div><div><dt>Reference number</dt><dd id="payReferenceValue">Assigned only after a payment request is created</dd></div>
-              <div><dt>Refund / cancellation</dt><dd id="payRefundValue">Subject to provider and transaction state</dd></div><div><dt>Protected conditions</dt><dd id="payProtectionValue">Provider-governed settlement after verified delivery</dd></div>
+          <section class="payment-gate" aria-labelledby="paymentGateTitle">
+            <div class="payment-gate-head">
+              <div><span class="payment-kicker">Secure checkout</span><h3 id="paymentGateTitle">Payment follows your accepted quotation</h3></div>
+              <span class="gateway-badge checking" id="gatewayStatus" role="status" aria-live="polite">Checking payment readiness…</span>
+            </div>
+            <p id="gatewayStatusDetail">LiftHaul shows only methods that have passed provider and environment certification. No payment is taken on this booking form.</p>
+            <ol class="payment-flow" aria-label="Verified payment process">
+              <li class="current"><span>1</span><b>Accept quotation</b><small>Confirm final amount and terms</small></li>
+              <li><span>2</span><b>Complete checkout</b><small>Use a certified hosted method</small></li>
+              <li><span>3</span><b>Provider verification</b><small>Signed webhook plus API check</small></li>
+              <li><span>4</span><b>Payment confirmed</b><small>Official reference is issued</small></li>
+            </ol>
+            <dl class="payment-assurance">
+              <div><dt>Booking amount</dt><dd id="payAmountValue">Awaiting vehicle &amp; distance</dd></div>
+              <div><dt>Authoritative status</dt><dd>Payment provider record</dd></div>
+              <div><dt>Manual exceptions</dt><dd>Under Review until officially verified</dd></div>
+              <div><dt>Duplicate protection</dt><dd>One idempotent transaction per request</dd></div>
             </dl>
-          </div>
-          <label class="protection-consent"><input type="checkbox" id="protectionAgree" required><span><strong>I understand the protected-payment conditions.</strong> Payment is requested only after quotation acceptance. Live safeguarded-funds handling activates only through an approved provider and governed operating model.</span></label>
+            <p class="payment-terms"><strong>Protected-payment conditions:</strong> The approved provider collects the payment after quotation acceptance. Release is governed by verified service completion, dispute, cancellation and refund rules shown before checkout. LiftHaul does not describe this as escrow.</p>
+          </section>
 
           <div class="grid2">
             <div class="field"><label>Your name <span class="req">*</span></label><input id="cName" autocomplete="name" required></div>
@@ -282,7 +281,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
           </div>
 
           <button class="btn accent lg block" type="submit" id="bookbtn">Get instant quote &amp; book →</button>
-          <p class="note">🔒 <b>Live protected-funds custody is currently OFF.</b> This page records a payment preference only; it never collects credentials or charges the customer. When the API is connected, the booking is persisted to LiftHaul's governed intake. In standalone demo mode, a browser copy is saved and no carrier is dispatched.</p>
+          <p class="note">🔒 This booking form never collects card, bank or wallet credentials. A certified payment method is offered only after the quotation is accepted; “Paid” is shown only after a signed provider notification and server-to-server verification both succeed.</p>
         </form>
 
         <div class="match" id="match" role="status" aria-live="polite">
@@ -361,7 +360,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 <!-- TRUST -->
 <section><div class="wrap">
   <div class="trust">
-    <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><div><h3>Protected Payment</h3><p>When activated through an approved provider, settlement follows verified delivery and governed release controls. Until then, controlled-pilot payments use operator verification.</p></div></div>
+    <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><div><h3>Protected Payment</h3><p>When activated through an approved provider, settlement follows verified delivery and governed release controls. Manual Payment Verification is an audited exception that remains Under Review until an official record is independently checked.</p></div></div>
     <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M3 10h5"/></svg></div><div><h3>LTFRB-verified carriers</h3><p>Carriers are checked for CPC authority, area of operation and unit legality — verified against official sources, never fabricated.</p></div></div>
     <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><h3>Track every leg</h3><p>Live status from match to pickup to delivery — including the port/sea leg on inter-island lanes.</p></div></div>
   </div>
@@ -371,7 +370,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   <a class="mark" href="index.html"><svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="35" height="35" rx="10" fill="#0b0f06" stroke="#5FB92A" stroke-width="2"/><path d="M20 8.5 L28.8 19.5 H23 V25.6 H17 V19.5 H11.2 Z" fill="#F2611A"/><rect x="11.5" y="28.6" width="17" height="3.3" rx="1.65" fill="#5FB92A"/></svg><span class="wordmark footwm" style="color:#fff"><b>Lift</b><b>Haul</b></span></a>
   <span class="demoflag">● Demo prototype — pre-launch</span>
 </div>
-  <div class="fnote">© <span id="yr"></span> LiftHaul Enterprise · Nationwide PH heavy-haul &amp; delivery marketplace · Powered by LiftHaul · Developed by TrenovaTech.ai · Protected Payment live funds OFF · verification never fabricated</div>
+  <div class="fnote">© <span id="yr"></span> LiftHaul Enterprise · Nationwide PH heavy-haul &amp; delivery marketplace · Powered by LiftHaul · Developed by TrenovaTech.ai · payment activation is environment-gated · verification never fabricated</div>
 </div></footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -459,22 +458,20 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   var STD_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","Destination","Out for Delivery","Delivered","POD","Settled"];
   var II_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","At Port","Sea Leg","Destination Port","Out for Delivery","Delivered","POD","Settled"];
   function showMatch(){$("#bookform").style.display="none";var m=$("#match");m.classList.add("show");m.scrollIntoView({behavior:scrollMode(),block:"center"});$("#spin").style.display="";$("#newBooking").style.display="none";}
-  function renderTrack(ref,title,sub,stages,cur){$("#ref").textContent="Booking "+ref;$("#spin").style.display="none";$("#matchTitle").textContent=title;$("#matchSub").textContent=sub;var html="";stages.forEach(function(s,i){var cls=i<cur?"done":i===cur?"cur":"";html+='<div class="tstep '+cls+'"><div class="ic">'+(i<cur?"✓":i===cur?"●":(i+1))+'</div><div><b>'+s+'</b></div></div>';});$("#track").innerHTML=html;$("#newBooking").style.display="";}
-  function localDemo(payload,v,ii){var ref="LH-"+(ii?"II":"")+Date.now().toString(36).toUpperCase().slice(-6);try{var a=JSON.parse(localStorage.getItem("lifthaul_bookings")||"[]");a.push(Object.assign({ref:ref,at:new Date().toISOString()},payload));localStorage.setItem("lifthaul_bookings",JSON.stringify(a));}catch(_){}var stages=(ii?II_STAGES:STD_STAGES);setTimeout(function(){renderTrack(ref,v.quote?"Request received · "+v.name:"Carrier matched · "+v.name,v.quote?"Engineered lift — our team returns a priced plan shortly.":"Estimated arrival at pickup: ~"+(15+Math.floor(Math.random()*20))+" min.",stages,v.quote?0:1);},2000);}
+  function renderTrack(ref,title,sub,stages,cur){$("#ref").textContent="Booking "+ref;$("#spin").style.display="none";$("#matchTitle").textContent=title;$("#matchSub").textContent=sub;var html="";stages.forEach(function(s,i){var cls=i<cur?"done":i===cur?"cur":"";html+='<div class="tstep '+cls+'"><div class="ic">'+(i<cur?"✓":i===cur?"●":(i+1))+'</div><div><b>'+s+'</b></div></div>';});$("#track").innerHTML=html;$("#newBooking").textContent="Book another →";$("#newBooking").style.display="";}
+  function bookingFailure(message){$("#spin").style.display="none";$("#ref").textContent="";$("#track").innerHTML="";$("#matchTitle").textContent="Booking was not saved";$("#matchSub").textContent=message||"The booking service is unavailable. No booking, payment or carrier dispatch was created.";$("#newBooking").textContent="Return to booking form";$("#newBooking").style.display="";}
 
   $("#bookform").addEventListener("submit",function(e){
     e.preventDefault();
     var need=["oIsland","oRegion","oProvince","oCity","oBarangay","dIsland","dRegion","dProvince","dCity","dBarangay","km","cName","cContact"];
     for(var i=0;i<need.length;i++){var el=$("#"+need[i]);if(!el.value.trim()){el.focus();el.style.borderColor="var(--crit)";return;}el.style.borderColor="";}
-    if(!$("#protectionAgree").checked){$("#protectionAgree").focus();return;}
     if(!sel){$("#veh").scrollIntoView({behavior:scrollMode(),block:"center"});return;}
     var v=VEH.find(function(x){return x.id===sel;});
     var ii=interIsland();
     var contact=$("#cContact").value.trim();
     var origin=window.LiftHaulBookingUX?LiftHaulBookingUX.getLocation("o"):{};
     var destination=window.LiftHaulBookingUX?LiftHaulBookingUX.getLocation("d"):{};
-    var payChoice=window.LiftHaulBookingUX?LiftHaulBookingUX.paymentChoice():{code:"operator",provider:"LiftHaul Finance verification",channel:"Bank transfer with proof"};
-    var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:origin.full_address||origin.locality_name||$("#oCity").value,dest_city:destination.full_address||destination.locality_name||$("#dCity").value,origin_location:origin,destination_location:destination,vehicle:sel,km:$("#km").value,payment:payChoice.code==="operator"?"operator":"protected",payment_method:payChoice.code,payment_provider:payChoice.provider,payment_channel:payChoice.channel,idempotency_key:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():("web-"+Date.now()+"-"+Math.random().toString(36).slice(2))};
+    var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:origin.full_address||origin.locality_name||$("#oCity").value,dest_city:destination.full_address||destination.locality_name||$("#dCity").value,origin_location:origin,destination_location:destination,vehicle:sel,km:$("#km").value,payment:"protected",idempotency_key:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():("web-"+Date.now()+"-"+Math.random().toString(36).slice(2))};
     payload.service_level=(document.getElementById("svcLevel")||{}).value||"STANDARD";
     payload.schedule_type=(document.getElementById("schedType")||{}).value||"NOW";
     if(payload.schedule_type==="SCHEDULED"){payload.scheduled_at=(document.getElementById("schedAt")||{}).value||"";}
@@ -489,8 +486,8 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
           var sub=(d.estimate!=null)?("Estimate ₱"+Number(d.estimate).toLocaleString("en-PH")+" · "+d.next_step):((d.estimate_note||"")+" "+d.next_step);
           renderTrack(d.ref,"Request received · "+v.name,sub,(d.inter_island?II_STAGES:STD_STAGES),0);
           if(d.tracking_token){var ex=document.getElementById("bkTrack");if(ex)ex.remove();$("#ref").insertAdjacentHTML("afterend",'<a id="bkTrack" class="btn accent block" style="margin-top:12px" href="track.html?t='+encodeURIComponent(d.tracking_token)+'">Track this booking →</a>');}
-        }).catch(function(){localDemo(payload,v,ii);});
-    } else { localDemo(payload,v,ii); }
+        }).catch(function(error){bookingFailure(error&&error.message?error.message:"The booking service is unavailable. No booking was created.");});
+    } else { bookingFailure("Connect the hosted LiftHaul API before submitting. This production-safe demo does not create local or fake bookings."); }
   });
 
   $("#yr").textContent=new Date().getFullYear();

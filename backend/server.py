@@ -78,6 +78,18 @@ def _production_config_errors(env=None):
                       any(c.isdigit() for c in bootstrap_pw))
     if bootstrap_pw and (len(bootstrap_pw) < 14 or weak or not all(strong_classes)):
         errors.append("LH_ADMIN_PASSWORD must be 14+ characters with upper, lower and numeric characters")
+    gateway_mode = str(env.get("PAYMENT_GATEWAY_MODE", "disabled")).strip().lower()
+    if gateway_mode == "production":
+        for key in ("XENDIT_SECRET_KEY", "XENDIT_WEBHOOK_TOKEN", "PAYMENT_ENABLED_CHANNELS",
+                    "PAYMENT_RETURN_BASE_URL"):
+            if not str(env.get(key, "")).strip():
+                errors.append(f"missing {key} for production payments")
+        if not str(env.get("PAYMENT_RETURN_BASE_URL", "")).strip().startswith("https://"):
+            errors.append("PAYMENT_RETURN_BASE_URL must use HTTPS")
+        for key in ("PAYMENT_PROVIDER_CERTIFIED", "PAYMENT_PRODUCTION_PILOT_APPROVED",
+                    "PAYMENT_RECONCILIATION_AUTOMATION"):
+            if str(env.get(key, "")).strip().lower() not in ("1", "true", "yes", "on"):
+                errors.append(f"{key} must be enabled for production payments")
     return errors
 
 
@@ -2058,6 +2070,53 @@ def _public_booking_routes():
 
 ROUTES.update(_public_booking_routes())
 
+
+def _payment_gateway_routes():
+    """Licensed provider edge. Public routes use only opaque booking tokens; provider webhooks are
+    authenticated by the Xendit callback token and then verified server-to-server."""
+    import payment_gateway as pg
+
+    def channels(a, b, p): return pg.available_channels(_conn)
+    def accept(a, b, p): return pg.accept_final_quote(_conn, p["token"], b.get("idempotency_key"))
+    def create(a, b, p): return pg.create_payment_session(
+        _conn, p["token"], b.get("channel"), b.get("idempotency_key"))
+    def status(a, b, p): return pg.latest_status(_conn, p["token"])
+    def refresh(a, b, p):
+        latest = pg.latest_status(_conn, p["token"])
+        if not latest.get("transaction_id"):
+            return latest
+        return pg.refresh_transaction(_conn, int(latest["transaction_id"]))
+    def webhook(a, b, p):
+        token = b.pop("_xendit_callback_token", None)
+        return pg.process_webhook(_conn, token, b)
+    def certify(a, b, p): return pg.certify_channel(
+        _conn, a, b["channel"], b["environment"], b.get("tests", {}), b.get("notes"))
+    def reconcile(a, b, p): return pg.reconcile_daily(_conn, a)
+    def refund(a, b, p): return pg.request_refund(
+        _conn, a, int(p["id"]), b["amount"], b.get("reason", "OTHERS"), b.get("idempotency_key"))
+    def manual_open(a, b, p): return pg.open_manual_review(
+        _conn, a, int(b["booking_id"]), b["amount"], b["reason"],
+        b.get("bank_reference"), b.get("supporting_document"))
+    def manual_approve(a, b, p): return pg.approve_manual_review(
+        _conn, a, int(p["id"]), b["official_record_reference"], b["reason"])
+
+    return {
+        ("GET", "/public/payments/channels"): channels,
+        ("POST", "/public/bookings/:token/accept-quote"): accept,
+        ("POST", "/public/bookings/:token/payments"): create,
+        ("GET", "/public/bookings/:token/payments/status"): status,
+        ("POST", "/public/bookings/:token/payments/refresh"): refresh,
+        ("POST", "/webhooks/xendit/payments"): webhook,
+        ("POST", "/admin/payments/channels/certify"): certify,
+        ("POST", "/admin/payments/reconcile"): reconcile,
+        ("POST", "/admin/payments/transactions/:id/refund"): refund,
+        ("POST", "/admin/payments/manual-reviews"): manual_open,
+        ("POST", "/admin/payments/manual-reviews/:id/approve"): manual_approve,
+    }
+
+
+ROUTES.update(_payment_gateway_routes())
+
 # Basic per-IP rate limiter for public (unauthenticated) endpoints.
 _PUBLIC_HITS = {}
 _PUBLIC_RATE_MAX = 20      # requests per window per IP
@@ -2803,6 +2862,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(413, {"error": "payload too large"})
             if method == "POST" and not _public_rate_ok(self.client_address[0] if self.client_address else "?"):
                 return self._send(429, {"error": "rate limit exceeded, try again shortly"})
+        if path.startswith("/webhooks/") and int(self.headers.get("Content-Length", 0) or 0) > 131072:
+            return self._send(413, {"error": "payload too large"})
         if path.startswith("/api/v1/") and int(self.headers.get("Content-Length", 0) or 0) > 262144:
             return self._send(413, {"error": "payload too large"})
         fn, params = _match(method, path)
@@ -2815,6 +2876,9 @@ class Handler(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(length) or b"{}")
             except Exception:
                 return self._send(400, {"error": "invalid JSON"})
+        if path == "/webhooks/xendit/payments":
+            # Passed in-memory only to the gateway verifier; never persisted or logged.
+            body["_xendit_callback_token"] = self.headers.get("X-Callback-Token", "")
         try:
             with _DB_LOCK:                      # serialize DB access across worker threads
                 try:
@@ -2827,7 +2891,7 @@ class Handler(BaseHTTPRequestHandler):
                         _api.check_rate(actor)
                         actor["_idem"] = self.headers.get("Idempotency-Key")
                     else:
-                        actor = None if (path == "/login" or path.startswith("/public/")) else _actor(self)
+                        actor = None if (path == "/login" or path.startswith("/public/") or path.startswith("/webhooks/")) else _actor(self)
                     result = fn(actor, body, params)
                 except Exception:
                     # PostgreSQL keeps a connection transaction-aborted after a
@@ -2869,11 +2933,48 @@ def _shutdown_async(srv):
     return worker
 
 
+def _payment_reconciliation_worker(stop_event):
+    """Environment-gated daily provider reconciliation.
+
+    The database run key makes each UTC day idempotent, including across restarts.
+    """
+    import payment_gateway
+    interval = max(300, int(os.environ.get("PAYMENT_RECONCILIATION_CHECK_SECONDS", "3600")))
+    worker_conn = None
+    try:
+        worker_conn = db.connect(os.environ.get("DATABASE_URL"))
+        while not stop_event.is_set():
+            try:
+                result = payment_gateway.reconcile_automatic(worker_conn)
+                if not result.get("idempotent"):
+                    log.info("payment reconciliation run_id=%s checked=%s issues=%s status=%s",
+                             result.get("run_id"), result.get("checked"), result.get("issues"),
+                             result.get("status"))
+            except Exception:
+                try: worker_conn.rollback()
+                except Exception: pass
+                log.exception("automatic payment reconciliation failed")
+            stop_event.wait(interval)
+    finally:
+        if worker_conn is not None:
+            try: worker_conn.close()
+            except Exception: pass
+
+
 def main():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    payment_stop = threading.Event()
+    payment_worker = None
+    if os.environ.get("PAYMENT_RECONCILIATION_AUTOMATION", "false").strip().lower() in ("1", "true", "yes", "on"):
+        payment_worker = threading.Thread(
+            target=_payment_reconciliation_worker, args=(payment_stop,),
+            name="lifthaul-payment-reconciliation", daemon=True,
+        )
+        payment_worker.start()
 
     def _shutdown(*_):
         log.info("graceful shutdown")
+        payment_stop.set()
         _shutdown_async(srv)
 
     signal.signal(signal.SIGINT, _shutdown)
@@ -2882,7 +2983,13 @@ def main():
     except Exception:
         pass
     log.info("RGO OS backend listening on :%d env=%s cors=%s", PORT, APP_ENV, CORS_ORIGINS or "(none)")
-    srv.serve_forever()
+    try:
+        srv.serve_forever()
+    finally:
+        payment_stop.set()
+        srv.server_close()
+        if payment_worker:
+            payment_worker.join(timeout=5)
 
 
 if __name__ == "__main__":

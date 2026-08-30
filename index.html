@@ -7,7 +7,7 @@
 <meta name="description" content="LiftHaul is the Philippine network for drivers, owner-operators, truckers and heavy-equipment operators. Register free, get verified, get matched to jobs, get paid through protected payments.">
 <style>
 :root{
-  --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
+  --bg:#F6F8F3;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
   --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
   --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
   --primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;
@@ -88,11 +88,8 @@ img,svg{max-width:100%}
 .stat b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em}
 .stat span{font-size:12.5px;color:var(--muted);font-weight:600}
 .mapscene{margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#EFF7E6}
-.mapscene svg{display:block;width:100%;height:auto}
+.mapscene svg{display:none}
 .mapcap{font-size:12px;text-align:center;margin-top:10px;font-weight:600}
-@media(prefers-reduced-motion:no-preference){.mapscene .fleet>g{animation:roll 9s ease-in-out infinite}
-  .mapscene .fleet>g:nth-child(2){animation-delay:-3s}.mapscene .fleet>g:nth-child(3){animation-delay:-6s}}
-@keyframes roll{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
 
 /* sections */
 section{padding:58px 0}
@@ -195,6 +192,8 @@ footer a:hover{color:#fff}
 .fnote{margin-top:30px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#93a684;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .demoflag{display:inline-flex;align-items:center;gap:7px;background:var(--warn-bg);color:#7a4a04;border:1px solid #e9c98a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="network-map.css?v=1">
 </head>
 <body>
 
@@ -353,7 +352,7 @@ footer a:hover{color:#fff}
       <div class="step"><div class="n">1</div><h3>Register &amp; submit documents</h3><p>Choose your role and provide your licence, registration, and — for fleets and operators — your LTFRB authority and permits.</p></div>
       <div class="step"><div class="n">2</div><h3>We verify — for real</h3><p>Our compliance team checks KYB and LTFRB authority against official sources. Nothing is marked verified without a recorded source.</p></div>
       <div class="step"><div class="n">3</div><h3>Get matched to jobs</h3><p>Once active, you receive work matched to your lanes, unit type, capacity and area of operation.</p></div>
-      <div class="step"><div class="n">4</div><h3>Get paid, protected</h3><p>Customer funds are held by a regulated provider and released to you when the job is verified — not before.</p></div>
+      <div class="step"><div class="n">4</div><h3>Get paid, protected</h3><p>When the approved provider is activated, it collects customer payment and settlement follows the verified-service, dispute and release rules shown before checkout.</p></div>
     </div>
   </div>
 </section>
@@ -362,29 +361,16 @@ footer a:hover{color:#fff}
 <section id="register">
   <style>
     #register .fleet-wrap{margin-top:24px}
-    #register .fleet-stage{position:relative;overflow:hidden;height:150px;
-      -webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);
-              mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
-    #register .fleet-ground{position:absolute;left:0;right:0;bottom:24px;height:2px;
-      background:linear-gradient(90deg,transparent,rgba(95,185,42,.4) 12%,rgba(95,185,42,.4) 88%,transparent)}
-    #register .fleet-ground:after{content:"";position:absolute;left:0;right:0;top:7px;height:2px;
-      background:repeating-linear-gradient(90deg,rgba(95,185,42,.5) 0 22px,transparent 22px 56px);
-      animation:lhdash 1s linear infinite}
-    @keyframes lhdash{to{background-position:-56px 0}}
-    #register .fleet-belt{position:absolute;bottom:18px;left:0;display:flex;width:max-content;
-      animation:lhroll 36s linear infinite}
-    #register .fleet-belt:hover{animation-play-state:paused}
-    #register .fleet-group{display:flex;align-items:flex-end;gap:58px;padding-right:58px}
-    @keyframes lhroll{to{transform:translateX(-50%)}}
-    #register .veh{height:66px;width:auto;display:block;filter:drop-shadow(0 7px 9px rgba(16,22,10,.16))}
-    #register .fleet-belt .wheel{transform-box:fill-box;transform-origin:50% 50%;
-      animation:lhspin 1.25s linear infinite}
-    @keyframes lhspin{to{transform:rotate(-360deg)}}
+    #register .fleet-stage{position:relative;overflow:hidden;height:auto;padding:18px;border:1px solid var(--line);border-radius:14px;background:#fff}
+    #register .fleet-ground{display:none}
+    #register .fleet-belt{position:static;display:block;width:100%}
+    #register .fleet-group{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;gap:26px;padding:0}
+    #register .veh{height:auto;width:100%;max-height:76px;display:block;filter:drop-shadow(0 5px 7px rgba(16,22,10,.12))}
+    #register .fleet-belt .wheel{transform:none}
     #register .fleet-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px}
     #register .fleet-types{text-align:center;margin-top:12px;font-size:13.5px;letter-spacing:.01em}
-    @media (prefers-reduced-motion:reduce){
-      #register .fleet-belt,#register .fleet-ground:after,#register .fleet-belt .wheel{animation:none}
-    }
+    @media(max-width:760px){#register .fleet-group{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (prefers-reduced-motion:reduce){#register .fleet-belt,#register .wheel{animation:none}}
   </style>
   <div class="wrap">
     <div class="sec-h">
@@ -402,7 +388,7 @@ footer a:hover{color:#fff}
         </g>
       </defs></svg>
 
-      <div class="fleet-stage" role="img" aria-label="A moving line of the vehicles LiftHaul hosts — prime movers and trailers, wing vans, mobile cranes, lowbed heavy-haul rigs and forklifts.">
+      <div class="fleet-stage" role="img" aria-label="Vehicle capabilities LiftHaul hosts — prime movers and trailers, wing vans, mobile cranes, lowbed heavy-haul rigs and forklifts.">
         <div class="fleet-ground"></div>
         <div class="fleet-belt">
           <div class="fleet-group">
@@ -517,7 +503,7 @@ footer a:hover{color:#fff}
       <h2>A network you can trust to pay you.</h2>
     </div>
     <div class="trust">
-      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Protected payments</h3><p>Job funds are held by a regulated provider and released only when the work is verified. Live custody stays off until legal and provider approvals are complete.</p></div>
+      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Protected payments</h3><p>Only provider-certified channels are shown. A signed provider notification and direct status check are required before a booking is marked paid.</p></div>
       <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M3 10h5"/></svg></div><h3>Real compliance</h3><p>LTFRB CPC authority and business KYB are checked against official sources by people — verification is never fabricated when a live source isn't available.</p></div>
       <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><h3>Verified network</h3><p>Every carrier, driver and unit is onboarded through a governed pipeline, so the operators you work alongside are held to the same standard.</p></div>
     </div>
@@ -605,10 +591,9 @@ footer a:hover{color:#fff}
 
   $("#yr").textContent=new Date().getFullYear();
 
-  // duplicate the fleet group so the CSS marquee loops seamlessly
-  var fg=$(".fleet-group");
-  if(fg){var clone=fg.cloneNode(true);clone.setAttribute("aria-hidden","true");fg.parentNode.appendChild(clone);}
 })();
 </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="network-map.js?v=1"></script>
 </body>
 </html>

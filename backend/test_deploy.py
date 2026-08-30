@@ -85,6 +85,22 @@ class TestCors(unittest.TestCase):
             self.assertTrue(errors, app_env)
             self.assertTrue(any("missing APP_SECRET" in e for e in errors))
 
+    def test_production_payment_mode_fails_closed_without_provider_gates(self):
+        import server
+        env = {
+            "APP_ENV": "production",
+            "APP_SECRET": "A" * 40,
+            "DATABASE_URL": "postgresql://db/lifthaul",
+            "CORS_ORIGINS": "https://app.lifthaul.example",
+            "LH_ADMIN_EMAIL": "owner@lifthaul.example",
+            "LH_ADMIN_PASSWORD": "StrongBootstrap123",
+            "PAYMENT_GATEWAY_MODE": "production",
+        }
+        errors = server._production_config_errors(env)
+        self.assertIn("missing XENDIT_SECRET_KEY for production payments", errors)
+        self.assertIn("PAYMENT_PROVIDER_CERTIFIED must be enabled for production payments", errors)
+        self.assertIn("PAYMENT_RECONCILIATION_AUTOMATION must be enabled for production payments", errors)
+
     def test_plain_http_localhost_is_ci_only(self):
         import server
         env = {

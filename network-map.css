@@ -1,0 +1,20 @@
+/* Functional Philippine coverage map — restrained, responsive, and keyboard accessible. */
+.mapscene{position:relative;height:342px;background:#edf2e9}
+.network-map{height:100%;width:100%;z-index:1;font-family:var(--font)}
+.network-map .leaflet-control-zoom a{color:#203319}
+.network-map .leaflet-control-attribution{font-size:8px;background:rgba(255,255,255,.86)}
+.network-map-controls{position:absolute;z-index:500;left:10px;top:10px;display:flex;gap:5px;flex-wrap:wrap;max-width:calc(100% - 55px)}
+.network-map-control{border:1px solid #c9d6c1;background:rgba(255,255,255,.94);color:#2d4224;border-radius:999px;padding:6px 9px;font:800 9.5px var(--font);box-shadow:0 2px 8px rgba(18,33,11,.08);cursor:pointer;transition:background .14s,border-color .14s,color .14s}
+.network-map-control:hover,.network-map-control:focus-visible{border-color:#6faa4e;outline:none}
+.network-map-control.on{background:#17250f;border-color:#17250f;color:#fff}
+.network-map-legend{position:absolute;z-index:500;left:10px;right:10px;bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:9px;padding:8px 10px;border:1px solid rgba(202,216,192,.9);border-radius:9px;background:rgba(255,255,255,.94);box-shadow:0 3px 12px rgba(20,35,13,.1);pointer-events:none}
+.network-map-legend strong{font-size:10px}.network-map-legend span{font-size:8.5px;color:#6f7e67;text-align:right}
+.network-hub{background:transparent;border:0}
+.network-hub>span{display:block;width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:#f2611a;box-shadow:0 2px 8px rgba(68,38,11,.34)}
+.leaflet-tooltip.network-label{border:0;border-radius:6px;background:#17250f;color:#fff;box-shadow:0 2px 8px rgba(16,27,10,.18);font:700 9px var(--font);padding:4px 6px}
+.leaflet-tooltip.network-label:before{display:none}
+@media(max-width:520px){
+  .mapscene{height:310px}
+  .network-map-legend{align-items:flex-start;flex-direction:column}.network-map-legend span{text-align:left}
+}
+@media(prefers-reduced-motion:reduce){.network-map-control{transition:none}}

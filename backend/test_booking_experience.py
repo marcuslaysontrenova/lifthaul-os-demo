@@ -78,10 +78,28 @@ class BookingMarkup(unittest.TestCase):
             for suffix in ("Island", "Region", "Province", "City", "Barangay"):
                 self.assertEqual(parser.tags.get(prefix + suffix), "select")
         self.assertEqual(parser.tags.get("routeMap"), "div")
-        self.assertEqual(parser.tags.get("payMethodValue"), "dd")
-        self.assertEqual(parser.tags.get("protectionAgree"), "input")
+        self.assertEqual(parser.tags.get("gatewayStatus"), "span")
+        self.assertEqual(parser.tags.get("payAmountValue"), "dd")
+        self.assertNotIn('name="pm"', html)
+        self.assertIn("signed provider notification", html)
         self.assertIn("prefers-reduced-motion", (ROOT / "booking-experience.css").read_text(encoding="utf-8"))
         self.assertIn('src="booking-experience.js"', html)
+        self.assertNotIn("lifthaul_bookings", html)
+        self.assertIn("does not create local or fake bookings", html)
+
+    def test_customer_maps_and_payment_checkout_are_functional_not_decorative(self):
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        track = (ROOT / "track.html").read_text(encoding="utf-8")
+        map_js = (ROOT / "network-map.js").read_text(encoding="utf-8")
+        checkout_js = (ROOT / "payment-checkout.js").read_text(encoding="utf-8")
+        self.assertIn('src="network-map.js?v=1"', home)
+        self.assertIn("L.tileLayer", map_js)
+        self.assertIn("data-area", map_js)
+        self.assertNotIn("cloneNode(true)", home)
+        self.assertIn('src="payment-checkout.js?v=1"', track)
+        self.assertIn("/public/payments/channels", checkout_js)
+        self.assertIn("/payments/refresh", checkout_js)
+        self.assertNotIn("Operator-confirmed payment", track)
 
 
 class StructuredPersistence(unittest.TestCase):

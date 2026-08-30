@@ -47,7 +47,22 @@ SCHEMA_COLUMNS = [
     ("idempotency_key", "TEXT"), ("special_instructions", "TEXT"),
     # Multi-stop + scheduling + service-level increment
     ("service_level", "TEXT"), ("schedule_type", "TEXT"), ("scheduled_at", "TEXT"), ("recurrence", "TEXT"),
+    # Structured PSGC selections + payment preference (no credentials and no live transaction).
+    ("origin_psgc", "TEXT"), ("destination_psgc", "TEXT"),
+    ("payment_method", "TEXT"), ("payment_provider", "TEXT"), ("payment_channel", "TEXT"),
 ]
+
+PAYMENT_PREFERENCES = {
+    "gcash": ("Configured Philippine payment gateway", "E-wallet"),
+    "maya": ("Configured Philippine payment gateway", "E-wallet / QRPh"),
+    "bank_transfer": ("Gateway-connected participating bank", "InstaPay / PESONet"),
+    "other_wallet": ("Configured multi-channel payment gateway", "E-wallet / QRPh"),
+    "card": ("PCI-compliant hosted checkout", "Visa / Mastercard / JCB"),
+    "otc": ("Gateway-supported retail payment partner", "OTC reference payment"),
+    "operator": ("LiftHaul Finance verification", "Bank transfer with proof"),
+    # Backward-compatible preference used by existing clients before channel selection was introduced.
+    "protected": ("Approved protected-payment provider (not yet activated)", "Provider-governed checkout"),
+}
 
 # Multi-stop legs — child of the canonical booking (NOT a parallel booking model).
 STOPS_SCHEMA = """
@@ -223,6 +238,38 @@ def _persist_stops(conn, booking_id, stops):
              s["contact_phone"], s["instructions"], s["load_type"], _now()))
 
 
+def _clean_location(payload, key, island_key, fallback_address):
+    """Validate and minimize a browser PSGC selection without trusting it as routing geometry."""
+    raw = payload.get(key)
+    island = str(payload.get(island_key, "")).strip().upper()
+    if not isinstance(raw, dict):
+        return {"island_group": island.title(), "full_address": str(fallback_address or "")[:400]}
+    selected_island = str(raw.get("island_group", "")).strip().upper()
+    if selected_island and selected_island != island:
+        raise core.ValidationError(f"{key} island group does not match the booking route")
+    code_fields = ("region_code", "province_code", "locality_code", "barangay_code")
+    for field in code_fields:
+        code = raw.get(field)
+        if code not in (None, "") and (not isinstance(code, str) or len(code) != 10 or not code.isdigit()):
+            raise core.ValidationError(f"{key}.{field} must be a 10-digit PSGC code")
+    lat = _num(raw.get("latitude")); lng = _num(raw.get("longitude"))
+    if lat is not None and not (3.0 <= lat <= 22.0):
+        raise core.ValidationError(f"{key}.latitude is outside the Philippines planning boundary")
+    if lng is not None and not (115.0 <= lng <= 130.0):
+        raise core.ValidationError(f"{key}.longitude is outside the Philippines planning boundary")
+    clean = {"island_group": island.title()}
+    for field in (
+        "region_code", "region_name", "province_code", "province_name", "administrative_area_kind",
+        "locality_code", "locality_name", "locality_type", "barangay_code", "barangay_name",
+        "address_detail", "full_address", "coordinate_source",
+    ):
+        value = raw.get(field)
+        clean[field] = str(value)[:400] if value not in (None, "") else None
+    clean["latitude"] = lat; clean["longitude"] = lng
+    clean["full_address"] = (clean.get("full_address") or str(fallback_address or ""))[:400]
+    return clean
+
+
 def quote(conn, vehicle, km, inter_island, service_level=None):
     """Server-side estimate. Real rate card when one exists; else a server-owned indicative rate for
     STANDARD classes, adjusted by the service-level multiplier. ENGINEERED classes NEVER get a
@@ -285,6 +332,12 @@ def submit(conn, payload):
     q = quote(conn, payload["vehicle"], payload.get("km"), route["inter_island"], level)
     routing = routing_candidate(svc["service_class"])
     intended = "protected" if str(payload.get("payment", "protected")).lower().startswith("prot") else "operator"
+    payment_method = str(payload.get("payment_method") or ("protected" if intended == "protected" else "operator")).lower()
+    if payment_method not in PAYMENT_PREFERENCES:
+        raise core.ValidationError("unsupported payment preference")
+    payment_provider, payment_channel = PAYMENT_PREFERENCES[payment_method]  # server-owned disclosure labels
+    origin = _clean_location(payload, "origin_location", "origin_island", payload.get("origin_city"))
+    destination = _clean_location(payload, "destination_location", "dest_island", payload.get("dest_city"))
 
     actor = _service_actor()
     shipper_id = _guest_shipper(conn)
@@ -294,8 +347,8 @@ def submit(conn, payload):
         (payload.get("origin_island") or "").upper(), (payload.get("dest_island") or "").upper(),
         service_type=svc["service_class"], requested_vehicle_category=svc["requested_vehicle_category"],
         inter_island=1 if route["inter_island"] else 0, route_class=route["route_class"],
-        pickup_address=str(payload.get("origin_city", ""))[:400],
-        delivery_address=str(payload.get("dest_city", ""))[:400],
+        pickup_address=origin["full_address"],
+        delivery_address=destination["full_address"],
         weight_kg=_num(payload.get("weight_kg")), cargo_description=str(payload.get("cargo", ""))[:400])
 
     token = "pbk_" + secrets.token_urlsafe(18)
@@ -306,13 +359,18 @@ def submit(conn, payload):
         "routing_candidate=?, quote_amount=?, quote_status=?, intended_payment=?, idempotency_key=?, "
         "special_instructions=?, service_level=?, schedule_type=?, scheduled_at=?, recurrence=?, "
         "pickup_window=?, delivery_window=?, payment_status='PROTECTED_PENDING', quotation_status=?, "
+        "pickup_lat=?, pickup_lng=?, delivery_lat=?, delivery_lng=?, origin_psgc=?, destination_psgc=?, "
+        "payment_method=?, payment_provider=?, payment_channel=?, "
         "updated_at=? WHERE id=?",
         (str(payload.get("contact_name"))[:200], str(payload.get("contact_email", ""))[:200],
          str(payload.get("contact_phone", ""))[:60], token, svc["service_class"], routing,
          q.get("amount"), q["status"], intended, idem, str(payload.get("notes", ""))[:2000],
          level, sched["schedule_type"], sched["scheduled_at"], sched["recurrence"],
          sched["pickup_window"], sched["delivery_window"],
-         ("ESTIMATE_REQUIRED" if q["status"] == "ESTIMATE_REQUIRED" else "AUTO_QUOTED"), _now(), bid))
+         ("ESTIMATE_REQUIRED" if q["status"] == "ESTIMATE_REQUIRED" else "AUTO_QUOTED"),
+         origin.get("latitude"), origin.get("longitude"), destination.get("latitude"), destination.get("longitude"),
+         json.dumps(origin, ensure_ascii=False), json.dumps(destination, ensure_ascii=False),
+         payment_method, payment_provider, payment_channel, _now(), bid))
     if stops:
         _persist_stops(conn, bid, stops)
     # Protected Payment: eligibility recorded; NO live transaction (no carrier yet, funds gate OFF).
@@ -320,7 +378,8 @@ def submit(conn, payload):
     live = pay.live_funds_enabled(conn)
     core.audit(conn, actor, "PUBLIC_BOOKING_CREATED", "mkt_bookings", bid, None,
                {"ref": ref, "route": route["route_class"], "service_class": svc["service_class"],
-                "routing": routing, "quote_status": q["status"], "live_funds": live})
+                "routing": routing, "quote_status": q["status"], "live_funds": live,
+                "payment_preference": payment_method})
     conn.commit()
 
     return {
@@ -332,6 +391,8 @@ def submit(conn, payload):
         "service_level": level, "schedule_type": sched["schedule_type"],
         "scheduled_at": sched["scheduled_at"], "stops": len(stops),
         "protected_payment": {"eligible": True, "live_funds_enabled": live, "intended_method": intended},
+        "payment_preference": {"method": payment_method, "provider": payment_provider,
+                               "channel": payment_channel, "charged": False},
         "next_step": ("Engineering estimate — our team returns a priced lift plan"
                       if q["status"] == "ESTIMATE_REQUIRED"
                       else "Quotation review → carrier matching"),
@@ -435,6 +496,7 @@ def track(conn, token):
         "SELECT id,tracking_token,status,service_type,service_class,inter_island,route_class,"
         "requested_vehicle_category,quote_amount,quote_status,quotation_status,payment_status,intended_payment,"
         "assignment_status,pickup_address,delivery_address,pickup_window,created_at,"
+        "payment_method,payment_provider,payment_channel,"
         "service_level,schedule_type,scheduled_at FROM mkt_bookings WHERE tracking_token=?", (token,)).fetchone()
     if not r:
         raise core.NotFoundError("booking not found")
@@ -501,6 +563,8 @@ def track(conn, token):
         "protected_payment": {"label": _PAY_PROJ.get(raw, "Payment Required"),
                               "terminology": "Protected Payment",
                               "live_funds_enabled": pay.live_funds_enabled(conn)},
+        "payment_preference": {"method": d.get("payment_method"), "provider": d.get("payment_provider"),
+                               "channel": d.get("payment_channel")},
         "provider": provider,               # None until legitimately assigned
         "pod_available": pod_available,
         "next_action": _NEXT_ACTION.get(raw, "Contact support for an update."),

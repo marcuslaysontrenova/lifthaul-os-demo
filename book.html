@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LiftHaul — Book a delivery, nationwide</title>
-<meta name="description" content="On-demand booking across Luzon, Visayas and Mindanao — instant transparent quotes, verified carriers, and Protected Payment held until your delivery is verified.">
+<meta name="description" content="On-demand booking across Luzon, Visayas and Mindanao with transparent quotes, verified carriers, Philippine address selection, and provider-governed Protected Payment.">
 <style>
 :root{
   --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
@@ -149,6 +149,8 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 .fnote{margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#93a684}
 .demoflag{display:inline-flex;align-items:center;gap:7px;background:var(--warn-bg);color:#7a4a04;border:1px solid #e9c98a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
 </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="booking-experience.css">
   <script src="config.js"></script>
 </head>
 <body>
@@ -172,7 +174,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
     <div>
       <div class="eyebrow">On-demand · nationwide</div>
       <h1>Move anything across the Philippines — <span class="hl">matched in minutes.</span></h1>
-      <p class="lead">Book a vehicle from a motorcycle to a lowbed or crane, Luzon to Visayas to Mindanao and inter-island. Get an instant, transparent quote and pay through <b>Protected Payment</b> — funds released only when your delivery is verified.</p>
+      <p class="lead">Book a vehicle from a motorcycle to a lowbed or crane, Luzon to Visayas to Mindanao and inter-island. Get an instant, transparent quote and choose <b>Protected Payment</b> — provider-governed settlement after verified delivery when the live-funds gate is approved.</p>
       <div class="pillrow">
         <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/></svg>Protected Payment</span>
         <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>LTFRB-verified carriers</span>
@@ -187,22 +189,48 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
       </div>
       <div class="bbody">
         <form id="bookform">
-          <div class="route">
-            <div class="leg">
-              <div class="dot"><i></i><span></span><i class="b"></i></div>
-              <div class="legs">
-                <div class="grid2">
-                  <div class="field"><label>Pickup island group <span class="req">*</span></label>
-                    <select id="oIsland" required><option value="">Select…</option><option>Luzon</option><option>Visayas</option><option>Mindanao</option></select></div>
-                  <div class="field"><label>Pickup city / area <span class="req">*</span></label><input id="oCity" placeholder="e.g. Cavite" required></div>
-                </div>
-                <div class="grid2">
-                  <div class="field"><label>Drop-off island group <span class="req">*</span></label>
-                    <select id="dIsland" required><option value="">Select…</option><option>Luzon</option><option>Visayas</option><option>Mindanao</option></select></div>
-                  <div class="field"><label>Drop-off city / area <span class="req">*</span></label><input id="dCity" placeholder="e.g. Cebu" required></div>
-                </div>
-              </div>
+          <div class="geo-source">
+            <div><strong>Official Philippine address hierarchy</strong><span>PSA PSGC · 30 June 2026 · fields unlock in order</span></div>
+            <span class="geo-status" id="geoStatus" role="status" aria-live="polite">Loading locations…</span>
+          </div>
+
+          <fieldset class="location-card pickup" id="oLocationCard" data-complete="false">
+            <legend>Pickup location</legend>
+            <div class="field"><label for="oIsland">1 · Island group <span class="req">*</span></label>
+              <select id="oIsland" required disabled><option value="">Loading…</option></select></div>
+            <div class="grid2">
+              <div class="field"><label for="oRegion">2 · Region <span class="req">*</span></label><select id="oRegion" required disabled><option value="">Select region…</option></select></div>
+              <div class="field"><label for="oProvince">3 · Province / area <span class="req">*</span></label><select id="oProvince" required disabled><option value="">Select province…</option></select></div>
             </div>
+            <div class="grid2">
+              <div class="field"><label for="oCity">4 · City / municipality <span class="req">*</span></label><select id="oCity" required disabled><option value="">Select city…</option></select></div>
+              <div class="field"><label for="oBarangay">5 · Barangay <span class="req">*</span></label><select id="oBarangay" required disabled><option value="">Select barangay…</option></select></div>
+            </div>
+            <div class="field"><label for="oDetail">Specific pickup area <span class="field-hint">optional building, street or landmark</span></label><input id="oDetail" autocomplete="street-address" placeholder="e.g. Warehouse 4, Pioneer Street"></div>
+            <p class="location-meta" id="oLocationMeta" aria-live="polite">Start with an island group.</p>
+          </fieldset>
+
+          <fieldset class="location-card dropoff" id="dLocationCard" data-complete="false">
+            <legend>Delivery location</legend>
+            <div class="field"><label for="dIsland">1 · Island group <span class="req">*</span></label>
+              <select id="dIsland" required disabled><option value="">Loading…</option></select></div>
+            <div class="grid2">
+              <div class="field"><label for="dRegion">2 · Region <span class="req">*</span></label><select id="dRegion" required disabled><option value="">Select region…</option></select></div>
+              <div class="field"><label for="dProvince">3 · Province / area <span class="req">*</span></label><select id="dProvince" required disabled><option value="">Select province…</option></select></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="dCity">4 · City / municipality <span class="req">*</span></label><select id="dCity" required disabled><option value="">Select city…</option></select></div>
+              <div class="field"><label for="dBarangay">5 · Barangay <span class="req">*</span></label><select id="dBarangay" required disabled><option value="">Select barangay…</option></select></div>
+            </div>
+            <div class="field"><label for="dDetail">Specific delivery area <span class="field-hint">optional building, street or landmark</span></label><input id="dDetail" autocomplete="street-address" placeholder="e.g. Gate 2, Mactan Economic Zone"></div>
+            <p class="location-meta" id="dLocationMeta" aria-live="polite">Start with an island group.</p>
+          </fieldset>
+
+          <div class="route-review" aria-label="Interactive Philippine route review">
+            <div class="route-review-head"><div><h3>Review route on the map</h3><span class="field-hint">Selections create planning markers; click the map to refine the active pin.</span></div>
+              <div class="map-actions"><button class="map-mode on" data-map-mode="o" type="button">Set pickup pin</button><button class="map-mode" data-map-mode="d" type="button">Set drop-off pin</button></div></div>
+            <div id="routeMap"><div class="map-fallback"><div><strong>Interactive Philippine map</strong>Select pickup and delivery locations to preview the route.</div></div></div>
+            <div class="map-caption" id="mapCaption" aria-live="polite"><b>Philippine route planner</b><span>Select locations to place pickup and drop-off markers</span></div>
           </div>
 
           <div class="interisland" id="interFlag">
@@ -226,13 +254,27 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
           <div class="estimate" id="estimate" hidden></div>
 
-          <div class="field"><label>Payment method</label></div>
+          <div class="payment-title"><label>Preferred payment method</label><span>Provider availability and final fees are confirmed before authorization.</span></div>
           <div class="pay" id="pay">
-            <label class="payopt on"><input type="radio" name="pm" value="protected" checked>
-              <div><b>Protected Payment<span class="badge-rec">Recommended</span></b><br><span>Your payment is held and released to the carrier only when delivery is verified.</span></div></label>
-            <label class="payopt"><input type="radio" name="pm" value="operator">
-              <div><b>Operator-verified (bank / Wise)</b><br><span>Pay via bank transfer or Wise with proof; Finance verifies before release.</span></div></label>
+            <label class="payopt on"><input type="radio" name="pm" value="gcash" checked><span class="pay-icon">G</span><div><b>GCash<span class="badge-rec">Popular</span></b><span>E-wallet checkout through the configured Philippine gateway.</span></div></label>
+            <label class="payopt"><input type="radio" name="pm" value="maya"><span class="pay-icon">M</span><div><b>Maya</b><span>Maya Wallet or QRPh through hosted checkout when activated.</span></div></label>
+            <label class="payopt"><input type="radio" name="pm" value="bank_transfer"><span class="pay-icon">↔</span><div><b>Online bank transfer</b><span>Participating Philippine banks via InstaPay or PESONet.</span></div></label>
+            <label class="payopt"><input type="radio" name="pm" value="other_wallet"><span class="pay-icon">◈</span><div><b>Other e-wallet / QRPh</b><span>Supported wallets are displayed by the activated gateway.</span></div></label>
+            <label class="payopt"><input type="radio" name="pm" value="card"><span class="pay-icon">▰</span><div><b>Debit or credit card</b><span>Visa, Mastercard or JCB on a PCI-compliant hosted page.</span></div></label>
+            <label class="payopt"><input type="radio" name="pm" value="otc"><span class="pay-icon">₱</span><div><b>Over-the-counter</b><span>Retail payment channels and limits shown before reference creation.</span></div></label>
+            <label class="payopt"><input type="radio" name="pm" value="operator"><span class="pay-icon">✓</span><div><b>Operator-verified transfer</b><span>Controlled-pilot bank transfer with proof and Finance verification.</span></div></label>
           </div>
+
+          <div class="pay-summary" aria-live="polite">
+            <div class="pay-summary-head"><b>Protected-payment review</b><span>No payment is taken on this booking form</span></div>
+            <dl>
+              <div><dt>Payment method</dt><dd id="payMethodValue">GCash</dd></div><div><dt>Provider / institution</dt><dd id="payProviderValue">Configured Philippine payment gateway</dd></div>
+              <div><dt>Transaction amount</dt><dd id="payAmountValue">Awaiting vehicle &amp; distance</dd></div><div><dt>Processing fee</dt><dd id="payFeeValue">Provider-calculated before payment</dd></div>
+              <div><dt>Payment status</dt><dd id="payStatusValue">Selection only — no charge at booking</dd></div><div><dt>Reference number</dt><dd id="payReferenceValue">Assigned only after a payment request is created</dd></div>
+              <div><dt>Refund / cancellation</dt><dd id="payRefundValue">Subject to provider and transaction state</dd></div><div><dt>Protected conditions</dt><dd id="payProtectionValue">Provider-governed settlement after verified delivery</dd></div>
+            </dl>
+          </div>
+          <label class="protection-consent"><input type="checkbox" id="protectionAgree" required><span><strong>I understand the protected-payment conditions.</strong> Payment is requested only after quotation acceptance. Live safeguarded-funds handling activates only through an approved provider and governed operating model.</span></label>
 
           <div class="grid2">
             <div class="field"><label>Your name <span class="req">*</span></label><input id="cName" autocomplete="name" required></div>
@@ -240,11 +282,11 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
           </div>
 
           <button class="btn accent lg block" type="submit" id="bookbtn">Get instant quote &amp; book →</button>
-          <p class="note">🔒 <b>Live protected-funds custody is currently OFF</b> — until LiftHaul's regulated payment provider and legal operating model are approved, bookings settle via operator-verified payment under the same delivery-verified release policy. This is a prototype: your booking is saved to this browser only; no real payment is taken and no carrier is dispatched.</p>
+          <p class="note">🔒 <b>Live protected-funds custody is currently OFF.</b> This page records a payment preference only; it never collects credentials or charges the customer. When the API is connected, the booking is persisted to LiftHaul's governed intake. In standalone demo mode, a browser copy is saved and no carrier is dispatched.</p>
         </form>
 
         <div class="match" id="match" role="status" aria-live="polite">
-          <div class="spinner" id="spin"></div>
+          <div class="loading-dots" id="spin" aria-hidden="true"><i></i><i></i><i></i></div>
           <h3 id="matchTitle">Matching you with a verified carrier…</h3>
           <p class="muted" id="matchSub" style="font-size:13px;margin-top:6px">Checking LTFRB authority, capacity and lane serviceability…</p>
           <div class="ref" id="ref"></div>
@@ -273,25 +315,15 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
       <div class="r"><span class="pin">M</span><div><b>Mindanao</b><br><span>Davao, Cagayan de Oro, Zamboanga, General Santos.</span></div></div>
       <div class="r"><span class="pin">⇆</span><div><b>Inter-island</b><br><span>RoRo &amp; port-handled lanes across island groups — priced into your quote.</span></div></div>
     </div>
-    <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#EFF7E6">
-      <svg viewBox="0 0 280 260" role="img" aria-label="Philippines coverage map" style="display:block;width:100%">
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#93CE68"/><stop offset="1" stop-color="#BEE398"/></linearGradient></defs>
-        <rect width="280" height="260" fill="#EFF7E6"/>
-        <g fill="url(#lg)" stroke="#5FB92A" stroke-width="1.1" stroke-linejoin="round">
-          <path d="M132 20c15-6 28 4 31 18 2 10-2 17 2 25 4 10-2 20-12 21-2 10-13 12-19 6-11 1-18-8-17-18-10-7-9-20-1-27-2-15 5-28 16-25z"/>
-          <path d="M164 90c8 1 14 8 13 15-1 7-8 8-13 4-6-6-6-14 0-19z"/>
-          <path d="M100 96c6-2 10 4 8 10l-18 37c-3 6-11 4-10-3l16-41c1-2 2-3 4-3z"/>
-          <path d="M158 120c7-1 11 5 8 10-3 5-10 4-12-1-2-4 0-8 4-9z"/>
-          <path d="M186 128c6 0 8 6 8 12s-2 13-8 13-7-7-7-13 1-12 7-12z"/>
-          <path d="M204 130c5 0 7 6 7 12s-2 13-6 13-6-7-6-13 0-12 5-12z"/>
-          <path d="M178 165c15-8 34-3 42 9 7 10 5 21 12 27 6 7 1 17-8 18-8 7-21 6-27-2-11 2-21-5-22-15-11-5-15-17-8-25-3-12 6-21 11-16z"/>
-        </g>
-        <g font-family="Segoe UI,Arial" font-size="10" font-weight="700" fill="#2E5C1A">
-          <circle cx="146" cy="58" r="3.4" fill="#F2611A"/><text x="154" y="61">Luzon</text>
-          <circle cx="196" cy="140" r="3.2" fill="#F2611A"/><text x="204" y="143">Visayas</text>
-          <circle cx="202" cy="182" r="3.4" fill="#F2611A"/><text x="132" y="185" text-anchor="end">Mindanao</text>
-        </g>
-      </svg>
+    <div class="coverage-proof">
+      <div class="proof-head"><div class="proof-icon">PH</div><div><h3>Current nationwide address coverage</h3><p>PSA Philippine Standard Geographic Code · Second Quarter 2026</p></div></div>
+      <div class="coverage-stats">
+        <div class="coverage-stat"><strong>18</strong><span>regions</span></div>
+        <div class="coverage-stat"><strong>82</strong><span>provinces</span></div>
+        <div class="coverage-stat"><strong>1,642</strong><span>cities &amp; municipalities</span></div>
+        <div class="coverage-stat"><strong>42,010</strong><span>barangays</span></div>
+      </div>
+      <p class="coverage-foot">The booking map uses real map tiles, zoom controls, route markers and click-to-refine pins. Independent cities and region-level municipalities retain their official PSGC parentage.</p>
     </div>
   </div>
 </div></section>
@@ -329,7 +361,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 <!-- TRUST -->
 <section><div class="wrap">
   <div class="trust">
-    <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><div><h3>Protected Payment</h3><p>Funds held until delivery is verified. Live custody activates once a regulated provider + legal model are approved; until then, operator-verified settlement applies.</p></div></div>
+    <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><div><h3>Protected Payment</h3><p>When activated through an approved provider, settlement follows verified delivery and governed release controls. Until then, controlled-pilot payments use operator verification.</p></div></div>
     <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M3 10h5"/></svg></div><div><h3>LTFRB-verified carriers</h3><p>Carriers are checked for CPC authority, area of operation and unit legality — verified against official sources, never fabricated.</p></div></div>
     <div class="tc"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><h3>Track every leg</h3><p>Live status from match to pickup to delivery — including the port/sea leg on inter-island lanes.</p></div></div>
   </div>
@@ -342,10 +374,13 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   <div class="fnote">© <span id="yr"></span> LiftHaul Enterprise · Nationwide PH heavy-haul &amp; delivery marketplace · Powered by LiftHaul · Developed by TrenovaTech.ai · Protected Payment live funds OFF · verification never fabricated</div>
 </div></footer>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="booking-experience.js"></script>
 <script>
 (function(){
   "use strict";
   var $=function(s){return document.querySelector(s);};
+  var scrollMode=function(){return window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";};
   // LiftHaul vehicle taxonomy (base fare ₱, per-km ₱, inter-island sea surcharge ₱). Heavy = quote-assisted.
   var VEH=[
     {id:"moto",name:"Motorcycle",cap:"up to 20 kg",base:60,km:8,sea:250},
@@ -379,15 +414,16 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
   function estimate(){
     var box=$("#estimate");
-    if(!sel){box.hidden=true;return;}
+    if(!sel){box.hidden=true;if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;}
     var v=VEH.find(function(x){return x.id===sel;});
     var km=parseFloat($("#km").value||"0");
     if(v.quote){
       box.hidden=false;
       box.innerHTML='<div class="quoteonly">⚙ '+v.name+' is an engineered quote — submit the booking and our team returns a priced lift plan (load charts, permits, route).</div>';
+      if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);
       return;
     }
-    if(!km||km<=0){box.hidden=true;return;}
+    if(!km||km<=0){box.hidden=true;if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;}
     var ii=interIsland();
     var dist=Math.round(v.km*km);
     var sea=ii?v.sea:0;
@@ -402,15 +438,16 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
       (ii?'<div class="row"><span>Inter-island sea-freight + port handling</span><span>'+peso(sea)+'</span></div>':'')+
       '<div class="row total"><span>Estimated total</span><span>'+peso(total)+'</span></div>'+
       '<div class="row" style="color:var(--muted)"><span>Transparent estimate · final fare confirmed at carrier match</span><span></span></div>';
+    if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(total);
   }
 
   document.addEventListener("click",function(e){
     var v=e.target.closest(".vopt"); if(v){[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});v.classList.add("on");sel=v.getAttribute("data-v");var vd=VEH.find(function(x){return x.id===sel;});populateLevels(!!(vd&&vd.heavy));estimate();return;}
     if(e.target.id==="addStop"){var wrap=document.getElementById("stops");var row=document.createElement("div");row.className="stoprow";row.style.cssText="display:flex;gap:8px;margin-bottom:6px";row.innerHTML='<input class="stopAddr" placeholder="Stop address (drop / staging / transfer)" style="flex:1"><button type="button" class="btn line sm rmStop">×</button>';wrap.appendChild(row);return;}
     if(e.target.classList&&e.target.classList.contains("rmStop")){var r=e.target.closest(".stoprow");if(r)r.remove();return;}
-    var p=e.target.closest(".payopt"); if(p){[].forEach.call(document.querySelectorAll(".payopt"),function(b){b.classList.remove("on");});p.classList.add("on");p.querySelector("input").checked=true;return;}
-    var w=e.target.closest(".bhead button"); if(w){[].forEach.call(document.querySelectorAll(".bhead button"),function(b){b.classList.remove("on");});w.classList.add("on");when=w.getAttribute("data-when");return;}
-    if(e.target.id==="newBooking"){$("#match").classList.remove("show");$("#bookform").style.display="";$("#bookform").reset();sel=null;[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});$("#estimate").hidden=true;$("#book").scrollIntoView({behavior:"smooth"});}
+    var p=e.target.closest(".payopt"); if(p){[].forEach.call(document.querySelectorAll(".payopt"),function(b){b.classList.remove("on");});p.classList.add("on");var pr=p.querySelector("input");pr.checked=true;pr.dispatchEvent(new Event("change",{bubbles:true}));return;}
+    var w=e.target.closest(".bhead button"); if(w){[].forEach.call(document.querySelectorAll(".bhead button"),function(b){b.classList.remove("on");});w.classList.add("on");when=w.getAttribute("data-when");var st=document.getElementById("schedType");if(st){st.value=when==="later"?"SCHEDULED":"NOW";st.dispatchEvent(new Event("change"));}return;}
+    if(e.target.id==="newBooking"){$("#match").classList.remove("show");$("#bookform").style.display="";$("#bookform").reset();$("#bookbtn").disabled=false;sel=null;[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});$("#estimate").hidden=true;if(window.LiftHaulBookingUX)LiftHaulBookingUX.reset();$("#book").scrollIntoView({behavior:scrollMode()});}
   });
   $("#oIsland").addEventListener("change",refreshInter);
   $("#dIsland").addEventListener("change",refreshInter);
@@ -421,26 +458,30 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
   var STD_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","Destination","Out for Delivery","Delivered","POD","Settled"];
   var II_STAGES=["Request Received","Quotation","Payment","Matching","Assigned","Pickup","In Transit","At Port","Sea Leg","Destination Port","Out for Delivery","Delivered","POD","Settled"];
-  function showMatch(){$("#bookform").style.display="none";var m=$("#match");m.classList.add("show");m.scrollIntoView({behavior:"smooth",block:"center"});$("#spin").style.display="";$("#newBooking").style.display="none";}
+  function showMatch(){$("#bookform").style.display="none";var m=$("#match");m.classList.add("show");m.scrollIntoView({behavior:scrollMode(),block:"center"});$("#spin").style.display="";$("#newBooking").style.display="none";}
   function renderTrack(ref,title,sub,stages,cur){$("#ref").textContent="Booking "+ref;$("#spin").style.display="none";$("#matchTitle").textContent=title;$("#matchSub").textContent=sub;var html="";stages.forEach(function(s,i){var cls=i<cur?"done":i===cur?"cur":"";html+='<div class="tstep '+cls+'"><div class="ic">'+(i<cur?"✓":i===cur?"●":(i+1))+'</div><div><b>'+s+'</b></div></div>';});$("#track").innerHTML=html;$("#newBooking").style.display="";}
   function localDemo(payload,v,ii){var ref="LH-"+(ii?"II":"")+Date.now().toString(36).toUpperCase().slice(-6);try{var a=JSON.parse(localStorage.getItem("lifthaul_bookings")||"[]");a.push(Object.assign({ref:ref,at:new Date().toISOString()},payload));localStorage.setItem("lifthaul_bookings",JSON.stringify(a));}catch(_){}var stages=(ii?II_STAGES:STD_STAGES);setTimeout(function(){renderTrack(ref,v.quote?"Request received · "+v.name:"Carrier matched · "+v.name,v.quote?"Engineered lift — our team returns a priced plan shortly.":"Estimated arrival at pickup: ~"+(15+Math.floor(Math.random()*20))+" min.",stages,v.quote?0:1);},2000);}
 
   $("#bookform").addEventListener("submit",function(e){
     e.preventDefault();
-    var need=["oIsland","oCity","dIsland","dCity","km","cName","cContact"];
+    var need=["oIsland","oRegion","oProvince","oCity","oBarangay","dIsland","dRegion","dProvince","dCity","dBarangay","km","cName","cContact"];
     for(var i=0;i<need.length;i++){var el=$("#"+need[i]);if(!el.value.trim()){el.focus();el.style.borderColor="var(--crit)";return;}el.style.borderColor="";}
-    if(!sel){$("#veh").scrollIntoView({behavior:"smooth",block:"center"});return;}
+    if(!$("#protectionAgree").checked){$("#protectionAgree").focus();return;}
+    if(!sel){$("#veh").scrollIntoView({behavior:scrollMode(),block:"center"});return;}
     var v=VEH.find(function(x){return x.id===sel;});
     var ii=interIsland();
     var contact=$("#cContact").value.trim();
-    var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:$("#oCity").value.trim(),dest_city:$("#dCity").value.trim(),vehicle:sel,km:$("#km").value,payment:(document.querySelector('input[name=pm]:checked')||{}).value};
+    var origin=window.LiftHaulBookingUX?LiftHaulBookingUX.getLocation("o"):{};
+    var destination=window.LiftHaulBookingUX?LiftHaulBookingUX.getLocation("d"):{};
+    var payChoice=window.LiftHaulBookingUX?LiftHaulBookingUX.paymentChoice():{code:"operator",provider:"LiftHaul Finance verification",channel:"Bank transfer with proof"};
+    var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:origin.full_address||origin.locality_name||$("#oCity").value,dest_city:destination.full_address||destination.locality_name||$("#dCity").value,origin_location:origin,destination_location:destination,vehicle:sel,km:$("#km").value,payment:payChoice.code==="operator"?"operator":"protected",payment_method:payChoice.code,payment_provider:payChoice.provider,payment_channel:payChoice.channel,idempotency_key:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():("web-"+Date.now()+"-"+Math.random().toString(36).slice(2))};
     payload.service_level=(document.getElementById("svcLevel")||{}).value||"STANDARD";
     payload.schedule_type=(document.getElementById("schedType")||{}).value||"NOW";
     if(payload.schedule_type==="SCHEDULED"){payload.scheduled_at=(document.getElementById("schedAt")||{}).value||"";}
     var st=collectStops();if(st.length)payload.stops=st;
     if(contact.indexOf("@")>-1)payload.contact_email=contact; else payload.contact_phone=contact;
     var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null;try{if(!base)base=localStorage.getItem("lifthaul_api_base")||localStorage.getItem("rgo_api_base");}catch(_){}
-    showMatch();
+    $("#bookbtn").disabled=true;showMatch();
     if(base){
       fetch(base.replace(/\/+$/,"")+"/public/bookings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
         .then(function(r){return r.json();}).then(function(j){

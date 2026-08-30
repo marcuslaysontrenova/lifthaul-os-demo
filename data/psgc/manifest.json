@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "name": "Philippine Standard Geographic Code",
+    "as_of": "2026-06-30",
+    "release": "Second Quarter 2026",
+    "publisher": "Philippine Statistics Authority",
+    "source": "https://psa.gov.ph/classification/psgc/",
+    "license": "CC BY 4.0",
+    "source_sha256": "9eece43a889af18398f4a40d29a8ffa4968c84b1c0d015e74ff4b5558070eb3d",
+    "totals": {
+      "regions": 18,
+      "provinces": 82,
+      "localities": 1642,
+      "barangays": 42010
+    }
+  },
+  "island_groups": [
+    {
+      "id": "Luzon",
+      "file": "data/psgc/luzon.json",
+      "regions": 8,
+      "center": [
+        16.15,
+        121.0
+      ],
+      "zoom": 6
+    },
+    {
+      "id": "Visayas",
+      "file": "data/psgc/visayas.json",
+      "regions": 4,
+      "center": [
+        10.75,
+        123.65
+      ],
+      "zoom": 7
+    },
+    {
+      "id": "Mindanao",
+      "file": "data/psgc/mindanao.json",
+      "regions": 6,
+      "center": [
+        7.65,
+        124.8
+      ],
+      "zoom": 6
+    }
+  ]
+}

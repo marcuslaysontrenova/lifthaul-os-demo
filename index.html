@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LiftHaul — Join the heavy-hauling &amp; lifting network</title>
-<meta name="description" content="LiftHaul is the Philippine network for drivers, owner-operators, truckers and heavy-equipment operators. Register free, get verified, get matched to jobs, get paid through protected payments.">
+<title>LiftHaul — Professional logistics with verified providers and protected payments</title>
+<meta name="description" content="Book trucks and heavy equipment across the Philippines. Compare verified transport providers, follow every trip, and use provider-verified Protected Payment.">
 <style>
 :root{
   --bg:#F6F8F3;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
   --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
-  --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
-  --primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;
+  --accent:#70C247;--accent-2:#56A82E;--accent-ink:#102019;
+  --primary:#006B3C;--primary-2:#005B34;--primary-ink:#FFFFFF;--primary-soft:#E7F3ED;
   --good:#3B8F1E;--good-bg:#E4F3D6;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;
   --radius:12px;--radius-sm:8px;
   --font:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
@@ -35,7 +35,7 @@ img,svg{max-width:100%}
 .btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;font-family:inherit;font-size:15px;font-weight:700;
   padding:12px 20px;border-radius:var(--radius-sm);border:1.5px solid transparent;background:var(--primary);color:var(--primary-ink);
   cursor:pointer;transition:transform .12s ease,box-shadow .12s ease,background .12s ease;white-space:nowrap}
-.btn:hover{background:var(--accent-2);transform:translateY(-1px);box-shadow:var(--shadow)}
+.btn:hover{background:var(--primary-2);transform:translateY(-1px);box-shadow:var(--shadow)}
 .btn:active{transform:translateY(0)}
 .btn.accent{background:var(--accent);color:var(--accent-ink)}
 .btn.accent:hover{background:var(--accent-2)}
@@ -47,7 +47,7 @@ img,svg{max-width:100%}
 .btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.rtab:focus-visible{outline:3px solid rgba(95,185,42,.45);outline-offset:2px}
 
 /* nav */
-.snav{position:sticky;top:0;z-index:50;background:rgba(234,244,224,.82);backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
+.snav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
 .snav .in{max-width:var(--wrap);margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:18px}
 .mark{display:flex;align-items:center;gap:10px}
 .wordmark{font-weight:800;font-size:21px;letter-spacing:-.03em}
@@ -58,7 +58,7 @@ img,svg{max-width:100%}
 .snav .navdiv{width:1px;height:20px;background:var(--line);flex:0 0 auto}
 .snav .sp{flex:1}
 .navtoggle{display:none;background:none;border:0;cursor:pointer;padding:8px}
-@media(max-width:900px){
+@media(max-width:1300px){
   .snav .links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 22px 14px}
   .snav .links.open{display:flex}
   .snav .links a{padding:11px 0;border-bottom:1px solid var(--line);white-space:normal}
@@ -191,6 +191,8 @@ footer a{display:block;color:#c9d8bd;font-size:14px;padding:4px 0}
 footer a:hover{color:#fff}
 .fnote{margin-top:30px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#93a684;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .demoflag{display:inline-flex;align-items:center;gap:7px;background:var(--warn-bg);color:#7a4a04;border:1px solid #e9c98a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
+.payflow{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.paynode{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;position:relative}.paynode .n{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:var(--primary);color:#fff;font-size:12px;font-weight:800}.paynode h3{font-size:15px;margin-top:12px}.paynode p{font-size:13px;color:var(--ink-2);margin-top:6px}.faq{display:grid;grid-template-columns:1fr 1fr;gap:12px}.faq details{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px}.faq summary{font-weight:750;cursor:pointer}.faq p{font-size:14px;color:var(--ink-2);margin-top:9px}.compliance-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.factlist{display:grid;gap:10px}.fact{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:13px 15px}.fact b{display:block}.fact span{color:var(--ink-2);font-size:13px}.legal-note{background:var(--warn-bg);border:1px solid #e8cd96;border-left:4px solid var(--warn);border-radius:var(--radius-sm);padding:14px 16px;color:#684306;font-size:13.5px}
+@media(max-width:980px){.payflow{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.compliance-grid,.faq{grid-template-columns:1fr}}@media(max-width:560px){.payflow{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="network-map.css?v=1">
@@ -202,24 +204,26 @@ footer a:hover{color:#fff}
   <div class="in">
     <a class="mark" href="#home" aria-label="LiftHaul home">
       <svg class="logo" width="34" height="34" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-        <rect x="2.5" y="2.5" width="35" height="35" rx="10" fill="#101408" stroke="#5FB92A" stroke-width="2"/>
-        <path d="M20 8.5 L28.8 19.5 H23 V25.6 H17 V19.5 H11.2 Z" fill="#F2611A"/>
-        <rect x="11.5" y="28.6" width="17" height="3.3" rx="1.65" fill="#5FB92A"/>
+        <rect x="2.5" y="2.5" width="35" height="35" rx="10" fill="#004F2D" stroke="#70C247" stroke-width="2"/>
+        <path d="M20 8.5 L28.8 19.5 H23 V25.6 H17 V19.5 H11.2 Z" fill="#70C247"/>
+        <rect x="11.5" y="28.6" width="17" height="3.3" rx="1.65" fill="#FFFFFF"/>
       </svg>
       <span class="wordmark"><b>Lift</b><b>Haul</b></span>
     </a>
     <div class="links" id="navlinks">
       <a href="#how">How it works</a>
       <a href="#who">Who joins</a>
-      <a href="#trust">Why LiftHaul</a>
+      <a href="#protected">Protected Payment</a>
+      <a href="#trust">Safety &amp; verification</a>
+      <a href="#faq">FAQ</a>
       <span class="navdiv" aria-hidden="true"></span>
       <a href="track.html">Track</a>
-      <a href="portal.html">Carrier portal</a>
-      <a href="driver.html">Driver app</a>
+      <a href="client.html">Client workspace</a>
+      <a href="portal.html">Provider workspace</a>
     </div>
     <div class="sp"></div>
-    <a class="btn line sm hidesm" href="book.html">Book a delivery</a>
-    <a class="btn sm" href="provider.html">Register free</a>
+    <a class="btn line sm hidesm" href="client.html">Client login</a>
+    <a class="btn sm" href="book.html">Book a Truck</a>
     <button class="navtoggle" id="navtoggle" aria-label="Menu" aria-expanded="false">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
@@ -230,22 +234,22 @@ footer a:hover{color:#fff}
 <header class="hero" id="home">
   <div class="wrap">
     <div>
-      <div class="eyebrow">Philippine heavy-hauling &amp; lifting network</div>
-      <h1>Drive, haul and <span class="hl">lift</span> — with a network that keeps you moving.</h1>
-      <p class="lead">LiftHaul connects drivers, owner-operators, truckers and heavy-equipment operators to real jobs — with document verification, LTFRB-aware compliance, and payments protected until the work is done.</p>
+      <div class="eyebrow">Nationwide logistics marketplace</div>
+      <h1>Professional logistics. <span class="hl">Verified providers.</span> Protected payments.</h1>
+      <p class="lead">Book trucks, cranes and heavy-haul equipment across Luzon, Visayas and Mindanao. Compare qualified offers, follow delivery evidence, and release payment only through a provider-verified workflow.</p>
       <div class="cta">
-        <a class="btn lg" href="provider.html">Register as a partner →</a>
-        <a class="btn line lg" href="book.html">Book a delivery →</a>
+        <a class="btn lg" href="book.html">Book a Truck →</a>
+        <a class="btn line lg" href="provider.html">Register as a Trucker or Fleet Owner →</a>
       </div>
       <div class="pillrow">
-        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>Free to register</span>
-        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/></svg>LTFRB-aware compliance</span>
-        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Protected payments</span>
+        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>Provider eligibility gates</span>
+        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/></svg>Evidence-based verification</span>
+        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Payment status verified by provider</span>
       </div>
     </div>
     <aside class="herocard" aria-label="What you get">
-      <h3>One profile. The whole job pipeline.</h3>
-      <p class="muted" style="font-size:14px;margin-top:6px">Register once, get verified, and start receiving matched work across the country.</p>
+      <h3>One booking. One accountable timeline.</h3>
+      <p class="muted" style="font-size:14px;margin-top:6px">Pickup, route, provider, payment, delivery evidence, dispute and settlement in one governed record.</p>
       <div class="mapscene">
         <svg viewBox="0 0 300 384" role="img" aria-label="Map of the Philippines: Luzon, Visayas and Mindanao" class="phmap">
           <defs>
@@ -298,7 +302,7 @@ footer a:hover{color:#fff}
         </svg>
       </div>
       <p class="mapcap muted">Luzon · Visayas · Mindanao — one verified network</p>
-      <a class="btn accent" style="width:100%;margin-top:14px" href="provider.html">Start your registration →</a>
+      <a class="btn accent" style="width:100%;margin-top:14px" href="book.html">Plan a nationwide booking →</a>
     </aside>
   </div>
 </header>
@@ -495,17 +499,60 @@ footer a:hover{color:#fff}
   </div>
 </section>
 
+<!-- PROTECTED PAYMENT -->
+<section id="protected" class="alt">
+  <div class="wrap">
+    <div class="sec-h">
+      <div class="eyebrow">Protected Payment</div>
+      <h2>Fund the booking. Verify the service. Release through governed controls.</h2>
+      <p>A redirect or screenshot never proves payment. LiftHaul requires an authenticated provider event, a direct provider status check, and an exact match of the booking reference, amount and currency.</p>
+    </div>
+    <div class="payflow">
+      <article class="paynode"><div class="n">1</div><h3>Agree</h3><p>Client and provider accept the price, scope and release conditions.</p></article>
+      <article class="paynode"><div class="n">2</div><h3>Fund</h3><p>The approved payment partner creates a unique transaction.</p></article>
+      <article class="paynode"><div class="n">3</div><h3>Verify</h3><p>Webhook authentication and server-side confirmation must both pass.</p></article>
+      <article class="paynode"><div class="n">4</div><h3>Deliver</h3><p>Pickup, trip and proof-of-delivery milestones are recorded.</p></article>
+      <article class="paynode"><div class="n">5</div><h3>Confirm</h3><p>The client confirms or may dispute before the stated deadline.</p></article>
+      <article class="paynode"><div class="n">6</div><h3>Release</h3><p>Authorized release, provider confirmation and reconciliation complete settlement.</p></article>
+    </div>
+    <div class="legal-note" style="margin-top:18px"><b>Important:</b> LiftHaul uses “Protected Payment” as the public product term. It will not claim a regulated funds-holding status, hold customer funds in an operating account, or activate live protected funds until a qualified financial partner, the operating agreement, Philippine regulatory analysis, and production certification are approved.</div>
+  </div>
+</section>
+
 <!-- TRUST -->
 <section id="trust" class="alt">
   <div class="wrap">
     <div class="sec-h">
-      <div class="eyebrow">Why LiftHaul</div>
-      <h2>A network you can trust to pay you.</h2>
+      <div class="eyebrow">Safety, verification and regulatory honesty</div>
+      <h2>Evidence first. Eligibility fails closed.</h2>
     </div>
     <div class="trust">
-      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Protected payments</h3><p>Only provider-certified channels are shown. A signed provider notification and direct status check are required before a booking is marked paid.</p></div>
-      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M3 10h5"/></svg></div><h3>Real compliance</h3><p>LTFRB CPC authority and business KYB are checked against official sources by people — verification is never fabricated when a live source isn't available.</p></div>
-      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><h3>Verified network</h3><p>Every carrier, driver and unit is onboarded through a governed pipeline, so the operators you work alongside are held to the same standard.</p></div>
+      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Payment integrity</h3><p>Only certified channels are shown. Payment, refund and settlement evidence remains traceable to provider IDs and an immutable audit history.</p></div>
+      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M3 10h5"/></svg></div><h3>Transport-document review</h3><p>Business, CPC or authority, vehicle, driver, insurance and roadworthiness records carry factual Submitted, Under Review, Verified, Rejected, Expired or Suspended states.</p></div>
+      <div class="tcard"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><h3>No unsupported claims</h3><p>Document review does not itself make LiftHaul BSP-compliant or LTFRB-accredited. Formal determinations and partner evidence are tracked as launch gates.</p></div>
+    </div>
+    <div class="compliance-grid" style="margin-top:24px">
+      <div class="factlist">
+        <div class="fact"><b>Transport providers</b><span>Expired, suspended, mismatched or unverified required records block paid-job eligibility.</span></div>
+        <div class="fact"><b>Client and provider separation</b><span>A provider cannot self-verify; a dispute opener cannot decide their own case; payout changes require independent review.</span></div>
+        <div class="fact"><b>Privacy and audit</b><span>Workspaces are organization-scoped, sensitive credentials are not stored in business records, and governed actions retain an audit trail.</span></div>
+      </div>
+      <div class="legal-note"><b>Pre-launch regulatory status</b><br>Payment role, merchant-acquisition structure, safeguarded funds, marketplace transport authority, privacy notices and final contracts require partner/counsel approval before the related production capability or public claim is activated.</div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-h"><div class="eyebrow">Frequently asked questions</div><h2>Know what happens before you book or dispatch.</h2></div>
+    <div class="faq">
+      <details><summary>Does LiftHaul hold my money?</summary><p>Not in its operating account. The intended production model uses an approved financial partner. Live protected funds remain off until the partner and legal structure are approved.</p></details>
+      <details><summary>What makes a payment “confirmed”?</summary><p>An authenticated provider event plus a direct server-to-server check matching the booking reference, amount, currency and successful payment status. A screenshot is not proof.</p></details>
+      <details><summary>When can payment be released?</summary><p>Only after the agreed service milestones and delivery evidence pass, the dispute window is respected, the payout account is approved, authorized release checks succeed, and the provider confirms release.</p></details>
+      <details><summary>What happens if I dispute a delivery?</summary><p>An eligible dispute freezes the affected unreleased amount. Both parties receive deadlines to provide evidence, and an authorized reviewer—not the case opener—records the resolution.</p></details>
+      <details><summary>Are all providers LTFRB-approved?</summary><p>LiftHaul records and reviews applicable transport authority and unit documents. The platform displays the actual verification status and does not imply agency accreditation without documentary support.</p></details>
+      <details><summary>Which payment methods are available?</summary><p>Only payment channels that are configured and have passed sandbox, security, failure, refund, reconciliation and controlled-production tests are displayed at checkout.</p></details>
     </div>
   </div>
 </section>
@@ -514,11 +561,11 @@ footer a:hover{color:#fff}
 <section>
   <div class="wrap">
     <div class="ctaband">
-      <h2>Ready to put your wheels — or your crane — to work?</h2>
-      <p>Register in a few minutes. Get verified. Start receiving matched jobs.</p>
+      <h2>Ready to move a load—or put your fleet to work?</h2>
+      <p>Book nationwide logistics or register for evidence-based provider review.</p>
       <div class="cta">
-        <a class="btn accent lg" href="provider.html">Register free →</a>
-        <a class="btn line lg" style="border-color:rgba(255,255,255,.3);color:#fff" href="book.html">Book a delivery instead</a>
+        <a class="btn accent lg" href="book.html">Book a Truck →</a>
+        <a class="btn line lg" style="border-color:rgba(255,255,255,.3);color:#fff" href="provider.html">Register a provider</a>
       </div>
     </div>
   </div>
@@ -547,13 +594,17 @@ footer a:hover{color:#fff}
         <a href="provider.html?type=CRANE_COMPANY">Equipment Operator</a></div>
       <div><h4>Platform</h4>
         <a href="#how">How it works</a>
-        <a href="#trust">Why LiftHaul</a>
+        <a href="#protected">Protected Payment</a>
+        <a href="#trust">Safety &amp; verification</a>
         <a href="book.html">Book a haul</a>
+        <a href="client.html">Client login</a>
         <a href="console.html" id="oplogin">Staff login</a></div>
-      <div><h4>Contact</h4>
-        <a href="#">hello@lifthaul.demo</a>
-        <a href="#">Nationwide · PH</a>
-        <a href="#">Mon–Sat dispatch</a></div>
+      <div><h4>Support &amp; legal</h4>
+        <a href="support.html">Contact &amp; support</a>
+        <a href="policies.html#terms">Terms of Service</a>
+        <a href="policies.html#privacy">Privacy Policy</a>
+        <a href="policies.html#refunds">Refund Policy</a>
+        <a href="policies.html#protected-payment">Protected-Payment Terms</a></div>
     </div>
     <div class="fnote">
       <span>© <span id="yr"></span> LiftHaul (demo) · Powered by LiftHaul OS · Developed by TrenovaTech.ai</span>

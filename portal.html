@@ -7,10 +7,10 @@
 <meta name="description" content="LiftHaul Carrier & Fleet Owner Portal — manage your own fleet, drivers, compliance, offers, trips, earnings and settlements. Regulated compliance is reviewer-verified; carriers never self-verify.">
 <style>
 :root{
-  --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
-  --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
-  --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
-  --primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;
+  --bg:#F5F7F5;--surface:#FFFFFF;--surface-2:#F0F6F2;--surface-3:#E3EEE7;
+  --ink:#17221B;--ink-2:#304A3A;--muted:#69766E;--line:#D7E1DA;
+  --accent:#70C247;--accent-2:#56A82E;--accent-ink:#102019;
+  --primary:#006B3C;--primary-2:#005B34;--primary-ink:#FFFFFF;--primary-soft:#E7F3ED;
   --good:#3B8F1E;--good-bg:#E4F3D6;--warn:#C9760A;--warn-bg:#FBEEDA;--crit:#CE3E3E;--crit-bg:#FBE6E6;
   --info:#2A72C9;--info-bg:#E4EEFB;
   --radius:12px;--radius-sm:8px;
@@ -22,9 +22,9 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased}
 h1,h2,h3{line-height:1.16;letter-spacing:-.02em;margin:0}p{margin:0}code{font-family:var(--mono);font-size:.92em}
 .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
-.topbar{background:rgba(234,244,224,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.topbar{background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
 .topbar .in{max-width:1120px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px}
-.wordmark{font-weight:800;font-size:20px;letter-spacing:-.03em}.wordmark b:last-child{color:var(--accent)}
+.wordmark{font-weight:800;font-size:20px;letter-spacing:-.03em}.wordmark b:last-child{color:var(--primary)}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
 .chip.c-good{background:var(--good-bg);color:var(--good)}.chip.c-warn{background:var(--warn-bg);color:var(--warn)}
 .chip.c-crit{background:var(--crit-bg);color:var(--crit)}.chip.c-info{background:var(--info-bg);color:var(--info)}.chip.c-mut{background:var(--surface-3);color:var(--muted)}
@@ -33,7 +33,7 @@ h1,h2,h3{line-height:1.16;letter-spacing:-.02em;margin:0}p{margin:0}code{font-fa
 .feetbl td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 .feetbl tr.tot td{font-weight:800;border-bottom:none;padding-top:8px;font-size:15px}
 .sp{flex:1}
-.btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;font-family:inherit;font-size:14.5px;font-weight:700;padding:11px 18px;border-radius:var(--radius-sm);border:1.5px solid transparent;background:var(--accent);color:var(--accent-ink);cursor:pointer;transition:.12s}
+.btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;font-family:inherit;font-size:14.5px;font-weight:700;padding:11px 18px;border-radius:var(--radius-sm);border:1.5px solid transparent;background:var(--primary);color:#fff;cursor:pointer;transition:.12s}
 .btn:hover{background:var(--accent-2)}.btn.line{background:rgba(255,255,255,.18);border-color:rgba(12,20,6,.28);color:var(--ink)}
 .btn.sm{padding:7px 13px;font-size:13px}
 .main{padding:22px 0 60px}
@@ -63,7 +63,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .login .panel-b label{display:block;font-size:13px;font-weight:600;margin-bottom:10px}
 .login input{width:100%;margin-top:5px;font-family:inherit;font-size:14.5px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--ink)}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;font-size:13.5px;box-shadow:var(--shadow);z-index:99;max-width:90vw}
+.payline{display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));overflow:auto;margin:12px 0;padding-bottom:6px}.paystep{position:relative;min-width:95px;text-align:center;padding:26px 5px 3px;color:var(--muted);font-size:10.5px;font-weight:700}.paystep:before{content:"";position:absolute;top:10px;left:0;right:0;height:3px;background:var(--line)}.paystep:after{content:"";position:absolute;top:4px;left:50%;width:14px;height:14px;border-radius:50%;transform:translateX(-50%);background:#fff;border:3px solid var(--line)}.paystep.complete:before,.paystep.current:before{background:var(--accent)}.paystep.complete:after{background:var(--accent);border-color:var(--accent)}.paystep.current:after{border-color:var(--primary);box-shadow:0 0 0 4px rgba(0,107,60,.12)}.paystep.current{color:var(--primary)}
 .hide{display:none}
+@media(prefers-reduced-motion:reduce){.btn{transition:none}.paystep.current:after{box-shadow:none}}
 </style>
 </head>
 <body>
@@ -84,7 +86,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
         <div class="note" style="border-left-color:var(--accent)"><span>🔐</span><div>This portal shows <b>your own carrier</b> only. You can manage your fleet, drivers, documents, offers and trips — but <b>regulated compliance is verified by a LiftHaul reviewer</b>, never self-approved.</div></div>
         <label>Email<input id="email" type="email" placeholder="you@carrier.com"></label>
         <label>Password<input id="password" type="password" placeholder="••••••••"></label>
-        <button class="btn" style="width:100%;margin-top:6px" onclick="doLogin()">Sign in</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="doLogin()">Sign in securely</button>
         <p id="loginMsg" class="cnt" style="margin-top:12px"></p>
       </div>
     </div>
@@ -339,12 +341,13 @@ function vFinance(d){
     +'<div class="stat"><div class="k">Released</div><div class="rows"><div class="r ok"><span class="big">'+esc(t.released)+'</span></div></div></div>'
     +'<div class="stat"><div class="k">Held (protected)</div><div class="rows"><div class="r wn"><span class="big">'+esc(t.held)+'</span></div></div></div>'
     +'<div class="stat"><div class="k">Payout accounts</div><div class="rows"><div class="r">'+((d.payout_accounts||[]).length?statusChip((d.payout_accounts[0]||{}).status):'<span class="chip c-mut">none</span>')+'</div></div></div></div>';
-  var rows=(d.settlements||[]).map(function(s){return '<tr><td>'+esc(s.transaction_no)+'</td><td class="num">'+esc(s.carrier_payable)+'</td><td class="num">'+esc(s.released_amount)+'</td><td class="num">'+esc(s.held_amount)+'</td><td>'+statusChip(s.state)+'</td></tr>';}).join('');
+  var rows=(d.settlements||[]).map(function(s){return '<tr><td>'+esc(s.transaction_no)+'</td><td class="num">'+esc(s.carrier_payable)+'</td><td class="num">'+esc(s.released_amount)+'</td><td class="num">'+esc(s.held_amount)+'</td><td>'+statusChip(s.status||s.state)+'</td><td>'+esc(s.next_action||'—')+'</td></tr><tr><td colspan="6">'+payTimeline(s.timeline||[])+'</td></tr>';}).join('');
   var pay=(d.payout_accounts||[]).map(function(p){return '<tr><td>'+esc(p.beneficiary_name||'—')+'</td><td>'+esc(p.entity_name||'—')+'</td><td><code>'+esc(p.account_masked||'••••')+'</code></td><td>'+statusChip(p.status)+'</td></tr>';}).join('');
   return '<div class="note"><span>💳</span><div>Your earnings and Protected Payment status. Funds are <b>held</b> until release conditions pass. A payout account must be reviewer-approved before any payout; account numbers are stored masked.</div></div>'
-    +top+tableize('Settlements',(d.settlements||[]).length,['Transaction','Payable','Released','Held','State'],rows)
+    +top+tableize('Settlements',(d.settlements||[]).length,['Transaction','Payable','Released','Held','State','Next action'],rows)
     +tableize('Payout accounts',(d.payout_accounts||[]).length,['Beneficiary','Entity','Account','Status'],pay);
 }
+function payTimeline(steps){return '<div class="payline">'+steps.map(function(s){return '<div class="paystep '+esc(s.status)+'">'+esc(s.label)+'</div>';}).join('')+'</div>';}
 function vCases(d){
   var disp=(d.disputes||[]).map(function(x){return '<tr><td>#'+esc(x.id)+'</td><td>#'+esc(x.booking_id)+'</td><td class="num">'+esc(x.amount_disputed)+'</td><td>'+statusChip(x.status)+'</td><td style="font-size:12px">'+esc(x.reason||'')+'</td></tr>';}).join('');
   var clm=(d.claims||[]).map(function(x){return '<tr><td>#'+esc(x.id)+'</td><td>'+esc(x.claim_type)+'</td><td>'+esc(x.claimant||'—')+'</td><td class="num">'+esc(x.approved_amount==null?'—':x.approved_amount)+'</td><td>'+statusChip(x.status)+'</td></tr>';}).join('');

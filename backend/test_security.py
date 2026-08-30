@@ -85,19 +85,26 @@ class TestSecretsBackup(Base):
             del os.environ["WISE_API_KEY"]
 
     def test_no_secret_literals_in_source(self):
-        src = open(security.__file__, encoding="utf-8").read().lower()
+        with open(security.__file__, encoding="utf-8") as source:
+            src = source.read().lower()
         for bad in ("api_key =", "apikey=", "secret =", "password ="):
             self.assertNotIn(bad, src)
 
     def test_backup(self):
         create_customer(self.c, self.admin, "Acme")
-        with tempfile.TemporaryDirectory() as d:
-            path = backup_db(self.c, os.path.join(d, "bk.sqlite"))
+        with tempfile.NamedTemporaryFile(suffix="-backup.sqlite", delete=False) as handle:
+            path = handle.name
+        os.unlink(path)
+        try:
+            path = backup_db(self.c, path)
             import sqlite3
             bk = sqlite3.connect(path)
             n = bk.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
             bk.close()
             self.assertEqual(n, 1)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
 
 
 if __name__ == "__main__":

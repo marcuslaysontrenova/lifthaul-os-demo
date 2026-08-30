@@ -49,7 +49,8 @@ VEHICLE_STATUSES = ("DRAFT", "DOCUMENT_REVIEW", "INSPECTION_REQUIRED", "APPROVED
 VEHICLE_ELIGIBLE_STATUS = "ACTIVE"
 DRIVER_STATUSES = ("APPLICATION", "DOCUMENT_REVIEW", "VERIFIED", "ACTIVE", "SUSPENDED",
                    "EXPIRED", "REJECTED")
-DOC_STATUSES = ("UPLOADED", "PENDING_REVIEW", "VERIFIED", "REJECTED", "EXPIRED", "REVOKED")
+DOC_STATUSES = ("UPLOADED", "PENDING_REVIEW", "VERIFIED", "REJECTED", "EXPIRED", "REVOKED",
+                "SUSPENDED", "RENEWAL_REQUIRED")
 INTEGRITY_STATUSES = ("NOT_RUN", "PASS", "WARNING", "FAIL", "BLOCKED")
 
 SHIPPER_TYPES = ("INDIVIDUAL", "SOLE_PROPRIETOR", "PARTNERSHIP", "CORPORATION", "ENTERPRISE")
@@ -282,6 +283,12 @@ def _reject_raw_secret(field, value):
 
 def init(conn):
     conn.executescript(SCHEMA)
+    have = {row[1] for row in conn.execute("PRAGMA table_info(mkt_documents)").fetchall()}
+    for column, declaration in {
+        "verification_source": "TEXT", "review_note": "TEXT", "suspension_reason": "TEXT"
+    }.items():
+        if column not in have:
+            conn.execute(f"ALTER TABLE mkt_documents ADD COLUMN {column} {declaration}")
     conn.commit()
 
 
@@ -813,14 +820,30 @@ def upload_document(conn, actor, document_type, subject_type, subject_id, **attr
     return doc_id
 
 
-def verify_document(conn, actor, doc_id):
+def mark_document_under_review(conn, actor, doc_id, note=None):
+    core.require(actor, "marketplace.compliance.verify")
+    row = _guarded(conn, actor, "mkt_documents", doc_id)
+    if row["status"] not in ("UPLOADED", "PENDING_REVIEW", "RENEWAL_REQUIRED"):
+        raise ValueError("only a submitted or renewal document can enter review")
+    _set(conn, "mkt_documents", doc_id, status="PENDING_REVIEW", review_note=note,
+         updated_by=actor["id"])
+    core.audit(conn, actor, "MKT_DOC_REVIEW_STARTED", "mkt_documents", doc_id,
+               {"status": row["status"]}, {"status": "PENDING_REVIEW", "note": note})
+    conn.commit()
+    return {"status": "PENDING_REVIEW", "public_status": "UNDER_REVIEW"}
+
+
+def verify_document(conn, actor, doc_id, source=None, note=None):
     core.require(actor, "marketplace.compliance.verify")
     row = _guarded(conn, actor, "mkt_documents", doc_id)
     if row["created_by"] == actor["id"]:
         raise PermissionError("no self-verification of documents")
+    verification_source = str(source or "MANUAL_DOCUMENT_REVIEW")[:300]
     _set(conn, "mkt_documents", doc_id, status="VERIFIED", verified_by=actor["id"], verified_at=_now(),
+         verification_source=verification_source, review_note=note, suspension_reason=None,
          updated_by=actor["id"])
-    core.audit(conn, actor, "MKT_DOC_VERIFIED", "mkt_documents", doc_id, {"status": row["status"]}, {"status": "VERIFIED"})
+    core.audit(conn, actor, "MKT_DOC_VERIFIED", "mkt_documents", doc_id, {"status": row["status"]},
+               {"status": "VERIFIED", "source": verification_source, "note": note})
     conn.commit()
     return {"status": "VERIFIED"}
 
@@ -832,6 +855,30 @@ def reject_document(conn, actor, doc_id, reason):
     core.audit(conn, actor, "MKT_DOC_REJECTED", "mkt_documents", doc_id, None, {"reason": reason})
     conn.commit()
     return {"status": "REJECTED"}
+
+
+def suspend_document(conn, actor, doc_id, reason):
+    core.require(actor, "marketplace.compliance.verify")
+    if not str(reason or "").strip():
+        raise ValueError("document suspension requires a reason")
+    row = _guarded(conn, actor, "mkt_documents", doc_id)
+    _set(conn, "mkt_documents", doc_id, status="SUSPENDED", suspension_reason=reason,
+         updated_by=actor["id"])
+    core.audit(conn, actor, "MKT_DOC_SUSPENDED", "mkt_documents", doc_id,
+               {"status": row["status"]}, {"status": "SUSPENDED", "reason": reason})
+    conn.commit()
+    return {"status": "SUSPENDED"}
+
+
+def require_document_renewal(conn, actor, doc_id, reason):
+    core.require(actor, "marketplace.compliance.verify")
+    row = _guarded(conn, actor, "mkt_documents", doc_id)
+    _set(conn, "mkt_documents", doc_id, status="RENEWAL_REQUIRED", review_note=reason,
+         updated_by=actor["id"])
+    core.audit(conn, actor, "MKT_DOC_RENEWAL_REQUIRED", "mkt_documents", doc_id,
+               {"status": row["status"]}, {"status": "RENEWAL_REQUIRED", "reason": reason})
+    conn.commit()
+    return {"status": "RENEWAL_REQUIRED"}
 
 
 def detect_expired_documents(conn, actor=None, as_of=None):
@@ -927,9 +974,11 @@ def evaluate_compliance(conn, subject_type, subject_id):
             elif any(d["status"] == "EXPIRED" for d in ds):
                 expired.append(dt)
                 (blockers if rule["severity"] == "BLOCKER" else warnings).append(f"{dt}:expired")
-            elif any(d["status"] == "REJECTED" for d in ds):
+            elif any(d["status"] in ("REJECTED", "SUSPENDED", "RENEWAL_REQUIRED", "REVOKED") for d in ds):
                 rejected.append(dt)
-                (blockers if rule["severity"] == "BLOCKER" else warnings).append(f"{dt}:rejected")
+                blocked_status = next(d["status"].lower() for d in ds
+                                      if d["status"] in ("REJECTED", "SUSPENDED", "RENEWAL_REQUIRED", "REVOKED"))
+                (blockers if rule["severity"] == "BLOCKER" else warnings).append(f"{dt}:{blocked_status}")
             else:
                 missing.append(dt)
                 (blockers if rule["severity"] == "BLOCKER" else warnings).append(f"{dt}:missing")

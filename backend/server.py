@@ -87,7 +87,9 @@ def _production_config_errors(env=None):
         if not str(env.get("PAYMENT_RETURN_BASE_URL", "")).strip().startswith("https://"):
             errors.append("PAYMENT_RETURN_BASE_URL must use HTTPS")
         for key in ("PAYMENT_PROVIDER_CERTIFIED", "PAYMENT_PRODUCTION_PILOT_APPROVED",
-                    "PAYMENT_RECONCILIATION_AUTOMATION"):
+                    "PAYMENT_RECONCILIATION_AUTOMATION", "PAYMENT_REGULATORY_ROLE_APPROVED",
+                    "PAYMENT_SAFEGUARDED_FUNDS_APPROVED",
+                    "PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED", "PAYMENT_DR_RESTORE_APPROVED"):
             if str(env.get(key, "")).strip().lower() not in ("1", "true", "yes", "on"):
                 errors.append(f"{key} must be enabled for production payments")
     return errors
@@ -1518,8 +1520,11 @@ def _marketplace_routes():
 
     # --- documents / compliance / queues / eligibility / integrity / migration ---
     def doc_upload(a, b, p):   return {"id": mo.upload_document(_conn, a, b["document_type"], b["subject_type"], int(b["subject_id"]), **{k: v for k, v in b.items() if k not in ("document_type", "subject_type", "subject_id")})}
-    def doc_verify(a, b, p):   return mo.verify_document(_conn, a, int(p["id"]))
+    def doc_review(a, b, p):   return mo.mark_document_under_review(_conn, a, int(p["id"]), b.get("note"))
+    def doc_verify(a, b, p):   return mo.verify_document(_conn, a, int(p["id"]), b.get("source"), b.get("note"))
     def doc_reject(a, b, p):   return mo.reject_document(_conn, a, int(p["id"]), b.get("reason", ""))
+    def doc_suspend(a, b, p):  return mo.suspend_document(_conn, a, int(p["id"]), b.get("reason", ""))
+    def doc_renew(a, b, p):    return mo.require_document_renewal(_conn, a, int(p["id"]), b.get("reason", ""))
     def doc_list(a, b, p):     return {"documents": mo.list_documents(_conn, a, subject_type=b.get("subject_type"), subject_id=b.get("subject_id"), expiring_before=b.get("expiring_before"))}
     def doc_expiry(a, b, p):
         core.require(a, "marketplace.compliance.manage")
@@ -1568,8 +1573,11 @@ def _marketplace_routes():
         ("POST", "/admin/marketplace/drivers/:id/activate"): dr_activate,
         ("GET", "/admin/marketplace/documents"): doc_list,
         ("POST", "/admin/marketplace/documents"): doc_upload,
+        ("POST", "/admin/marketplace/documents/:id/review"): doc_review,
         ("POST", "/admin/marketplace/documents/:id/verify"): doc_verify,
         ("POST", "/admin/marketplace/documents/:id/reject"): doc_reject,
+        ("POST", "/admin/marketplace/documents/:id/suspend"): doc_suspend,
+        ("POST", "/admin/marketplace/documents/:id/renewal-required"): doc_renew,
         ("POST", "/admin/marketplace/documents/detect-expiry"): doc_expiry,
         ("POST", "/admin/marketplace/compliance/evaluate"): comp_eval,
         ("POST", "/admin/marketplace/compliance/override"): comp_override,
@@ -2092,6 +2100,7 @@ def _payment_gateway_routes():
     def certify(a, b, p): return pg.certify_channel(
         _conn, a, b["channel"], b["environment"], b.get("tests", {}), b.get("notes"))
     def reconcile(a, b, p): return pg.reconcile_daily(_conn, a)
+    def readiness(a, b, p): return pg.security_readiness(_conn, a)
     def refund(a, b, p): return pg.request_refund(
         _conn, a, int(p["id"]), b["amount"], b.get("reason", "OTHERS"), b.get("idempotency_key"))
     def manual_open(a, b, p): return pg.open_manual_review(
@@ -2109,6 +2118,7 @@ def _payment_gateway_routes():
         ("POST", "/webhooks/xendit/payments"): webhook,
         ("POST", "/admin/payments/channels/certify"): certify,
         ("POST", "/admin/payments/reconcile"): reconcile,
+        ("GET", "/admin/payments/security-readiness"): readiness,
         ("POST", "/admin/payments/transactions/:id/refund"): refund,
         ("POST", "/admin/payments/manual-reviews"): manual_open,
         ("POST", "/admin/payments/manual-reviews/:id/approve"): manual_approve,
@@ -2766,6 +2776,36 @@ def _fleet_routes():
 
 ROUTES.update(_notifications_routes())
 ROUTES.update(_carrier_portal_routes())
+
+
+def _client_portal_routes():
+    import client_portal as cp
+
+    return {
+        ("GET", "/portal/client/overview"): lambda a, b, p: cp.overview(_conn, a),
+        ("GET", "/portal/client/bookings"): lambda a, b, p: cp.bookings(_conn, a),
+        ("GET", "/portal/client/offers"): lambda a, b, p: cp.offers(_conn, a),
+        ("GET", "/portal/client/trips"): lambda a, b, p: cp.trips(_conn, a),
+        ("GET", "/portal/client/payments"): lambda a, b, p: cp.payments(_conn, a),
+        ("GET", "/portal/client/addresses"): lambda a, b, p: cp.addresses(_conn, a),
+        ("POST", "/portal/client/addresses"): lambda a, b, p: cp.add_address(
+            _conn, a, b["label"], b["specific_address"],
+            **{k: v for k, v in b.items() if k not in ("label", "specific_address")}),
+        ("GET", "/portal/client/payment-preferences"): lambda a, b, p: cp.payment_preferences(_conn, a),
+        ("POST", "/portal/client/payment-preferences"): lambda a, b, p: cp.add_payment_preference(
+            _conn, a, b["provider"], b["channel"], b["provider_alias"], b["display_label"],
+            is_default=b.get("is_default", False)),
+        ("GET", "/portal/client/notifications"): lambda a, b, p: cp.notifications(_conn, a),
+        ("POST", "/portal/client/notifications/:id/read"): lambda a, b, p: cp.mark_notification_read(
+            _conn, a, int(p["id"])),
+        ("POST", "/admin/client-portal/bind"): lambda a, b, p: {"id": cp.bind_principal(
+            _conn, a, int(b["user_id"]), int(b["shipper_id"]), b.get("portal_role", "CLIENT_BOOKER"))},
+        ("POST", "/admin/client-portal/principals/:id/revoke"): lambda a, b, p: cp.revoke_principal(
+            _conn, a, int(p["id"]), b.get("reason")),
+    }
+
+
+ROUTES.update(_client_portal_routes())
 ROUTES.update(_reassignment_routes())
 ROUTES.update(_rental_routes())
 ROUTES.update(_billing_routes())

@@ -126,6 +126,21 @@ class PaymentGatewayTests(unittest.TestCase):
         self.assertEqual([c["key"] for c in public["channels"]], ["gcash"])
         self.assertNotIn("secret", str(public).lower())
 
+    def test_admin_readiness_report_is_secret_free_and_fail_closed(self):
+        self.certify()
+        report = pg.security_readiness(self.conn, self.admin)
+        self.assertFalse(report["live_activation_ready"])
+        self.assertEqual(report["decision"], "KEEP_LIVE_FUNDS_DISABLED")
+        self.assertFalse(report["legal_escrow_claim_authorized"])
+        self.assertIn("gcash", report["certified_channels"])
+        rendered = str(report).lower()
+        self.assertNotIn("xnd_development_test_only", rendered)
+        self.assertNotIn("webhook-secret", rendered)
+
+        outsider = {"id": 812, "role": "customer", "tenant_id": 1, "perms": set()}
+        with self.assertRaises(Exception):
+            pg.security_readiness(self.conn, outsider)
+
     def test_session_creation_is_provider_backed_and_idempotent(self):
         created = self.ready()
         self.assertEqual(created["status"], "PENDING")
@@ -136,6 +151,34 @@ class PaymentGatewayTests(unittest.TestCase):
         self.assertEqual(replay["transaction_id"], created["transaction_id"])
         with self.assertRaises(Exception):
             pg.create_payment_session(self.conn, self.token, "maya", "pay-create-1", client=self.client)
+
+    def test_repeated_click_with_new_key_reuses_active_transaction(self):
+        created = self.ready()
+        repeated = pg.create_payment_session(
+            self.conn, self.token, "gcash", "pay-create-new-browser-key", client=self.client,
+        )
+        self.assertTrue(repeated["idempotent"])
+        self.assertTrue(repeated["deduplicated_active_transaction"])
+        self.assertEqual(repeated["transaction_id"], created["transaction_id"])
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM gateway_payment_transactions WHERE booking_id=?",
+                (self.booking_id,),
+            ).fetchone()[0],
+            1,
+        )
+
+    def test_parallel_channel_is_blocked_while_transaction_active(self):
+        self.certify("gcash")
+        self.certify("maya")
+        pg.accept_final_quote(self.conn, self.token, "quote-accept-parallel")
+        pg.create_payment_session(
+            self.conn, self.token, "gcash", "pay-create-first-channel", client=self.client,
+        )
+        with self.assertRaises(Exception):
+            pg.create_payment_session(
+                self.conn, self.token, "maya", "pay-create-second-channel", client=self.client,
+            )
 
     def test_invalid_webhook_never_changes_payment(self):
         created = self.ready()
@@ -149,7 +192,9 @@ class PaymentGatewayTests(unittest.TestCase):
         payload = self.success_webhook()
         first = pg.process_webhook(self.conn, "webhook-secret", payload, client=self.client)
         self.assertEqual(first["payment"]["status"], "PAID")
-        self.assertEqual(first["payment"]["verification_method"], "PROVIDER_API")
+        self.assertEqual(first["payment"]["verification_method"], "PROVIDER_WEBHOOK_PLUS_API")
+        self.assertTrue(first["payment"]["verification_factors"]["provider_webhook_verified"])
+        self.assertTrue(first["payment"]["verification_factors"]["provider_api_verified"])
         booking = self.conn.execute("SELECT payment_status FROM mkt_bookings WHERE id=?", (self.booking_id,)).fetchone()
         self.assertEqual(booking["payment_status"], "PAID")
         booking = self.conn.execute("SELECT status FROM mkt_bookings WHERE id=?", (self.booking_id,)).fetchone()
@@ -166,14 +211,21 @@ class PaymentGatewayTests(unittest.TestCase):
         self.assertEqual(result["payment"]["status"], "UNDER_REVIEW")
         self.assertNotEqual(pg._row(self.conn, created["transaction_id"])["status"], "PAID")
 
-    def test_delayed_confirmation_is_resolved_by_server_poll(self):
+    def test_delayed_webhook_api_success_remains_under_review(self):
         created = self.ready()
         pending = pg.refresh_transaction(self.conn, created["transaction_id"], client=self.client)
         self.assertEqual(pending["status"], "PENDING")
         self.client.payment_status = "SUCCEEDED"
         self.client.session_status = "COMPLETED"
         confirmed = pg.refresh_transaction(self.conn, created["transaction_id"], client=self.client)
-        self.assertEqual(confirmed["status"], "PAID")
+        self.assertEqual(confirmed["status"], "UNDER_REVIEW")
+        self.assertEqual(confirmed["verification_method"], "PROVIDER_API_ONLY")
+        self.assertFalse(confirmed["verification_factors"]["provider_webhook_verified"])
+        booking = self.conn.execute("SELECT payment_status FROM mkt_bookings WHERE id=?", (self.booking_id,)).fetchone()
+        self.assertNotEqual(booking["payment_status"], "PAID")
+
+        verified = pg.process_webhook(self.conn, "webhook-secret", self.success_webhook(), client=self.client)
+        self.assertEqual(verified["payment"]["status"], "PAID")
 
     def test_failed_expired_and_cancelled_states(self):
         created = self.ready()
@@ -283,8 +335,11 @@ class PaymentGatewayTests(unittest.TestCase):
         )
 
     def test_payment_state_persists_after_database_restart(self):
-        with tempfile.TemporaryDirectory(dir=os.path.dirname(__file__)) as folder:
-            path = os.path.join(folder, "gateway-restart.sqlite")
+        # A named file avoids Windows/OneDrive directory ACL interference while still exercising
+        # a real close/reopen cycle against durable SQLite storage.
+        with tempfile.NamedTemporaryFile(suffix="-gateway-restart.sqlite", delete=False) as handle:
+            path = handle.name
+        try:
             first = db.connect("sqlite:///" + path)
             result = public_booking.submit(first, {
                 "contact_name": "Restart Test", "contact_phone": "+639171000001",
@@ -306,6 +361,9 @@ class PaymentGatewayTests(unittest.TestCase):
                 self.assertTrue(pg.available_channels(reopened)["available"])
             finally:
                 reopened.close()
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
 
 
 if __name__ == "__main__":

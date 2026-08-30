@@ -131,6 +131,8 @@ def _seed_platform(conn):
     notifications_engine.init(conn); notifications_engine.seed(conn)     # Automated Customer & Operational Notifications: lifecycle comms over the existing notification domain
     import carrier_portal
     carrier_portal.init(conn); carrier_portal.seed(conn)                 # Carrier / Fleet Owner Portal: secure self-service over the existing carrier ecosystem (principal binding only; no new domains)
+    import client_portal
+    client_portal.init(conn); client_portal.seed(conn)                   # Client Booker Workspace: shipper-bound projections over canonical bookings/offers/trips/protected payments
     import driver_reassignment
     driver_reassignment.init(conn); driver_reassignment.seed(conn)       # Driver Reassignment / Re-matching: governed orchestration over matching (intra-carrier substitution + inter-carrier re-match; funds never moved)
     import rental

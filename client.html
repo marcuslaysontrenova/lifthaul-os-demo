@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiftHaul — Client Booker Workspace</title>
+<meta name="description" content="Create and monitor LiftHaul bookings, compare offers, follow trips, and see verified protected-payment status.">
+<link rel="stylesheet" href="workspace.css?v=1">
+</head>
+<body>
+<header class="lh-topbar"><div class="lh-topbar__inner">
+  <a class="lh-brand" href="index.html"><span class="lh-logo" aria-hidden="true">↑</span><span>Lift<em>Haul</em></span></a>
+  <span class="lh-workspace-badge">Client Booker Workspace</span><span class="lh-spacer"></span>
+  <span id="who" class="lh-chip is-hidden"></span><button id="logout" class="lh-btn lh-btn--line lh-btn--sm is-hidden">Sign out</button>
+</div></header>
+
+<main id="loginView" class="lh-login">
+  <section class="lh-card"><div class="lh-card__head"><h2>Sign in to your client account</h2></div><div class="lh-card__body">
+    <div class="lh-notice"><span aria-hidden="true">🛡</span><div>Your account shows only your organization’s bookings and protected-payment records. A provider-verified status—not a screenshot—controls funding and release.</div></div>
+    <div class="lh-field"><label for="email">Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com"></div>
+    <div class="lh-field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    <button id="loginBtn" class="lh-btn lh-btn--primary" style="width:100%">Sign in securely</button>
+    <p id="loginMsg" style="color:var(--lh-muted);font-size:13px;margin:12px 0 0"></p>
+  </div></section>
+</main>
+
+<div id="appView" class="lh-shell is-hidden">
+  <aside class="lh-sidebar"><div class="lh-sidebar__label">Client workspace</div><nav id="nav" class="lh-nav" aria-label="Workspace"></nav></aside>
+  <main class="lh-main"><div id="content"></div></main>
+</div>
+<div id="toast" class="lh-toast is-hidden" role="status"></div>
+
+<script src="config.js"></script>
+<script>
+(function(){'use strict';
+var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||'',token='';
+try{if(!base)base=localStorage.getItem('lifthaul_api_base')||'';token=sessionStorage.getItem('lifthaul_api_token')||'';}catch(e){}
+var tabs=[['overview','Dashboard'],['bookings','Bookings'],['offers','Offers & comparison'],['trips','Active deliveries'],['payments','Protected payments'],['addresses','Saved addresses'],['preferences','Payment methods'],['notifications','Notifications']];
+var current='overview';
+function q(s){return document.querySelector(s)}
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function req(method,path,body){if(!base)return Promise.reject(new Error('No hosted API is configured for this pre-launch workspace.'));var h={'Content-Type':'application/json'};if(token&&path!='/login')h.Authorization='Bearer '+token;return fetch(base.replace(/\/+$/,'')+path,{method:method,headers:h,body:body?JSON.stringify(body):undefined}).then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{};if(d.data!==undefined)d=d.data;if(!r.ok)throw new Error(d.error||d.detail||('HTTP '+r.status));return d})})}
+function money(v){return v==null?'—':'₱'+Number(v).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function chip(s){var x=String(s||'Pending'),c=/SETTLED|RELEASED|ACTIVE|VERIFIED|PROTECTED/.test(x)?'good':/FAILED|CANCEL|DISPUT|EXPIRED|HOLD|REJECT/.test(x)?'bad':/PROCESS|WAIT|PENDING|REQUIRED|SUBMIT/.test(x)?'pending':'info';return '<span class="lh-chip lh-chip--'+c+'">'+esc(x.replace(/_/g,' '))+'</span>'}
+function empty(title,text,action){return '<div class="lh-empty"><strong>'+esc(title)+'</strong>'+esc(text)+(action||'')+'</div>'}
+function toast(t){q('#toast').textContent=t;q('#toast').classList.remove('is-hidden');clearTimeout(toast.t);toast.t=setTimeout(function(){q('#toast').classList.add('is-hidden')},2800)}
+function head(title,desc,action){return '<div class="lh-pagehead"><div><h1>'+esc(title)+'</h1><p>'+esc(desc)+'</p></div>'+(action||'')+'</div>'}
+function table(headers,rows){return '<div class="lh-table-wrap"><table class="lh-table"><thead><tr>'+headers.map(function(x){return'<th>'+esc(x)+'</th>'}).join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>'}
+function timeline(p){var steps=p.timeline||[];return '<div class="lh-timeline" aria-label="Protected Payment status">'+steps.map(function(s){return'<div class="lh-step is-'+esc(s.status)+'">'+esc(s.label)+'</div>'}).join('')+'</div>'}
+function renderNav(){q('#nav').innerHTML=tabs.map(function(t){return'<button data-tab="'+t[0]+'"'+(current===t[0]?' aria-current="page"':'')+'>'+esc(t[1])+'</button>'}).join('')}
+q('#nav').addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(!b)return;current=b.dataset.tab;renderNav();load()});
+q('#loginBtn').addEventListener('click',function(){var msg=q('#loginMsg');msg.textContent='Signing in…';req('POST','/login',{email:q('#email').value.trim(),password:q('#password').value}).then(function(d){token=d.token;sessionStorage.setItem('lifthaul_api_token',token);enter()}).catch(function(e){msg.textContent=e.message})});
+q('#logout').addEventListener('click',function(){req('POST','/logout',{}).catch(function(){}).then(function(){sessionStorage.removeItem('lifthaul_api_token');location.reload()})});
+function enter(){q('#loginView').classList.add('is-hidden');q('#appView').classList.remove('is-hidden');q('#logout').classList.remove('is-hidden');q('#who').classList.remove('is-hidden');q('#who').textContent='Client account';renderNav();load()}
+function load(){var path={overview:'overview',bookings:'bookings',offers:'offers',trips:'trips',payments:'payments',addresses:'addresses',preferences:'payment-preferences',notifications:'notifications'}[current];q('#content').innerHTML=empty('Loading your workspace','Retrieving persisted records…');req('GET','/portal/client/'+path).then(render).catch(function(e){q('#content').innerHTML='<div class="lh-notice lh-notice--warn"><span>!</span><div><b>Workspace unavailable.</b> '+esc(e.message)+'</div></div>'})}
+function render(d){var h='';
+ if(current==='overview'){var c=d.booking_counts||{};h=head('Welcome back','Your organization-wide logistics and protected-payment overview.','<a class="lh-btn" href="book.html">Create booking</a>')+'<div class="lh-grid lh-grid--4"><div class="lh-stat"><span>Total bookings</span><strong>'+esc(d.total_bookings||0)+'</strong></div><div class="lh-stat"><span>Drafts</span><strong>'+esc(c.DRAFT||0)+'</strong></div><div class="lh-stat"><span>Active</span><strong>'+esc((c.ASSIGNED||0)+(c.PAYMENT_REQUIRED||0))+'</strong></div><div class="lh-stat"><span>Unread notices</span><strong>'+esc(d.unread_notifications||0)+'</strong></div></div><div class="lh-card" style="margin-top:15px"><div class="lh-card__head"><h2>Account verification</h2>'+chip(d.verification_status)+'</div><div class="lh-card__body"><div class="lh-notice">Only verified transport providers and eligible units can receive paid assignments. Verification records show their actual review status and are never self-approved.</div></div></div>'}
+ if(current==='bookings'){var a=d.bookings||[];h=head('Bookings','Create, review and monitor your organization’s booking requests.','<a class="lh-btn" href="book.html">New booking</a>')+'<div class="lh-card">'+(a.length?table(['Booking','Route','Cargo','Pickup','Status'],a.map(function(x){return'<tr><td>#'+esc(x.id)+'</td><td>'+esc(x.origin_zone||x.pickup_address||'—')+' → '+esc(x.dest_zone||x.delivery_address||'—')+'</td><td>'+esc(x.cargo_description||x.cargo_code)+'</td><td>'+esc(x.pickup_window||'—')+'</td><td>'+chip(x.status)+'</td></tr>'})):empty('No bookings yet','Start with a pickup, destination, cargo and required vehicle.'))+'</div>'}
+ if(current==='offers'){var a=d.offers||[];h=head('Offers & comparison','Compare provider quotations without exposing internal margins.')+'<div class="lh-card">'+(a.length?table(['Booking','Provider','Offer','Vehicle','Valid until','Status'],a.map(function(x){return'<tr><td>#'+esc(x.booking_id)+'</td><td>Carrier #'+esc(x.carrier_id)+'</td><td>'+money(x.amount)+'</td><td>'+esc(x.vehicle_id||'To assign')+'</td><td>'+esc(x.valid_until||'—')+'</td><td>'+chip(x.status)+'</td></tr>'})):empty('No offers available','Offers appear after a validated booking is broadcast to eligible providers.'))+'</div>'}
+ if(current==='trips'){var a=d.trips||[];h=head('Active deliveries','Follow the assigned unit, trip milestones and delivery evidence.')+'<div class="lh-card">'+(a.length?table(['Trip','Booking','Progress','ETA','Last update','Status'],a.map(function(x){return'<tr><td>#'+esc(x.id)+'</td><td>#'+esc(x.booking_id)+'</td><td>'+esc(x.progress_pct||0)+'%</td><td>'+esc(x.eta||'—')+'</td><td>'+esc(x.last_ping_at||'—')+'</td><td>'+chip(x.status)+'</td></tr>'})):empty('No active deliveries','Assigned and funded trips will appear here.'))+'</div>'}
+ if(current==='payments'){var a=d.payments||[];h=head('Protected payments','Provider-verified funding, evidence-gated release and auditable settlement.')+'<div class="lh-notice"><span>🛡</span><div><b>Protected Payment</b> is the approved public term. LiftHaul does not claim a regulated funds-holding status. Live funds remain disabled until the licensed partner, operating model and production gates are approved.</div></div>'+(a.length?a.map(function(p){return'<article class="lh-card" style="margin-bottom:15px"><div class="lh-card__head"><h2>'+esc(p.transaction_no)+' · Booking #'+esc(p.booking_id)+'</h2>'+chip(p.status)+'</div><div class="lh-card__body">'+timeline(p)+'<div class="lh-grid lh-grid--4" style="margin-top:16px"><div class="lh-stat"><span>Contract</span><strong style="font-size:20px">'+money(p.contract_value)+'</strong></div><div class="lh-stat"><span>Funded</span><strong style="font-size:20px">'+money(p.funded_amount)+'</strong></div><div class="lh-stat"><span>Released</span><strong style="font-size:20px">'+money(p.released_amount)+'</strong></div><div class="lh-stat"><span>Refunded</span><strong style="font-size:20px">'+money(p.refunded_amount)+'</strong></div></div><p><b>What happened:</b> '+esc(p.what_happened)+'</p><p><b>Next:</b> '+esc(p.next_actor)+' — '+esc(p.next_action)+'</p><p style="color:var(--lh-muted);font-size:12px">'+esc(p.verification_reminder)+'</p></div></article>'}).join(''):empty('No protected-payment record','A record is created only after an offer is accepted and payment is required.'))}
+ if(current==='addresses'){var a=d.addresses||[];h=head('Saved addresses','Reusable pickup and delivery locations linked to the Philippine location hierarchy.','<a class="lh-btn" href="book.html">Add from booking</a>')+'<div class="lh-card">'+(a.length?table(['Label','Island group','Region','Province','City / municipality','Barangay','Address'],a.map(function(x){return'<tr><td>'+esc(x.label)+'</td><td>'+esc(x.island_group||'—')+'</td><td>'+esc(x.region_code||'—')+'</td><td>'+esc(x.province_code||'—')+'</td><td>'+esc(x.city_code||'—')+'</td><td>'+esc(x.barangay_code||'—')+'</td><td>'+esc(x.specific_address)+'</td></tr>'})):empty('No saved addresses','Save a verified location while creating a booking.'))+'</div>'}
+ if(current==='preferences'){var a=d.payment_preferences||[];h=head('Payment methods','Provider-issued aliases only. LiftHaul never stores raw card, bank or wallet credentials.')+'<div class="lh-notice lh-notice--warn"><span>i</span><div>Only provider-certified channels are customer-visible. A saved preference does not prove payment and cannot change a booking status.</div></div><div class="lh-card">'+(a.length?table(['Provider','Channel','Account','Default','Status'],a.map(function(x){return'<tr><td>'+esc(x.provider)+'</td><td>'+esc(x.channel)+'</td><td>'+esc(x.display_label)+'</td><td>'+(x.is_default?'Yes':'No')+'</td><td>'+chip(x.status)+'</td></tr>'})):empty('No payment methods','Add a payment method from an activated provider checkout.'))+'</div>'}
+ if(current==='notifications'){var a=d.notifications||[];h=head('Messages & notifications','Booking, payment, trip, dispute and settlement notices.')+'<div class="lh-card">'+(a.length?table(['Date','Subject','Channel','Delivery','Read'],a.map(function(x){return'<tr><td>'+esc(x.created_at||'—')+'</td><td>'+esc(x.subject||x.event_type)+'</td><td>'+esc(x.channel)+'</td><td>'+chip(x.status)+'</td><td>'+(x.is_read?'Read':'Unread')+'</td></tr>'})):empty('No notifications','Important lifecycle notices will appear here.'))+'</div>'}
+ q('#content').innerHTML=h}
+if(token&&base)enter();
+})();
+</script>
+</body></html>

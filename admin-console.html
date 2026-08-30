@@ -6,21 +6,21 @@
 <title>LiftHaul OS — Enterprise Administration</title>
 <style>
   :root{
-    --brand:#5FBE2A; --accent:#F2611A; --gold:#F2C21A; --ink:#0C2306;
+    --brand:#70C247; --accent:#006B3C; --gold:#D59B24; --ink:#17221B;
     --nav:#0A1705; --nav-2:#12240b; --line:#e3e8de; --surface:#ffffff; --surface-2:#f6f8f4;
     --muted:#5b6b52; --danger:#c0392b; --ok:#2e7d32;
-    --mode-view:#5b6b7b; --mode-edit:#5FBE2A; --mode-approval:#F2C21A; --mode-finance:#F2611A; --mode-dispatch:#2f6fb0;
+    --mode-view:#5b6b7b; --mode-edit:#70C247; --mode-approval:#D59B24; --mode-finance:#006B3C; --mode-dispatch:#2f6fb0;
   }
   *{box-sizing:border-box;margin:0} body{font-family:Inter,Arial,Helvetica,sans-serif;color:var(--ink);background:var(--surface-2)}
   a{color:inherit}
   /* login */
-  #login{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(120% 120% at 80% -20%,rgba(242,97,26,.18),transparent 55%),linear-gradient(120deg,#0C2306,#18400e)}
+  #login{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(120% 120% at 80% -20%,rgba(112,194,71,.16),transparent 55%),linear-gradient(120deg,#003b22,#006b3c)}
   #login .card{background:#fff;border-radius:16px;padding:32px;width:min(380px,92vw);box-shadow:0 24px 60px rgba(0,0,0,.4)}
   #login h1{font-size:19px;margin-bottom:4px} #login p{color:var(--muted);font-size:13px;margin-bottom:18px}
   input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit;background:#fff}
   label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:12px 0 5px}
   .btn{display:inline-flex;align-items:center;gap:7px;padding:11px 18px;border:0;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;background:var(--accent);color:#fff;font-family:inherit}
-  .btn:hover{background:#d9520f} .btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)} .btn.ghost:hover{background:#eef1ea}
+  .btn:hover{background:#004f2d} .btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)} .btn.ghost:hover{background:#eef1ea}
   .btn.sm{padding:7px 12px;font-size:12.5px;border-radius:8px}
   .err{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px}
   /* shell */
@@ -1235,9 +1235,13 @@ Object.assign(SCREENS, {
   fin_integrity: async (it,c)=>{ const d=await api('GET','/admin/marketplace/finance-integrity');
     c.innerHTML=header(it,'Financial integrity — overall: '+d.overall)+
       table(['Check','Status','Count'], d.checks, r=>[cell(r.check),pill(r.status),r.count]); },
-  fin_live_status: async (it,c)=>{ const d=await api('GET','/admin/marketplace/protected-payment-live-status');
-    c.innerHTML=header(it,'Live protected-payment provider status. Mock is deterministic; live settlement is fail-closed until a licensed partner is selected + validated.')+
+  fin_live_status: async (it,c)=>{ const [d,g]=await Promise.all([api('GET','/admin/marketplace/protected-payment-live-status'),api('GET','/admin/payments/security-readiness')]);
+    const gates=Object.keys(g.production_approvals||{}).map(k=>({gate:k.replace(/_/g,' '),status:g.production_approvals[k]?'PASS':'BLOCKED'}));
+    c.innerHTML=header(it,'Live protected-payment provider status. This is an evidence gate, not a self-certification; live settlement stays blocked until every technical and external control passes.')+
       `<div class="note"><b>Mock:</b> ${cell(d.mock)}<br><b>Live protected payment:</b> ${pill(d.live_protected_payment==='BLOCKED'?'INACTIVE':'ACTIVE')} ${d.live_protected_payment}<br><b>Reason:</b> ${cell(d.reason)}</div>`+
+      `<div class="note"><b>Payment gateway:</b> ${cell(g.provider)} / ${cell(g.environment)}<br><b>Activation decision:</b> ${pill(g.live_activation_ready?'ACTIVE':'INACTIVE')} ${cell(g.decision)}<br><b>Certified channels:</b> ${cell((g.certified_channels||[]).join(', ')||'None')}<br><b>Public terminology:</b> ${cell(g.public_terminology)} — legal escrow claim: ${g.legal_escrow_claim_authorized?'authorized':'not authorized'}</div>`+
+      table(['Production gate','Status'],gates,r=>[cell(r.gate),pill(r.status==='PASS'?'ACTIVE':'INACTIVE')+' '+r.status])+
+      `<div class="wrap" style="padding:12px"><b>Current blockers:</b><ul>${(g.blockers||[]).map(x=>`<li>${cell(x)}</li>`).join('')}</ul></div>`+
       `<div class="wrap" style="padding:12px"><b>Owner actions to unblock live settlement:</b><ul>${(d.owner_actions||[]).map(x=>`<li>${cell(x)}</li>`).join('')}</ul></div>`; },
 });
 function finPRPill(s){ return (s==='PROTECTED'||s==='RELEASED')?'ACTIVE':(s==='DISPUTED'||s==='FAILED'||s==='CANCELLED'||s==='EXPIRED')?'INACTIVE':'DRAFT'; }

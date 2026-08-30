@@ -29,44 +29,6 @@
     "1600000000": [8.90, 125.50], "1900000000": [7.20, 124.10],
   };
 
-  var PAYMENTS = {
-    gcash: {
-      method: "GCash", provider: "Configured Philippine payment gateway", channel: "E-wallet",
-      fee: "Provider-calculated before payment", status: "Selection only — no charge at booking",
-      refund: "Eligible refunds return through the activated provider to the original wallet",
-    },
-    maya: {
-      method: "Maya", provider: "Configured Philippine payment gateway", channel: "E-wallet / QRPh",
-      fee: "Provider-calculated before payment", status: "Selection only — no charge at booking",
-      refund: "Void or refund availability follows the activated provider and transaction state",
-    },
-    bank_transfer: {
-      method: "Online bank transfer", provider: "Gateway-connected participating bank", channel: "InstaPay / PESONet",
-      fee: "Bank or provider fee shown before authorization", status: "Selection only — no charge at booking",
-      refund: "Cancellation before payment; paid refunds require provider and Finance verification",
-    },
-    other_wallet: {
-      method: "Other supported e-wallet", provider: "Configured multi-channel payment gateway", channel: "E-wallet / QRPh",
-      fee: "Provider-calculated before payment", status: "Availability confirmed at hosted checkout",
-      refund: "Refund rules are displayed by the activated wallet channel before payment",
-    },
-    card: {
-      method: "Debit or credit card", provider: "PCI-compliant hosted checkout", channel: "Visa / Mastercard / JCB",
-      fee: "Provider-calculated before payment", status: "Card details are never entered on this booking form",
-      refund: "Eligible refunds return to the original card; timing depends on issuer and provider",
-    },
-    otc: {
-      method: "Over-the-counter", provider: "Gateway-supported retail payment partner", channel: "OTC reference payment",
-      fee: "Channel fee and limits shown before reference creation", status: "Channel availability confirmed at checkout",
-      refund: "Some cash channels do not support automatic refunds; Finance review may be required",
-    },
-    operator: {
-      method: "Operator-verified bank transfer", provider: "LiftHaul Finance verification", channel: "Bank transfer with proof",
-      fee: "Your bank may charge a transfer fee", status: "Available for controlled pilot settlement",
-      refund: "Cancellation and refund require governed Finance review and an audit record",
-    },
-  };
-
   function byId(id) { return document.getElementById(id); }
   function reducedMotion() { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
   function esc(value) {
@@ -319,9 +281,10 @@
     }
     state.map = window.L.map("routeMap", { zoomControl: false, minZoom: 5, maxZoom: 18, scrollWheelZoom: false }).setView([12.8797, 121.7740], 5);
     window.L.control.zoom({ position: "bottomright" }).addTo(state.map);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      subdomains: "abcd",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(state.map);
     state.map.on("click", function (event) {
       var prefix = state.activePin;
@@ -370,33 +333,56 @@
   }
 
   function paymentChoice() {
-    var radio = document.querySelector('input[name="pm"]:checked');
-    var code = radio ? radio.value : "operator";
-    return Object.assign({ code: code }, PAYMENTS[code] || PAYMENTS.operator);
-  }
-  function updatePaymentSummary() {
-    var choice = paymentChoice();
-    var amount = state.amount == null ? "Awaiting vehicle & distance" : "₱" + Number(state.amount).toLocaleString("en-PH", { maximumFractionDigits: 0 });
-    var fields = {
-      payMethodValue: choice.method, payProviderValue: choice.provider, payAmountValue: amount,
-      payFeeValue: choice.fee, payStatusValue: choice.status,
-      payReferenceValue: "Assigned only after a payment request is created",
-      payRefundValue: choice.refund, payProtectionValue: "Provider-governed settlement; release follows verified delivery and approved controls",
+    return {
+      code: "protected",
+      method: "Selected after quotation acceptance",
+      provider: "Provider-certified hosted checkout",
+      channel: "Not selected during booking",
     };
-    Object.keys(fields).forEach(function (id) { if (byId(id)) byId(id).textContent = fields[id]; });
-    document.querySelectorAll(".payopt").forEach(function (option) {
-      var input = option.querySelector('input[name="pm"]');
-      option.classList.toggle("on", !!(input && input.checked));
-    });
   }
-  function updatePaymentAmount(amount) { state.amount = Number.isFinite(Number(amount)) ? Number(amount) : null; updatePaymentSummary(); }
+  function paymentApiBase() {
+    var base = window.RGO_CONFIG && window.RGO_CONFIG.apiBase;
+    try { if (!base) base = localStorage.getItem("lifthaul_api_base") || localStorage.getItem("rgo_api_base"); } catch (_) {}
+    return base ? base.replace(/\/+$/, "") : null;
+  }
+  function setGatewayReadiness(kind, title, detail) {
+    var status = byId("gatewayStatus");
+    var copy = byId("gatewayStatusDetail");
+    if (status) { status.className = "gateway-badge " + kind; status.textContent = title; }
+    if (copy) copy.textContent = detail;
+  }
+  function updatePaymentReadiness() {
+    var amount = state.amount == null ? "Awaiting vehicle & distance" : "₱" + Number(state.amount).toLocaleString("en-PH", { maximumFractionDigits: 0 });
+    if (byId("payAmountValue")) byId("payAmountValue").textContent = amount;
+    var base = paymentApiBase();
+    if (!base) {
+      setGatewayReadiness("unavailable", "No live payment channel active", "Payment choices remain hidden until a gateway channel passes sandbox, security, refund, reconciliation and end-to-end certification.");
+      return;
+    }
+    setGatewayReadiness("checking", "Checking certified channels…", "LiftHaul is asking the payment service which methods are approved for this environment.");
+    fetch(base + "/public/payments/channels", { headers: { Accept: "application/json" } })
+      .then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); })
+      .then(function (result) {
+        var data = result.body && result.body.data ? result.body.data : result.body;
+        var channels = data && Array.isArray(data.channels) ? data.channels : [];
+        if (!result.ok || !channels.length) {
+          setGatewayReadiness("unavailable", "No live payment channel active", "No uncertified method is shown. Payment opens only after quotation acceptance and provider certification.");
+          return;
+        }
+        setGatewayReadiness("ready", channels.length + " certified payment method" + (channels.length === 1 ? "" : "s") + " ready", "Available methods will be shown on the secure hosted checkout after you accept the final quotation.");
+      })
+      .catch(function () {
+        setGatewayReadiness("unavailable", "Payment service unavailable", "No payment method is exposed while provider readiness cannot be verified.");
+      });
+  }
+  function updatePaymentAmount(amount) { state.amount = Number.isFinite(Number(amount)) ? Number(amount) : null; updatePaymentReadiness(); }
 
   function reset() {
     ["o", "d"].forEach(function (prefix) {
       state.nodes[prefix] = {}; state.points[prefix] = null; state.loadToken[prefix] += 1;
       clearAfter(prefix, "Island"); updateProgress(prefix);
     });
-    state.amount = null; setPinMode("o"); updateMap(); updatePaymentSummary();
+    state.amount = null; setPinMode("o"); updateMap(); updatePaymentReadiness();
   }
   async function init() {
     var status = byId("geoStatus");
@@ -418,8 +404,7 @@
     document.querySelectorAll(".map-mode").forEach(function (button) {
       button.addEventListener("click", function () { setPinMode(button.getAttribute("data-map-mode")); });
     });
-    document.querySelectorAll('input[name="pm"]').forEach(function (radio) { radio.addEventListener("change", updatePaymentSummary); });
-    initMap(); setPinMode("o"); updatePaymentSummary();
+    initMap(); setPinMode("o"); updatePaymentReadiness();
   }
 
   window.LiftHaulBookingUX = {

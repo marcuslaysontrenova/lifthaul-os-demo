@@ -7,7 +7,7 @@
 <meta name="description" content="Track a LiftHaul booking with your tracking code — live status, milestones and Protected Payment state across Luzon, Visayas, Mindanao and inter-island.">
 <style>
 :root{
-  --bg:#5CB236;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
+  --bg:#F6F8F3;--surface:#FFFFFF;--surface-2:#F1F7EB;--surface-3:#E4F0D9;
   --ink:#14210C;--ink-2:#294417;--muted:#7C8A70;--line:#D5E3C6;
   --accent:#F2611A;--accent-2:#D9520F;--accent-ink:#FFFFFF;
   --primary:#5FB92A;--primary-2:#4E9E20;--primary-ink:#0C2306;--primary-soft:#E1F2D2;
@@ -74,6 +74,7 @@ h1,h2,h3{line-height:1.14;letter-spacing:-.02em;margin:0}p{margin:0}a{color:inhe
 footer{background:var(--ink);color:#c9d8bd;padding:28px 0;margin-top:20px;font-size:12.5px}
 footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
 </style>
+  <link rel="stylesheet" href="payment-checkout.css?v=1">
   <script src="config.js"></script>
 </head>
 <body>
@@ -96,7 +97,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
     <input id="tok" placeholder="Tracking code (e.g. pbk_…)" autocomplete="off" spellcheck="false" aria-label="Tracking code">
     <button class="btn" type="submit">Track →</button>
   </form>
-  <div class="note">🔒 Read-only. Your code is opaque and specific to your booking — it never exposes internal IDs, pricing internals, carrier details or other customers' data. Protected Payment live-fund custody is currently <b>OFF</b>.</div>
+  <div class="note">🔒 Read-only. Your opaque booking code never exposes internal IDs or another customer's data. Payment methods appear only when a provider channel is certified for this environment.</div>
   <div class="err" id="err"></div>
 </div></header>
 
@@ -149,9 +150,10 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
 
 <footer><div class="in">
   <span>© <span id="yr"></span> LiftHaul Enterprise · Powered by LiftHaul · Developed by TrenovaTech.ai</span>
-  <span>Demo prototype · Protected Payment live funds OFF</span>
+  <span>Demo prototype · verified payment activation is environment-gated</span>
 </div></footer>
 
+<script src="payment-checkout.js?v=1"></script>
 <script>
 (function(){
   "use strict";
@@ -159,6 +161,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
   function esc(s){return String(s==null?"":s).replace(/[<>&"]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];});}
   function peso(n){return "₱"+Number(n).toLocaleString("en-PH",{maximumFractionDigits:0});}
   var ACT_LABEL={VIEW_QUOTATION:"View quotation",VIEW_PAYMENT_INSTRUCTIONS:"Payment instructions",VIEW_POD:"View proof of delivery",CONTACT_SUPPORT:"Contact support"};
+  var activeToken="";
 
   function showErr(m){$("#err").textContent=m;$("#err").classList.add("show");$("#result").classList.remove("show");}
   function clearErr(){$("#err").classList.remove("show");}
@@ -187,7 +190,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
         '<div class="chead"><span class="ref">'+esc(d.ref)+'</span>'+(d.inter_island?'<span class="svc">Inter-island</span>':'<span class="svc">Domestic</span>')+'<span class="pill">'+esc(d.customer_status)+'</span></div>'+
         '<div class="grid">'+rows+'</div>'+
         ((d.delivery_verification&&d.delivery_verification.required)?('<div class="section"><h3>Delivery Verification</h3><div class="pay"><span class="lbl">'+esc(d.delivery_verification.state)+'</span></div><p class="muted" style="font-size:12.5px;margin-top:6px">Your delivery requires recipient verification (a secure code is sent to the recipient). The code is never shown here. Verification confirms handoff only — it does not waive any damage claim.</p></div>'):"")+
-        '<div class="section"><h3>Protected Payment</h3><div class="pay"><span class="lbl">'+esc(pp.label||d.payment_status)+'</span>'+(pp.live_funds_enabled?'':'<span class="off">Live custody OFF</span>')+'</div><p class="muted" style="font-size:12.5px;margin-top:6px">Funds are released to the carrier only when delivery is verified. Until our regulated provider is live, settlement is operator-verified (bank / Wise) under the same delivery-verified policy.</p></div>'+
+        '<div class="section"><h3>Protected Payment</h3><div class="pay"><span class="lbl">'+esc(pp.label||d.payment_status)+'</span><span class="off">Provider verification required</span></div><p class="muted" style="font-size:12.5px;margin-top:6px">Payment is confirmed only from a signed provider notification plus a direct provider status check. A screenshot or redirect never marks this booking paid.</p><div id="paymentCheckout"></div></div>'+
         ((d.stops&&d.stops.length)?('<div class="section"><h3>Stops</h3>'+d.stops.map(function(s){return '<div class="tstep '+(s.status==="DONE"?"done":"upcoming")+'"><div class="ic">'+esc(s.seq)+'</div><div class="nm">'+esc(s.type)+' · '+esc(s.address||"")+'</div></div>';}).join("")+'</div>'):"")+
         '<div class="section"><h3>Progress</h3><div class="time">'+stages+'</div></div>'+
         '<div class="section"><h3>What happens next</h3><div class="next">'+esc(d.next_action)+'</div><div class="acts">'+acts+'</div>'+
@@ -195,12 +198,26 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
         '</div>'+
       '</div>';
     $("#result").classList.add("show");
+    if(window.LiftHaulPayment&&activeToken){
+      window.LiftHaulPayment.mount(document.getElementById("paymentCheckout"),{
+        token:activeToken,base:paymentBase(),amount:d.estimate,
+        quotationReady:(d.actions||[]).indexOf("VIEW_QUOTATION")>=0,
+        paymentRequired:(d.actions||[]).indexOf("VIEW_PAYMENT_INSTRUCTIONS")>=0
+      });
+    }
+  }
+
+  function paymentBase(){
+    var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null;
+    try{if(!base)base=localStorage.getItem("lifthaul_api_base")||localStorage.getItem("rgo_api_base");}catch(_){}
+    return base?base.replace(/\/+$/,""):null;
   }
 
   function lookup(token){
     token=(token||"").trim();
     if(!token){showErr("Please enter your tracking code.");return;}
-    var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||null;try{if(!base)base=localStorage.getItem("lifthaul_api_base")||localStorage.getItem("rgo_api_base");}catch(_){}
+    activeToken=token;
+    var base=paymentBase();
     if(!base){
       showErr("Live tracking connects to the LiftHaul backend, which isn't configured in this demo. Once the API is hosted (localStorage.lifthaul_api_base), this page shows the real, persisted status of booking "+token+".");
       return;

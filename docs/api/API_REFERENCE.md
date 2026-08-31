@@ -596,6 +596,27 @@ Carrier-portal: `GET /portal/carrier/dashboard`, `GET/POST /portal/carrier/avail
 **Availability** (per-vehicle/driver toggle with computed effective status) tabs — completing the carrier
 operating workspace.
 
+## Administration-fee settlement to Wise
+
+For public bookings, the disclosed administration fee is fixed at **10% of the persisted transport
+subtotal**. After Xendit confirmation has passed both authenticated-webhook and server-to-server API
+verification, the platform creates one idempotent `platform_fee_settlements` record. Manual payment
+verification never triggers automatic fee transfer.
+
+Wise submission is fail-closed. `ADMIN_FEE_WISE_ENABLED`, a verified Wise Business profile and
+recipient, approved API balance-funding capability, and approved early-release treatment are all
+required before a quote, transfer, or funding request is sent. A created or funded Wise request is
+not labelled complete until Wise reports `outgoing_payment_sent`/`completed`. Refunds after submission
+open an auditable fee-recovery case instead of silently reducing another party's funds.
+
+Finance endpoints (RBAC `marketplace.payment.reconcile`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/payments/administration-fees` | List tenant-scoped fee settlements and recovery state |
+| POST | `/admin/payments/administration-fees/:id/retry` | Retry a blocked/failed Wise submission after configuration is corrected |
+| POST | `/admin/payments/administration-fees/:id/sync` | Query Wise and update the authoritative transfer status |
+
 ## E-commerce / ERP readiness
 
 This API is designed to support future Shopify / WooCommerce / ERP / WMS / TMS / custom connectors

@@ -101,6 +101,11 @@ class BookingMarkup(unittest.TestCase):
         portal = (ROOT / "portal.html").read_text(encoding="utf-8")
         self.assertIn("This workspace is for customers booking transport", client)
         self.assertIn('href="portal.html"', client)
+        self.assertIn('id="demoBtn"', client)
+        self.assertIn("Explore demo workspace", client)
+        self.assertIn("READ-ONLY DEMO · SYNTHETIC DATA", client)
+        self.assertIn("No real transaction or provider verification has occurred", client)
+        self.assertIn("demoMode=!base", client)
         self.assertIn("This workspace is for truckers and fleet owners", portal)
         self.assertIn('href="client.html"', portal)
 

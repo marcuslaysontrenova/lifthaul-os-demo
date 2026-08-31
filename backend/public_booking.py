@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import secrets
 
 import core
@@ -33,6 +34,12 @@ VEHICLE_MAP = {
     "lowbed": ("LOWBED",      "ENGINEERED", None, None, None),
     "crane":  ("CRANE_RIGGING","ENGINEERED",None, None, None),
 }
+VEHICLE_CAPACITY_KG = {
+    "moto": 20, "sedan": 200, "mpv": 600, "pickup": 800, "van": 1000,
+    "6w": 7000, "10w": 12000, "lowbed": 40000, "crane": 350000,
+}
+ADMINISTRATION_FEE_RATE = 0.10
+ADMINISTRATION_FEE_VERSION = "PUBLIC_ADMIN_FEE_V1"
 ENGINEERED_NOTE = "Engineering estimate required — load charts, permits, route survey and ground-bearing checks price this, not a distance formula."
 
 
@@ -50,6 +57,13 @@ SCHEMA_COLUMNS = [
     # Structured PSGC selections + payment preference (no credentials and no live transaction).
     ("origin_psgc", "TEXT"), ("destination_psgc", "TEXT"),
     ("payment_method", "TEXT"), ("payment_provider", "TEXT"), ("payment_channel", "TEXT"),
+    # Public quote evidence — server-calculated and retained separately from the customer total.
+    ("distance_km", "REAL"), ("distance_source", "TEXT"), ("transport_amount", "REAL"),
+    ("administration_fee_rate", "REAL"), ("administration_fee", "REAL"),
+    # Structured cargo/package details used for vehicle-capacity validation and operations.
+    ("cargo_category", "TEXT"), ("package_count", "INTEGER"),
+    ("package_length_cm", "REAL"), ("package_width_cm", "REAL"), ("package_height_cm", "REAL"),
+    ("declared_value", "REAL"), ("special_handling", "TEXT"),
 ]
 
 PAYMENT_PREFERENCES = {
@@ -270,28 +284,147 @@ def _clean_location(payload, key, island_key, fallback_address):
     return clean
 
 
+def _with_administration_fee(transport_amount, status, **extra):
+    """Build the public quote from a transport subtotal plus LiftHaul's disclosed administration fee.
+
+    The 10% is a markup on the transport subtotal.  The resulting platform revenue is therefore
+    9.09% of the final customer total; both values are retained so finance never confuses markup
+    with gross-margin percentage.
+    """
+    if transport_amount is None:
+        result = {
+            "amount": None, "transport_subtotal": None,
+            "administration_fee_rate": ADMINISTRATION_FEE_RATE,
+            "administration_fee": None, "platform_margin": None,
+            "margin_percent_of_total": None, "fee_version": ADMINISTRATION_FEE_VERSION,
+            "status": status,
+        }
+    else:
+        transport = round(float(transport_amount), 2)
+        fee = round(transport * ADMINISTRATION_FEE_RATE, 2)
+        total = round(transport + fee, 2)
+        result = {
+            "amount": total, "transport_subtotal": transport,
+            "administration_fee_rate": ADMINISTRATION_FEE_RATE,
+            "administration_fee": fee, "platform_margin": fee,
+            "margin_percent_of_total": round((fee / total) * 100, 2) if total else 0.0,
+            "fee_version": ADMINISTRATION_FEE_VERSION, "status": status,
+        }
+    result.update(extra)
+    return result
+
+
+def _haversine_km(origin, destination):
+    """Planning distance from the two persisted map points; None when either point is unavailable."""
+    try:
+        lat1, lon1 = float(origin.get("latitude")), float(origin.get("longitude"))
+        lat2, lon2 = float(destination.get("latitude")), float(destination.get("longitude"))
+    except (TypeError, ValueError, AttributeError):
+        return None
+    earth_km = 6371.0088
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return earth_km * 2 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1 - a)))
+
+
+def resolve_distance(origin, destination, submitted_km=None, inter_island=False):
+    """Prefer server-recalculation from stored points; keep km input only for legacy/API compatibility.
+
+    The map presently stores planning coordinates, so a conservative routing factor is applied and
+    the source is explicit.  A contracted routing provider can replace this estimator without
+    changing the quote or audit model.
+    """
+    direct = _haversine_km(origin, destination)
+    if direct is not None and direct > 0:
+        factor = 1.15 if inter_island else 1.25
+        return {"km": round(max(1.0, direct * factor), 1), "source": "SERVER_PLANNING_COORDINATES",
+                "straight_line_km": round(direct, 1), "routing_factor": factor}
+    try:
+        km = float(submitted_km or 0)
+    except (TypeError, ValueError):
+        km = 0
+    if km <= 0 or km > 5000:
+        return {"km": None, "source": "DISTANCE_REQUIRED", "straight_line_km": None,
+                "routing_factor": None}
+    return {"km": round(km, 1), "source": "CLIENT_ESTIMATE_LEGACY",
+            "straight_line_km": None, "routing_factor": None}
+
+
+_CARGO_CATEGORIES = {
+    "DOCUMENTS_PARCEL", "BOXES_GENERAL", "APPLIANCE_FURNITURE", "CONSTRUCTION_MATERIALS",
+    "MACHINERY_EQUIPMENT", "REFRIGERATED_PERISHABLE", "HAZARDOUS_REGULATED", "OTHER",
+}
+
+
+def clean_cargo(payload):
+    category = str(payload.get("cargo_category") or "BOXES_GENERAL").strip().upper()
+    if category not in _CARGO_CATEGORIES:
+        raise core.ValidationError("unsupported cargo category")
+    description = str(payload.get("cargo") or "General cargo").strip()[:400]
+    weight = _num(payload.get("weight_kg"))
+    if weight is not None and (weight <= 0 or weight > 350000):
+        raise core.ValidationError("cargo weight must be between 0 and 350,000 kg")
+    try:
+        count = int(payload.get("package_count") or 1)
+    except (TypeError, ValueError):
+        raise core.ValidationError("package count must be a whole number")
+    if count < 1 or count > 10000:
+        raise core.ValidationError("package count must be between 1 and 10,000")
+    dimensions = []
+    for key in ("package_length_cm", "package_width_cm", "package_height_cm"):
+        value = _num(payload.get(key))
+        if value is not None and (value <= 0 or value > 5000):
+            raise core.ValidationError(f"{key} is outside the supported range")
+        dimensions.append(value)
+    declared = _num(payload.get("declared_value"))
+    if declared is not None and (declared < 0 or declared > 1_000_000_000):
+        raise core.ValidationError("declared value is outside the supported range")
+    handling = payload.get("special_handling") or []
+    if isinstance(handling, str):
+        handling = [handling]
+    if not isinstance(handling, list) or len(handling) > 10:
+        raise core.ValidationError("invalid special handling selection")
+    handling = [str(item).strip().upper()[:40] for item in handling if str(item).strip()]
+    return {"category": category, "description": description, "weight_kg": weight, "count": count,
+            "length_cm": dimensions[0], "width_cm": dimensions[1], "height_cm": dimensions[2],
+            "declared_value": declared, "special_handling": handling}
+
+
+def validate_vehicle_capacity(vehicle, cargo):
+    weight = cargo.get("weight_kg")
+    capacity = VEHICLE_CAPACITY_KG.get(vehicle)
+    if weight is not None and capacity is not None and weight > capacity:
+        raise core.ValidationError(
+            f"selected vehicle capacity is {capacity:g} kg; cargo weight is {weight:g} kg")
+
+
 def quote(conn, vehicle, km, inter_island, service_level=None):
     """Server-side estimate. Real rate card when one exists; else a server-owned indicative rate for
     STANDARD classes, adjusted by the service-level multiplier. ENGINEERED classes NEVER get a
     fabricated instant price (service level or not)."""
     veh, cls, base, perkm, sea = VEHICLE_MAP[vehicle]
     if cls == "ENGINEERED":
-        return {"amount": None, "status": "ESTIMATE_REQUIRED", "note": ENGINEERED_NOTE}
+        return _with_administration_fee(None, "ESTIMATE_REQUIRED", note=ENGINEERED_NOTE)
     km = float(km or 0)
     if km <= 0:
-        return {"amount": None, "status": "ESTIMATE_REQUIRED", "note": "distance required for a standard quote"}
+        return _with_administration_fee(
+            None, "ESTIMATE_REQUIRED", note="distance required for a standard quote")
     mult = SERVICE_LEVELS.get(str(service_level or "STANDARD").upper(), {}).get("multiplier") or 1.0
     try:
         import rates
         rc = rates.resolve_rate(conn, veh)
         if rc and rc.get("standard_rate"):
             line = rates.price_line(rc["standard_rate"], 1, max(1, round(km / 200)), 0.0, rc.get("internal_cost", 0.0))
-            amt = round(line["total"] * mult + (sea if inter_island else 0))
-            return {"amount": amt, "status": "QUOTED", "source": "rate_card", "service_level": service_level}
+            transport = round(line["total"] * mult + (sea if inter_island else 0))
+            return _with_administration_fee(
+                transport, "QUOTED", source="rate_card", service_level=service_level)
     except Exception:
         pass
-    amt = round((base + perkm * km) * mult + (sea if inter_island else 0))
-    return {"amount": amt, "status": "QUOTED_INDICATIVE", "source": "server_tariff", "service_level": service_level}
+    transport = round((base + perkm * km) * mult + (sea if inter_island else 0))
+    return _with_administration_fee(
+        transport, "QUOTED_INDICATIVE", source="server_tariff", service_level=service_level)
 
 
 def routing_candidate(service_class):
@@ -329,15 +462,18 @@ def submit(conn, payload):
     level = resolve_service_level(payload.get("service_level"), svc["service_class"])
     sched = resolve_schedule(payload)
     stops = _clean_stops(payload.get("stops"))
-    q = quote(conn, payload["vehicle"], payload.get("km"), route["inter_island"], level)
+    origin = _clean_location(payload, "origin_location", "origin_island", payload.get("origin_city"))
+    destination = _clean_location(payload, "destination_location", "dest_island", payload.get("dest_city"))
+    distance = resolve_distance(origin, destination, payload.get("km"), route["inter_island"])
+    cargo = clean_cargo(payload)
+    validate_vehicle_capacity(payload["vehicle"], cargo)
+    q = quote(conn, payload["vehicle"], distance["km"], route["inter_island"], level)
     routing = routing_candidate(svc["service_class"])
     intended = "protected" if str(payload.get("payment", "protected")).lower().startswith("prot") else "operator"
     payment_method = str(payload.get("payment_method") or ("protected" if intended == "protected" else "operator")).lower()
     if payment_method not in PAYMENT_PREFERENCES:
         raise core.ValidationError("unsupported payment preference")
     payment_provider, payment_channel = PAYMENT_PREFERENCES[payment_method]  # server-owned disclosure labels
-    origin = _clean_location(payload, "origin_location", "origin_island", payload.get("origin_city"))
-    destination = _clean_location(payload, "destination_location", "dest_island", payload.get("dest_city"))
 
     actor = _service_actor()
     shipper_id = _guest_shipper(conn)
@@ -349,7 +485,7 @@ def submit(conn, payload):
         inter_island=1 if route["inter_island"] else 0, route_class=route["route_class"],
         pickup_address=origin["full_address"],
         delivery_address=destination["full_address"],
-        weight_kg=_num(payload.get("weight_kg")), cargo_description=str(payload.get("cargo", ""))[:400])
+        weight_kg=cargo["weight_kg"], cargo_description=cargo["description"])
 
     token = "pbk_" + secrets.token_urlsafe(18)
     ref = "LH-" + ("II" if route["inter_island"] else "") + token[-6:].upper()
@@ -361,6 +497,9 @@ def submit(conn, payload):
         "pickup_window=?, delivery_window=?, payment_status='PROTECTED_PENDING', quotation_status=?, "
         "pickup_lat=?, pickup_lng=?, delivery_lat=?, delivery_lng=?, origin_psgc=?, destination_psgc=?, "
         "payment_method=?, payment_provider=?, payment_channel=?, "
+        "distance_km=?, distance_source=?, transport_amount=?, administration_fee_rate=?, administration_fee=?, "
+        "cargo_category=?, package_count=?, package_length_cm=?, package_width_cm=?, package_height_cm=?, "
+        "declared_value=?, special_handling=?, "
         "updated_at=? WHERE id=?",
         (str(payload.get("contact_name"))[:200], str(payload.get("contact_email", ""))[:200],
          str(payload.get("contact_phone", ""))[:60], token, svc["service_class"], routing,
@@ -370,7 +509,11 @@ def submit(conn, payload):
          ("ESTIMATE_REQUIRED" if q["status"] == "ESTIMATE_REQUIRED" else "AUTO_QUOTED"),
          origin.get("latitude"), origin.get("longitude"), destination.get("latitude"), destination.get("longitude"),
          json.dumps(origin, ensure_ascii=False), json.dumps(destination, ensure_ascii=False),
-         payment_method, payment_provider, payment_channel, _now(), bid))
+         payment_method, payment_provider, payment_channel,
+         distance["km"], distance["source"], q.get("transport_subtotal"),
+         q.get("administration_fee_rate"), q.get("administration_fee"),
+         cargo["category"], cargo["count"], cargo["length_cm"], cargo["width_cm"], cargo["height_cm"],
+         cargo["declared_value"], json.dumps(cargo["special_handling"]), _now(), bid))
     if stops:
         _persist_stops(conn, bid, stops)
     # Protected Payment: eligibility recorded; NO live transaction (no carrier yet, funds gate OFF).
@@ -379,7 +522,11 @@ def submit(conn, payload):
     core.audit(conn, actor, "PUBLIC_BOOKING_CREATED", "mkt_bookings", bid, None,
                {"ref": ref, "route": route["route_class"], "service_class": svc["service_class"],
                 "routing": routing, "quote_status": q["status"], "live_funds": live,
-                "payment_preference": payment_method})
+                "payment_preference": payment_method, "distance_km": distance["km"],
+                "distance_source": distance["source"], "cargo_category": cargo["category"],
+                "transport_subtotal": q.get("transport_subtotal"),
+                "administration_fee": q.get("administration_fee"), "customer_total": q.get("amount"),
+                "fee_version": q.get("fee_version")})
     conn.commit()
 
     return {
@@ -388,6 +535,15 @@ def submit(conn, payload):
         "inter_island": route["inter_island"], "service_class": svc["service_class"],
         "routing_candidate": routing,
         "estimate": q.get("amount"), "estimate_status": q["status"], "estimate_note": q.get("note"),
+        "distance": distance,
+        "cargo": {"category": cargo["category"], "description": cargo["description"],
+                  "weight_kg": cargo["weight_kg"], "package_count": cargo["count"]},
+        "quote_breakdown": {
+            "transport_subtotal": q.get("transport_subtotal"),
+            "administration_fee_rate": q.get("administration_fee_rate"),
+            "administration_fee": q.get("administration_fee"),
+            "customer_total": q.get("amount"), "currency": "PHP",
+        },
         "service_level": level, "schedule_type": sched["schedule_type"],
         "scheduled_at": sched["scheduled_at"], "stops": len(stops),
         "protected_payment": {"eligible": True, "live_funds_enabled": live, "intended_method": intended},
@@ -497,7 +653,9 @@ def track(conn, token):
         "requested_vehicle_category,quote_amount,quote_status,quotation_status,payment_status,intended_payment,"
         "assignment_status,pickup_address,delivery_address,pickup_window,created_at,"
         "payment_method,payment_provider,payment_channel,"
-        "service_level,schedule_type,scheduled_at FROM mkt_bookings WHERE tracking_token=?", (token,)).fetchone()
+        "service_level,schedule_type,scheduled_at,distance_km,distance_source,transport_amount,"
+        "administration_fee_rate,administration_fee,cargo_category,package_count,weight_kg,cargo_description "
+        "FROM mkt_bookings WHERE tracking_token=?", (token,)).fetchone()
     if not r:
         raise core.NotFoundError("booking not found")
     d = dict(r)
@@ -559,6 +717,15 @@ def track(conn, token):
         "vehicle_class": d.get("requested_vehicle_category"),
         "quotation_status": _QUOTE_CUST.get(d.get("quote_status"), d.get("quotation_status") or "Pending"),
         "estimate": (None if eng else d.get("quote_amount")),   # engineered: no fabricated instant price
+        "distance": {"km": d.get("distance_km"), "source": d.get("distance_source")},
+        "cargo": {"category": d.get("cargo_category"), "description": d.get("cargo_description"),
+                  "weight_kg": d.get("weight_kg"), "package_count": d.get("package_count")},
+        "quote_breakdown": {
+            "transport_subtotal": (None if eng else d.get("transport_amount")),
+            "administration_fee_rate": (None if eng else d.get("administration_fee_rate")),
+            "administration_fee": (None if eng else d.get("administration_fee")),
+            "customer_total": (None if eng else d.get("quote_amount")), "currency": "PHP",
+        },
         "payment_status": _PAY_PROJ.get(raw, "Payment Required"),
         "protected_payment": {"label": _PAY_PROJ.get(raw, "Payment Required"),
                               "terminology": "Protected Payment",

@@ -98,6 +98,20 @@ input:focus,select:focus{border-color:var(--primary);outline:none;box-shadow:0 0
 .payopt b{font-size:13.5px}.payopt span{font-size:12px;color:var(--ink-2)}
 .badge-rec{font-size:10px;font-weight:800;color:#fff;background:var(--primary-2);border-radius:999px;padding:2px 7px;margin-left:6px;vertical-align:middle}
 .note{font-size:12px;color:var(--muted);margin-top:12px}
+.cargo-card{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:14px;margin:0 0 14px}
+.cargo-card legend{padding:0 7px;font-size:14px;font-weight:800;color:var(--ink)}
+.cargo-intro{font-size:12.5px;color:var(--ink-2);margin:-2px 0 12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:620px){.grid3{grid-template-columns:1fr}}
+.handling{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
+.handling-option{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:7px 10px;font-size:12px;font-weight:650;color:var(--ink-2);cursor:pointer}
+.handling-option input{width:auto;margin:0;accent-color:var(--primary)}
+.auto-distance{background:var(--primary-soft);font-weight:750;color:var(--ink)}
+.auto-distance[readonly]{cursor:not-allowed}
+.field-help{font-size:11.5px;color:var(--muted);margin-top:1px}
+.recommendation{display:none;align-items:flex-start;gap:8px;border-left:3px solid var(--primary);background:var(--primary-soft);border-radius:8px;padding:9px 11px;margin:-4px 0 12px;font-size:12.5px;color:var(--ink-2)}
+.recommendation.show{display:flex}
+.estimate .row.fee{color:var(--primary-2);font-weight:700}
 /* matching + tracking */
 .match{display:none;text-align:center;padding:8px 4px}
 .match.show{display:block}
@@ -165,6 +179,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   </div>
   <div class="sp"></div>
   <a class="btn line sm hidesm" href="index.html#register">Register</a>
+  <a class="btn line sm hidesm" href="client.html">Client login</a>
   <a class="btn sm" href="console.html">Staff login</a>
 </div></nav>
 
@@ -193,6 +208,38 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
             <div><strong>Official Philippine address hierarchy</strong><span>PSA PSGC · 30 June 2026 · fields unlock in order</span></div>
             <span class="geo-status" id="geoStatus" role="status" aria-live="polite">Loading locations…</span>
           </div>
+
+          <fieldset class="cargo-card">
+            <legend>What are you sending?</legend>
+            <p class="cargo-intro">Describe the shipment accurately. Weight and handling needs determine the safest vehicle recommendation.</p>
+            <div class="grid2">
+              <div class="field"><label for="cargoCategory">Cargo / package type <span class="req">*</span></label>
+                <select id="cargoCategory" required>
+                  <option value="">Select cargo type…</option><option value="DOCUMENTS_PARCEL">Documents or parcel</option>
+                  <option value="BOXES_GENERAL">Boxes / general cargo</option><option value="APPLIANCE_FURNITURE">Appliance or furniture</option>
+                  <option value="CONSTRUCTION_MATERIALS">Construction materials</option><option value="MACHINERY_EQUIPMENT">Machinery or equipment</option>
+                  <option value="REFRIGERATED_PERISHABLE">Refrigerated / perishable</option><option value="HAZARDOUS_REGULATED">Hazardous / regulated cargo</option>
+                  <option value="OTHER">Other cargo</option>
+                </select></div>
+              <div class="field"><label for="cargoDesc">Package description <span class="req">*</span></label><input id="cargoDesc" maxlength="400" placeholder="e.g. 12 sealed cartons of machine parts" required></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="packageCount">Number of packages <span class="req">*</span></label><input id="packageCount" type="number" min="1" max="10000" value="1" required></div>
+              <div class="field"><label for="cargoWeight">Total weight (kg) <span class="req">*</span></label><input id="cargoWeight" type="number" min="0.1" max="350000" step="0.1" placeholder="e.g. 350" required></div>
+            </div>
+            <div class="grid3">
+              <div class="field"><label for="packageLength">Length (cm)</label><input id="packageLength" type="number" min="0.1" max="5000" step="0.1" placeholder="Optional"></div>
+              <div class="field"><label for="packageWidth">Width (cm)</label><input id="packageWidth" type="number" min="0.1" max="5000" step="0.1" placeholder="Optional"></div>
+              <div class="field"><label for="packageHeight">Height (cm)</label><input id="packageHeight" type="number" min="0.1" max="5000" step="0.1" placeholder="Optional"></div>
+            </div>
+            <div class="field"><label for="declaredValue">Declared cargo value (₱) <span class="field-hint">optional, for quotation and risk review</span></label><input id="declaredValue" type="number" min="0" max="1000000000" step="0.01" placeholder="e.g. 50000"></div>
+            <div class="field"><label>Special handling</label><div class="handling">
+              <label class="handling-option"><input type="checkbox" name="specialHandling" value="FRAGILE">Fragile</label>
+              <label class="handling-option"><input type="checkbox" name="specialHandling" value="REFRIGERATED">Refrigerated</label>
+              <label class="handling-option"><input type="checkbox" name="specialHandling" value="LIFT_ASSISTANCE">Lift assistance</label>
+              <label class="handling-option"><input type="checkbox" name="specialHandling" value="OVERSIZED">Oversized</label>
+            </div></div>
+          </fieldset>
 
           <fieldset class="location-card pickup" id="oLocationCard" data-complete="false">
             <legend>Pickup location</legend>
@@ -238,10 +285,12 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
             <span>Inter-island lane — sea-freight + port handling included; delivery routed through a RoRo/port leg.</span>
           </div>
 
-          <div class="field" style="margin-bottom:8px"><label>Estimated distance (km) <span class="req">*</span></label>
-            <input id="km" inputmode="numeric" placeholder="e.g. 45" required></div>
+          <div class="field" style="margin-bottom:8px"><label for="km">Automatically calculated distance (km) <span class="req">*</span></label>
+            <input id="km" class="auto-distance" inputmode="decimal" placeholder="Complete pickup and delivery locations" required readonly>
+            <span class="field-help" id="distanceMeta">Planning estimate from selected locations. Refine both map pins for better accuracy; final dispatch routing is confirmed separately.</span></div>
           <div class="field" style="margin-top:0"><label>Choose a vehicle <span class="req">*</span></label></div>
           <div class="veh" id="veh"></div>
+          <div class="recommendation" id="vehicleRecommendation" role="status" aria-live="polite"></div>
 
           <div class="grid2" style="margin-top:2px">
             <div class="field"><label>Service level</label><select id="svcLevel"></select></div>
@@ -382,15 +431,15 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   var scrollMode=function(){return window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";};
   // LiftHaul vehicle taxonomy (base fare ₱, per-km ₱, inter-island sea surcharge ₱). Heavy = quote-assisted.
   var VEH=[
-    {id:"moto",name:"Motorcycle",cap:"up to 20 kg",base:60,km:8,sea:250},
-    {id:"sedan",name:"Sedan",cap:"200 kg",base:120,km:14,sea:900},
-    {id:"mpv",name:"MPV / SUV",cap:"300–600 kg",base:180,km:18,sea:1400},
-    {id:"pickup",name:"Pickup",cap:"800 kg",base:220,km:22,sea:1800},
-    {id:"van",name:"L300 / Van",cap:"1,000 kg",base:300,km:28,sea:2600},
-    {id:"6w",name:"6-Wheeler Truck",cap:"5–7 t",base:1200,km:55,sea:7500},
-    {id:"10w",name:"10W Wing Van",cap:"12 t",base:2500,km:80,sea:14000},
-    {id:"lowbed",name:"Lowbed / Heavy Haul",cap:"20–40 t",base:6000,km:140,sea:38000,heavy:true},
-    {id:"crane",name:"Crane / Rigging",cap:"up to 350 t",quote:true,heavy:true}
+    {id:"moto",name:"Motorcycle",cap:"up to 20 kg",capKg:20,base:60,km:8,sea:250},
+    {id:"sedan",name:"Sedan",cap:"200 kg",capKg:200,base:120,km:14,sea:900},
+    {id:"mpv",name:"MPV / SUV",cap:"300–600 kg",capKg:600,base:180,km:18,sea:1400},
+    {id:"pickup",name:"Pickup",cap:"800 kg",capKg:800,base:220,km:22,sea:1800},
+    {id:"van",name:"L300 / Van",cap:"1,000 kg",capKg:1000,base:300,km:28,sea:2600},
+    {id:"6w",name:"6-Wheeler Truck",cap:"5–7 t",capKg:7000,base:1200,km:55,sea:7500},
+    {id:"10w",name:"10W Wing Van",cap:"12 t",capKg:12000,base:2500,km:80,sea:14000},
+    {id:"lowbed",name:"Lowbed / Heavy Haul",cap:"20–40 t",capKg:40000,base:6000,km:140,sea:38000,heavy:true},
+    {id:"crane",name:"Crane / Rigging",cap:"up to 350 t",capKg:350000,quote:true,heavy:true}
   ];
   var sel=null, when="now";
   // service levels (mirror server eligibility + multipliers; server remains authoritative)
@@ -410,6 +459,22 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   function peso(n){return "₱"+Number(n).toLocaleString("en-PH",{maximumFractionDigits:0});}
   function interIsland(){var o=$("#oIsland").value,d=$("#dIsland").value;return o&&d&&o!==d;}
   function refreshInter(){$("#interFlag").classList.toggle("show",interIsland());estimate();}
+  function vehicleById(id){return VEH.find(function(x){return x.id===id;});}
+  function chooseVehicle(id){
+    [].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.toggle("on",b.getAttribute("data-v")===id);});
+    sel=id;var chosen=vehicleById(id);populateLevels(!!(chosen&&chosen.heavy));estimate();
+  }
+  function recommendVehicle(force){
+    var weight=parseFloat($("#cargoWeight").value||"0"),box=$("#vehicleRecommendation");
+    if(!weight||weight<=0){box.classList.remove("show");return null;}
+    var recommended=VEH.find(function(v){return weight<=v.capKg;})||VEH[VEH.length-1];
+    var chosen=vehicleById(sel);
+    if(force||!chosen||weight>chosen.capKg)chooseVehicle(recommended.id);
+    var category=$("#cargoCategory").value;
+    var caution=category==="HAZARDOUS_REGULATED"?" Regulated cargo remains subject to document and carrier-eligibility review.":"";
+    box.innerHTML='<b>Recommended: '+recommended.name+'</b><span>Capacity '+recommended.cap+' for '+weight.toLocaleString("en-PH")+' kg.'+caution+' You may choose a larger vehicle.</span>';
+    box.classList.add("show");return recommended;
+  }
 
   function estimate(){
     var box=$("#estimate");
@@ -428,29 +493,35 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
     var sea=ii?v.sea:0;
     var lvl=(document.getElementById("svcLevel")||{}).value||"STANDARD";
     var m=(SERVICE_LVL[lvl]&&SERVICE_LVL[lvl].m)||1;
-    var subtotal=Math.round((v.base+dist)*m);
-    var total=subtotal+sea;
+    var serviceSubtotal=Math.round((v.base+dist)*m);
+    var transportSubtotal=serviceSubtotal+sea;
+    var adminFee=Math.round(transportSubtotal*.10);
+    var total=transportSubtotal+adminFee;
     box.hidden=false;
     box.innerHTML='<div class="row"><span>Base fare · '+v.name+'</span><span>'+peso(v.base)+'</span></div>'+
       '<div class="row"><span>Distance · '+km+' km × '+peso(v.km)+'/km</span><span>'+peso(dist)+'</span></div>'+
-      (m!==1?'<div class="row"><span>Service level · '+((SERVICE_LVL[lvl]||{}).n||lvl)+' (×'+m+')</span><span>'+peso(subtotal-(v.base+dist))+'</span></div>':'')+
+      (m!==1?'<div class="row"><span>Service level · '+((SERVICE_LVL[lvl]||{}).n||lvl)+' (×'+m+')</span><span>'+peso(serviceSubtotal-(v.base+dist))+'</span></div>':'')+
       (ii?'<div class="row"><span>Inter-island sea-freight + port handling</span><span>'+peso(sea)+'</span></div>':'')+
-      '<div class="row total"><span>Estimated total</span><span>'+peso(total)+'</span></div>'+
-      '<div class="row" style="color:var(--muted)"><span>Transparent estimate · final fare confirmed at carrier match</span><span></span></div>';
+      '<div class="row"><span>Transport subtotal</span><span>'+peso(transportSubtotal)+'</span></div>'+
+      '<div class="row fee"><span>LiftHaul administration charge (10%)</span><span>'+peso(adminFee)+'</span></div>'+
+      '<div class="row total"><span>Estimated customer total</span><span>'+peso(total)+'</span></div>'+
+      '<div class="row" style="color:var(--muted)"><span>Transparent planning estimate · final route and fare confirmed at quotation</span><span></span></div>';
     if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(total);
   }
 
   document.addEventListener("click",function(e){
-    var v=e.target.closest(".vopt"); if(v){[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});v.classList.add("on");sel=v.getAttribute("data-v");var vd=VEH.find(function(x){return x.id===sel;});populateLevels(!!(vd&&vd.heavy));estimate();return;}
+    var v=e.target.closest(".vopt"); if(v){var requested=vehicleById(v.getAttribute("data-v"));var weight=parseFloat($("#cargoWeight").value||"0");if(weight&&requested&&weight>requested.capKg){recommendVehicle(true);return;}chooseVehicle(requested.id);recommendVehicle(false);return;}
     if(e.target.id==="addStop"){var wrap=document.getElementById("stops");var row=document.createElement("div");row.className="stoprow";row.style.cssText="display:flex;gap:8px;margin-bottom:6px";row.innerHTML='<input class="stopAddr" placeholder="Stop address (drop / staging / transfer)" style="flex:1"><button type="button" class="btn line sm rmStop">×</button>';wrap.appendChild(row);return;}
     if(e.target.classList&&e.target.classList.contains("rmStop")){var r=e.target.closest(".stoprow");if(r)r.remove();return;}
     var p=e.target.closest(".payopt"); if(p){[].forEach.call(document.querySelectorAll(".payopt"),function(b){b.classList.remove("on");});p.classList.add("on");var pr=p.querySelector("input");pr.checked=true;pr.dispatchEvent(new Event("change",{bubbles:true}));return;}
     var w=e.target.closest(".bhead button"); if(w){[].forEach.call(document.querySelectorAll(".bhead button"),function(b){b.classList.remove("on");});w.classList.add("on");when=w.getAttribute("data-when");var st=document.getElementById("schedType");if(st){st.value=when==="later"?"SCHEDULED":"NOW";st.dispatchEvent(new Event("change"));}return;}
-    if(e.target.id==="newBooking"){$("#match").classList.remove("show");$("#bookform").style.display="";$("#bookform").reset();$("#bookbtn").disabled=false;sel=null;[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});$("#estimate").hidden=true;if(window.LiftHaulBookingUX)LiftHaulBookingUX.reset();$("#book").scrollIntoView({behavior:scrollMode()});}
+    if(e.target.id==="newBooking"){$("#match").classList.remove("show");$("#bookform").style.display="";$("#bookform").reset();$("#packageCount").value="1";$("#bookbtn").disabled=false;sel=null;[].forEach.call(document.querySelectorAll(".vopt"),function(b){b.classList.remove("on");});$("#estimate").hidden=true;$("#vehicleRecommendation").classList.remove("show");if(window.LiftHaulBookingUX)LiftHaulBookingUX.reset();$("#book").scrollIntoView({behavior:scrollMode()});}
   });
   $("#oIsland").addEventListener("change",refreshInter);
   $("#dIsland").addEventListener("change",refreshInter);
-  $("#km").addEventListener("input",estimate);
+  document.addEventListener("lifthaul:distancechange",function(e){var d=e.detail&&e.detail.distance;$("#km").value=d&&d.km?d.km:"";$("#distanceMeta").textContent=d?(d.refined?"Distance recalculated from your two refined map pins.":"Planning distance calculated automatically. Refine both map pins for better accuracy; final dispatch routing is confirmed separately."):"Complete both pickup and delivery locations to calculate distance automatically.";estimate();});
+  $("#cargoWeight").addEventListener("input",function(){recommendVehicle(true);});
+  $("#cargoCategory").addEventListener("change",function(){recommendVehicle(false);});
   document.getElementById("svcLevel").addEventListener("change",estimate);
   document.getElementById("schedType").addEventListener("change",function(){document.getElementById("schedWrap").style.display=this.value==="SCHEDULED"?"":"none";});
   function collectStops(){var out=[];[].forEach.call(document.querySelectorAll("#stops .stopAddr"),function(inp){var a=inp.value.trim();if(a)out.push({type:"DROP",address:a});});return out;}
@@ -463,15 +534,18 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
   $("#bookform").addEventListener("submit",function(e){
     e.preventDefault();
-    var need=["oIsland","oRegion","oProvince","oCity","oBarangay","dIsland","dRegion","dProvince","dCity","dBarangay","km","cName","cContact"];
+    var need=["cargoCategory","cargoDesc","packageCount","cargoWeight","oIsland","oRegion","oProvince","oCity","oBarangay","dIsland","dRegion","dProvince","dCity","dBarangay","km","cName","cContact"];
     for(var i=0;i<need.length;i++){var el=$("#"+need[i]);if(!el.value.trim()){el.focus();el.style.borderColor="var(--crit)";return;}el.style.borderColor="";}
     if(!sel){$("#veh").scrollIntoView({behavior:scrollMode(),block:"center"});return;}
     var v=VEH.find(function(x){return x.id===sel;});
+    var cargoWeight=parseFloat($("#cargoWeight").value||"0");
+    if(cargoWeight>v.capKg){recommendVehicle(true);$("#veh").scrollIntoView({behavior:scrollMode(),block:"center"});return;}
     var ii=interIsland();
     var contact=$("#cContact").value.trim();
     var origin=window.LiftHaulBookingUX?LiftHaulBookingUX.getLocation("o"):{};
     var destination=window.LiftHaulBookingUX?LiftHaulBookingUX.getLocation("d"):{};
-    var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:origin.full_address||origin.locality_name||$("#oCity").value,dest_city:destination.full_address||destination.locality_name||$("#dCity").value,origin_location:origin,destination_location:destination,vehicle:sel,km:$("#km").value,payment:"protected",idempotency_key:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():("web-"+Date.now()+"-"+Math.random().toString(36).slice(2))};
+    var handling=[];[].forEach.call(document.querySelectorAll('input[name="specialHandling"]:checked'),function(el){handling.push(el.value);});
+    var payload={contact_name:$("#cName").value.trim(),origin_island:$("#oIsland").value,dest_island:$("#dIsland").value,origin_city:origin.full_address||origin.locality_name||$("#oCity").value,dest_city:destination.full_address||destination.locality_name||$("#dCity").value,origin_location:origin,destination_location:destination,vehicle:sel,km:$("#km").value,payment:"protected",cargo_category:$("#cargoCategory").value,cargo:$("#cargoDesc").value.trim(),package_count:$("#packageCount").value,weight_kg:$("#cargoWeight").value,package_length_cm:$("#packageLength").value||null,package_width_cm:$("#packageWidth").value||null,package_height_cm:$("#packageHeight").value||null,declared_value:$("#declaredValue").value||null,special_handling:handling,idempotency_key:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():("web-"+Date.now()+"-"+Math.random().toString(36).slice(2))};
     payload.service_level=(document.getElementById("svcLevel")||{}).value||"STANDARD";
     payload.schedule_type=(document.getElementById("schedType")||{}).value||"NOW";
     if(payload.schedule_type==="SCHEDULED"){payload.scheduled_at=(document.getElementById("schedAt")||{}).value||"";}
@@ -483,7 +557,8 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
       fetch(base.replace(/\/+$/,"")+"/public/bookings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
         .then(function(r){return r.json();}).then(function(j){
           if(j.error)throw new Error(j.error);var d=j.data;
-          var sub=(d.estimate!=null)?("Estimate ₱"+Number(d.estimate).toLocaleString("en-PH")+" · "+d.next_step):((d.estimate_note||"")+" "+d.next_step);
+          var qb=d.quote_breakdown||{};
+          var sub=(d.estimate!=null)?("Customer total ₱"+Number(qb.customer_total!=null?qb.customer_total:d.estimate).toLocaleString("en-PH")+" (includes disclosed 10% administration charge) · "+d.next_step):((d.estimate_note||"")+" "+d.next_step);
           renderTrack(d.ref,"Request received · "+v.name,sub,(d.inter_island?II_STAGES:STD_STAGES),0);
           if(d.tracking_token){var ex=document.getElementById("bkTrack");if(ex)ex.remove();$("#ref").insertAdjacentHTML("afterend",'<a id="bkTrack" class="btn accent block" style="margin-top:12px" href="track.html?t='+encodeURIComponent(d.tracking_token)+'">Track this booking →</a>');}
         }).catch(function(error){bookingFailure(error&&error.message?error.message:"The booking service is unavailable. No booking was created.");});

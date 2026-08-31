@@ -6,6 +6,7 @@ price); server-side quote ignores tampered frontend totals; idempotent duplicate
 payload denial; private-fleet/marketplace routing candidate; Protected Payment linkage with live funds
 OFF; tracking by safe token only (isolation); tenant isolation of the admin queue; restart persistence.
 """
+import json
 import unittest
 
 import core
@@ -98,8 +99,49 @@ class Quote(unittest.TestCase):
     def test_server_ignores_tampered_frontend_total(self):
         r = pb.submit(self.c, _p(vehicle="sedan", km=10, amount=999999, estimate=999999, total=999999))
         self.assertNotEqual(r["estimate"], 999999)
-        # sedan: base 120 + 14*10 = 260 (domestic)
-        self.assertEqual(r["estimate"], 260)
+        # sedan transport ₱260 + disclosed 10% administration charge ₱26
+        self.assertEqual(r["estimate"], 286)
+
+    def test_administration_charge_is_disclosed_and_accounted_separately(self):
+        r = pb.submit(self.c, _p(vehicle="sedan", km=10))
+        q = r["quote_breakdown"]
+        self.assertEqual(q["transport_subtotal"], 260)
+        self.assertEqual(q["administration_fee_rate"], 0.10)
+        self.assertEqual(q["administration_fee"], 26)
+        self.assertEqual(q["customer_total"], 286)
+        row = self.c.execute(
+            "SELECT quote_amount,transport_amount,administration_fee_rate,administration_fee "
+            "FROM mkt_bookings WHERE id=?", (r["booking_id"],)).fetchone()
+        self.assertEqual(row["quote_amount"], 286)
+        self.assertEqual(row["transport_amount"], 260)
+        self.assertEqual(row["administration_fee"], 26)
+
+    def test_map_points_override_tampered_distance(self):
+        origin = {"island_group": "Luzon", "full_address": "Pickup", "latitude": 14.5995, "longitude": 120.9842}
+        destination = {"island_group": "Luzon", "full_address": "Delivery", "latitude": 14.6760, "longitude": 121.0437}
+        r = pb.submit(self.c, _p(vehicle="sedan", km=1, origin_location=origin, destination_location=destination))
+        self.assertNotEqual(r["distance"]["km"], 1)
+        self.assertEqual(r["distance"]["source"], "SERVER_PLANNING_COORDINATES")
+
+    def test_vehicle_too_small_for_cargo_is_rejected(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(vehicle="van", weight_kg=1200, cargo="Machine parts"))
+
+    def test_structured_cargo_is_persisted_and_trackable(self):
+        r = pb.submit(self.c, _p(
+            vehicle="6w", cargo_category="MACHINERY_EQUIPMENT", cargo="Industrial pump",
+            weight_kg=3200, package_count=2, package_length_cm=180,
+            special_handling=["FRAGILE", "LIFT_ASSISTANCE"],
+        ))
+        row = self.c.execute(
+            "SELECT cargo_category,cargo_description,weight_kg,package_count,special_handling "
+            "FROM mkt_bookings WHERE id=?", (r["booking_id"],)).fetchone()
+        self.assertEqual(row["cargo_category"], "MACHINERY_EQUIPMENT")
+        self.assertEqual(row["cargo_description"], "Industrial pump")
+        self.assertEqual(row["weight_kg"], 3200)
+        self.assertEqual(json_dumps(json.loads(row["special_handling"])), '["FRAGILE", "LIFT_ASSISTANCE"]')
+        tracked = pb.track(self.c, r["tracking_token"])
+        self.assertEqual(tracked["cargo"]["package_count"], 2)
 
     def test_inter_island_adds_sea_freight(self):
         dom = pb.submit(self.c, _p(vehicle="6w", km=100, origin_island="Luzon", dest_island="Luzon"))["estimate"]

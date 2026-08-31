@@ -22,8 +22,9 @@ class TestDbFactory(unittest.TestCase):
         self.assertIn("PostgreSQL", str(ctx.exception))
 
     def test_persistence_across_reconnect(self):
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "rgo.sqlite")
+        with tempfile.NamedTemporaryFile(suffix="-rgo.sqlite", delete=False) as handle:
+            path = handle.name
+        try:
             c1 = db.connect("sqlite:///" + path)
             admin = c1.execute  # noqa
             uid = core.create_user(c1, "a@r", "pw", "admin", "A")
@@ -36,6 +37,9 @@ class TestDbFactory(unittest.TestCase):
             self.assertEqual(n, 1)
             self.assertEqual(db.current_version(c2), db.SCHEMA_VERSION)
             c2.close()
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
 
 
 class TestCors(unittest.TestCase):
@@ -50,7 +54,8 @@ class TestCors(unittest.TestCase):
         self.assertIsNone(server._cors_origin("https://app.rgo.example"))
 
     def test_no_secret_literals_in_server(self):
-        src = open(os.path.join(os.path.dirname(__file__), "server.py"), encoding="utf-8").read().lower()
+        with open(os.path.join(os.path.dirname(__file__), "server.py"), encoding="utf-8") as source:
+            src = source.read().lower()
         for bad in ("password =", "api_key =", "secret = \"", "wise_key ="):
             self.assertNotIn(bad, src)
 
@@ -100,6 +105,10 @@ class TestCors(unittest.TestCase):
         self.assertIn("missing XENDIT_SECRET_KEY for production payments", errors)
         self.assertIn("PAYMENT_PROVIDER_CERTIFIED must be enabled for production payments", errors)
         self.assertIn("PAYMENT_RECONCILIATION_AUTOMATION must be enabled for production payments", errors)
+        self.assertIn("PAYMENT_REGULATORY_ROLE_APPROVED must be enabled for production payments", errors)
+        self.assertIn("PAYMENT_SAFEGUARDED_FUNDS_APPROVED must be enabled for production payments", errors)
+        self.assertIn("PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED must be enabled for production payments", errors)
+        self.assertIn("PAYMENT_DR_RESTORE_APPROVED must be enabled for production payments", errors)
 
     def test_plain_http_localhost_is_ci_only(self):
         import server

@@ -76,6 +76,16 @@ REQUIRED_CERTIFICATION_TESTS = (
     "end_to_end_channel",
 )
 
+PRODUCTION_SECURITY_FLAGS = (
+    ("provider_certified", "Provider commercial and technical certification"),
+    ("production_pilot_approved", "Controlled low-value production pilot"),
+    ("reconciliation_automation", "Automated daily reconciliation"),
+    ("regulatory_role_approved", "Philippine payment-role and regulatory review"),
+    ("safeguarded_funds_approved", "Safeguarded or conditional-settlement fund model"),
+    ("independent_security_test_approved", "Independent penetration/security test"),
+    ("dr_restore_approved", "Payment recovery and restore exercise"),
+)
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS gateway_channel_certifications(
   id INTEGER PRIMARY KEY, provider TEXT NOT NULL, environment TEXT NOT NULL,
@@ -95,6 +105,10 @@ CREATE TABLE IF NOT EXISTS gateway_payment_transactions(
   refunded_amount REAL DEFAULT 0, failure_code TEXT, review_reason TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
   UNIQUE(provider,reference_id), UNIQUE(booking_id,idempotency_key));
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_gateway_one_active_payment_per_booking
+ON gateway_payment_transactions(booking_id)
+WHERE status IN ('PROCESSING','PENDING','PAID','UNDER_REVIEW');
 
 CREATE TABLE IF NOT EXISTS gateway_webhook_events(
   id INTEGER PRIMARY KEY, provider TEXT NOT NULL, event_key TEXT NOT NULL,
@@ -189,8 +203,17 @@ def gateway_config():
         "return_base_url": os.getenv("PAYMENT_RETURN_BASE_URL", "").strip().rstrip("/"),
         "provider_certified": _truthy("PAYMENT_PROVIDER_CERTIFIED"),
         "production_pilot_approved": _truthy("PAYMENT_PRODUCTION_PILOT_APPROVED"),
+        "reconciliation_automation": _truthy("PAYMENT_RECONCILIATION_AUTOMATION"),
+        "regulatory_role_approved": _truthy("PAYMENT_REGULATORY_ROLE_APPROVED"),
+        "safeguarded_funds_approved": _truthy("PAYMENT_SAFEGUARDED_FUNDS_APPROVED"),
+        "independent_security_test_approved": _truthy("PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED"),
+        "dr_restore_approved": _truthy("PAYMENT_DR_RESTORE_APPROVED"),
         "api_base_url": os.getenv("XENDIT_API_BASE_URL", "https://api.xendit.co").strip().rstrip("/"),
     }
+
+
+def _production_gate_failures(cfg):
+    return [label for key, label in PRODUCTION_SECURITY_FLAGS if not cfg.get(key)]
 
 
 def _certified(conn, channel_key, environment):
@@ -208,7 +231,8 @@ def available_channels(conn):
     """Return only channels that are safe to display to a customer."""
     cfg = gateway_config()
     configured = bool(cfg["secret_key"] and cfg["webhook_token"] and cfg["return_base_url"].startswith("https://"))
-    production_gate = cfg["mode"] != "production" or cfg["production_pilot_approved"]
+    production_failures = _production_gate_failures(cfg) if cfg["mode"] == "production" else []
+    production_gate = not production_failures
     ready = cfg["mode"] != "disabled" and configured and cfg["provider_certified"] and production_gate
     channels = []
     if ready:
@@ -229,13 +253,60 @@ def available_channels(conn):
         elif not cfg["provider_certified"]:
             reason = "The payment provider has not passed the activation gate."
         elif not production_gate:
-            reason = "The controlled production pilot has not been approved."
+            reason = "Production activation remains blocked: " + "; ".join(production_failures) + "."
         else:
             reason = "No payment channel has completed channel certification."
     return {
         "provider": PROVIDER, "mode": cfg["mode"], "environment": cfg["environment"],
         "available": bool(channels), "channels": channels, "reason": reason,
         "authoritative_confirmation": "Verified provider webhook plus server-to-server status check",
+    }
+
+
+def security_readiness(conn, actor):
+    """Secret-free administrative evidence for the payment activation decision.
+
+    This is intentionally a gate report, not a self-certification. External approvals remain false
+    until their evidence owners set the corresponding production environment controls.
+    """
+    core.require(actor, "marketplace.payment.reconcile")
+    cfg = gateway_config()
+    configured = {
+        "gateway_mode_selected": cfg["mode"] in {"sandbox", "production"},
+        "provider_secret_configured": bool(cfg["secret_key"]),
+        "webhook_authentication_configured": bool(cfg["webhook_token"]),
+        "secure_https_return_url": cfg["return_base_url"].startswith("https://"),
+        "hosted_checkout_no_raw_credentials": True,
+        "webhook_plus_api_confirmation_required": True,
+        "database_idempotency_guard": True,
+        "manual_payment_dual_control": True,
+    }
+    approvals = {key: bool(cfg.get(key)) for key, _ in PRODUCTION_SECURITY_FLAGS}
+    certified = []
+    for key in sorted(CHANNELS):
+        if _certified(conn, key, cfg["environment"]):
+            certified.append(key)
+    blockers = []
+    if cfg["mode"] != "production":
+        blockers.append("Gateway is not in production mode")
+    blockers.extend(label for key, label in PRODUCTION_SECURITY_FLAGS if not approvals[key])
+    if not certified:
+        blockers.append("No channel has complete certification for " + cfg["environment"])
+    if not all((configured["provider_secret_configured"], configured["webhook_authentication_configured"],
+                configured["secure_https_return_url"])):
+        blockers.append("Provider credentials, callback authentication, or HTTPS return URL is incomplete")
+    return {
+        "provider": PROVIDER,
+        "mode": cfg["mode"],
+        "environment": cfg["environment"],
+        "architecture_controls": configured,
+        "production_approvals": approvals,
+        "certified_channels": certified,
+        "live_activation_ready": not blockers,
+        "blockers": blockers,
+        "public_terminology": "Protected Payment",
+        "legal_escrow_claim_authorized": False,
+        "decision": "ACTIVATE" if not blockers else "KEEP_LIVE_FUNDS_DISABLED",
     }
 
 
@@ -252,8 +323,9 @@ def certify_channel(conn, actor, channel_key, environment, tests, notes=None):
     if env == "PRODUCTION":
         if not _certified(conn, key, "SANDBOX"):
             raise core.ConflictError("sandbox certification is required before production certification")
-        if not gateway_config()["production_pilot_approved"]:
-            raise core.ConflictError("controlled production pilot approval is required")
+        missing = _production_gate_failures(gateway_config())
+        if missing:
+            raise core.ConflictError("production activation gates are incomplete: " + ", ".join(missing))
     existing = conn.execute(
         "SELECT id FROM gateway_channel_certifications WHERE provider=? AND environment=? AND channel_key=?",
         (PROVIDER, env, key),
@@ -345,6 +417,11 @@ def _row(conn, transaction_id):
 
 
 def _public_transaction(row):
+    factors = {
+        "provider_webhook_verified": bool(row.get("webhook_verified_at")),
+        "provider_api_verified": bool(row.get("api_verified_at")),
+        "reference_amount_currency_matched": row.get("status") == "PAID",
+    }
     return {
         "transaction_id": row["id"], "provider": row["provider"],
         "channel": row["channel_key"], "amount": row["amount"], "currency": row["currency"],
@@ -353,7 +430,8 @@ def _public_transaction(row):
         "expires_at": row.get("expires_at"), "paid_at": row.get("paid_at"),
         "refunded_amount": row.get("refunded_amount") or 0,
         "verification_method": row.get("verification_method"),
-        "verification_reminder": "Payment is confirmed only from the provider or an audited official-record review.",
+        "verification_factors": factors,
+        "verification_reminder": "API payment confirmation requires both an authenticated provider webhook and a server-to-server reference, amount, currency and status match. Manual exceptions require a second operator and an official provider record.",
     }
 
 
@@ -379,8 +457,8 @@ def create_payment_session(conn, token, channel_key, idempotency_key, client=Non
     if key not in {item["key"] for item in availability["channels"]}:
         raise core.ForbiddenError("payment channel is not enabled and certified")
     idem = str(idempotency_key or "").strip()
-    if not idem or len(idem) > 160:
-        raise core.ValidationError("a valid idempotency key is required")
+    if len(idem) < 8 or len(idem) > 128:
+        raise core.ValidationError("an idempotency key between 8 and 128 characters is required")
     request_hash = _hash({"booking": booking["id"], "channel": key, "amount": amount, "currency": "PHP"})
     existing = conn.execute(
         "SELECT * FROM gateway_payment_transactions WHERE booking_id=? AND idempotency_key=?",
@@ -392,6 +470,25 @@ def create_payment_session(conn, token, channel_key, idempotency_key, client=Non
             raise core.ConflictError("idempotency key was reused with different payment details")
         result = _public_transaction(existing)
         result["idempotent"] = True
+        return result
+
+    # A fresh browser-generated key must not create a second checkout for the same booking.
+    # The partial unique index above is the final database-level guard against concurrent requests;
+    # this lookup provides a useful idempotent response for ordinary repeated clicks.
+    active = conn.execute(
+        "SELECT * FROM gateway_payment_transactions "
+        "WHERE booking_id=? AND status IN ('PROCESSING','PENDING','PAID','UNDER_REVIEW') "
+        "ORDER BY id DESC LIMIT 1",
+        (booking["id"],),
+    ).fetchone()
+    if active:
+        active = dict(active)
+        if (active["channel_key"] != key or float(active["amount"]) != amount
+                or active["currency"] != "PHP"):
+            raise core.ConflictError("an active payment transaction already exists for this booking")
+        result = _public_transaction(active)
+        result["idempotent"] = True
+        result["deduplicated_active_transaction"] = True
         return result
 
     cfg = gateway_config()
@@ -502,8 +599,14 @@ def _apply_verified_state(conn, row, session, payment):
         actual = (payment.get("reference_id"), float(payment.get("request_amount") or 0), payment.get("currency"))
         if expected != actual:
             update.update(status="UNDER_REVIEW", review_reason="provider payment did not match reference, amount, or currency")
+        elif payment_status == "SUCCEEDED" and row.get("webhook_verified_at"):
+            update.update(status="PAID", verification_method="PROVIDER_WEBHOOK_PLUS_API", paid_at=_now())
         elif payment_status == "SUCCEEDED":
-            update.update(status="PAID", verification_method="PROVIDER_API", paid_at=_now())
+            # A successful server poll is useful evidence when a webhook is delayed, but it is not
+            # sufficient to complete the two-factor provider confirmation contract.  Keep the
+            # transaction visible to reconciliation without granting paid/dispatch authority.
+            update.update(status="UNDER_REVIEW", verification_method="PROVIDER_API_ONLY",
+                          review_reason="provider API reports success; authenticated webhook confirmation is pending")
         elif payment_status in {"FAILED"}:
             update.update(status="FAILED", failure_code=payment.get("failure_code"))
         elif payment_status in {"CANCELED", "CANCELLED"}:

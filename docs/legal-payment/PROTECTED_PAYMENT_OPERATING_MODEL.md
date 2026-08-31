@@ -53,3 +53,9 @@ described internally as "escrow-ready" (a technical readiness statement, not a l
 Live fund movement is technically disabled: `LIVE_PROTECTED_FUNDS_ENABLED=false`. It can only turn on
 when **all three** are documented as true: an approved PH legal operating model, an active licensed
 provider, and the flag. Missing any one → LIVE FUND MOVEMENT DENIED (enforced centrally in code).
+
+The customer payment gateway applies a separate production lock for provider certification,
+per-channel certification, a controlled pilot, automated reconciliation, regulatory-role review,
+safeguarded-funds approval, an independent security test, and DR/restore approval. See
+`PAYMENT_SECURITY_VERIFICATION_GATE.md`. These are cumulative controls: passing the gateway gate
+does not by itself authorize protected-funds custody or conditional release.

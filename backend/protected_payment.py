@@ -478,8 +478,8 @@ def metrics(conn, actor=None):
 # --------------------------------------------------------------------------- #
 CUSTOMER_LABELS = {
     "PAYMENT_REQUIRED": "Payment Required", "PAYMENT_INTENT_CREATED": "Awaiting Payment",
-    "AWAITING_CUSTOMER_FUNDS": "Awaiting Payment", "CUSTOMER_FUNDED": "Payment Confirmed",
-    "FUNDING_CONFIRMED": "Payment Confirmed", "FUNDS_PROTECTED": "Funds Protected",
+    "AWAITING_CUSTOMER_FUNDS": "Awaiting Payment", "CUSTOMER_FUNDED": "Payment Processing",
+    "FUNDING_CONFIRMED": "Payment Processing", "FUNDS_PROTECTED": "Funded and Protected",
     "TRIP_AUTHORIZED": "Service Authorized", "SERVICE_IN_PROGRESS": "Service In Progress",
     "DELIVERY_EVIDENCE_PENDING": "Delivery Evidence Submitted", "DISPUTE_WINDOW": "Acceptance / Dispute Window",
     "RELEASE_ELIGIBLE": "Release Processing", "RELEASE_APPROVAL_PENDING": "Release Processing",
@@ -490,20 +490,91 @@ CUSTOMER_LABELS = {
     "PARTIALLY_REFUNDED": "Partially Refunded", "REFUNDED": "Refunded", "LEGAL_HOLD": "Legal Hold",
     "RELEASE_REJECTED": "Release Processing", "CHARGEBACK": "Payment Held"}
 
+PUBLIC_TIMELINE = (
+    ("AWAITING_PAYMENT", "Awaiting Payment"),
+    ("PAYMENT_PROCESSING", "Payment Processing"),
+    ("FUNDED_AND_PROTECTED", "Funded and Protected"),
+    ("SERVICE_IN_PROGRESS", "Service in Progress"),
+    ("DELIVERY_SUBMITTED", "Delivery Submitted"),
+    ("AWAITING_CONFIRMATION", "Awaiting Confirmation"),
+    ("PAYMENT_RELEASED", "Payment Released"),
+)
+
+_TIMELINE_INDEX = {
+    "PAYMENT_REQUIRED": 0, "PAYMENT_INTENT_CREATED": 0, "AWAITING_CUSTOMER_FUNDS": 0,
+    "CUSTOMER_FUNDED": 1, "FUNDING_CONFIRMED": 1,
+    "FUNDS_PROTECTED": 2, "TRIP_AUTHORIZED": 2,
+    "SERVICE_IN_PROGRESS": 3,
+    "DELIVERY_EVIDENCE_PENDING": 4,
+    "DISPUTE_WINDOW": 5, "RELEASE_ELIGIBLE": 5, "RELEASE_APPROVAL_PENDING": 5,
+    "RELEASE_APPROVED": 5, "RELEASE_REQUESTED": 5,
+    "RELEASE_CONFIRMED": 6, "SETTLED": 6,
+}
+
+STATUS_GUIDANCE = {
+    "PAYMENT_REQUIRED": ("The booking is ready for payment.", "Client", "Pay before the funding deadline."),
+    "PAYMENT_INTENT_CREATED": ("Secure payment instructions were created.", "Client", "Complete payment before expiry."),
+    "AWAITING_CUSTOMER_FUNDS": ("The payment provider is waiting for funds.", "Client", "Complete payment before expiry."),
+    "CUSTOMER_FUNDED": ("The provider reported customer funding; verification is continuing.", "LiftHaul", "Wait for provider verification."),
+    "FUNDING_CONFIRMED": ("Funding was verified with the payment provider.", "LiftHaul", "Apply the approved protected-funds arrangement."),
+    "FUNDS_PROTECTED": ("Funds are secured under the approved provider arrangement.", "Transport provider", "Prepare and dispatch the verified unit."),
+    "TRIP_AUTHORIZED": ("Dispatch is authorized after payment and compliance gates passed.", "Transport provider", "Record pickup and begin service."),
+    "SERVICE_IN_PROGRESS": ("The transport service is underway.", "Transport provider", "Maintain trip milestones and delivery evidence."),
+    "DELIVERY_EVIDENCE_PENDING": ("Delivery evidence was submitted and awaits confirmation.", "Client", "Confirm delivery or open a dispute before the deadline."),
+    "DISPUTE_WINDOW": ("The delivery acceptance and dispute window is open.", "Client", "Confirm delivery or raise a supported dispute."),
+    "RELEASE_ELIGIBLE": ("Evidence and waiting-period gates passed.", "LiftHaul", "Run governed release review."),
+    "RELEASE_APPROVAL_PENDING": ("Payment release requires an authorized approval.", "Authorized approver", "Approve or return with reasons."),
+    "RELEASE_APPROVED": ("Release was approved but has not yet been sent.", "LiftHaul", "Submit the release to the provider."),
+    "RELEASE_REQUESTED": ("The provider is processing the release.", "Payment provider", "Wait for provider confirmation."),
+    "RELEASE_CONFIRMED": ("The provider confirmed release to the transport provider.", "LiftHaul", "Complete reconciliation."),
+    "SETTLED": ("Release and ledger reconciliation are complete.", "None", "No action required."),
+    "PAYMENT_FAILED": ("The payment provider reported a failed payment.", "Client", "Retry through an available certified channel."),
+    "PAYMENT_EXPIRED": ("The payment instruction expired before verification.", "Client", "Create a new payment instruction."),
+    "FUNDS_HELD": ("Release is on hold.", "LiftHaul", "Review the hold reason and supporting evidence."),
+    "FRAUD_REVIEW": ("The transaction is under a governed risk review.", "Risk reviewer", "Complete review; no release is allowed."),
+    "DISPUTED": ("A dispute was opened before release.", "Both parties", "Submit evidence by the case deadlines."),
+    "REFUND_PENDING": ("An approved refund is being processed.", "Payment provider", "Wait for provider confirmation."),
+    "PARTIALLY_REFUNDED": ("Part of the protected amount was refunded.", "LiftHaul", "Review the remaining release or refund balance."),
+    "REFUNDED": ("The provider confirmed the full refund.", "None", "Retain the settlement record."),
+    "LEGAL_HOLD": ("Release is blocked by a legal hold.", "Authorized legal reviewer", "Resolve the hold under the case record."),
+    "CHARGEBACK": ("A chargeback affects the protected funds.", "Finance and Risk", "Investigate before any release."),
+}
+
+
+def public_timeline(state):
+    """Return the shared client/carrier timeline without pretending exception states progressed."""
+    current = _TIMELINE_INDEX.get(state)
+    return [{"code": code, "label": label,
+             "status": ("complete" if current is not None and i < current else
+                        "current" if current is not None and i == current else "upcoming")}
+            for i, (code, label) in enumerate(PUBLIC_TIMELINE)]
+
 
 def customer_view(conn, actor, tx_id):
     """Customer-facing projection. NEVER exposes internal carrier cost, LiftHaul margin, provider
     secrets, carrier bank account, other tenants, or fraud-engine internals."""
     t = _tx(conn, actor, tx_id)
     lt = ledger_totals(conn, tx_id)
-    return {"transaction_no": f"PP-{t['id']}", "booking_id": t["booking_id"], "quotation_id": t["quotation_id"],
+    guidance = STATUS_GUIDANCE.get(t["state"], ("The transaction is being reviewed.", "LiftHaul", "Check again later."))
+    return {"transaction_no": f"PP-{t['id']}", "protected_payment_id": t["id"],
+            "booking_id": t["booking_id"], "quotation_id": t["quotation_id"],
             "service_provider": f"Carrier #{t['carrier_id']}", "contract_value": t["contract_amount"],
             "funded_amount": lt.get("funding", 0), "protected_amount": t["protected_amount"],
             "released_amount": lt.get("release", 0), "refunded_amount": lt.get("refund", 0),
+            "fee_breakdown": {"platform_fee": t["platform_fee"], "processing_fee": t["provider_fee"],
+                              "tax": t["tax"]},
             "status": CUSTOMER_LABELS.get(t["state"], "Processing"),
+            "state": t["state"], "provider": t["provider"],
+            "provider_transaction_id": t["provider_reference"],
+            "funding_deadline": t["funding_deadline"],
             "dispute_window_expires_at": t["dispute_window_expires_at"], "currency": t["currency"],
+            "what_happened": guidance[0], "next_actor": guidance[1], "next_action": guidance[2],
+            "timeline": public_timeline(t["state"]),
+            "release_conditions": t["dispute_policy"],
             "milestone_plan": json.loads(t["milestone_plan"]) if t["milestone_plan"] else None,
-            "terminology": "Protected Payment"}
+            "terminology": "Protected Payment",
+            "verification_reminder": "Payment and release statuses come from the authorized provider record. Retain the official reference and contact support for discrepancies.",
+            "legal_escrow_status": "NOT_AUTHORIZED_FOR_PUBLIC_USE"}
 
 
 def carrier_settlement(conn, actor, tx_id):
@@ -514,10 +585,16 @@ def carrier_settlement(conn, actor, tx_id):
     released = lt.get("release", 0)
     funded = lt.get("funding", 0)
     held = round(max(0.0, funded - released - lt.get("refund", 0)), 2)
-    return {"transaction_no": f"PP-{t['id']}", "job_id": t["job_id"], "contract_amount": t["contract_amount"],
+    guidance = STATUS_GUIDANCE.get(t["state"], ("The transaction is being reviewed.", "LiftHaul", "Check again later."))
+    return {"transaction_no": f"PP-{t['id']}", "protected_payment_id": t["id"],
+            "booking_id": t["booking_id"], "job_id": t["job_id"], "contract_amount": t["contract_amount"],
             "protected_status": t["state"] in ("FUNDS_PROTECTED", "TRIP_AUTHORIZED", "SERVICE_IN_PROGRESS",
                                                "DELIVERY_EVIDENCE_PENDING", "DISPUTE_WINDOW", "RELEASE_ELIGIBLE",
                                                "RELEASE_APPROVED", "RELEASE_REQUESTED", "RELEASE_CONFIRMED", "SETTLED"),
             "carrier_payable": t["carrier_payable"], "provider_fee": t["provider_fee"],
             "released_amount": released, "held_amount": held, "state": t["state"],
+            "status": CUSTOMER_LABELS.get(t["state"], "Processing"),
+            "provider": t["provider"], "settlement_reference": t["provider_reference"],
+            "what_happened": guidance[0], "next_actor": guidance[1], "next_action": guidance[2],
+            "timeline": public_timeline(t["state"]),
             "milestone_plan": json.loads(t["milestone_plan"]) if t["milestone_plan"] else None}

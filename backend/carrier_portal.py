@@ -248,6 +248,10 @@ def compliance(conn, actor, requested=None, expiring_days=30):
     cid = resolve_carrier(conn, actor, requested)
     docs = ob.list_documents(conn, _svc(actor, "marketplace.compliance.view"),
                              subject_type="CARRIER", subject_id=cid)
+    public_status = {"UPLOADED": "SUBMITTED", "PENDING_REVIEW": "UNDER_REVIEW",
+                     "VERIFIED": "VERIFIED", "REJECTED": "REJECTED", "EXPIRED": "EXPIRED",
+                     "SUSPENDED": "SUSPENDED", "RENEWAL_REQUIRED": "RENEWAL_REQUIRED",
+                     "REVOKED": "SUSPENDED"}
     # LTFRB / CPC
     gate = ltfrb.carrier_authority_gate(conn, cid)
     auth = ltfrb._active_authority(conn, cid)
@@ -266,9 +270,14 @@ def compliance(conn, actor, requested=None, expiring_days=30):
         "carrier_id": cid,
         "kyb_status": tr.carrier_kyb_status(conn, cid),
         "ltfrb": {"ok": gate["ok"], "reasons": gate["reasons"], "authority": cpc},
-        "documents": [{"id": d["id"], "document_type": d["document_type"], "status": d["status"],
+        "documents": [{"id": d["id"], "document_type": d["document_type"],
+                       "status": public_status.get(d["status"], d["status"]),
+                       "internal_status": d["status"],
                        "issuing_authority": d.get("issuing_authority"),
-                       "expiry_date": d.get("expiry_date"), "days_to_expiry": _days_to(d.get("expiry_date"))}
+                       "document_number": d.get("document_number"), "issue_date": d.get("issue_date"),
+                       "expiry_date": d.get("expiry_date"), "days_to_expiry": _days_to(d.get("expiry_date")),
+                       "verified_at": d.get("verified_at"), "verified_by": d.get("verified_by"),
+                       "verification_source": d.get("verification_source")}
                       for d in docs],
         "expiring_soon": sorted(watch, key=lambda x: x["days_to_expiry"]),
     }

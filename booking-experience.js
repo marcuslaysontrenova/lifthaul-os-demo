@@ -14,6 +14,7 @@
     markers: {},
     scopes: {},
     routeLine: null,
+    routeDistance: null,
     amount: null,
   };
 
@@ -232,15 +233,48 @@
     var role = prefix === "o" ? "Pickup" : "Drop-off";
     return role + (location.full_address ? ": " + location.full_address : " planning area");
   }
+  function haversineKm(a, b) {
+    var radius = 6371.0088;
+    var rad = function (value) { return value * Math.PI / 180; };
+    var p1 = rad(a.lat), p2 = rad(b.lat);
+    var dp = rad(b.lat - a.lat), dl = rad(b.lng - a.lng);
+    var h = Math.sin(dp / 2) * Math.sin(dp / 2) +
+      Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    return radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+  }
+  function updateDistance() {
+    var o = state.points.o, d = state.points.d;
+    if (!o || !d || !ready("o") || !ready("d")) {
+      state.routeDistance = null;
+      document.dispatchEvent(new CustomEvent("lifthaul:distancechange", { detail: { distance: null } }));
+      return;
+    }
+    var direct = haversineKm(o, d);
+    var interIsland = byId("oIsland").value !== byId("dIsland").value;
+    var factor = interIsland ? 1.15 : 1.25;
+    state.routeDistance = {
+      km: Math.max(1, Math.round(direct * factor * 10) / 10),
+      straight_line_km: Math.round(direct * 10) / 10,
+      routing_factor: factor,
+      source: "PLANNING_COORDINATES",
+      refined: o.source === "user-pin" && d.source === "user-pin",
+    };
+    document.dispatchEvent(new CustomEvent("lifthaul:distancechange", {
+      detail: { distance: Object.assign({}, state.routeDistance) },
+    }));
+  }
   function updateMapCaption() {
     var caption = byId("mapCaption");
     if (!caption) return;
     var o = state.points.o, d = state.points.d;
-    if (o && d) caption.innerHTML = "<b>Route preview ready</b><span>Drag-free planning view · click the map to refine the active pin</span>";
+    if (o && d) caption.innerHTML = "<b>Route preview ready</b><span>" +
+      (state.routeDistance ? state.routeDistance.km.toLocaleString("en-PH") + " km planning distance · " : "") +
+      "click the map to refine the active pin</span>";
     else if (o || d) caption.innerHTML = "<b>One point selected</b><span>Complete the other location to preview the route</span>";
     else caption.innerHTML = "<b>Philippine route planner</b><span>Select locations to place pickup and drop-off markers</span>";
   }
   function updateMap() {
+    updateDistance();
     updateMapCaption();
     if (!state.map || !window.L) return;
     ["o", "d"].forEach(function (prefix) {
@@ -382,7 +416,7 @@
       state.nodes[prefix] = {}; state.points[prefix] = null; state.loadToken[prefix] += 1;
       clearAfter(prefix, "Island"); updateProgress(prefix);
     });
-    state.amount = null; setPinMode("o"); updateMap(); updatePaymentReadiness();
+    state.amount = null; state.routeDistance = null; setPinMode("o"); updateMap(); updatePaymentReadiness();
   }
   async function init() {
     var status = byId("geoStatus");
@@ -409,6 +443,7 @@
 
   window.LiftHaulBookingUX = {
     getLocation: getLocation,
+    getDistance: function () { return state.routeDistance ? Object.assign({}, state.routeDistance) : null; },
     isLocationReady: ready,
     paymentChoice: paymentChoice,
     updatePaymentAmount: updatePaymentAmount,

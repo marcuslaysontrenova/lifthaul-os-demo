@@ -16,9 +16,13 @@
 <main id="loginView" class="lh-login">
   <section class="lh-card"><div class="lh-card__head"><h2>Sign in to your client account</h2></div><div class="lh-card__body">
     <div class="lh-notice"><span aria-hidden="true">🛡</span><div>Your account shows only your organization’s bookings and protected-payment records. A provider-verified status—not a screenshot—controls funding and release.</div></div>
+    <div class="lh-notice"><span aria-hidden="true">📦</span><div><b>This workspace is for customers booking transport.</b> Create requests, compare carrier offers, follow deliveries, and review payment status. If you operate trucks or a fleet, use the <a href="portal.html"><b>Carrier / Fleet Owner Portal →</b></a></div></div>
     <div class="lh-field"><label for="email">Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com"></div>
     <div class="lh-field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <button id="loginBtn" class="lh-btn lh-btn--primary" style="width:100%">Sign in securely</button>
+    <button id="demoBtn" class="lh-btn is-hidden" type="button" style="width:100%;margin-top:8px">Explore demo workspace</button>
+    <p id="demoHelp" class="is-hidden" style="color:var(--lh-muted);font-size:12px;margin:8px 0 0;text-align:center">No account needed · read-only · synthetic records only</p>
+    <a class="lh-btn lh-btn--line" style="width:100%;margin-top:8px" href="book.html">Book transport without signing in</a>
     <p id="loginMsg" style="color:var(--lh-muted);font-size:13px;margin:12px 0 0"></p>
   </div></section>
 </main>
@@ -32,10 +36,48 @@
 <script src="config.js"></script>
 <script>
 (function(){'use strict';
-var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||'',token='';
+var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||'',token='',demoMode=false;
 try{if(!base)base=localStorage.getItem('lifthaul_api_base')||'';token=sessionStorage.getItem('lifthaul_api_token')||'';}catch(e){}
 var tabs=[['overview','Dashboard'],['bookings','Bookings'],['offers','Offers & comparison'],['trips','Active deliveries'],['payments','Protected payments'],['addresses','Saved addresses'],['preferences','Payment methods'],['notifications','Notifications']];
 var current='overview';
+var demoData={
+ overview:{total_bookings:4,booking_counts:{DRAFT:1,ASSIGNED:1,PAYMENT_REQUIRED:1,COMPLETED:1},unread_notifications:2,verification_status:'SYNTHETIC DEMO'},
+ bookings:{bookings:[
+  {id:'D-1042',origin_zone:'Makati City',dest_zone:'Pasig City',cargo_description:'10 palletized office fixtures',pickup_window:'05 Sep 2026 · 09:00',status:'ASSIGNED'},
+  {id:'D-1041',origin_zone:'Quezon City',dest_zone:'Batangas City',cargo_description:'Crated industrial generator · 4,800 kg',pickup_window:'07 Sep 2026 · 06:30',status:'PAYMENT_REQUIRED'},
+  {id:'D-1040',origin_zone:'Cebu City',dest_zone:'Lapu-Lapu City',cargo_description:'Retail display equipment',pickup_window:'02 Sep 2026 · 13:00',status:'COMPLETED'},
+  {id:'D-1039',origin_zone:'Davao City',dest_zone:'Tagum City',cargo_description:'6 construction-material pallets',pickup_window:'Schedule not set',status:'DRAFT'}
+ ]},
+ offers:{offers:[
+  {booking_id:'D-1041',carrier_id:'DEMO-017',amount:38500,vehicle_id:'10-wheeler wing van',valid_until:'03 Sep 2026 · 17:00',status:'AVAILABLE'},
+  {booking_id:'D-1041',carrier_id:'DEMO-024',amount:41250,vehicle_id:'Lowbed trailer',valid_until:'03 Sep 2026 · 15:00',status:'AVAILABLE'},
+  {booking_id:'D-1042',carrier_id:'DEMO-009',amount:14800,vehicle_id:'6-wheeler closed van',valid_until:'Accepted',status:'ACCEPTED'}
+ ]},
+ trips:{trips:[
+  {id:'T-DEMO-88',booking_id:'D-1042',progress_pct:62,eta:'05 Sep 2026 · 14:20',last_ping_at:'2 minutes ago',status:'SERVICE_IN_PROGRESS'}
+ ]},
+ payments:{payments:[{
+  transaction_no:'DEMO-PAY-1041',booking_id:'D-1041',status:'FUNDED_AND_PROTECTED',contract_value:38500,funded_amount:38500,released_amount:0,refunded_amount:0,
+  timeline:[
+   {label:'Awaiting payment',status:'complete'},{label:'Processing',status:'complete'},{label:'Funded & protected',status:'current'},
+   {label:'Service in progress',status:'upcoming'},{label:'Delivery submitted',status:'upcoming'},{label:'Awaiting confirmation',status:'upcoming'},{label:'Payment released',status:'upcoming'}
+  ],
+  what_happened:'Synthetic sandbox funding confirmation recorded for this product demonstration.',next_actor:'Client booker',next_action:'Confirm delivery only after reviewing proof-of-delivery evidence.',verification_reminder:'DEMO ONLY — no money was collected, held or transferred. Live status must come from a verified payment-provider API.'
+ }]},
+ addresses:{addresses:[
+  {label:'Makati office',island_group:'Luzon',region_code:'NCR',province_code:'Metro Manila',city_code:'Makati City',barangay_code:'San Lorenzo',specific_address:'Demo address · Ayala Avenue'},
+  {label:'Batangas warehouse',island_group:'Luzon',region_code:'CALABARZON',province_code:'Batangas',city_code:'Batangas City',barangay_code:'Balagtas',specific_address:'Demo address · Diversion Road'}
+ ]},
+ 'payment-preferences':{payment_preferences:[
+  {provider:'Sandbox provider',channel:'GCash test channel',display_label:'Demo wallet · •• 2048',is_default:1,status:'DEMO_ONLY'},
+  {provider:'Sandbox provider',channel:'Online bank test channel',display_label:'Demo bank · •• 8801',is_default:0,status:'DEMO_ONLY'}
+ ]},
+ notifications:{notifications:[
+  {created_at:'31 Aug 2026 · 09:24',subject:'Demo booking D-1042 is in transit',channel:'IN_APP',status:'DELIVERED',is_read:0},
+  {created_at:'31 Aug 2026 · 08:12',subject:'Synthetic payment status: Funded and Protected',channel:'IN_APP',status:'DELIVERED',is_read:0},
+  {created_at:'30 Aug 2026 · 16:40',subject:'Demo carrier offer received for D-1041',channel:'EMAIL_SANDBOX',status:'DELIVERED',is_read:1}
+ ]}
+};
 function q(s){return document.querySelector(s)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function req(method,path,body){if(!base)return Promise.reject(new Error('No hosted API is configured for this pre-launch workspace.'));var h={'Content-Type':'application/json'};if(token&&path!='/login')h.Authorization='Bearer '+token;return fetch(base.replace(/\/+$/,'')+path,{method:method,headers:h,body:body?JSON.stringify(body):undefined}).then(function(r){return r.text().then(function(t){var d=t?JSON.parse(t):{};if(d.data!==undefined)d=d.data;if(!r.ok)throw new Error(d.error||d.detail||('HTTP '+r.status));return d})})}
@@ -49,9 +91,10 @@ function timeline(p){var steps=p.timeline||[];return '<div class="lh-timeline" a
 function renderNav(){q('#nav').innerHTML=tabs.map(function(t){return'<button data-tab="'+t[0]+'"'+(current===t[0]?' aria-current="page"':'')+'>'+esc(t[1])+'</button>'}).join('')}
 q('#nav').addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(!b)return;current=b.dataset.tab;renderNav();load()});
 q('#loginBtn').addEventListener('click',function(){var msg=q('#loginMsg');msg.textContent='Signing in…';req('POST','/login',{email:q('#email').value.trim(),password:q('#password').value}).then(function(d){token=d.token;sessionStorage.setItem('lifthaul_api_token',token);enter()}).catch(function(e){msg.textContent=e.message})});
-q('#logout').addEventListener('click',function(){req('POST','/logout',{}).catch(function(){}).then(function(){sessionStorage.removeItem('lifthaul_api_token');location.reload()})});
-function enter(){q('#loginView').classList.add('is-hidden');q('#appView').classList.remove('is-hidden');q('#logout').classList.remove('is-hidden');q('#who').classList.remove('is-hidden');q('#who').textContent='Client account';renderNav();load()}
-function load(){var path={overview:'overview',bookings:'bookings',offers:'offers',trips:'trips',payments:'payments',addresses:'addresses',preferences:'payment-preferences',notifications:'notifications'}[current];q('#content').innerHTML=empty('Loading your workspace','Retrieving persisted records…');req('GET','/portal/client/'+path).then(render).catch(function(e){q('#content').innerHTML='<div class="lh-notice lh-notice--warn"><span>!</span><div><b>Workspace unavailable.</b> '+esc(e.message)+'</div></div>'})}
+q('#demoBtn').addEventListener('click',function(){demoMode=true;try{history.replaceState(null,'',location.pathname+'?demo=1')}catch(e){}enter()});
+q('#logout').addEventListener('click',function(){if(demoMode){try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload();return}req('POST','/logout',{}).catch(function(){}).then(function(){sessionStorage.removeItem('lifthaul_api_token');location.reload()})});
+function enter(){q('#loginView').classList.add('is-hidden');q('#appView').classList.remove('is-hidden');q('#logout').classList.remove('is-hidden');q('#who').classList.remove('is-hidden');q('#who').textContent=demoMode?'READ-ONLY DEMO · SYNTHETIC DATA':'Client account';renderNav();load()}
+function load(){var path={overview:'overview',bookings:'bookings',offers:'offers',trips:'trips',payments:'payments',addresses:'addresses',preferences:'payment-preferences',notifications:'notifications'}[current];if(demoMode){render(demoData[path]||{});return}q('#content').innerHTML=empty('Loading your workspace','Retrieving persisted records…');req('GET','/portal/client/'+path).then(render).catch(function(e){q('#content').innerHTML='<div class="lh-notice lh-notice--warn"><span>!</span><div><b>Workspace unavailable.</b> '+esc(e.message)+'</div></div>'})}
 function render(d){var h='';
  if(current==='overview'){var c=d.booking_counts||{};h=head('Welcome back','Your organization-wide logistics and protected-payment overview.','<a class="lh-btn" href="book.html">Create booking</a>')+'<div class="lh-grid lh-grid--4"><div class="lh-stat"><span>Total bookings</span><strong>'+esc(d.total_bookings||0)+'</strong></div><div class="lh-stat"><span>Drafts</span><strong>'+esc(c.DRAFT||0)+'</strong></div><div class="lh-stat"><span>Active</span><strong>'+esc((c.ASSIGNED||0)+(c.PAYMENT_REQUIRED||0))+'</strong></div><div class="lh-stat"><span>Unread notices</span><strong>'+esc(d.unread_notifications||0)+'</strong></div></div><div class="lh-card" style="margin-top:15px"><div class="lh-card__head"><h2>Account verification</h2>'+chip(d.verification_status)+'</div><div class="lh-card__body"><div class="lh-notice">Only verified transport providers and eligible units can receive paid assignments. Verification records show their actual review status and are never self-approved.</div></div></div>'}
  if(current==='bookings'){var a=d.bookings||[];h=head('Bookings','Create, review and monitor your organization’s booking requests.','<a class="lh-btn" href="book.html">New booking</a>')+'<div class="lh-card">'+(a.length?table(['Booking','Route','Cargo','Pickup','Status'],a.map(function(x){return'<tr><td>#'+esc(x.id)+'</td><td>'+esc(x.origin_zone||x.pickup_address||'—')+' → '+esc(x.dest_zone||x.delivery_address||'—')+'</td><td>'+esc(x.cargo_description||x.cargo_code)+'</td><td>'+esc(x.pickup_window||'—')+'</td><td>'+chip(x.status)+'</td></tr>'})):empty('No bookings yet','Start with a pickup, destination, cargo and required vehicle.'))+'</div>'}
@@ -61,8 +104,11 @@ function render(d){var h='';
  if(current==='addresses'){var a=d.addresses||[];h=head('Saved addresses','Reusable pickup and delivery locations linked to the Philippine location hierarchy.','<a class="lh-btn" href="book.html">Add from booking</a>')+'<div class="lh-card">'+(a.length?table(['Label','Island group','Region','Province','City / municipality','Barangay','Address'],a.map(function(x){return'<tr><td>'+esc(x.label)+'</td><td>'+esc(x.island_group||'—')+'</td><td>'+esc(x.region_code||'—')+'</td><td>'+esc(x.province_code||'—')+'</td><td>'+esc(x.city_code||'—')+'</td><td>'+esc(x.barangay_code||'—')+'</td><td>'+esc(x.specific_address)+'</td></tr>'})):empty('No saved addresses','Save a verified location while creating a booking.'))+'</div>'}
  if(current==='preferences'){var a=d.payment_preferences||[];h=head('Payment methods','Provider-issued aliases only. LiftHaul never stores raw card, bank or wallet credentials.')+'<div class="lh-notice lh-notice--warn"><span>i</span><div>Only provider-certified channels are customer-visible. A saved preference does not prove payment and cannot change a booking status.</div></div><div class="lh-card">'+(a.length?table(['Provider','Channel','Account','Default','Status'],a.map(function(x){return'<tr><td>'+esc(x.provider)+'</td><td>'+esc(x.channel)+'</td><td>'+esc(x.display_label)+'</td><td>'+(x.is_default?'Yes':'No')+'</td><td>'+chip(x.status)+'</td></tr>'})):empty('No payment methods','Add a payment method from an activated provider checkout.'))+'</div>'}
  if(current==='notifications'){var a=d.notifications||[];h=head('Messages & notifications','Booking, payment, trip, dispute and settlement notices.')+'<div class="lh-card">'+(a.length?table(['Date','Subject','Channel','Delivery','Read'],a.map(function(x){return'<tr><td>'+esc(x.created_at||'—')+'</td><td>'+esc(x.subject||x.event_type)+'</td><td>'+esc(x.channel)+'</td><td>'+chip(x.status)+'</td><td>'+(x.is_read?'Read':'Unread')+'</td></tr>'})):empty('No notifications','Important lifecycle notices will appear here.'))+'</div>'}
+ if(demoMode)h='<div class="lh-notice lh-notice--warn"><span>DEMO</span><div><b>Read-only product tour.</b> Every booking, payment, vehicle and notification shown below is synthetic. No real transaction or provider verification has occurred.</div></div>'+h;
  q('#content').innerHTML=h}
-if(token&&base)enter();
+if(!base){q('#demoBtn').classList.remove('is-hidden');q('#demoHelp').classList.remove('is-hidden')}
+try{demoMode=!base&&new URLSearchParams(location.search).get('demo')==='1'}catch(e){}
+if(demoMode||token&&base)enter();
 })();
 </script>
 </body></html>

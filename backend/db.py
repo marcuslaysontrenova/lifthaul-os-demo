@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 22  # provider-backed payment sessions, webhooks, certification + reconciliation
+SCHEMA_VERSION = 23  # governed 10% administration-fee settlement to Wise
 
 
 def _now():
@@ -121,6 +121,8 @@ def _seed_platform(conn):
     ltfrb.init(conn); ltfrb.seed(conn)                                   # Regulatory closure: LTFRB carrier transport-authority (CPC) records + verification + hard assignment gate
     import public_booking
     public_booking.init(conn); public_booking.seed(conn)                 # Public Nationwide Booking intake -> canonical mkt_bookings (source=PUBLIC_MARKETPLACE)
+    import platform_fee_settlement
+    platform_fee_settlement.init(conn); platform_fee_settlement.seed(conn)  # Provider-verified 10% administration-fee ledger + fail-closed Wise transfer
     import api_platform
     api_platform.init(conn); api_platform.seed(conn)                     # Platform Control -> Integrations: B2B API clients + scopes + outbound webhooks
     import goods_protection

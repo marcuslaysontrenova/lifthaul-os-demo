@@ -636,6 +636,12 @@ def _apply_verified_state(conn, row, session, payment):
         conn.execute("UPDATE mkt_bookings SET payment_status=?,updated_at=? WHERE id=?",
                      (final["status"], _now(), row["booking_id"]))
     conn.commit()
+    if final["status"] == "PAID":
+        # The fee ledger is idempotent and provider failures never reverse a valid
+        # customer-payment confirmation.  It reports BLOCKED/ACTION_REQUIRED rather
+        # than fabricating a Wise transfer.
+        import platform_fee_settlement as pfs
+        pfs.record_verified_payment(conn, final["id"])
     return final
 
 
@@ -727,6 +733,9 @@ def process_webhook(conn, callback_token, payload, client=None):
             (refund["transaction_id"], _now(), event_id),
         )
         conn.commit()
+        if event_type != "refund.failed" and str(data.get("status") or "").upper() != "FAILED":
+            import platform_fee_settlement as pfs
+            pfs.handle_refund(conn, refund["transaction_id"], new_refunded)
         return {"accepted": True, "event_id": event_id, "transaction_id": refund["transaction_id"],
                 "refund_status": "FAILED" if event_type == "refund.failed" else "SUCCEEDED"}
     session_id = data.get("payment_session_id")

@@ -2083,6 +2083,7 @@ def _payment_gateway_routes():
     """Licensed provider edge. Public routes use only opaque booking tokens; provider webhooks are
     authenticated by the Xendit callback token and then verified server-to-server."""
     import payment_gateway as pg
+    import platform_fee_settlement as pfs
 
     def channels(a, b, p): return pg.available_channels(_conn)
     def accept(a, b, p): return pg.accept_final_quote(_conn, p["token"], b.get("idempotency_key"))
@@ -2108,6 +2109,10 @@ def _payment_gateway_routes():
         b.get("bank_reference"), b.get("supporting_document"))
     def manual_approve(a, b, p): return pg.approve_manual_review(
         _conn, a, int(p["id"]), b["official_record_reference"], b["reason"])
+    def fee_list(a, b, p): return {"settlements": pfs.list_settlements(_conn, a)}
+    def fee_sync(a, b, p): return pfs.sync_transfer(_conn, a, int(p["id"]))
+    def fee_retry(a, b, p):
+        return pfs.attempt_transfer(_conn, int(p["id"]), actor=a)
 
     return {
         ("GET", "/public/payments/channels"): channels,
@@ -2122,6 +2127,9 @@ def _payment_gateway_routes():
         ("POST", "/admin/payments/transactions/:id/refund"): refund,
         ("POST", "/admin/payments/manual-reviews"): manual_open,
         ("POST", "/admin/payments/manual-reviews/:id/approve"): manual_approve,
+        ("GET", "/admin/payments/administration-fees"): fee_list,
+        ("POST", "/admin/payments/administration-fees/:id/sync"): fee_sync,
+        ("POST", "/admin/payments/administration-fees/:id/retry"): fee_retry,
     }
 
 

@@ -98,14 +98,19 @@ class BookingMarkup(unittest.TestCase):
 
     def test_client_and_provider_workspaces_have_unambiguous_purpose(self):
         client = (ROOT / "client.html").read_text(encoding="utf-8")
+        client_js = (ROOT / "client-workspace.js").read_text(encoding="utf-8")
         portal = (ROOT / "portal.html").read_text(encoding="utf-8")
         self.assertIn("This workspace is for customers booking transport", client)
         self.assertIn('href="portal.html"', client)
         self.assertIn('id="demoBtn"', client)
         self.assertIn("Explore demo workspace", client)
-        self.assertIn("READ-ONLY DEMO · SYNTHETIC DATA", client)
-        self.assertIn("No real transaction or provider verification has occurred", client)
-        self.assertIn("demoMode=!base", client)
+        self.assertIn("READ-ONLY DEMO · SYNTHETIC DATA", client_js)
+        self.assertIn("No real transaction or provider verification has occurred", client_js)
+        self.assertIn("demoMode=!base", client_js)
+        self.assertIn("Book a Truck", client_js)
+        self.assertNotIn("Create booking", client_js)
+        self.assertIn("data-booking-filter", client_js)
+        self.assertIn("View protected payments", client_js)
         self.assertIn("This workspace is for truckers and fleet owners", portal)
         self.assertIn('href="client.html"', portal)
 

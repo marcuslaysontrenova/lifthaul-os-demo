@@ -163,32 +163,139 @@ def _bookings(conn, actor):
     return sid, [dict(r) for r in rows]
 
 
+_DRAFT = {"DRAFT", "RETURNED", "REVISION_REQUIRED"}
+_ACTIVE = {"SUBMITTED", "VALIDATED", "BROADCAST", "OFFER_AVAILABLE", "SELECTED", "ASSIGNED",
+           "PAYMENT_REQUIRED", "PAYMENT_PENDING", "CONFIRMED", "READY_FOR_TRIP_ACTIVATION",
+           "IN_TRANSIT", "SERVICE_IN_PROGRESS", "DELIVERY_PENDING", "DELIVERY_SUBMITTED"}
+_COMPLETED = {"COMPLETED", "DELIVERED", "SETTLED", "CLOSED"}
+_CANCELLED = {"CANCELLED", "EXPIRED", "REJECTED"}
+
+
+def _booking_bucket(status):
+    value = str(status or "UNKNOWN").upper()
+    if value in _DRAFT:
+        return "DRAFT"
+    if value in _COMPLETED:
+        return "COMPLETED"
+    if value in _CANCELLED:
+        return "CANCELLED"
+    if value in _ACTIVE:
+        return "ACTIVE"
+    return "OTHER"
+
+
+def _booking_action(status, payment_state=None, trip_status=None):
+    bucket = _booking_bucket(status)
+    if bucket == "DRAFT":
+        return "Continue Draft"
+    if str(payment_state or "").upper() in ("PAYMENT_REQUIRED", "PAYMENT_PENDING"):
+        return "Pay Now"
+    if str(trip_status or "").upper() in ("IN_TRANSIT", "SERVICE_IN_PROGRESS", "PICKED_UP"):
+        return "Track Booking"
+    if str(payment_state or "").upper() in ("DISPUTE_WINDOW", "DELIVERY_EVIDENCE_PENDING"):
+        return "Confirm Delivery"
+    if bucket == "COMPLETED":
+        return "Download Receipt"
+    return "View Details"
+
+
+def _booking_view(conn, row):
+    b = dict(row)
+    assignment = conn.execute(
+        "SELECT * FROM mkt_assignments WHERE booking_id=? AND status<>'CANCELLED' ORDER BY id DESC LIMIT 1",
+        (b["id"],),
+    ).fetchone()
+    carrier = vehicle = trip = pricing = payment = None
+    if assignment:
+        carrier = conn.execute("SELECT legal_name,trade_name FROM mkt_carriers WHERE id=?",
+                               (assignment["carrier_id"],)).fetchone()
+        vehicle = conn.execute("SELECT category_code,plate_number,body_type FROM mkt_vehicles WHERE id=?",
+                               (assignment["vehicle_id"],)).fetchone()
+        trip = conn.execute("SELECT id,status,progress_pct,eta,last_ping_at FROM mkt_trips "
+                            "WHERE assignment_id=? ORDER BY id DESC LIMIT 1", (assignment["id"],)).fetchone()
+        if assignment["pricing_snapshot_id"]:
+            pricing = conn.execute("SELECT total,currency FROM mkt_pricing_snapshots WHERE id=?",
+                                   (assignment["pricing_snapshot_id"],)).fetchone()
+    payment = conn.execute("SELECT id,state,contract_amount,updated_at FROM mkt_protected_tx "
+                           "WHERE booking_id=? ORDER BY id DESC LIMIT 1", (b["id"],)).fetchone()
+    payment_state = payment["state"] if payment else b.get("payment_status")
+    return {
+        "id": b["id"], "booking_reference": f"LH-{int(b['id']):06d}",
+        "created_at": b.get("created_at"), "updated_at": b.get("updated_at") or b.get("created_at"),
+        "pickup_location": b.get("pickup_address") or b.get("origin_zone") or "Not set",
+        "delivery_location": b.get("delivery_address") or b.get("dest_zone") or "Not set",
+        "pickup_schedule": b.get("pickup_window"),
+        "cargo_type": b.get("cargo_description") or b.get("cargo_code"),
+        "cargo_description": b.get("cargo_description"),
+        "origin_zone": b.get("origin_zone"), "dest_zone": b.get("dest_zone"),
+        "requested_vehicle": b.get("requested_vehicle_category"),
+        "assigned_truck": (" · ".join(x for x in (
+            vehicle["category_code"] if vehicle else None,
+            vehicle["plate_number"] if vehicle else None) if x) or None),
+        "service_provider": ((carrier["trade_name"] or carrier["legal_name"]) if carrier else None),
+        "booking_amount": (pricing["total"] if pricing else (payment["contract_amount"] if payment else None)),
+        "currency": (pricing["currency"] if pricing else "PHP"),
+        "status": b.get("status"), "status_bucket": _booking_bucket(b.get("status")),
+        "protected_payment_status": payment_state,
+        "protected_payment_id": payment["id"] if payment else None,
+        "trip_id": trip["id"] if trip else None,
+        "trip_status": trip["status"] if trip else None,
+        "progress_pct": trip["progress_pct"] if trip else None,
+        "eta": trip["eta"] if trip else None,
+        "available_action": _booking_action(b.get("status"), payment_state, trip["status"] if trip else None),
+    }
+
+
 def overview(conn, actor):
     core.require(actor, "client.portal.view")
     sid, shipper = _shipper(conn, actor)
     _, bookings = _bookings(conn, actor)
+    projected = [_booking_view(conn, booking) for booking in bookings]
     by_status = {}
-    for booking in bookings:
-        by_status[booking.get("status") or "UNKNOWN"] = by_status.get(booking.get("status") or "UNKNOWN", 0) + 1
+    buckets = {"DRAFT": 0, "ACTIVE": 0, "COMPLETED": 0, "CANCELLED": 0}
+    for booking in projected:
+        raw = booking.get("status") or "UNKNOWN"
+        by_status[raw] = by_status.get(raw, 0) + 1
+        if booking["status_bucket"] in buckets:
+            buckets[booking["status_bucket"]] += 1
     unread = conn.execute(
         "SELECT COUNT(*) n FROM notifications n WHERE n.recipient=? AND NOT EXISTS("
         "SELECT 1 FROM client_notification_reads r WHERE r.user_id=? AND r.notification_id=n.id)",
         (actor.get("email") or "", actor["id"]),
     ).fetchone()
+    payment_rows = conn.execute(
+        "SELECT p.id,p.state FROM mkt_protected_tx p JOIN mkt_bookings b ON b.id=p.booking_id "
+        "WHERE b.shipper_id=? ORDER BY p.id DESC", (sid,)).fetchall()
+    open_disputes = conn.execute(
+        "SELECT COUNT(*) n FROM mkt_disputes d JOIN mkt_bookings b ON b.id=d.booking_id "
+        "WHERE b.shipper_id=? AND d.status NOT IN('RESOLVED','CLOSED','REJECTED')", (sid,)).fetchone()
+    payments_recent = []
+    for row in payment_rows[:3]:
+        payments_recent.append(_payment_view(conn, actor, row["id"]))
+    action_required = [b for b in projected if b["available_action"] in (
+        "Continue Draft", "Pay Now", "Confirm Delivery")][:5]
     return {
         "shipper_id": sid,
         "legal_name": shipper.get("legal_name"),
         "verification_status": shipper.get("status"),
         "booking_counts": by_status,
+        "summary": {"total": len(projected), "draft": buckets["DRAFT"], "active": buckets["ACTIVE"],
+                    "completed": buckets["COMPLETED"], "cancelled": buckets["CANCELLED"],
+                    "protected_payments": len(payment_rows),
+                    "open_disputes": open_disputes["n"] if open_disputes else 0,
+                    "unread_notifications": unread["n"] if unread else 0},
         "total_bookings": len(bookings),
         "unread_notifications": unread["n"] if unread else 0,
+        "action_required": action_required,
+        "recent_bookings": projected[:5],
+        "recent_payments": payments_recent,
     }
 
 
 def bookings(conn, actor):
     core.require(actor, "client.portal.view")
     sid, rows = _bookings(conn, actor)
-    return {"shipper_id": sid, "bookings": rows}
+    return {"shipper_id": sid, "bookings": [_booking_view(conn, row) for row in rows]}
 
 
 def offers(conn, actor):
@@ -214,6 +321,26 @@ def trips(conn, actor):
     return {"shipper_id": sid, "trips": [dict(r) for r in rows]}
 
 
+def _payment_view(conn, actor, tx_id):
+    view = pp.customer_view(conn, actor, tx_id)
+    tx = conn.execute("SELECT created_at,updated_at,booking_id,carrier_id FROM mkt_protected_tx WHERE id=?",
+                      (tx_id,)).fetchone()
+    booking = conn.execute("SELECT pickup_address,origin_zone,delivery_address,dest_zone FROM mkt_bookings WHERE id=?",
+                           (tx["booking_id"],)).fetchone()
+    carrier = conn.execute("SELECT legal_name,trade_name FROM mkt_carriers WHERE id=?", (tx["carrier_id"],)).fetchone()
+    view.update({
+        "created_at": tx["created_at"], "last_status_update": tx["updated_at"] or tx["created_at"],
+        "pickup_location": booking["pickup_address"] or booking["origin_zone"],
+        "delivery_location": booking["delivery_address"] or booking["dest_zone"],
+        "service_provider": ((carrier["trade_name"] or carrier["legal_name"]) if carrier else view["service_provider"]),
+        "payment_method": view.get("provider") or "Provider checkout",
+        "amount_protected": view.get("protected_amount"),
+        "release_date": view.get("dispute_window_expires_at"),
+        "dispute_status": ("OPEN" if view.get("state") in ("DISPUTED", "LEGAL_HOLD") else "NONE"),
+    })
+    return view
+
+
 def payments(conn, actor):
     core.require(actor, "client.portal.view")
     sid = resolve_shipper(conn, actor)
@@ -221,7 +348,18 @@ def payments(conn, actor):
         "SELECT p.id FROM mkt_protected_tx p JOIN mkt_bookings b ON b.id=p.booking_id "
         "WHERE b.shipper_id=? ORDER BY p.id DESC", (sid,)
     ).fetchall()
-    return {"shipper_id": sid, "payments": [pp.customer_view(conn, actor, r["id"]) for r in rows]}
+    return {"shipper_id": sid, "payments": [_payment_view(conn, actor, r["id"]) for r in rows]}
+
+
+def payment_detail(conn, actor, tx_id):
+    core.require(actor, "client.portal.view")
+    sid = resolve_shipper(conn, actor)
+    owned = conn.execute(
+        "SELECT 1 FROM mkt_protected_tx p JOIN mkt_bookings b ON b.id=p.booking_id "
+        "WHERE p.id=? AND b.shipper_id=?", (tx_id, sid)).fetchone()
+    if not owned:
+        raise core.NotFoundError("protected-payment transaction not found")
+    return _payment_view(conn, actor, tx_id)
 
 
 def addresses(conn, actor):
@@ -319,3 +457,19 @@ def mark_notification_read(conn, actor, notification_id):
         )
     conn.commit()
     return {"id": notification_id, "read": True}
+
+
+def mark_all_notifications_read(conn, actor):
+    core.require(actor, "client.portal.view")
+    resolve_shipper(conn, actor)
+    rows = conn.execute(
+        "SELECT id FROM notifications WHERE recipient=?", (actor.get("email") or "",)).fetchall()
+    changed = 0
+    for row in rows:
+        if not conn.execute("SELECT 1 FROM client_notification_reads WHERE user_id=? AND notification_id=?",
+                            (actor["id"], row["id"])).fetchone():
+            conn.execute("INSERT INTO client_notification_reads(user_id,notification_id,read_at) VALUES(?,?,?)",
+                         (actor["id"], row["id"], _now()))
+            changed += 1
+    conn.commit()
+    return {"read": True, "updated": changed}

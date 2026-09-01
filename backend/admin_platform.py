@@ -93,7 +93,9 @@ def init(conn):
     conn.executescript(SCHEMA)
     import config_registry; config_registry.init(conn)   # definitions table exists before any set_config
     _ensure_columns(conn, "users", {"status": "TEXT NOT NULL DEFAULT 'ACTIVE'",
-                                    "last_login_at": "TEXT", "tenant_id": "INTEGER"})
+                                    "last_login_at": "TEXT", "tenant_id": "INTEGER",
+                                    "mobile": "TEXT", "verified_at": "TEXT",
+                                    "password_reset_required": "INTEGER NOT NULL DEFAULT 0"})
     _ensure_columns(conn, "sessions", {"ip": "TEXT", "last_seen": "TEXT"})
     _ensure_columns(conn, "platform_config", {"effective_to": "TEXT"})
     _ensure_columns(conn, "audit_logs", {"correlation_id": "TEXT"})
@@ -1256,9 +1258,15 @@ def guarded_login(conn, email, password, ip=None, tenant="RGO", mfa_code=None) -
     if not row or not core.verify_pw(password, row["pw_hash"]):
         record_login(conn, email, False, "invalid_credentials", ip)
         raise core.AuthError("invalid credentials")
-    if core._user_status(row) != "ACTIVE":
-        record_login(conn, email, False, "inactive", ip)
-        raise core.AuthError("account is not active")
+    status = core._user_status(row).upper()
+    if status != "ACTIVE":
+        reason = "account suspended" if status in ("SUSPENDED", "LOCKED") else (
+            "account not yet verified" if status in ("PENDING", "UNVERIFIED") else "account is not active")
+        record_login(conn, email, False, status.lower(), ip)
+        raise core.AuthError(reason)
+    if "password_reset_required" in row.keys() and row["password_reset_required"]:
+        record_login(conn, email, False, "password_reset_required", ip)
+        raise core.AuthError("password reset required")
     if mfa_required_for(conn, row, tenant):
         if not mfa_code:
             record_login(conn, email, False, "mfa_required", ip)

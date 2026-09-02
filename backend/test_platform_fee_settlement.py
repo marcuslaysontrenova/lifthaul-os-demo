@@ -112,7 +112,7 @@ class AdministrationFeeWiseSettlementTests(unittest.TestCase):
     def test_refund_after_submission_creates_fee_recovery_case(self):
         result = pfs.record_verified_payment(self.conn, self.transaction_id, client=FakeWise("processing"))
         self.assertEqual(result["status"], "PROCESSING")
-        impact = pfs.handle_refund(self.conn, self.transaction_id, 143)
+        impact = pfs.handle_refund(self.conn, self.transaction_id, 160)
         self.assertEqual(impact["status"], "REFUND_REVIEW_REQUIRED")
         self.assertEqual(impact["recovery_status"], "OPEN")
         self.assertEqual(impact["recovery_amount"], 13)

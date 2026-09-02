@@ -2063,7 +2063,11 @@ ROUTES.update(_ltfrb_routes())
 def _public_booking_routes():
     import public_booking as pb
 
-    def pb_submit(a, b, p):  return pb.submit(_conn, b)              # a is None (public); server owns the actor
+    def pb_submit(a, b, p):
+        body = dict(b or {})
+        body["_client_disclosure_required"] = True
+        return pb.submit(_conn, body)                                  # public acknowledgement is server-enforced
+    def pb_recommend(a, b, p): return pb.recommend_vehicles(_conn, b)
     def pb_track(a, b, p):   return pb.track(_conn, p["token"])
     def pb_queue(a, b, p):   return pb.admin_queue(_conn, a)
     def pb_review(a, b, p):  return pb.review(_conn, a, int(p["id"]), b["action"],
@@ -2081,6 +2085,7 @@ def _public_booking_routes():
 
     return {
         ("POST", "/public/bookings"): pb_submit,
+        ("POST", "/public/bookings/vehicle-recommendations"): pb_recommend,
         ("GET", "/public/bookings/track/:token"): pb_track,
         ("GET", "/public/service-levels"): pb_levels,
         ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,

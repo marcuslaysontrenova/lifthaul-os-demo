@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS mkt_vehicle_categories(
   hazmat_allowed INTEGER DEFAULT 0,
   port_eligible INTEGER DEFAULT 0,
   requires_special_permit INTEGER DEFAULT 0,
+  safety_allowance_pct REAL NOT NULL DEFAULT 0.10,
   status TEXT NOT NULL DEFAULT 'DRAFT',
   checksum TEXT,
   created_by INTEGER, created_at TEXT,
@@ -153,6 +154,10 @@ def _cid():
 
 def init(conn):
     conn.executescript(SCHEMA)
+    try:
+        conn.execute("ALTER TABLE mkt_vehicle_categories ADD COLUMN safety_allowance_pct REAL NOT NULL DEFAULT 0.10")
+    except Exception:
+        pass
     conn.commit()
 
 
@@ -163,7 +168,7 @@ _VEHICLE_FIELDS = (
     "name", "class_group", "body_type", "axle_config", "payload_kg", "volume_cbm",
     "length_cm", "width_cm", "height_cm", "opening_length_cm", "opening_width_cm",
     "opening_height_cm", "lifting_capable", "lifting_capacity_kg", "refrigerated",
-    "hazmat_allowed", "port_eligible", "requires_special_permit",
+    "hazmat_allowed", "port_eligible", "requires_special_permit", "safety_allowance_pct",
 )
 
 
@@ -181,21 +186,23 @@ def create_vehicle_category(conn, actor, code, name, class_group, **attrs):
     for f in _VEHICLE_FIELDS:
         if f in ("name", "class_group"):
             continue
-        row[f] = attrs.get(f, 0 if f.endswith(("_kg", "_cbm", "capable", "allowed", "eligible", "permit")) else None)
+        row[f] = attrs.get(f, 0.10 if f == "safety_allowance_pct" else
+                           (0 if f.endswith(("_kg", "_cbm", "capable", "allowed", "eligible", "permit")) else None))
     cs = _vehicle_checksum(row)
     now = _now()
     cur = conn.execute(
         "INSERT INTO mkt_vehicle_categories(code,name,class_group,body_type,axle_config,payload_kg,"
         "volume_cbm,length_cm,width_cm,height_cm,opening_length_cm,opening_width_cm,opening_height_cm,"
         "lifting_capable,lifting_capacity_kg,refrigerated,hazmat_allowed,port_eligible,"
-        "requires_special_permit,status,checksum,created_by,created_at,correlation_id) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?,?,?,?)",
+        "requires_special_permit,safety_allowance_pct,status,checksum,created_by,created_at,correlation_id) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?,?,?,?)",
         (code, name, class_group, row["body_type"], row["axle_config"], row["payload_kg"],
          row["volume_cbm"], row["length_cm"], row["width_cm"], row["height_cm"],
          row["opening_length_cm"], row["opening_width_cm"], row["opening_height_cm"],
          int(row["lifting_capable"] or 0), row["lifting_capacity_kg"] or 0, int(row["refrigerated"] or 0),
          int(row["hazmat_allowed"] or 0), int(row["port_eligible"] or 0),
-         int(row["requires_special_permit"] or 0), cs, actor["id"], now, _cid()))
+         int(row["requires_special_permit"] or 0), float(row["safety_allowance_pct"] or 0),
+         cs, actor["id"], now, _cid()))
     vid = cur.lastrowid
     core.audit(conn, actor, "MKT_VEHICLE_CREATED", "mkt_vehicle_categories", vid, None, {"code": code})
     conn.commit()

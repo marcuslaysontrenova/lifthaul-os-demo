@@ -392,18 +392,20 @@
     <div class="hzbar hz"></div>
     <div class="mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="3" y="3" width="42" height="42" rx="12" fill="#101408" stroke="#5FBE2A" stroke-width="2.6"/><path d="M24 10 L34.5 23.4 H27.6 V30.7 H20.4 V23.4 H13.5 Z" fill="#F2611A"/><rect x="13.8" y="34.3" width="20.4" height="3.9" rx="2" fill="#5FB92A"/></svg><div class="wordmark" style="font-weight:800;letter-spacing:.02em">Lift<b>Haul</b> Enterprise</div></div>
     <div class="brand-hero"><div class="eyebrow">Operations Console</div><h1>The office behind the lift.</h1><p>Dispatch, fleet, permits and billing for the crew running the jobs your customers book online.</p></div>
-    <div class="brand-foot"><a data-act="backSite">← Back to public site</a></div>
+    <div class="brand-foot"><a href="index.html">← Back to public site</a></div>
   </div>
   <div class="auth">
     <form class="card" id="loginForm">
-      <a class="backlink" data-act="backSite"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Back to site</a>
+      <a class="backlink" href="index.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Back to site</a>
       <h2>Staff sign in</h2><div class="sub" id="loginSub">LiftHaul Enterprise · Demo workspace</div>
-      <label class="fld" id="demoRoleField"><span>Demo role</span><select id="demoRole" class="role-select" aria-label="Demo role"><option value="booking_admin">Booking &amp; Quotation Administrator</option><option value="approver">Approver</option><option value="finance_admin">Finance Administrator</option><option value="executive">Executive View</option><option value="user_admin">User Administrator</option><option value="super_admin">Super Administrator</option><option value="operational_user">Operational User</option></select></label>
-      <label class="fld"><span>Username</span><input id="u" type="text" value="encoder-1" autocomplete="username" spellcheck="false"></label>
-      <label class="fld"><span>Password</span><input id="p" type="password" value="demo1234" autocomplete="current-password"></label>
-      <div class="hint" id="loginHint">🔑&nbsp;<div>Select a role to test its exact access. Password <code>demo1234</code>; any values sign you in.</div></div>
+      <label class="fld"><span>Staff email or employee ID</span><input id="u" type="text" autocomplete="username" spellcheck="false" required></label>
+      <label class="fld"><span>Password</span><input id="p" type="password" autocomplete="current-password" required></label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin:-4px 0 8px"><input id="showStaffPassword" type="checkbox" style="width:auto"> Show password</label>
+      <div class="hint" id="loginHint">🔒&nbsp;<div>Authentication, lockout, sessions and role permissions are enforced by the configured LiftHaul API.</div></div>
+      <div id="staffLoginError" role="alert" style="min-height:18px;color:var(--crit);font-size:12px;font-weight:700"></div>
       <button class="btn block" type="submit">Sign in →</button>
-      <div class="fine" id="loginMode">Working demo · data lives in your browser only</div>
+      <div class="fine"><a href="#" id="staffForgotPassword">Forgot password?</a></div>
+      <div class="fine" id="loginMode">No offline or browser-only staff sign-in is permitted.</div>
       <div class="fine" style="margin-top:6px">Developed by <a href="https://trenovatech.ai" target="_blank" rel="noopener" style="color:var(--accent);font-weight:800;text-decoration:none">TrenovaTech.ai</a></div>
     </form>
   </div>
@@ -443,10 +445,10 @@
     <button class="nav" data-mod="reports"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 20V4M20 20H4M8 16v-4M12 16V8M16 16v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Reports</button>
     <button class="nav" data-mod="access"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M17 8v6M14 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Users &amp; Access</button>
     <div style="margin:12px 10px 2px;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Platform Control &amp; Commercial</div>
-    <a class="nav" href="admin-console.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.2-2.9 7.4-7 8.8C7.9 18.4 5 15.2 5 11V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 11.5l1.8 1.8 3.2-3.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Platform Administration</a>
-    <a class="nav" href="admin_commercial.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/></svg>Commercial Config</a>
-    <a class="nav" href="admin_referral.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 21l-4.9-2.8.9-5.5-4-3.9 5.5-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Referral Program</a>
-    <a class="nav" href="samantha.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="18.5" cy="5.5" r="1.6" fill="currentColor"/></svg>Samantha BD</a>
+    <a class="nav" data-perms="platform.settings.view,role_admin.view" href="admin-console.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.2-2.9 7.4-7 8.8C7.9 18.4 5 15.2 5 11V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 11.5l1.8 1.8 3.2-3.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Platform Administration</a>
+    <a class="nav" data-perms="marketplace.vehicle.view,crm.admin.pricing.view" href="admin_commercial.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="17" r="2.4" stroke="currentColor" stroke-width="2"/></svg>Commercial Config</a>
+    <a class="nav" data-perms="referral.manage,referral.finance,referral.fraud,referral.qualify" href="admin_referral.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 21l-4.9-2.8.9-5.5-4-3.9 5.5-.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Referral Program</a>
+    <a class="nav" data-perms="bd.prospect.view" href="samantha.html"><svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="18.5" cy="5.5" r="1.6" fill="currentColor"/></svg>Samantha BD</a>
     <div style="margin-top:auto;padding:14px 10px 4px;font-size:11px;color:var(--muted);line-height:1.5">Developed by<br><a href="https://trenovatech.ai" target="_blank" rel="noopener" style="color:var(--accent);font-weight:800;text-decoration:none">TrenovaTech.ai</a></div>
   </aside>
   <main id="main"></main>
@@ -487,7 +489,8 @@ window.RGO_API = (function(){
   return {
     configured:function(){return !!base;},
     setBase:function(b){base=b; try{localStorage.setItem('lifthaul_api_base',b);}catch(e){}},
-    login:function(email,pw){return req('POST','/login',{email:email,password:pw}).then(function(d){token=d.token; try{sessionStorage.setItem('lifthaul_api_token',token);}catch(e){} return d;});},
+    login:function(identifier,pw){return req('POST','/login',{identifier:identifier,password:pw}).then(function(d){token=d.token; try{sessionStorage.setItem('lifthaul_api_token',token);}catch(e){} return d;});},
+    forgotPassword:function(identifier){return req('POST','/public/auth/forgot-password',{identifier:identifier});},
     logout:function(){
       function clear(){token=null;try{sessionStorage.removeItem('lifthaul_api_token');localStorage.removeItem('lifthaul_api_token');localStorage.removeItem('rgo_api_token');}catch(e){}}
       if(!base||!token){clear();return Promise.resolve();}
@@ -682,17 +685,17 @@ window.RGO_API = (function(){
   // queue out of Finance's navigation while preserving her backend read access, per CTO direction.
   // Finance gates on codes Finance actually resolves (payment.read / finance_admin.manage), since the
   // backend finance_admin role expresses finance authority through those, not a bare finance.view.
-  var MODULE_PERMS={dashboard:['dashboard.view'],bookings:['booking.audit.view'],quotes:['quotation.view'],jobs:['operations.view','job.read'],dispatch:['operations.view','job.read'],customers:['customer.view'],fleet:['assets.view','fleet.view'],maintenance:['assets.view','fleet.view'],fleetmap:['assets.view','fleet.view'],drivers:['operations.view','job.read'],permits:['permits.view','safety.view'],invoices:['invoice.view','payment.read'],finance:['finance.view','payment.read','finance_admin.manage'],reports:['reports.view','reporting.view'],access:['users.view','user_admin.view','role_admin.view']};
+  var MODULE_PERMS={dashboard:['dashboard.view','booking.read','job.read','payment.read','user_admin.view'],bookings:['booking.audit.view'],quotes:['quotation.view'],jobs:['operations.view','job.read'],dispatch:['operations.view','job.read'],customers:['customer.view'],fleet:['assets.view','fleet.view'],maintenance:['assets.view','fleet.view'],fleetmap:['assets.view','fleet.view'],drivers:['operations.view','job.read'],permits:['permits.view','safety.view'],invoices:['invoice.view','invoice.read','finance.view'],finance:['finance.view','payment.verify','finance_admin.manage'],reports:['reports.view','reporting.view'],access:['users.view','user_admin.view','role_admin.view']};
   var roleCode='booking_admin',role=ROLE_DEFS.booking_admin.label,currentActor={id:ROLE_DEFS.booking_admin.actor,name:ROLE_DEFS.booking_admin.name};
   // Backend-authoritative permission payload (GET /me/permissions). When set, the UI gates on THIS —
   // never on a JS role engine. ROLE_DEFS is only the offline-demo fallback. livePerms==null => mock mode.
   var livePerms=null;      // array of granted permission codes resolved by the backend
   var liveMode=false;      // true once authenticated against a real backend
   if(window.RGO_API&&RGO_API.configured()){
-    $('#demoRoleField').style.display='none'; $('#u').value=''; $('#p').value='';
+    $('#u').value=''; $('#p').value='';
     $('#u').placeholder='Work email'; $('#loginSub').textContent='LiftHaul Enterprise · Secure operations workspace';
     $('#loginHint').innerHTML='🔐&nbsp;<div>Use your authorized LiftHaul account. Access is enforced and audited by the backend.</div>';
-    $('#loginMode').textContent='Connected production workspace · server-persisted data';
+    $('#loginMode').textContent='Connected backend workspace · server-persisted data';
     $('#demoRibbon').style.display='none';
   }
   function canPerm(p,code){
@@ -701,6 +704,12 @@ window.RGO_API = (function(){
     var d=ROLE_DEFS[code||roleCode];return !!(d&&(d.perms.indexOf('*')>-1||d.perms.indexOf(p)>-1));
   }
   function canAny(ps,code){return (ps||[]).some(function(p){return canPerm(p,code)});}
+  function applyNavigationAccess(){
+    document.querySelectorAll('.nav').forEach(function(n){
+      var required=n.dataset.mod?(MODULE_PERMS[n.dataset.mod]||[]):String(n.dataset.perms||'').split(',').filter(Boolean);
+      n.style.display=canAny(required)?'flex':'none';
+    });
+  }
   function financialValue(p,n){return canPerm(p)?peso(n):'<span class="restricted" title="Restricted by role">🔒 Restricted</span>';}
   function requirePerm(p,msg){if(canPerm(p))return true;toast(msg||'You are not authorized for this action');return false;}
 
@@ -875,33 +884,38 @@ window.RGO_API = (function(){
     badges();save();toast(id+' submitted');window.scrollTo({top:document.getElementById('book').offsetTop-40,behavior:'smooth'});}
 
   // ---------- SHELL / NAV ----------
-  function applyRoleUI(){var d=ROLE_DEFS[roleCode];role=d.label;currentActor={id:d.actor,name:d.name};$('#roleBadge').textContent=d.label;$('#userName').textContent=d.name;$('#userAvatar').textContent=d.initials;document.querySelectorAll('.nav[data-mod]').forEach(function(n){n.style.display=canAny(MODULE_PERMS[n.dataset.mod]||[])?'flex':'none';});var reset=$('[data-act="resetDemo"]');if(reset)reset.style.display=roleCode==='super_admin'?'inline-flex':'none';}
-  $('#demoRole').addEventListener('change',function(){var d=ROLE_DEFS[this.value];$('#u').value=d.actor;});
+  function applyRoleUI(){var d=ROLE_DEFS[roleCode];role=d.label;currentActor={id:d.actor,name:d.name};$('#roleBadge').textContent=d.label;$('#userName').textContent=d.name;$('#userAvatar').textContent=d.initials;applyNavigationAccess();var reset=$('[data-act="resetDemo"]');if(reset)reset.style.display=roleCode==='super_admin'?'inline-flex':'none';}
   function enterApp(){showScreen('dash');views._bf=roleCode==='approver'?'PENDING_INTERNAL_APPROVAL':'all';
     var isFinance=(canPerm('finance.view')||canPerm('payment.read')||canPerm('finance_admin.manage'))&&!canPerm('booking.audit.view');
     var landing=(canPerm('users.view')||canPerm('user_admin.view'))?'access':canPerm('quotation.approve')?'bookings':isFinance?'finance':'dashboard';
     go(landing);badges();}
-  function demoLogin(){liveMode=false;livePerms=null;roleCode=$('#demoRole').value;applyRoleUI();enterApp();}
   $('#loginForm').addEventListener('submit',function(e){
     e.preventDefault();
     // Live path: when a backend origin is configured, authenticate for real and gate the whole UI on
     // the backend's /me/permissions payload. No fallback to the JS role model while connected.
     if(window.RGO_API && RGO_API.configured()){
-      var email=$('#u').value.trim(), pw=$('#p').value;
+      var email=$('#u').value.trim(), pw=$('#p').value, error=$('#staffLoginError');
+      error.textContent='';
       toast('Signing in…');
       RGO_API.login(email,pw).then(function(){return RGO_API.myPermissions();}).then(function(me){
         liveMode=true; livePerms=(me&&me.permissions)||[]; window.liveMe=me;
         role=(me&&me.role)||email; currentActor={id:email,name:(me&&me.user)||email};
         $('#roleBadge').textContent=role; $('#userName').textContent=currentActor.name;
         $('#userAvatar').textContent=(currentActor.name||'?').slice(0,2).toUpperCase();
-        document.querySelectorAll('.nav[data-mod]').forEach(function(n){n.style.display=canAny(MODULE_PERMS[n.dataset.mod]||[])?'flex':'none';});
+        applyNavigationAccess();
         var reset=$('[data-act="resetDemo"]');if(reset)reset.style.display=canPerm('platform.settings')?'inline-flex':'none';
         toast('Connected · backend-authoritative permissions'); enterApp();
-      }).catch(function(err){ toast('Live sign-in failed: '+err.message); });
+      }).catch(function(err){
+        var message=(err&&err.message)||'';
+        error.textContent=/invalid credentials/i.test(message)?'Incorrect email, employee ID or password.':(message||'Incorrect email, employee ID or password.');
+        toast('Sign-in failed');
+      });
       return;
     }
-    demoLogin();
+    $('#staffLoginError').textContent='Staff authentication is unavailable until the hosted LiftHaul API is configured.';
   });
+  $('#showStaffPassword').addEventListener('change',function(){$('#p').type=this.checked?'text':'password';});
+  $('#staffForgotPassword').addEventListener('click',function(e){e.preventDefault();var identifier=$('#u').value.trim(),error=$('#staffLoginError');if(!identifier){error.textContent='Enter your staff email or employee ID first.';$('#u').focus();return;}if(!(window.RGO_API&&RGO_API.configured())){error.textContent='Password reset is unavailable until the hosted LiftHaul API is configured.';return;}RGO_API.forgotPassword(identifier).then(function(){error.style.color='var(--good)';error.textContent='If the account exists, password-reset instructions have been issued through the configured secure channel.';}).catch(function(err){error.style.color='var(--crit)';error.textContent=err.message||'Password reset could not be started.';});});
   $('#signout').addEventListener('click',function(){
     if(window.RGO_API&&RGO_API.configured())RGO_API.logout().then(function(){liveMode=false;livePerms=null;showScreen('login')});
     else showScreen('login');
@@ -1093,7 +1107,7 @@ window.RGO_API = (function(){
     var el=e.target.closest('[data-act]');if(!el)return;var act=el.dataset.act,arg=el.dataset.arg;
     // public / screens
     if(act==='staffLogin')return showScreen('login');
-    if(act==='backSite')return showScreen('public');
+    if(act==='backSite'){window.location.href='index.html';return;}
     if(act==='scrollBook')return scrollTo('book');
     if(act==='scrollServices')return scrollTo('services');
     if(act==='bookSvc'){var s=DB.services.find(function(x){return x.id===arg});if($('#bkService'))$('#bkService').value=arg;scrollTo('book');return;}
@@ -2236,7 +2250,7 @@ window.RGO_API = (function(){
   // ---------- BOOT ----------
   var savedTheme=null;try{savedTheme=localStorage.getItem('lifthaul_theme')}catch(e){}
   if(savedTheme)document.documentElement.setAttribute('data-theme',savedTheme);
-  DB.bookings=seedBookings();load();migrateAccessModel();applyRoleOverrides();initPublic();badges();showScreen('public');
+  DB.bookings=seedBookings();load();migrateAccessModel();applyRoleOverrides();initPublic();badges();showScreen('login');
 })();
 </script>
 

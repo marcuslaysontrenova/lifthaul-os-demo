@@ -33,14 +33,60 @@ VEHICLE_MAP = {
     "10w":    ("WING_VAN_10W","STANDARD",   2500, 80,  14000),
     "lowbed": ("LOWBED",      "ENGINEERED", None, None, None),
     "crane":  ("CRANE_RIGGING","ENGINEERED",None, None, None),
+    "refvan": ("REFRIGERATED_VAN", "STANDARD", 420, 32, 3200),
+    "6wref":  ("REFRIGERATED_TRUCK_6W", "STANDARD", 1550, 64, 9000),
+    "manual": ("CUSTOM_ASSESSMENT", "ENGINEERED", None, None, None),
 }
 VEHICLE_CAPACITY_KG = {
     "moto": 20, "sedan": 200, "mpv": 600, "pickup": 800, "van": 1000,
     "6w": 7000, "10w": 12000, "lowbed": 40000, "crane": 350000,
+    "refvan": 900, "6wref": 7000,
+}
+MATCHING_VERSION = "CARGO_MATCH_V2"
+DEFAULT_SAFETY_ALLOWANCE_PCT = 0.10
+
+# Public choice -> administrator-managed vehicle category. Capacity, dimensions and active status are
+# read from mkt_vehicle_categories; these labels are never trusted as the source of truth.
+PUBLIC_VEHICLE_CATEGORIES = {
+    "moto": "motorcycle", "sedan": "sedan", "mpv": "mpv", "pickup": "pickup",
+    "van": "l300_van", "refvan": "ref_van_light", "6w": "truck_6w",
+    "6wref": "truck_6w_ref", "10w": "truck_10w_wing",
+    "lowbed": "lowbed_trailer", "crane": "crane_truck",
+}
+PUBLIC_CARGO_TYPES = {
+    "DOCUMENTS_PARCEL": "general", "BOXES_GENERAL": "packaged_goods",
+    "APPLIANCE_FURNITURE": "high_value", "CONSTRUCTION_MATERIALS": "construction_material",
+    "MACHINERY_EQUIPMENT": "machinery", "REFRIGERATED_PERISHABLE": "perishable_chilled",
+    "HAZARDOUS_REGULATED": "hazardous", "OTHER": "general",
+}
+REASON_LABELS = {
+    "payload_exceeded": "Payload capacity is insufficient after the safety allowance.",
+    "volume_exceeded": "Total cargo volume exceeds the usable cargo volume.",
+    "refrigeration_required": "This cargo requires a verified refrigerated body.",
+    "oversized_handling_required": "Oversized cargo requires a flatbed, low-bed or lifting-capable unit.",
+    "hazmat_not_permitted": "This vehicle is not verified for hazardous-material handling.",
+    "item_too_long": "Cargo length exceeds the verified body opening.",
+    "item_too_wide": "Cargo width exceeds the verified body opening.",
+    "item_too_tall": "Cargo height exceeds the verified body opening.",
+    "vehicle_not_active": "This category is not active for matching.",
+    "inter_island_not_verified": "This category is not configured for an inter-island port leg.",
+    "closed_body_required": "A closed or weather-protected body is required.",
+    "lifting_equipment_required": "Verified lifting equipment is required.",
+    "flatbed_required": "A verified flatbed or low-bed body is required.",
+    "container_chassis_required": "A verified container chassis is required.",
+    "side_loading_required": "A side-loading-capable body is required.",
+    "tail_lift_unverified": "No tail-lift capability is verified for this category.",
+    "forklift_support_unverified": "Forklift support requires operations confirmation.",
 }
 ADMINISTRATION_FEE_RATE = 0.10
 ADMINISTRATION_FEE_VERSION = "PUBLIC_ADMIN_FEE_V1"
 ENGINEERED_NOTE = "Engineering estimate required — load charts, permits, route survey and ground-bearing checks price this, not a distance formula."
+EXCLUDED_CHARGES = (
+    "Expressway tolls", "Parking", "Ferry or RoRo", "Port and terminal fees",
+    "Government and special permits", "Weighbridge and cargo-clearance fees",
+    "Escort expenses", "Loading/unloading, helpers or waiting time not included in the agreed rate",
+    "Accommodation, meals and other route or incidental expenses",
+)
 
 
 def _now():
@@ -64,6 +110,14 @@ SCHEMA_COLUMNS = [
     ("cargo_category", "TEXT"), ("package_count", "INTEGER"),
     ("package_length_cm", "REAL"), ("package_width_cm", "REAL"), ("package_height_cm", "REAL"),
     ("declared_value", "REAL"), ("special_handling", "TEXT"),
+    ("cargo_volume_cbm", "REAL"), ("stackable", "INTEGER"), ("fragile", "INTEGER"),
+    ("splittable", "INTEGER"), ("vehicle_count", "INTEGER"),
+    ("safety_allowance_pct", "REAL"), ("matching_version", "TEXT"),
+    ("matching_decision", "TEXT"),
+    ("tax_amount", "REAL"), ("transport_tax_amount", "REAL"),
+    ("administration_fee_tax_amount", "REAL"), ("tax_rate", "REAL"),
+    ("tax_code", "TEXT"), ("tax_type", "TEXT"), ("tax_mode", "TEXT"),
+    ("withholding_amount", "REAL"), ("excluded_charges_ack", "INTEGER"),
 ]
 
 PAYMENT_PREFERENCES = {
@@ -284,7 +338,7 @@ def _clean_location(payload, key, island_key, fallback_address):
     return clean
 
 
-def _with_administration_fee(transport_amount, status, **extra):
+def _with_administration_fee(conn, transport_amount, status, **extra):
     """Build the public quote from a transport subtotal plus LiftHaul's disclosed administration fee.
 
     The 10% is a markup on the transport subtotal.  The resulting platform revenue is therefore
@@ -297,17 +351,43 @@ def _with_administration_fee(transport_amount, status, **extra):
             "administration_fee_rate": ADMINISTRATION_FEE_RATE,
             "administration_fee": None, "platform_margin": None,
             "margin_percent_of_total": None, "fee_version": ADMINISTRATION_FEE_VERSION,
+            "tax_amount": None, "transport_tax_amount": None,
+            "administration_fee_tax_amount": None, "tax_rate": None,
+            "tax_code": None, "tax_type": None, "tax_mode": None,
+            "withholding_amount": None,
             "status": status,
         }
     else:
-        transport = round(float(transport_amount), 2)
+        # The governed tax policy determines standard/zero-rated/exempt treatment and whether the
+        # quoted source rate was tax-inclusive.  The public breakdown is normalized to a tax-exclusive
+        # service charge so the 10% fee can never be calculated on tax.
+        import policy
+        ctx = {"tenant": _platform_tenant()}
+        transport_policy = policy.evaluate_tax(conn, float(transport_amount), ctx)
+        transport = round(float(transport_policy["taxable_base"]), 2)
         fee = round(transport * ADMINISTRATION_FEE_RATE, 2)
-        total = round(transport + fee, 2)
+        # Administration-fee tax is calculated independently. This prevents a transport provider's
+        # tax from being conflated with Haulift's own tax obligation in the ledger.
+        fee_policy = policy.evaluate_tax(conn, fee, ctx)
+        transport_tax = round(float(transport_policy["tax"]), 2)
+        fee_tax = round(float(fee_policy["tax"]), 2)
+        tax = round(transport_tax + fee_tax, 2)
+        total = round(transport + fee + tax, 2)
+        withholding = round(float(transport_policy.get("withholding") or 0) +
+                            float(fee_policy.get("withholding") or 0), 2)
         result = {
             "amount": total, "transport_subtotal": transport,
             "administration_fee_rate": ADMINISTRATION_FEE_RATE,
             "administration_fee": fee, "platform_margin": fee,
             "margin_percent_of_total": round((fee / total) * 100, 2) if total else 0.0,
+            "tax_amount": tax, "transport_tax_amount": transport_tax,
+            "administration_fee_tax_amount": fee_tax,
+            "tax_rate": transport_policy["rate"], "tax_code": transport_policy["code"],
+            "tax_type": transport_policy["tax_type"],
+            "tax_mode": "inclusive" if transport_policy["inclusive"] else "exclusive",
+            "withholding_amount": withholding,
+            "tax_policy_snapshot": {
+                "transport": transport_policy["snapshot"], "administration_fee": fee_policy["snapshot"]},
             "fee_version": ADMINISTRATION_FEE_VERSION, "status": status,
         }
     result.update(extra)
@@ -384,12 +464,152 @@ def clean_cargo(payload):
     handling = payload.get("special_handling") or []
     if isinstance(handling, str):
         handling = [handling]
-    if not isinstance(handling, list) or len(handling) > 10:
+    if not isinstance(handling, list) or len(handling) > 20:
         raise core.ValidationError("invalid special handling selection")
     handling = [str(item).strip().upper()[:40] for item in handling if str(item).strip()]
+    present_dims = [v is not None for v in dimensions]
+    if any(present_dims) and not all(present_dims):
+        raise core.ValidationError("length, width and height must all be supplied together")
+    calculated_volume = None
+    if all(present_dims):
+        calculated_volume = round(dimensions[0] * dimensions[1] * dimensions[2] * count / 1_000_000, 4)
+    submitted_volume = _num(payload.get("cargo_volume_cbm"))
+    if submitted_volume is not None and (submitted_volume <= 0 or submitted_volume > 5000):
+        raise core.ValidationError("cargo volume is outside the supported range")
+    volume = calculated_volume if calculated_volume is not None else submitted_volume
     return {"category": category, "description": description, "weight_kg": weight, "count": count,
             "length_cm": dimensions[0], "width_cm": dimensions[1], "height_cm": dimensions[2],
-            "declared_value": declared, "special_handling": handling}
+            "volume_cbm": volume, "declared_value": declared, "special_handling": handling,
+            "stackable": bool(payload.get("stackable")), "fragile": bool(payload.get("fragile")),
+            "splittable": bool(payload.get("splittable"))}
+
+
+def _extra_vehicle_denials(vehicle, cargo, inter_island=False):
+    handling = set(cargo.get("special_handling") or [])
+    code = vehicle["code"]
+    body = (vehicle.get("body_type") or "").lower()
+    name = (vehicle.get("name") or "").lower()
+    closed = any(x in body or x in name for x in ("closed", "wing", "van", "refrigerated"))
+    reasons = []
+    if inter_island and not vehicle.get("port_eligible"):
+        reasons.append("inter_island_not_verified")
+    if handling.intersection({"CLOSED_VAN", "WEATHER_PROTECTION"}) and not closed:
+        reasons.append("closed_body_required")
+    if "REFRIGERATED" in handling and not vehicle.get("refrigerated"):
+        reasons.append("refrigeration_required")
+    if handling.intersection({"CRANE_BOOM", "TOP_LOADING"}) and not (
+            vehicle.get("lifting_capable") or body in ("flatbed", "lowbed")):
+        reasons.append("lifting_equipment_required")
+    if "FLATBED" in handling and body not in ("flatbed", "lowbed"):
+        reasons.append("flatbed_required")
+    if "CONTAINER_CHASSIS" in handling and body != "container_chassis":
+        reasons.append("container_chassis_required")
+    if "SIDE_LOADING" in handling and body not in ("wing_van", "flatbed", "lowbed", "dropside"):
+        reasons.append("side_loading_required")
+    if "TAIL_LIFT" in handling:
+        reasons.append("tail_lift_unverified")
+    if "FORKLIFT_SUPPORT" in handling:
+        reasons.append("forklift_support_unverified")
+    return list(dict.fromkeys(reasons))
+
+
+def _public_vehicle(vehicle, public_id, units, cargo, kind):
+    safety = float(vehicle.get("safety_allowance_pct") or DEFAULT_SAFETY_ALLOWANCE_PCT)
+    usable_weight = round(float(vehicle.get("payload_kg") or 0) / (1 + safety), 1)
+    dims = [vehicle.get("opening_length_cm"), vehicle.get("opening_width_cm"), vehicle.get("opening_height_cm")]
+    return {
+        "id": public_id, "catalog_code": vehicle["code"], "name": vehicle["name"],
+        "classification": kind, "vehicle_count": units,
+        "verified_payload_kg": vehicle.get("payload_kg"), "usable_cargo_weight_kg": usable_weight,
+        "safety_allowance_pct": safety, "volume_cbm": vehicle.get("volume_cbm"),
+        "body_dimensions_cm": dims, "body_type": vehicle.get("body_type") or "category-configured",
+        "refrigerated": bool(vehicle.get("refrigerated")),
+        "lifting_capable": bool(vehicle.get("lifting_capable")),
+        "special_permit_required": bool(vehicle.get("requires_special_permit")),
+        "availability": "Verified unit and service-area availability checked before assignment",
+        "reason": ("Best-fit active category for the cargo weight, dimensions, volume, route and handling requirements."
+                   if kind == "RECOMMENDED" else
+                   "Safe eligible alternative with additional capacity or specialization."),
+    }
+
+
+def recommend_vehicles(conn, payload):
+    """Deterministic cargo-first matching. AI may explain/rank this result but may never widen it."""
+    if not isinstance(payload, dict):
+        raise core.ValidationError("invalid recommendation payload")
+    cargo = clean_cargo(payload)
+    if cargo["weight_kg"] is None:
+        raise core.ValidationError("total cargo weight is required before vehicle matching")
+    route = classify_route(payload.get("origin_island"), payload.get("dest_island"))
+    import marketplace as mkt
+    cargo_code = PUBLIC_CARGO_TYPES[cargo["category"]]
+    dims = ((cargo["length_cm"], cargo["width_cm"], cargo["height_cm"])
+            if cargo["length_cm"] is not None else None)
+    active = {v["code"]: v for v in mkt.list_vehicle_categories(conn, active_only=True)}
+    eligible = []
+    rejected = []
+    for public_id, code in PUBLIC_VEHICLE_CATEGORIES.items():
+        vehicle = active.get(code)
+        if not vehicle:
+            rejected.append({"id": public_id, "name": code, "reasons": ["vehicle_not_active"]})
+            continue
+        safety = float(vehicle.get("safety_allowance_pct") or DEFAULT_SAFETY_ALLOWANCE_PCT)
+        required_weight = cargo["weight_kg"] * (1 + safety)
+        body = (vehicle.get("body_type") or "").lower()
+        volume_for_gate = None if body in ("flatbed", "lowbed", "container_chassis") else cargo.get("volume_cbm")
+        gate = mkt.is_vehicle_eligible(conn, cargo_code, code, weight_kg=required_weight,
+                                       volume_cbm=volume_for_gate, dims=dims)
+        reasons = list(gate["reasons"]) + _extra_vehicle_denials(vehicle, cargo, route["inter_island"])
+        if reasons:
+            rejected.append({"id": public_id, "name": vehicle["name"],
+                             "reasons": list(dict.fromkeys(reasons))})
+        else:
+            eligible.append((public_id, vehicle, 1))
+
+    # A split allocation is permitted only when the client confirms the cargo is safely splittable.
+    # Payload/volume can be distributed; the largest single item's dimensions and all handling gates
+    # must still fit every unit.
+    if not eligible and cargo["splittable"] and cargo["count"] > 1:
+        for public_id, code in PUBLIC_VEHICLE_CATEGORIES.items():
+            vehicle = active.get(code)
+            if not vehicle:
+                continue
+            safety = float(vehicle.get("safety_allowance_pct") or DEFAULT_SAFETY_ALLOWANCE_PCT)
+            per_unit = float(vehicle.get("payload_kg") or 0) / (1 + safety)
+            volume_cap = float(vehicle.get("volume_cbm") or 0)
+            if per_unit <= 0:
+                continue
+            units = max(1, math.ceil(cargo["weight_kg"] / per_unit))
+            if cargo.get("volume_cbm") and volume_cap > 0:
+                units = max(units, math.ceil(cargo["volume_cbm"] / volume_cap))
+            if units > min(cargo["count"], 12):
+                continue
+            gate = mkt.is_vehicle_eligible(conn, cargo_code, code, weight_kg=None,
+                                           volume_cbm=None, dims=dims)
+            reasons = [r for r in gate["reasons"] if r not in ("payload_exceeded", "volume_exceeded")]
+            reasons += _extra_vehicle_denials(vehicle, cargo, route["inter_island"])
+            if not reasons:
+                eligible.append((public_id, vehicle, units))
+
+    needs_refrigeration = cargo["category"] == "REFRIGERATED_PERISHABLE" or "REFRIGERATED" in set(cargo["special_handling"])
+    eligible.sort(key=lambda item: (
+        item[2],
+        0 if (needs_refrigeration == bool(item[1].get("refrigerated"))) else 1,
+        1 if item[1].get("requires_special_permit") else 0,
+        1 if item[1].get("lifting_capable") else 0,
+        float(item[1].get("payload_kg") or 0), float(item[1].get("volume_cbm") or 0)))
+    options = [_public_vehicle(v, pid, units, cargo, "RECOMMENDED" if i == 0 else "ALTERNATIVE")
+               for i, (pid, v, units) in enumerate(eligible[:4])]
+    manual = not options
+    return {
+        "matching_version": MATCHING_VERSION, "manual_assessment_required": manual,
+        "message": ("Your cargo requires a customized transport assessment. Please submit the booking for review by our operations team."
+                    if manual else
+                    "Vehicle eligibility was calculated from administrator-managed verified category limits."),
+        "cargo": cargo, "route": route, "options": options,
+        "rejected": [{**r, "explanations": [REASON_LABELS.get(x, x.replace("_", " ").capitalize())
+                                              for x in r["reasons"]]} for r in rejected],
+    }
 
 
 def validate_vehicle_capacity(vehicle, cargo):
@@ -400,31 +620,54 @@ def validate_vehicle_capacity(vehicle, cargo):
             f"selected vehicle capacity is {capacity:g} kg; cargo weight is {weight:g} kg")
 
 
+def validate_vehicle_match(conn, payload, cargo):
+    """Final-submit guard: the chosen option must still be in the deterministic eligible pool."""
+    if cargo.get("weight_kg") is None:
+        return {"matching_version": "LEGACY_CAPACITY_ONLY", "vehicle_count": 1,
+                "safety_allowance_pct": None, "decision": "LEGACY"}
+    result = recommend_vehicles(conn, payload)
+    vehicle = str(payload.get("vehicle") or "")
+    count = int(payload.get("vehicle_count") or 1)
+    if result["manual_assessment_required"]:
+        if vehicle != "manual":
+            raise core.ValidationError("no standard vehicle is eligible; submit for customized operations assessment")
+        return {"matching_version": result["matching_version"], "vehicle_count": 0,
+                "safety_allowance_pct": None, "decision": "MANUAL_ASSESSMENT"}
+    selected = next((x for x in result["options"] if x["id"] == vehicle and x["vehicle_count"] == count), None)
+    if not selected:
+        raise core.ValidationError("selected vehicle is not eligible for the current cargo, route or handling requirements")
+    return {"matching_version": result["matching_version"], "vehicle_count": selected["vehicle_count"],
+            "safety_allowance_pct": selected["safety_allowance_pct"],
+            "decision": selected["classification"]}
+
+
 def quote(conn, vehicle, km, inter_island, service_level=None):
     """Server-side estimate. Real rate card when one exists; else a server-owned indicative rate for
     STANDARD classes, adjusted by the service-level multiplier. ENGINEERED classes NEVER get a
     fabricated instant price (service level or not)."""
     veh, cls, base, perkm, sea = VEHICLE_MAP[vehicle]
     if cls == "ENGINEERED":
-        return _with_administration_fee(None, "ESTIMATE_REQUIRED", note=ENGINEERED_NOTE)
+        return _with_administration_fee(conn, None, "ESTIMATE_REQUIRED", note=ENGINEERED_NOTE)
     km = float(km or 0)
     if km <= 0:
         return _with_administration_fee(
-            None, "ESTIMATE_REQUIRED", note="distance required for a standard quote")
+            conn, None, "ESTIMATE_REQUIRED", note="distance required for a standard quote")
     mult = SERVICE_LEVELS.get(str(service_level or "STANDARD").upper(), {}).get("multiplier") or 1.0
     try:
         import rates
         rc = rates.resolve_rate(conn, veh)
         if rc and rc.get("standard_rate"):
             line = rates.price_line(rc["standard_rate"], 1, max(1, round(km / 200)), 0.0, rc.get("internal_cost", 0.0))
-            transport = round(line["total"] * mult + (sea if inter_island else 0))
+            transport = round(line["total"] * mult)
             return _with_administration_fee(
-                transport, "QUOTED", source="rate_card", service_level=service_level)
+                conn, transport, "QUOTED", source="rate_card", service_level=service_level)
     except Exception:
         pass
-    transport = round((base + perkm * km) * mult + (sea if inter_island else 0))
+    # Ferry/RoRo, ports, tolls, permits and other pass-through/incidental costs are explicitly
+    # outside the Haulift booking and Protected Payment amount.
+    transport = round((base + perkm * km) * mult)
     return _with_administration_fee(
-        transport, "QUOTED_INDICATIVE", source="server_tariff", service_level=service_level)
+        conn, transport, "QUOTED_INDICATIVE", source="server_tariff", service_level=service_level)
 
 
 def routing_candidate(service_class):
@@ -445,6 +688,9 @@ def submit(conn, payload):
             raise core.ValidationError(f"missing required field: {k}")
     if not (str(payload.get("contact_phone", "")).strip() or str(payload.get("contact_email", "")).strip()):
         raise core.ValidationError("a contact phone or email is required")
+    if (payload.get("_client_disclosure_required") and
+            payload.get("excluded_charges_ack") not in (True, 1, "1", "true", "TRUE", "yes", "YES")):
+        raise core.ValidationError("client acceptance of excluded-charge responsibility is required")
     # length / safety caps (defence-in-depth; server layer also caps body size)
     for k, v in list(payload.items()):
         if isinstance(v, str) and len(v) > 2000:
@@ -467,6 +713,7 @@ def submit(conn, payload):
     distance = resolve_distance(origin, destination, payload.get("km"), route["inter_island"])
     cargo = clean_cargo(payload)
     validate_vehicle_capacity(payload["vehicle"], cargo)
+    match = validate_vehicle_match(conn, payload, cargo)
     q = quote(conn, payload["vehicle"], distance["km"], route["inter_island"], level)
     routing = routing_candidate(svc["service_class"])
     intended = "protected" if str(payload.get("payment", "protected")).lower().startswith("prot") else "operator"
@@ -514,6 +761,16 @@ def submit(conn, payload):
          q.get("administration_fee_rate"), q.get("administration_fee"),
          cargo["category"], cargo["count"], cargo["length_cm"], cargo["width_cm"], cargo["height_cm"],
          cargo["declared_value"], json.dumps(cargo["special_handling"]), _now(), bid))
+    conn.execute(
+        "UPDATE mkt_bookings SET cargo_volume_cbm=?,stackable=?,fragile=?,splittable=?,vehicle_count=?,"
+        "safety_allowance_pct=?,matching_version=?,matching_decision=?,tax_amount=?,transport_tax_amount=?,"
+        "administration_fee_tax_amount=?,tax_rate=?,tax_code=?,tax_type=?,tax_mode=?,withholding_amount=?,"
+        "excluded_charges_ack=1 WHERE id=?",
+        (cargo.get("volume_cbm"), int(cargo["stackable"]), int(cargo["fragile"]), int(cargo["splittable"]),
+         match["vehicle_count"], match["safety_allowance_pct"], match["matching_version"], match["decision"],
+         q.get("tax_amount"), q.get("transport_tax_amount"), q.get("administration_fee_tax_amount"),
+         q.get("tax_rate"), q.get("tax_code"), q.get("tax_type"), q.get("tax_mode"),
+         q.get("withholding_amount"), bid))
     if stops:
         _persist_stops(conn, bid, stops)
     # Protected Payment: eligibility recorded; NO live transaction (no carrier yet, funds gate OFF).
@@ -525,8 +782,10 @@ def submit(conn, payload):
                 "payment_preference": payment_method, "distance_km": distance["km"],
                 "distance_source": distance["source"], "cargo_category": cargo["category"],
                 "transport_subtotal": q.get("transport_subtotal"),
-                "administration_fee": q.get("administration_fee"), "customer_total": q.get("amount"),
-                "fee_version": q.get("fee_version")})
+                "administration_fee": q.get("administration_fee"), "tax_amount": q.get("tax_amount"),
+                "customer_total": q.get("amount"), "fee_version": q.get("fee_version"),
+                "matching_version": match["matching_version"], "matching_decision": match["decision"],
+                "excluded_charges_ack": True})
     conn.commit()
 
     return {
@@ -537,12 +796,23 @@ def submit(conn, payload):
         "estimate": q.get("amount"), "estimate_status": q["status"], "estimate_note": q.get("note"),
         "distance": distance,
         "cargo": {"category": cargo["category"], "description": cargo["description"],
-                  "weight_kg": cargo["weight_kg"], "package_count": cargo["count"]},
+                  "weight_kg": cargo["weight_kg"], "package_count": cargo["count"],
+                  "volume_cbm": cargo.get("volume_cbm"), "vehicle_count": match["vehicle_count"]},
+        "vehicle_match": match,
         "quote_breakdown": {
+            "transport_service_charge": q.get("transport_subtotal"),
             "transport_subtotal": q.get("transport_subtotal"),
             "administration_fee_rate": q.get("administration_fee_rate"),
             "administration_fee": q.get("administration_fee"),
+            "transport_tax_amount": q.get("transport_tax_amount"),
+            "administration_fee_tax_amount": q.get("administration_fee_tax_amount"),
+            "applicable_tax": q.get("tax_amount"), "tax_rate": q.get("tax_rate"),
+            "tax_code": q.get("tax_code"), "tax_type": q.get("tax_type"),
+            "tax_mode": q.get("tax_mode"), "withholding_amount": q.get("withholding_amount"),
+            "total_protected_payment": q.get("amount"),
             "customer_total": q.get("amount"), "currency": "PHP",
+            "included": ["Transport-service charge", "Haulift administration fee (10%)", "Applicable tax"],
+            "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },
         "service_level": level, "schedule_type": sched["schedule_type"],
         "scheduled_at": sched["scheduled_at"], "stops": len(stops),
@@ -654,7 +924,9 @@ def track(conn, token):
         "assignment_status,pickup_address,delivery_address,pickup_window,created_at,"
         "payment_method,payment_provider,payment_channel,"
         "service_level,schedule_type,scheduled_at,distance_km,distance_source,transport_amount,"
-        "administration_fee_rate,administration_fee,cargo_category,package_count,weight_kg,cargo_description "
+        "administration_fee_rate,administration_fee,tax_amount,transport_tax_amount,"
+        "administration_fee_tax_amount,tax_rate,tax_code,tax_type,tax_mode,withholding_amount,"
+        "cargo_category,package_count,weight_kg,cargo_description "
         "FROM mkt_bookings WHERE tracking_token=?", (token,)).fetchone()
     if not r:
         raise core.NotFoundError("booking not found")
@@ -721,10 +993,20 @@ def track(conn, token):
         "cargo": {"category": d.get("cargo_category"), "description": d.get("cargo_description"),
                   "weight_kg": d.get("weight_kg"), "package_count": d.get("package_count")},
         "quote_breakdown": {
+            "transport_service_charge": (None if eng else d.get("transport_amount")),
             "transport_subtotal": (None if eng else d.get("transport_amount")),
             "administration_fee_rate": (None if eng else d.get("administration_fee_rate")),
             "administration_fee": (None if eng else d.get("administration_fee")),
+            "transport_tax_amount": (None if eng else d.get("transport_tax_amount")),
+            "administration_fee_tax_amount": (None if eng else d.get("administration_fee_tax_amount")),
+            "applicable_tax": (None if eng else d.get("tax_amount")),
+            "tax_rate": (None if eng else d.get("tax_rate")), "tax_code": d.get("tax_code"),
+            "tax_type": d.get("tax_type"), "tax_mode": d.get("tax_mode"),
+            "withholding_amount": (None if eng else d.get("withholding_amount")),
+            "total_protected_payment": (None if eng else d.get("quote_amount")),
             "customer_total": (None if eng else d.get("quote_amount")), "currency": "PHP",
+            "included": ["Transport-service charge", "Haulift administration fee (10%)", "Applicable tax"],
+            "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },
         "payment_status": _PAY_PROJ.get(raw, "Payment Required"),
         "protected_payment": {"label": _PAY_PROJ.get(raw, "Payment Required"),

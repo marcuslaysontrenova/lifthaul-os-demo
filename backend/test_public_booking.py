@@ -20,7 +20,8 @@ SUP = {"id": 0, "role": "super_admin", "perms": {"*"}, "tenant_id": None}
 
 def _p(**kw):
     d = {"contact_name": "Ana Cruz", "contact_phone": "09171234567",
-         "origin_island": "Luzon", "dest_island": "Luzon", "vehicle": "6w", "km": 45}
+         "origin_island": "Luzon", "dest_island": "Luzon", "vehicle": "6w", "km": 45,
+         "excluded_charges_ack": True}
     d.update(kw); return d
 
 
@@ -99,8 +100,8 @@ class Quote(unittest.TestCase):
     def test_server_ignores_tampered_frontend_total(self):
         r = pb.submit(self.c, _p(vehicle="sedan", km=10, amount=999999, estimate=999999, total=999999))
         self.assertNotEqual(r["estimate"], 999999)
-        # sedan transport ₱260 + disclosed 10% administration charge ₱26
-        self.assertEqual(r["estimate"], 286)
+        # ₱260 transport + ₱26 fee + separately calculated tax (₱31 + ₱3 at default 12%).
+        self.assertEqual(r["estimate"], 320)
 
     def test_administration_charge_is_disclosed_and_accounted_separately(self):
         r = pb.submit(self.c, _p(vehicle="sedan", km=10))
@@ -108,11 +109,12 @@ class Quote(unittest.TestCase):
         self.assertEqual(q["transport_subtotal"], 260)
         self.assertEqual(q["administration_fee_rate"], 0.10)
         self.assertEqual(q["administration_fee"], 26)
-        self.assertEqual(q["customer_total"], 286)
+        self.assertEqual(q["applicable_tax"], 34)
+        self.assertEqual(q["customer_total"], 320)
         row = self.c.execute(
             "SELECT quote_amount,transport_amount,administration_fee_rate,administration_fee "
             "FROM mkt_bookings WHERE id=?", (r["booking_id"],)).fetchone()
-        self.assertEqual(row["quote_amount"], 286)
+        self.assertEqual(row["quote_amount"], 320)
         self.assertEqual(row["transport_amount"], 260)
         self.assertEqual(row["administration_fee"], 26)
 
@@ -129,24 +131,72 @@ class Quote(unittest.TestCase):
 
     def test_structured_cargo_is_persisted_and_trackable(self):
         r = pb.submit(self.c, _p(
-            vehicle="6w", cargo_category="MACHINERY_EQUIPMENT", cargo="Industrial pump",
+            vehicle="6w", cargo_category="CONSTRUCTION_MATERIALS", cargo="Industrial pump",
             weight_kg=3200, package_count=2, package_length_cm=180,
+            package_width_cm=100, package_height_cm=100,
             special_handling=["FRAGILE", "LIFT_ASSISTANCE"],
         ))
         row = self.c.execute(
             "SELECT cargo_category,cargo_description,weight_kg,package_count,special_handling "
             "FROM mkt_bookings WHERE id=?", (r["booking_id"],)).fetchone()
-        self.assertEqual(row["cargo_category"], "MACHINERY_EQUIPMENT")
+        self.assertEqual(row["cargo_category"], "CONSTRUCTION_MATERIALS")
         self.assertEqual(row["cargo_description"], "Industrial pump")
         self.assertEqual(row["weight_kg"], 3200)
         self.assertEqual(json_dumps(json.loads(row["special_handling"])), '["FRAGILE", "LIFT_ASSISTANCE"]')
         tracked = pb.track(self.c, r["tracking_token"])
         self.assertEqual(tracked["cargo"]["package_count"], 2)
 
-    def test_inter_island_adds_sea_freight(self):
+    def test_inter_island_excludes_sea_freight_from_protected_total(self):
         dom = pb.submit(self.c, _p(vehicle="6w", km=100, origin_island="Luzon", dest_island="Luzon"))["estimate"]
         ii = pb.submit(self.c, _p(vehicle="6w", km=100, origin_island="Luzon", dest_island="Visayas"))["estimate"]
-        self.assertGreater(ii, dom)  # sea-freight surcharge applied server-side
+        self.assertEqual(ii, dom)
+
+    def test_excluded_charge_acceptance_is_required(self):
+        with self.assertRaises(core.ValidationError):
+            pb.submit(self.c, _p(excluded_charges_ack=False, _client_disclosure_required=True))
+
+    def test_fee_is_ten_percent_before_tax_and_exclusions_are_informational(self):
+        q = pb.submit(self.c, _p(vehicle="sedan", km=10))["quote_breakdown"]
+        self.assertEqual(q["administration_fee"], q["transport_service_charge"] * .10)
+        self.assertEqual(q["total_protected_payment"],
+                         q["transport_service_charge"] + q["administration_fee"] + q["applicable_tax"])
+        self.assertIn("Ferry or RoRo", q["excluded_client_responsibility"])
+
+
+class CargoFirstVehicleMatching(unittest.TestCase):
+    def setUp(self): self.c = db.connect(":memory:")
+
+    def test_safety_allowance_blocks_nominal_capacity(self):
+        r = pb.recommend_vehicles(self.c, _p(
+            cargo_category="BOXES_GENERAL", weight_kg=950, package_count=1,
+            package_length_cm=100, package_width_cm=80, package_height_cm=80))
+        ids = [x["id"] for x in r["options"]]
+        self.assertNotIn("pickup", ids)
+        self.assertNotIn("van", ids)
+        self.assertEqual(r["options"][0]["id"], "6w")
+
+    def test_dimensions_and_refrigeration_are_enforced(self):
+        r = pb.recommend_vehicles(self.c, _p(
+            cargo_category="REFRIGERATED_PERISHABLE", weight_kg=500, package_count=1,
+            package_length_cm=200, package_width_cm=120, package_height_cm=120,
+            special_handling=["REFRIGERATED"]))
+        self.assertTrue(r["options"])
+        self.assertTrue(all(x["refrigerated"] for x in r["options"]))
+
+    def test_multiple_vehicle_allocation_for_splittable_cargo(self):
+        r = pb.recommend_vehicles(self.c, _p(
+            cargo_category="REFRIGERATED_PERISHABLE", weight_kg=12000, package_count=4,
+            package_length_cm=100, package_width_cm=100, package_height_cm=100,
+            special_handling=["REFRIGERATED"], splittable=True))
+        self.assertTrue(r["options"])
+        self.assertGreaterEqual(r["options"][0]["vehicle_count"], 2)
+
+    def test_hazardous_cargo_routes_to_manual_assessment(self):
+        r = pb.recommend_vehicles(self.c, _p(
+            cargo_category="HAZARDOUS_REGULATED", weight_kg=200, package_count=1,
+            package_length_cm=50, package_width_cm=50, package_height_cm=50,
+            special_handling=["HAZARDOUS_MATERIAL"]))
+        self.assertTrue(r["manual_assessment_required"])
 
 
 class Routing(unittest.TestCase):

@@ -166,6 +166,45 @@ svg [stroke="#5FB92A"], svg [stroke="#5fb92a"] {
   stroke: var(--accent) !important;
 }
 
+/*
+ * Site canvas: apple green is the unmistakable background across every
+ * customer, provider and operations surface. Content stays on calm panels so
+ * dense booking, compliance and payment records remain easy to read.
+ */
+html {
+  min-height: 100%;
+  background-color: var(--lh-apple) !important;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--lh-apple) !important;
+  background-image:
+    radial-gradient(circle at 12% 2%, rgba(255, 255, 255, .16), transparent 30rem),
+    linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(0, 107, 60, .08)) !important;
+  background-attachment: fixed !important;
+}
+
+/* Remove legacy pale page bands while preserving white cards and forms. */
+main,
+#public,
+#dash,
+.app,
+.main,
+.lh-shell,
+.lh-main {
+  background-color: transparent !important;
+}
+
+.hero,
+.alt,
+.sec.alt {
+  background-color: var(--lh-apple) !important;
+  background-image:
+    radial-gradient(circle at 80% 8%, rgba(255, 255, 255, .14), transparent 27rem),
+    linear-gradient(145deg, rgba(255, 255, 255, .05), rgba(0, 107, 60, .07)) !important;
+}
+
 /* La Salle green provides structure; apple green identifies the next action. */
 .side,
 .lh-sidebar,

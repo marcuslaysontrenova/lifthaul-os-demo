@@ -1,4 +1,4 @@
-/* LiftHaul brand system — La Salle green structure + apple green action. */
+/* LiftHaul brand system — black structure + apple green canvas + tangerine action. */
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
@@ -13,15 +13,15 @@
   --lh-tangerine-soft: #fff0e6;
   --lh-tangerine-ink: #14261b;
   --lh-page: #f5f8f4;
-  --lh-panel: var(--lh-lasalle);
-  --lh-panel-soft: #0b7547;
-  --lh-panel-strong: var(--lh-lasalle-strong);
+  --lh-panel: #0a0a0a;
+  --lh-panel-soft: #171717;
+  --lh-panel-strong: #000000;
   --lh-panel-ink: #ffffff;
-  --lh-panel-muted: #d5eadf;
+  --lh-panel-muted: #e2e2e2;
   --lh-ink: #14261b;
   --lh-ink-soft: #315441;
   --lh-muted: #66756c;
-  --lh-border: #25845e;
+  --lh-border: #343434;
 
   /* Common aliases used across the public, client, provider and staff apps. */
   --bg: var(--lh-page);
@@ -83,16 +83,16 @@
   color-scheme: dark;
   --bg: #07130d;
   --page: #07130d;
-  --card: #0d2117;
-  --surface: #0d2117;
-  --surface-2: #123020;
-  --surface-3: #173b28;
-  --soft: #123020;
+  --card: #0a0a0a;
+  --surface: #0a0a0a;
+  --surface-2: #171717;
+  --surface-3: #000000;
+  --soft: #171717;
   --ink: #eef7f1;
   --ink-2: #b6d1c0;
   --ink2: #b6d1c0;
   --muted: #8eaa98;
-  --line: #28513b;
+  --line: #343434;
   --primary: #2a925e;
   --primary-d: #20804f;
   --primary-2: #20804f;
@@ -125,10 +125,10 @@
   --lh-accent-strong: #70c247;
   --lh-accent-soft: #193d25;
   --lh-bg: #07130d;
-  --lh-surface: #0d2117;
+  --lh-surface: #0a0a0a;
   --lh-text: #eef7f1;
   --lh-muted: #8eaa98;
-  --lh-line: #28513b;
+  --lh-line: #343434;
   --lh-blue: #83d45a;
   --lh-blue-soft: #153a24;
   --shadow: 0 1px 2px rgba(0, 0, 0, .32), 0 12px 32px rgba(0, 0, 0, .34);
@@ -211,7 +211,7 @@ main,
     linear-gradient(145deg, rgba(255, 255, 255, .05), rgba(0, 107, 60, .07)) !important;
 }
 
-/* La Salle green replaces the former beige content surfaces. */
+/* Black replaces the former La Salle green content surfaces. */
 .snav,
 .lh-topbar,
 .topbar,
@@ -258,7 +258,7 @@ main,
   color: var(--lh-panel-ink) !important;
 }
 
-/* Supporting copy remains readable on the La Salle green surfaces. */
+/* Supporting copy remains readable on black surfaces. */
 .snav .links a,
 .step p,
 .rolecard p,
@@ -313,20 +313,30 @@ main,
   color: var(--lh-panel-ink) !important;
 }
 
-/* White input fields remain distinct and recognizable inside green panels. */
+/* White input fields remain distinct and recognizable inside black panels. */
 :root:not([data-theme="dark"]) input,
 :root:not([data-theme="dark"]) select,
 :root:not([data-theme="dark"]) textarea {
   background-color: #ffffff !important;
+  color: var(--lh-ink) !important;
+  border-color: #cfd7d1 !important;
 }
 
-/* La Salle green provides structure; tangerine identifies primary actions. */
+/* Black provides structure; tangerine identifies primary actions. */
 .side,
 .lh-sidebar,
 .app .top,
 .time-card,
 .side-card.dark {
-  background-color: var(--lh-lasalle-deep) !important;
+  background-color: var(--lh-panel-strong) !important;
+  color: var(--lh-panel-ink) !important;
+}
+
+/* Numbered process markers use the tangerine action color, never black. */
+.step .n,
+.paynode .n {
+  background-color: var(--lh-tangerine) !important;
+  color: #ffffff !important;
 }
 
 .btn.accent,
@@ -374,7 +384,7 @@ button[type="submit"]:not(.line):not(.ghost):hover {
 
 .hz,
 .hzbar {
-  background-image: repeating-linear-gradient(-45deg, var(--accent) 0 14px, var(--lh-lasalle-deep) 14px 28px) !important;
+  background-image: repeating-linear-gradient(-45deg, var(--accent) 0 14px, var(--lh-panel-strong) 14px 28px) !important;
 }
 
 .hero::before,

@@ -89,26 +89,30 @@ class Statements(Base):
         self.acct = self._account(credit_limit=100000, payment_terms_days=30)
 
     def test_rollup_and_opening_carryforward(self):
-        bl.post_charge(self.c, self.op, self.acct, "FREIGHT", 1, "f", 30000, tax=3600)
+        bl.post_charge(self.c, self.op, self.acct, "FREIGHT", 1, "f", 30000,
+                       tax=3600, item_date="2026-08-15")
         s1 = bl.generate_statement(self.c, self.op, self.acct, "2026-08-01", "2026-08-31")
         self.assertEqual(s1["opening_balance"], 0)
         self.assertEqual(s1["closing_balance"], 33600)
         # a NEW charge posted after s1 is swept into s2 (opening carries s1 closing)
-        bl.post_charge(self.c, self.op, self.acct, "RENTAL", 2, "r", 10000, tax=0)
+        bl.post_charge(self.c, self.op, self.acct, "RENTAL", 2, "r", 10000,
+                       tax=0, item_date="2026-09-15")
         s2 = bl.generate_statement(self.c, self.op, self.acct, "2026-09-01", "2026-09-30")
         self.assertEqual(s2["opening_balance"], 33600)
         self.assertEqual(s2["charges_total"], 10000)
         self.assertEqual(s2["closing_balance"], 43600)
 
     def test_statemented_items_not_reswept(self):
-        bl.post_charge(self.c, self.op, self.acct, "FREIGHT", 1, "f", 30000)
+        bl.post_charge(self.c, self.op, self.acct, "FREIGHT", 1, "f", 30000,
+                       item_date="2026-08-15")
         bl.generate_statement(self.c, self.op, self.acct, "2026-08-01", "2026-08-31")
         s2 = bl.generate_statement(self.c, self.op, self.acct, "2026-09-01", "2026-09-30")
         self.assertEqual(s2["charges_total"], 0)   # nothing new -> not double counted
         self.assertEqual(s2["closing_balance"], 30000)
 
     def test_over_limit_flag_and_credit_status(self):
-        bl.post_charge(self.c, self.op, self.acct, "R", 1, "big", 150000)
+        bl.post_charge(self.c, self.op, self.acct, "R", 1, "big", 150000,
+                       item_date="2026-08-15")
         s = bl.generate_statement(self.c, self.op, self.acct, "2026-08-01", "2026-08-31")
         self.assertTrue(s["over_limit"])
         self.assertEqual(self.c.execute("SELECT credit_status FROM billing_accounts WHERE id=?", (self.acct,)).fetchone()["credit_status"],

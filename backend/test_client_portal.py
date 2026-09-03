@@ -102,6 +102,37 @@ class ClientPortalTests(unittest.TestCase):
         cp.mark_notification_read(self.conn, self.actor, nid)
         self.assertEqual(cp.overview(self.conn, self.actor)["unread_notifications"], 0)
 
+    def test_overview_counts_and_clickable_projections_have_required_detail(self):
+        view = cp.overview(self.conn, self.actor)
+        self.assertEqual(view["summary"]["total"], 1)
+        self.assertEqual(view["summary"]["draft"], 1)
+        booking = cp.bookings(self.conn, self.actor)["bookings"][0]
+        for key in ("booking_reference", "pickup_location", "delivery_location", "cargo_type",
+                    "booking_amount", "status", "status_bucket", "protected_payment_status",
+                    "updated_at", "available_action"):
+            self.assertIn(key, booking)
+        self.assertEqual(booking["available_action"], "Continue Draft")
+
+    def test_payment_detail_and_mark_all_remain_user_scoped(self):
+        tx = pp.create_transaction(self.conn, self.admin, booking_id=self.booking_id, carrier_id=77,
+                                   contract_amount=10000, protected_amount=10000,
+                                   platform_fee=1000, provider_fee=150, tax=0,
+                                   funding_deadline="2026-09-01T10:00:00+00:00",
+                                   dispute_policy="Verified delivery plus dispute window")
+        detail = cp.payment_detail(self.conn, self.actor, tx)
+        self.assertEqual(detail["protected_payment_id"], tx)
+        with self.assertRaises(core.NotFoundError):
+            cp.payment_detail(self.conn, self.other_actor, tx)
+        self.conn.execute(
+            "INSERT INTO notifications(template,recipient,subject,body,channel,status,created_at) "
+            "VALUES('payment','client@acme.test','Payment verified','Verified','email','DELIVERED',?)",
+            (core.now(),),
+        )
+        self.conn.commit()
+        result = cp.mark_all_notifications_read(self.conn, self.actor)
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(cp.overview(self.conn, self.actor)["unread_notifications"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

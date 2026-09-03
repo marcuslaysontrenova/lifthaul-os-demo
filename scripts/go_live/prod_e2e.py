@@ -84,6 +84,7 @@ def main():
     booking = {"contact_name": "E2E Synthetic", "contact_phone": "09170000000",
                "origin_island": "LUZON", "dest_island": "LUZON", "origin_city": "Makati",
                "dest_city": "Quezon City", "vehicle": "moto", "km": 12,
+               "excluded_charges_ack": True,
                "idempotency_key": f"e2e-{int(time.time())}"}
     code, body, _ = _req("POST", "/public/bookings", booking)
     token_tok = body.get("tracking_token")

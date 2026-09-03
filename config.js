@@ -15,4 +15,5 @@
  * localStorage.lifthaul_api_base still works as a per-browser DEV override and, when set,
  * is used only if apiBase here is empty.
  */
-window.RGO_CONFIG = { apiBase: "" };
+var lifthaulLocalHost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+window.RGO_CONFIG = { apiBase: lifthaulLocalHost ? "http://localhost:8787" : "" };

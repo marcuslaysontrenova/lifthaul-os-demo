@@ -112,6 +112,29 @@ input:focus,select:focus{border-color:var(--primary);outline:none;box-shadow:0 0
 .recommendation{display:none;align-items:flex-start;gap:8px;border-left:3px solid var(--primary);background:var(--primary-soft);border-radius:8px;padding:9px 11px;margin:-4px 0 12px;font-size:12.5px;color:var(--ink-2)}
 .recommendation.show{display:flex}
 .estimate .row.fee{color:var(--primary-2);font-weight:700}
+.booking-step{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px;margin:0 0 14px}
+.booking-step h3{font-size:15px;margin-bottom:4px}.booking-step .step-kicker{display:block;color:var(--primary-2);font-size:11px;font-weight:850;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.vehicle-stage.locked{background:var(--surface-2);color:var(--muted)}
+.vehicle-stage.locked .veh{display:none}
+.vehicle-stage.ready{border-color:var(--primary)}
+.vehicle-stage.manual{border-color:var(--warn);background:var(--warn-bg)}
+.vopt{position:relative;text-align:left;min-height:124px;padding:12px}
+.vopt .vtag{display:inline-flex;font-size:9px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:var(--primary-2);background:var(--primary-soft);border-radius:999px;padding:2px 6px;margin-bottom:6px}
+.vopt .vreason{display:block;margin-top:5px;font-size:10.5px;line-height:1.35;color:var(--ink-2)}
+.vopt .vmeta{display:block;margin-top:5px;font-size:10px;color:var(--muted)}
+.vopt.on{box-shadow:0 0 0 3px rgba(95,185,42,.18)}
+.match-status{font-size:12.5px;color:var(--ink-2);margin:4px 0 12px}
+.match-status.error{color:var(--crit)}
+.volume-readout{font-size:12px;color:var(--primary-2);font-weight:700;margin-top:-8px;margin-bottom:12px}
+.handling-option[hidden]{display:none}
+.excluded-disclosure{border:1px solid #e6c486;background:var(--warn-bg);border-radius:12px;padding:14px;margin:0 0 14px}
+.excluded-disclosure h3{font-size:14px;margin-bottom:6px}.excluded-disclosure p,.excluded-disclosure li{font-size:12px;color:#704607}
+.excluded-disclosure ul{margin:7px 0 10px;padding-left:20px;columns:2}
+.excluded-ack{display:flex;align-items:flex-start;gap:9px;padding:10px;background:#fff;border:1px solid #e6c486;border-radius:8px;font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer}
+.excluded-ack input{width:auto;margin-top:3px;accent-color:var(--primary)}
+.price-groups{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.price-group{border:1px solid var(--line);border-radius:9px;padding:10px;background:#fff}.price-group b{font-size:12px}.price-group span{display:block;font-size:11px;color:var(--muted);margin-top:4px}
+@media(max-width:620px){.excluded-disclosure ul{columns:1}.price-groups{grid-template-columns:1fr}.veh{grid-template-columns:1fr}}
 /* matching + tracking */
 .match{display:none;text-align:center;padding:8px 4px}
 .match.show{display:block}
@@ -165,6 +188,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="booking-experience.css">
+  <link rel="stylesheet" href="theme.css?v=4">
   <script src="config.js"></script>
 </head>
 <body>
@@ -180,7 +204,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   <div class="sp"></div>
   <a class="btn line sm hidesm" href="index.html#register">Register</a>
   <a class="btn line sm hidesm" href="client.html">Client login</a>
-  <a class="btn sm" href="console.html">Staff login</a>
+  <a class="btn sm" href="console.html?staff=1">Staff login</a>
 </div></nav>
 
 <!-- HERO + BOOKING -->
@@ -209,8 +233,8 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
             <span class="geo-status" id="geoStatus" role="status" aria-live="polite">Loading locations…</span>
           </div>
 
-          <fieldset class="cargo-card">
-            <legend>What are you sending?</legend>
+          <fieldset class="cargo-card" id="cargoCard">
+            <legend>Step 2 · Cargo details, weight and dimensions</legend>
             <p class="cargo-intro">Describe the shipment accurately. Weight and handling needs determine the safest vehicle recommendation.</p>
             <div class="grid2">
               <div class="field"><label for="cargoCategory">Cargo / package type <span class="req">*</span></label>
@@ -223,26 +247,46 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
                 </select></div>
               <div class="field"><label for="cargoDesc">Package description <span class="req">*</span></label><input id="cargoDesc" maxlength="400" placeholder="e.g. 12 sealed cartons of machine parts" required></div>
             </div>
-            <div class="grid2">
-              <div class="field"><label for="packageCount">Number of packages <span class="req">*</span></label><input id="packageCount" type="number" min="1" max="10000" value="1" required></div>
-              <div class="field"><label for="cargoWeight">Total weight (kg) <span class="req">*</span></label><input id="cargoWeight" type="number" min="0.1" max="350000" step="0.1" placeholder="e.g. 350" required></div>
-            </div>
             <div class="grid3">
-              <div class="field"><label for="packageLength">Length (cm)</label><input id="packageLength" type="number" min="0.1" max="5000" step="0.1" placeholder="Optional"></div>
-              <div class="field"><label for="packageWidth">Width (cm)</label><input id="packageWidth" type="number" min="0.1" max="5000" step="0.1" placeholder="Optional"></div>
-              <div class="field"><label for="packageHeight">Height (cm)</label><input id="packageHeight" type="number" min="0.1" max="5000" step="0.1" placeholder="Optional"></div>
+              <div class="field"><label for="packageCount">Packages / units <span class="req">*</span></label><input id="packageCount" type="number" min="1" max="10000" value="1" required></div>
+              <div class="field"><label for="cargoWeight">Total weight <span class="req">*</span></label><input id="cargoWeight" type="number" min="0.1" max="350000" step="0.1" placeholder="e.g. 350" required></div>
+              <div class="field"><label for="weightUnit">Weight unit</label><select id="weightUnit"><option value="KG">Kilograms</option><option value="T">Metric tons</option></select></div>
+            </div>
+            <div class="grid2">
+              <div class="grid3">
+                <div class="field"><label for="packageLength">Length <span class="req">*</span></label><input id="packageLength" type="number" min="0.1" max="5000" step="0.1" required></div>
+                <div class="field"><label for="packageWidth">Width <span class="req">*</span></label><input id="packageWidth" type="number" min="0.1" max="5000" step="0.1" required></div>
+                <div class="field"><label for="packageHeight">Height <span class="req">*</span></label><input id="packageHeight" type="number" min="0.1" max="5000" step="0.1" required></div>
+              </div>
+              <div class="field"><label for="dimensionUnit">Dimension unit</label><select id="dimensionUnit"><option value="CM">Centimetres</option><option value="M">Metres</option></select></div>
+            </div>
+            <div class="volume-readout" id="cargoVolume">Estimated total cargo volume: waiting for dimensions</div>
+            <div class="grid3">
+              <label class="handling-option"><input type="checkbox" id="stackable">Stackable</label>
+              <label class="handling-option"><input type="checkbox" id="fragile">Fragile</label>
+              <label class="handling-option"><input type="checkbox" id="splittable">May be divided safely across vehicles</label>
             </div>
             <div class="field"><label for="declaredValue">Declared cargo value (₱) <span class="field-hint">optional, for quotation and risk review</span></label><input id="declaredValue" type="number" min="0" max="1000000000" step="0.01" placeholder="e.g. 50000"></div>
-            <div class="field"><label>Special handling</label><div class="handling">
-              <label class="handling-option"><input type="checkbox" name="specialHandling" value="FRAGILE">Fragile</label>
-              <label class="handling-option"><input type="checkbox" name="specialHandling" value="REFRIGERATED">Refrigerated</label>
-              <label class="handling-option"><input type="checkbox" name="specialHandling" value="LIFT_ASSISTANCE">Lift assistance</label>
-              <label class="handling-option"><input type="checkbox" name="specialHandling" value="OVERSIZED">Oversized</label>
+            <div class="field"><label for="cargoPhotos">Cargo photographs <span class="field-hint">required later when risk or operations review requests evidence</span></label><input id="cargoPhotos" type="file" multiple accept="image/png,image/jpeg,image/webp"></div>
+            <div class="field"><label>Step 3 · Handling requirements</label><div class="handling" id="handlingOptions">
+              <label class="handling-option" data-for="GENERAL"><input type="checkbox" name="specialHandling" value="CLOSED_VAN">Closed van</label>
+              <label class="handling-option" data-for="REFRIGERATED_PERISHABLE"><input type="checkbox" name="specialHandling" value="REFRIGERATED">Refrigerated vehicle</label>
+              <label class="handling-option" data-for="GENERAL"><input type="checkbox" name="specialHandling" value="TAIL_LIFT">Tail lift</label>
+              <label class="handling-option" data-for="MACHINERY_EQUIPMENT CONSTRUCTION_MATERIALS"><input type="checkbox" name="specialHandling" value="CRANE_BOOM">Crane or boom</label>
+              <label class="handling-option" data-for="MACHINERY_EQUIPMENT CONSTRUCTION_MATERIALS"><input type="checkbox" name="specialHandling" value="FORKLIFT_SUPPORT">Forklift support</label>
+              <label class="handling-option" data-for="GENERAL"><input type="checkbox" name="specialHandling" value="SIDE_LOADING">Side loading</label>
+              <label class="handling-option" data-for="GENERAL"><input type="checkbox" name="specialHandling" value="TOP_LOADING">Top loading</label>
+              <label class="handling-option" data-for="MACHINERY_EQUIPMENT CONSTRUCTION_MATERIALS"><input type="checkbox" name="specialHandling" value="FLATBED">Flatbed</label>
+              <label class="handling-option" data-for="CONSTRUCTION_MATERIALS MACHINERY_EQUIPMENT"><input type="checkbox" name="specialHandling" value="CONTAINER_CHASSIS">Container chassis</label>
+              <label class="handling-option" data-for="GENERAL"><input type="checkbox" name="specialHandling" value="WEATHER_PROTECTION">Weather protection</label>
+              <label class="handling-option" data-for="HAZARDOUS_REGULATED"><input type="checkbox" name="specialHandling" value="HAZARDOUS_MATERIAL">Hazardous-material handling</label>
+              <label class="handling-option" data-for="MACHINERY_EQUIPMENT"><input type="checkbox" name="specialHandling" value="OVERSIZED">Oversized-load handling</label>
+              <label class="handling-option" data-for="GENERAL"><input type="checkbox" name="specialHandling" value="HELPER">Helper / manpower</label>
             </div></div>
           </fieldset>
 
           <fieldset class="location-card pickup" id="oLocationCard" data-complete="false">
-            <legend>Pickup location</legend>
+            <legend>Step 1 · Pickup location</legend>
             <div class="field"><label for="oIsland">1 · Island group <span class="req">*</span></label>
               <select id="oIsland" required disabled><option value="">Loading…</option></select></div>
             <div class="grid2">
@@ -258,7 +302,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
           </fieldset>
 
           <fieldset class="location-card dropoff" id="dLocationCard" data-complete="false">
-            <legend>Delivery location</legend>
+            <legend>Step 1 · Delivery location</legend>
             <div class="field"><label for="dIsland">1 · Island group <span class="req">*</span></label>
               <select id="dIsland" required disabled><option value="">Loading…</option></select></div>
             <div class="grid2">
@@ -282,30 +326,46 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
           <div class="interisland" id="interFlag">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 17h18M5 17l2-6h10l2 6M8 11V7h8v4"/></svg>
-            <span>Inter-island lane — sea-freight + port handling included; delivery routed through a RoRo/port leg.</span>
+            <span>Inter-island lane detected. Ferry/RoRo, port and terminal charges are excluded from Protected Payment and are paid separately by the client.</span>
           </div>
 
           <div class="field" style="margin-bottom:8px"><label for="km">Automatically calculated distance (km) <span class="req">*</span></label>
             <input id="km" class="auto-distance" inputmode="decimal" placeholder="Complete pickup and delivery locations" required readonly>
             <span class="field-help" id="distanceMeta">Planning estimate from selected locations. Refine both map pins for better accuracy; final dispatch routing is confirmed separately.</span></div>
-          <div class="field" style="margin-top:0"><label>Choose a vehicle <span class="req">*</span></label></div>
-          <div class="veh" id="veh"></div>
-          <div class="recommendation" id="vehicleRecommendation" role="status" aria-live="polite"></div>
+          <section class="booking-step vehicle-stage locked" id="vehicleStage" aria-labelledby="vehicleStageTitle">
+            <span class="step-kicker">Step 4 · Safety match</span>
+            <h3 id="vehicleStageTitle">Recommended vehicles</h3>
+            <p class="match-status" id="vehicleGateMessage" role="status" aria-live="polite">Complete both locations and all required cargo fields to calculate safe vehicle options.</p>
+            <div class="veh" id="veh"></div>
+            <div class="recommendation" id="vehicleRecommendation" role="status" aria-live="polite"></div>
+            <details id="rejectedVehicles" hidden><summary>Why other vehicles are not suitable</summary><div id="rejectedVehicleList" class="match-status"></div></details>
+          </section>
 
-          <div class="grid2" style="margin-top:2px">
+          <div class="grid2 booking-step" style="margin-top:2px">
             <div class="field"><label>Service level</label><select id="svcLevel"></select></div>
-            <div class="field"><label>Schedule</label><select id="schedType"><option value="NOW">Deliver now</option><option value="SCHEDULED">Scheduled</option></select></div>
+            <div class="field"><label>Step 5 · Schedule</label><select id="schedType"><option value="NOW">Deliver now</option><option value="SCHEDULED">Scheduled</option></select></div>
           </div>
           <div class="field" id="schedWrap" style="display:none"><label>Scheduled date</label><input id="schedAt" type="date"></div>
           <div class="field"><label>Additional stops <span class="muted" style="font-weight:400;font-size:12px">(optional — multi-drop / staging)</span></label>
             <div id="stops"></div>
             <button type="button" class="btn line sm" id="addStop" style="align-self:flex-start;margin-top:4px">+ Add stop</button></div>
 
-          <div class="estimate" id="estimate" hidden></div>
+          <div class="estimate" id="estimate" hidden aria-live="polite"></div>
+
+          <section class="excluded-disclosure" aria-labelledby="excludedTitle">
+            <h3 id="excludedTitle">Included in Protected Payment—and what remains separate</h3>
+            <div class="price-groups">
+              <div class="price-group"><b>Included</b><span>Agreed transport-service charge · Haulift 10% administration fee · applicable tax</span></div>
+              <div class="price-group"><b>Not included—client responsibility</b><span>Tolls · parking · ferry/RoRo · ports · permits · route and incidental expenses</span></div>
+            </div>
+            <p>The displayed booking total includes the agreed transport-service charge, Haulift’s 10% administration fee, and applicable tax only. Toll fees, parking, ferry or RoRo charges, port fees, government permits, route charges, and other incidental expenses are excluded and shall be paid separately by the client/booker when incurred.</p>
+            <ul><li>Pay excluded third parties directly whenever possible.</li><li>Driver advances require prior approval and an official receipt.</li><li>Reimbursements stay outside Protected Payment.</li><li>No 10% administration fee is added to reimbursements.</li></ul>
+            <label class="excluded-ack"><input type="checkbox" id="excludedAck" required> <span>I understand and agree that expenses excluded from the booking total will be shouldered separately by me as the client/booker.</span></label>
+          </section>
 
           <section class="payment-gate" aria-labelledby="paymentGateTitle">
             <div class="payment-gate-head">
-              <div><span class="payment-kicker">Secure checkout</span><h3 id="paymentGateTitle">Payment follows your accepted quotation</h3></div>
+              <div><span class="payment-kicker">Steps 7–8 · Protected Payment and confirmation</span><h3 id="paymentGateTitle">Payment follows your accepted quotation</h3></div>
               <span class="gateway-badge checking" id="gatewayStatus" role="status" aria-live="polite">Checking payment readiness…</span>
             </div>
             <p id="gatewayStatusDetail">LiftHaul shows only methods that have passed provider and environment certification. No payment is taken on this booking form.</p>
@@ -361,7 +421,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
       <div class="r"><span class="pin">L</span><div><b>Luzon</b><br><span>Metro Manila, CALABARZON, Central &amp; North Luzon, Bicol.</span></div></div>
       <div class="r"><span class="pin">V</span><div><b>Visayas</b><br><span>Cebu, Iloilo, Bacolod, Tacloban, Bohol.</span></div></div>
       <div class="r"><span class="pin">M</span><div><b>Mindanao</b><br><span>Davao, Cagayan de Oro, Zamboanga, General Santos.</span></div></div>
-      <div class="r"><span class="pin">⇆</span><div><b>Inter-island</b><br><span>RoRo &amp; port-handled lanes across island groups — priced into your quote.</span></div></div>
+      <div class="r"><span class="pin">⇆</span><div><b>Inter-island</b><br><span>RoRo and port-handled lanes are supported; third-party ferry and terminal charges remain a separate client responsibility.</span></div></div>
     </div>
     <div class="coverage-proof">
       <div class="proof-head"><div class="proof-icon">PH</div><div><h3>Current nationwide address coverage</h3><p>PSA Philippine Standard Geographic Code · Second Quarter 2026</p></div></div>
@@ -424,12 +484,18 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="booking-experience.js"></script>
+<script src="cargo-booking.js"></script>
 <script>
 (function(){
   "use strict";
+  if(window.LiftHaulCargoFirst)return;
+  var unavailable=document.getElementById("vehicleGateMessage"),submit=document.getElementById("bookbtn");
+  if(unavailable)unavailable.textContent="Vehicle matching is unavailable. Booking is disabled until the approved cargo-matching module loads.";
+  if(submit)submit.disabled=true;
+  return;
   var $=function(s){return document.querySelector(s);};
   var scrollMode=function(){return window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";};
-  // LiftHaul vehicle taxonomy (base fare ₱, per-km ₱, inter-island sea surcharge ₱). Heavy = quote-assisted.
+  // Retained, unreachable legacy fallback below. The approved module above fails closed if unavailable.
   var VEH=[
     {id:"moto",name:"Motorcycle",cap:"up to 20 kg",capKg:20,base:60,km:8,sea:250},
     {id:"sedan",name:"Sedan",cap:"200 kg",capKg:200,base:120,km:14,sea:900},
@@ -452,7 +518,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
   VEH.forEach(function(v){ vh+='<button type="button" class="vopt'+(v.heavy?' heavy':'')+'" data-v="'+v.id+'"><b>'+v.name+'</b><span>'+v.cap+'</span></button>'; });
   $("#veh").innerHTML=vh;
   var rg="";
-  VEH.forEach(function(v){ rg+='<div class="vcard'+(v.heavy?' heavy':'')+'"><b>'+v.name+(v.heavy?' ★':'')+'</b><div class="cap">'+v.cap+'</div><p>'+(v.quote?'Engineered, permit-handled lift/haul — priced by our team.':'Transparent base + per-km pricing. Inter-island adds sea-freight.')+'</p></div>'; });
+  VEH.forEach(function(v){ rg+='<div class="vcard'+(v.heavy?' heavy':'')+'"><b>'+v.name+(v.heavy?' ★':'')+'</b><div class="cap">'+v.cap+'</div><p>'+(v.quote?'Engineered, permit-handled lift/haul — priced by our team.':'Transparent base + per-km pricing. Third-party route expenses remain separate.')+'</p></div>'; });
   $("#vehGrid").innerHTML=rg;
   populateLevels(false);
 
@@ -488,22 +554,21 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
       return;
     }
     if(!km||km<=0){box.hidden=true;if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;}
-    var ii=interIsland();
     var dist=Math.round(v.km*km);
-    var sea=ii?v.sea:0;
     var lvl=(document.getElementById("svcLevel")||{}).value||"STANDARD";
     var m=(SERVICE_LVL[lvl]&&SERVICE_LVL[lvl].m)||1;
     var serviceSubtotal=Math.round((v.base+dist)*m);
-    var transportSubtotal=serviceSubtotal+sea;
+    var transportSubtotal=serviceSubtotal;
     var adminFee=Math.round(transportSubtotal*.10);
-    var total=transportSubtotal+adminFee;
+    var applicableTax=Math.round((transportSubtotal+adminFee)*.12);
+    var total=transportSubtotal+adminFee+applicableTax;
     box.hidden=false;
     box.innerHTML='<div class="row"><span>Base fare · '+v.name+'</span><span>'+peso(v.base)+'</span></div>'+
       '<div class="row"><span>Distance · '+km+' km × '+peso(v.km)+'/km</span><span>'+peso(dist)+'</span></div>'+
       (m!==1?'<div class="row"><span>Service level · '+((SERVICE_LVL[lvl]||{}).n||lvl)+' (×'+m+')</span><span>'+peso(serviceSubtotal-(v.base+dist))+'</span></div>':'')+
-      (ii?'<div class="row"><span>Inter-island sea-freight + port handling</span><span>'+peso(sea)+'</span></div>':'')+
       '<div class="row"><span>Transport subtotal</span><span>'+peso(transportSubtotal)+'</span></div>'+
       '<div class="row fee"><span>LiftHaul administration charge (10%)</span><span>'+peso(adminFee)+'</span></div>'+
+      '<div class="row"><span>Applicable tax</span><span>'+peso(applicableTax)+'</span></div>'+
       '<div class="row total"><span>Estimated customer total</span><span>'+peso(total)+'</span></div>'+
       '<div class="row" style="color:var(--muted)"><span>Transparent planning estimate · final route and fare confirmed at quotation</span><span></span></div>';
     if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(total);

@@ -158,6 +158,9 @@ def _seed_users():
 
 
 _seed_users()
+if APP_ENV.strip().lower() in ("development", "dev", "local", "test", "testing"):
+    import client_auth as _client_auth
+    _client_auth.seed_demo_workspace(_conn)
 _provider = core.MockWiseProvider()
 
 
@@ -176,8 +179,21 @@ def _actor(handler):
 def _routes():
     def login(actor, body, _):
         # C-007: guarded login (lockout -> credentials -> status -> MFA -> session + history)
+        import client_auth
+        identifier = body.get("identifier") or body.get("email")
+        email = client_auth.resolve_identifier(_conn, identifier)
         return {"token": admin_platform.guarded_login(
-            _conn, body["email"], body["password"], mfa_code=body.get("mfa_code"))}
+            _conn, email, body["password"], mfa_code=body.get("mfa_code"))}
+
+    def forgot_password(actor, body, _):
+        import client_auth
+        return client_auth.request_password_reset(
+            _conn, body.get("identifier"),
+            reveal_token=client_auth.development_token_allowed())
+
+    def public_reset_password(actor, body, _):
+        import client_auth
+        return client_auth.reset_password(_conn, body.get("token"), body.get("new_password"))
 
     def logout(actor, body, _):
         import security
@@ -320,6 +336,8 @@ def _routes():
 
     return {
         ("POST", "/login"): login,
+        ("POST", "/public/auth/forgot-password"): forgot_password,
+        ("POST", "/public/auth/reset-password"): public_reset_password,
         ("POST", "/logout"): logout,
         ("GET", "/me/permissions"): me_perms,
         ("POST", "/customers"): create_customer,
@@ -2045,7 +2063,11 @@ ROUTES.update(_ltfrb_routes())
 def _public_booking_routes():
     import public_booking as pb
 
-    def pb_submit(a, b, p):  return pb.submit(_conn, b)              # a is None (public); server owns the actor
+    def pb_submit(a, b, p):
+        body = dict(b or {})
+        body["_client_disclosure_required"] = True
+        return pb.submit(_conn, body)                                  # public acknowledgement is server-enforced
+    def pb_recommend(a, b, p): return pb.recommend_vehicles(_conn, b)
     def pb_track(a, b, p):   return pb.track(_conn, p["token"])
     def pb_queue(a, b, p):   return pb.admin_queue(_conn, a)
     def pb_review(a, b, p):  return pb.review(_conn, a, int(p["id"]), b["action"],
@@ -2063,6 +2085,7 @@ def _public_booking_routes():
 
     return {
         ("POST", "/public/bookings"): pb_submit,
+        ("POST", "/public/bookings/vehicle-recommendations"): pb_recommend,
         ("GET", "/public/bookings/track/:token"): pb_track,
         ("GET", "/public/service-levels"): pb_levels,
         ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,
@@ -2795,6 +2818,7 @@ def _client_portal_routes():
         ("GET", "/portal/client/offers"): lambda a, b, p: cp.offers(_conn, a),
         ("GET", "/portal/client/trips"): lambda a, b, p: cp.trips(_conn, a),
         ("GET", "/portal/client/payments"): lambda a, b, p: cp.payments(_conn, a),
+        ("GET", "/portal/client/payments/:id"): lambda a, b, p: cp.payment_detail(_conn, a, int(p["id"])),
         ("GET", "/portal/client/addresses"): lambda a, b, p: cp.addresses(_conn, a),
         ("POST", "/portal/client/addresses"): lambda a, b, p: cp.add_address(
             _conn, a, b["label"], b["specific_address"],
@@ -2804,6 +2828,7 @@ def _client_portal_routes():
             _conn, a, b["provider"], b["channel"], b["provider_alias"], b["display_label"],
             is_default=b.get("is_default", False)),
         ("GET", "/portal/client/notifications"): lambda a, b, p: cp.notifications(_conn, a),
+        ("POST", "/portal/client/notifications/read-all"): lambda a, b, p: cp.mark_all_notifications_read(_conn, a),
         ("POST", "/portal/client/notifications/:id/read"): lambda a, b, p: cp.mark_notification_read(
             _conn, a, int(p["id"])),
         ("POST", "/admin/client-portal/bind"): lambda a, b, p: {"id": cp.bind_principal(

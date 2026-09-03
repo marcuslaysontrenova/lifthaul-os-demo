@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 23  # governed 10% administration-fee settlement to Wise
+SCHEMA_VERSION = 24  # client authentication recovery + actionable workspace projections
 
 
 def _now():
@@ -135,6 +135,8 @@ def _seed_platform(conn):
     carrier_portal.init(conn); carrier_portal.seed(conn)                 # Carrier / Fleet Owner Portal: secure self-service over the existing carrier ecosystem (principal binding only; no new domains)
     import client_portal
     client_portal.init(conn); client_portal.seed(conn)                   # Client Booker Workspace: shipper-bound projections over canonical bookings/offers/trips/protected payments
+    import client_auth
+    client_auth.init(conn)                                               # Client login identifiers + hashed single-use password recovery
     import driver_reassignment
     driver_reassignment.init(conn); driver_reassignment.seed(conn)       # Driver Reassignment / Re-matching: governed orchestration over matching (intra-carrier substitution + inter-carrier re-match; funds never moved)
     import rental

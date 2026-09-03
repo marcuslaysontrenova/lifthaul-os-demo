@@ -215,6 +215,8 @@ main,
 .snav,
 .lh-topbar,
 .topbar,
+.herocard,
+.stat,
 .bcard,
 .pill,
 .cargo-card,
@@ -260,6 +262,8 @@ main,
 
 /* Supporting copy remains readable on black surfaces. */
 .snav .links a,
+.herocard > p,
+.stat span,
 .step p,
 .rolecard p,
 .paynode p,
@@ -291,6 +295,55 @@ main,
 .bcard .tstep span,
 .pill {
   color: var(--lh-panel-muted) !important;
+}
+
+.herocard h3,
+.herocard .mapcap,
+.stat b {
+  color: var(--lh-panel-ink) !important;
+}
+
+/* Keep the primary hero actions and trust signals aligned and easy to scan. */
+.hero .cta {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px !important;
+  width: 100%;
+}
+
+.hero .cta .btn {
+  width: 100%;
+  min-height: 68px;
+  padding-inline: 20px;
+  text-align: center;
+  white-space: normal;
+}
+
+.hero .pillrow {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px !important;
+  width: 100%;
+}
+
+.hero .pillrow .pill {
+  justify-content: center;
+  min-height: 48px;
+  padding: 9px 12px;
+  text-align: center;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+@media (max-width: 680px) {
+  .hero .cta,
+  .hero .pillrow {
+    grid-template-columns: 1fr;
+  }
+
+  .hero .cta .btn {
+    min-height: 56px;
+  }
 }
 
 .bhead button {

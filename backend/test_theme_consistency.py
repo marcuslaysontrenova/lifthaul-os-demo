@@ -37,6 +37,9 @@ class ThemeConsistency(unittest.TestCase):
         self.assertIn("background-color: var(--lh-tangerine) !important", css)
         self.assertIn("background-color: var(--surface) !important", css)
         self.assertIn(".step .n,\n.paynode .n {\n  background-color: var(--lh-tangerine) !important", css)
+        self.assertIn(".herocard h3,", css)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", css)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", css)
         self.assertIn("remove legacy pale page bands", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
 
@@ -52,11 +55,11 @@ class ThemeConsistency(unittest.TestCase):
         for relative in PUBLIC_PAGES:
             with self.subTest(page=relative):
                 markup = (ROOT / relative).read_text(encoding="utf-8")
-                self.assertIn('href="theme.css?v=7"', markup)
+                self.assertIn('href="theme.css?v=8"', markup)
 
     def test_bundled_frontend_loads_shared_theme(self):
         markup = (ROOT / "backend" / "frontend" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('href="../../theme.css?v=7"', markup)
+        self.assertIn('href="../../theme.css?v=8"', markup)
 
 
 if __name__ == "__main__":

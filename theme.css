@@ -8,14 +8,21 @@
   --lh-apple: #70c247;
   --lh-apple-strong: #56a82e;
   --lh-apple-soft: #edf8e8;
+  --lh-tangerine: #f36a21;
+  --lh-tangerine-strong: #e65f1a;
+  --lh-tangerine-soft: #fff0e6;
+  --lh-tangerine-ink: #14261b;
+  --lh-beige: #f3e6d0;
+  --lh-beige-soft: #f8f0e2;
+  --lh-beige-strong: #e8d5b5;
   --lh-page: #f5f8f4;
-  --lh-panel: #ffffff;
-  --lh-panel-soft: #f0f6f1;
-  --lh-panel-strong: #e3eee7;
+  --lh-panel: var(--lh-beige);
+  --lh-panel-soft: var(--lh-beige-soft);
+  --lh-panel-strong: var(--lh-beige-strong);
   --lh-ink: #14261b;
   --lh-ink-soft: #315441;
   --lh-muted: #66756c;
-  --lh-border: #d4e2d9;
+  --lh-border: #d8c5a3;
 
   /* Common aliases used across the public, client, provider and staff apps. */
   --bg: var(--lh-page);
@@ -205,7 +212,49 @@ main,
     linear-gradient(145deg, rgba(255, 255, 255, .05), rgba(0, 107, 60, .07)) !important;
 }
 
-/* La Salle green provides structure; apple green identifies the next action. */
+/* Beige replaces stark white on content surfaces without reducing form clarity. */
+.snav,
+.lh-topbar,
+.topbar,
+.step,
+.rolecard,
+.portal,
+.paynode,
+.faq details,
+.fact,
+.panel,
+.card,
+.lh-card,
+.lh-stat,
+.lh-toolbar,
+.lh-record,
+.lh-list-link,
+.location-card,
+.route-review-head,
+.pay-summary,
+.payment-gate,
+.payment-flow li,
+.payment-checkout-header,
+.payment-progress,
+.payment-channel,
+.payment-reference,
+.provider-option label,
+.side-card:not(.dark),
+.top-link.button,
+.trust span,
+.policy section,
+.policy-nav a {
+  background-color: var(--surface) !important;
+}
+
+/* White input fields remain distinct and recognizable inside beige panels. */
+:root:not([data-theme="dark"]) input,
+:root:not([data-theme="dark"]) select,
+:root:not([data-theme="dark"]) textarea {
+  background-color: #ffffff !important;
+}
+
+/* La Salle green provides structure; tangerine identifies primary actions. */
 .side,
 .lh-sidebar,
 .app .top,
@@ -220,10 +269,10 @@ main,
 .btn:not(.line):not(.ghost):not(.danger),
 .lh-btn:not(.lh-btn--line):not(.lh-btn--danger),
 button[type="submit"]:not(.line):not(.ghost) {
-  background-color: var(--accent) !important;
-  color: var(--accent-ink) !important;
+  background-color: var(--lh-tangerine) !important;
+  color: var(--lh-tangerine-ink) !important;
   border-color: transparent !important;
-  box-shadow: 0 8px 20px rgba(0, 107, 60, .16) !important;
+  box-shadow: 0 8px 20px rgba(169, 63, 8, .2) !important;
 }
 
 .btn.accent:hover,
@@ -232,7 +281,7 @@ button[type="submit"]:not(.line):not(.ghost) {
 .btn:not(.line):not(.ghost):not(.danger):hover,
 .lh-btn:not(.lh-btn--line):not(.lh-btn--danger):hover,
 button[type="submit"]:not(.line):not(.ghost):hover {
-  background-color: var(--accent-2) !important;
+  background-color: var(--lh-tangerine-strong) !important;
 }
 
 .btn.line,

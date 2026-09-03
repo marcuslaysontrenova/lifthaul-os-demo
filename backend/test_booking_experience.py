@@ -132,7 +132,7 @@ class BookingMarkup(unittest.TestCase):
         self.assertIn("READ-ONLY DEMO · SYNTHETIC DATA", client_js)
         self.assertIn("No real transaction or provider verification has occurred", client_js)
         self.assertIn("demoMode=!base", client_js)
-        self.assertIn("Book a Truck", client_js)
+        self.assertIn("Book a Service", client_js)
         self.assertNotIn("Create booking", client_js)
         self.assertIn("data-booking-filter", client_js)
         self.assertIn("View protected payments", client_js)

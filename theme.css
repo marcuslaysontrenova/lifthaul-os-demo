@@ -12,17 +12,16 @@
   --lh-tangerine-strong: #e65f1a;
   --lh-tangerine-soft: #fff0e6;
   --lh-tangerine-ink: #14261b;
-  --lh-beige: #f3e6d0;
-  --lh-beige-soft: #f8f0e2;
-  --lh-beige-strong: #e8d5b5;
   --lh-page: #f5f8f4;
-  --lh-panel: var(--lh-beige);
-  --lh-panel-soft: var(--lh-beige-soft);
-  --lh-panel-strong: var(--lh-beige-strong);
+  --lh-panel: var(--lh-lasalle);
+  --lh-panel-soft: #0b7547;
+  --lh-panel-strong: var(--lh-lasalle-strong);
+  --lh-panel-ink: #ffffff;
+  --lh-panel-muted: #d5eadf;
   --lh-ink: #14261b;
   --lh-ink-soft: #315441;
   --lh-muted: #66756c;
-  --lh-border: #d8c5a3;
+  --lh-border: #25845e;
 
   /* Common aliases used across the public, client, provider and staff apps. */
   --bg: var(--lh-page);
@@ -212,10 +211,22 @@ main,
     linear-gradient(145deg, rgba(255, 255, 255, .05), rgba(0, 107, 60, .07)) !important;
 }
 
-/* Beige replaces stark white on content surfaces without reducing form clarity. */
+/* La Salle green replaces the former beige content surfaces. */
 .snav,
 .lh-topbar,
 .topbar,
+.bcard,
+.pill,
+.cargo-card,
+.booking-step,
+.estimate,
+.payopt,
+.vopt,
+.handling-option,
+.vcard,
+.cov .isl .r,
+.plan,
+.ref,
 .step,
 .rolecard,
 .portal,
@@ -240,14 +251,69 @@ main,
 .payment-reference,
 .provider-option label,
 .side-card:not(.dark),
-.top-link.button,
 .trust span,
 .policy section,
 .policy-nav a {
   background-color: var(--surface) !important;
+  color: var(--lh-panel-ink) !important;
 }
 
-/* White input fields remain distinct and recognizable inside beige panels. */
+/* Supporting copy remains readable on the La Salle green surfaces. */
+.snav .links a,
+.step p,
+.rolecard p,
+.paynode p,
+.faq details p,
+.fact span,
+.panel p,
+.panel small,
+.card p,
+.card small,
+.lh-card__head > span,
+.lh-card__body p,
+.lh-stat span,
+.lh-record__top span,
+.lh-record__footer > span,
+.lh-list-link small,
+.provider-option label small,
+.side-card:not(.dark) > p,
+.policy section p,
+.policy section li,
+.bcard .cargo-intro,
+.bcard .field-help,
+.bcard .match-status,
+.bcard .vopt span,
+.bcard .vreason,
+.bcard .vmeta,
+.bcard .estimate .row,
+.bcard .payopt span,
+.bcard .note,
+.bcard .tstep span,
+.pill {
+  color: var(--lh-panel-muted) !important;
+}
+
+.bhead button {
+  color: var(--lh-panel-muted) !important;
+}
+
+.bhead button.on {
+  background-color: var(--lh-apple) !important;
+  color: var(--lh-lasalle-deep) !important;
+  border-color: var(--lh-tangerine) !important;
+}
+
+.bcard .estimate .row.total,
+.bcard label,
+.bcard legend,
+.bcard h2,
+.bcard h3,
+.bcard b,
+.bcard strong {
+  color: var(--lh-panel-ink) !important;
+}
+
+/* White input fields remain distinct and recognizable inside green panels. */
 :root:not([data-theme="dark"]) input,
 :root:not([data-theme="dark"]) select,
 :root:not([data-theme="dark"]) textarea {
@@ -287,17 +353,23 @@ button[type="submit"]:not(.line):not(.ghost):hover {
 .btn.line,
 .btn.ghost,
 .lh-btn--line {
-  background-color: var(--surface) !important;
-  color: var(--primary) !important;
-  border-color: var(--line) !important;
-  box-shadow: none !important;
+  background-color: var(--lh-tangerine) !important;
+  color: var(--lh-tangerine-ink) !important;
+  border-color: var(--lh-tangerine-strong) !important;
+  box-shadow: 0 8px 20px rgba(169, 63, 8, .2) !important;
 }
 
 .btn.line:hover,
 .btn.ghost:hover,
 .lh-btn--line:hover {
-  background-color: var(--primary-soft) !important;
-  border-color: var(--primary) !important;
+  background-color: var(--lh-tangerine-strong) !important;
+  border-color: var(--lh-tangerine-strong) !important;
+}
+
+.top-link.button {
+  background-color: var(--lh-tangerine) !important;
+  color: var(--lh-tangerine-ink) !important;
+  border-color: var(--lh-tangerine-strong) !important;
 }
 
 .hz,

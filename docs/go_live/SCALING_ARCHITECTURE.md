@@ -23,7 +23,9 @@ Luzon, Visayas and Mindanao?
    - PostgreSQL → `psycopg2 ThreadedConnectionPool` (true concurrent transactions).
    - file SQLite → one connection per worker thread (WAL) — dev/verification only.
    - in-memory SQLite → pooling refused (each connection is a separate DB).
-   - **Enablement:** auto-on for a Postgres `DATABASE_URL`; `LIFTHAUL_DB_POOL=1/0` overrides;
+   - **Enablement:** explicit opt-in `LIFTHAUL_DB_POOL=1` (default OFF even on Postgres — the
+     serialized single-connection mode is the duplicate-free launch default; enabling pooling
+     requires the booking-flow atomic hardening in PERFORMANCE_AND_RELIABILITY_PLAN.md §7);
      pool size via `LIFTHAUL_DB_POOL_MAX` (default 10). Default dev path (single conn +
      lock) is unchanged, so the test suite and local runs are unaffected.
 2. **Thread-local correlation id** (`core.py`) — concurrent requests no longer overwrite
@@ -46,7 +48,7 @@ failures, distinct carrier per request = correct isolation).
                      ▼             ▼             ▼
               ┌──────────┐  ┌──────────┐  ┌──────────┐   N stateless LiftHaul
               │ app inst │  │ app inst │  │ app inst │   instances (same image),
-              │ + pool   │  │ + pool   │  │ + pool   │   LIFTHAUL_DB_POOL auto-on
+              │ + pool   │  │ + pool   │  │ + pool   │   LIFTHAUL_DB_POOL=1 (opt-in)
               └────┬─────┘  └────┬─────┘  └────┬─────┘
                    └─────────────┼─────────────┘
                                  ▼
@@ -82,6 +84,6 @@ on CPU/RPS. That comfortably covers a national pilot.
 ## Verify before claiming capacity
 
 1. `python scripts/go_live/concurrency_loadtest.py --clients 100` against the **hosted
-   Postgres** URL (pool auto-on) — expect 0 failures, distinct carrier per request.
+   Postgres** URL with `LIFTHAUL_DB_POOL=1` — expect 0 failures, distinct carrier per request.
 2. Watch DB active connections stay under the limit.
 3. Add an instance; confirm throughput rises roughly linearly.

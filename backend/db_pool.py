@@ -47,8 +47,13 @@ def should_pool(url=None) -> bool:
     if flag is not None:
         on = flag.strip().lower() in ("1", "true", "yes", "on")
         return bool(on and not _is_memory(url))
-    # auto: pool a real Postgres in production; leave dev/sqlite on the safe single-conn path
-    return _is_postgres(url)
+    # DEFAULT OFF — even on Postgres. Pooling removes the global DB lock and runs
+    # transactions concurrently; the serialized single-connection default is
+    # structurally free of double-booking/double-assignment races. Enabling pooling
+    # (LIFTHAUL_DB_POOL=1) is a deliberate scale-time step that REQUIRES the atomic
+    # single-winner guards tracked in docs/go_live/PERFORMANCE_AND_RELIABILITY_PLAN.md
+    # (payments are already idempotent and safe either way). Safe launch default wins.
+    return False
 
 
 class _PgPool:
@@ -58,6 +63,7 @@ class _PgPool:
         self._dbconn = dbconn
         self._pool = psycopg2.pool.ThreadedConnectionPool(minconn, maxconn, dsn=url)
         self.kind = "postgres"
+        self.capacity = maxconn      # max concurrent checkouts (bounds in-flight requests)
 
     def checkout(self):
         raw = self._pool.getconn()
@@ -94,6 +100,9 @@ class _SqliteThreadPool:
         self._all = []
         self._lock = threading.Lock()
         self.kind = "sqlite-file"
+        # SQLite serializes writers; bound in-flight requests so a spike sheds load
+        # gracefully instead of piling up thousands of contending threads.
+        self.capacity = int(os.environ.get("LIFTHAUL_MAX_INFLIGHT", "16") or "16")
 
     def checkout(self):
         c = getattr(self._local, "conn", None)

@@ -22,6 +22,7 @@ def _days_ago(n):
     return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
 
 
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.c = db.connect(":memory:")

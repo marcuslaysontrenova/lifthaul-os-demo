@@ -120,8 +120,15 @@ def _guard_env_posture():
 
 validate_config()
 import threading
-_conn = db.connect(os.environ.get("DATABASE_URL"))   # sqlite (dev) or postgres (prod)
-_DB_LOCK = threading.Lock()                          # serialize DB access across worker threads
+import db_pool
+_DATABASE_URL = os.environ.get("DATABASE_URL")
+_conn_single = db.connect(_DATABASE_URL)             # sqlite (dev) or postgres (prod)
+_DB_LOCK = threading.Lock()                          # serialize DB access (single-conn mode)
+# Concurrency mode: when pooling is enabled (auto for Postgres, or LIFTHAUL_DB_POOL=1)
+# each request checks out its own connection and runs WITHOUT the global lock, so
+# transactions execute concurrently. Otherwise we keep the safe single-connection path.
+_POOL = db_pool.build(_DATABASE_URL) if db_pool.should_pool(_DATABASE_URL) else None
+_conn = db_pool.ConnProxy(_conn_single) if _POOL else _conn_single
 _store = pdfgen.DbStore(_conn)                       # durable across process/container restarts
 
 
@@ -2160,8 +2167,8 @@ ROUTES.update(_payment_gateway_routes())
 
 # Basic per-IP rate limiter for public (unauthenticated) endpoints.
 _PUBLIC_HITS = {}
-_PUBLIC_RATE_MAX = 20      # requests per window per IP
-_PUBLIC_RATE_WINDOW = 60   # seconds
+_PUBLIC_RATE_MAX = int(os.environ.get("LIFTHAUL_PUBLIC_RATE_MAX", "20") or "20")      # requests per window per IP
+_PUBLIC_RATE_WINDOW = int(os.environ.get("LIFTHAUL_PUBLIC_RATE_WINDOW", "60") or "60")  # seconds
 _PUBLIC_RATE_LOCK = threading.Lock()
 
 
@@ -2924,8 +2931,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"status": "ok", "env": APP_ENV})
         if method == "GET" and path in ("/ready", "/readyz"):
             try:
-                self._conn_ping()
-                return self._send(200, {"status": "ready", "schema_version": db.current_version(_conn)})
+                if _POOL is None:
+                    with _DB_LOCK:
+                        self._conn_ping(); ver = db.current_version(_conn_single)
+                else:
+                    c = _POOL.checkout()
+                    try:
+                        c.execute("SELECT 1").fetchone(); ver = db.current_version(c)
+                    finally:
+                        _POOL.release(c, commit=False)
+                return self._send(200, {"status": "ready", "schema_version": ver})
             except Exception:
                 log.exception("readiness probe failed")
                 return self._send(503, {"status": "not-ready"})
@@ -2952,26 +2967,39 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/webhooks/xendit/payments":
             # Passed in-memory only to the gateway verifier; never persisted or logged.
             body["_xendit_callback_token"] = self.headers.get("X-Callback-Token", "")
+        def _do_request():
+            core.set_correlation_id(self._rid)   # tag every audited write in this request
+            if path.startswith("/api/v1/"):
+                import api_platform as _api
+                _key = (self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+                        or self.headers.get("X-API-Key", "").strip())
+                actor = _api.authenticate(_conn, _key, self.client_address[0] if self.client_address else None)
+                _api.check_rate(actor)
+                actor["_idem"] = self.headers.get("Idempotency-Key")
+            else:
+                actor = None if (path == "/login" or path.startswith("/public/") or path.startswith("/webhooks/")) else _actor(self)
+            return fn(actor, body, params)
         try:
-            with _DB_LOCK:                      # serialize DB access across worker threads
+            if _POOL is None:
+                with _DB_LOCK:                   # single shared connection: serialize
+                    try:
+                        result = _do_request()
+                    except Exception:
+                        # Postgres keeps a connection transaction-aborted after a statement
+                        # error; roll back before releasing the lock so the next request
+                        # always receives a healthy session.
+                        _conn.rollback()
+                        raise
+            else:
+                conn = _POOL.checkout()          # per-request connection: run concurrently
+                _conn._bind(conn)
+                ok = False
                 try:
-                    core.set_correlation_id(self._rid)   # tag every audited write in this request
-                    if path.startswith("/api/v1/"):
-                        import api_platform as _api
-                        _key = (self.headers.get("Authorization", "").replace("Bearer ", "").strip()
-                                or self.headers.get("X-API-Key", "").strip())
-                        actor = _api.authenticate(_conn, _key, self.client_address[0] if self.client_address else None)
-                        _api.check_rate(actor)
-                        actor["_idem"] = self.headers.get("Idempotency-Key")
-                    else:
-                        actor = None if (path == "/login" or path.startswith("/public/") or path.startswith("/webhooks/")) else _actor(self)
-                    result = fn(actor, body, params)
-                except Exception:
-                    # PostgreSQL keeps a connection transaction-aborted after a
-                    # statement error. Roll back before releasing the shared DB
-                    # lock so the next request always receives a healthy session.
-                    _conn.rollback()
-                    raise
+                    result = _do_request()
+                    ok = True
+                finally:
+                    _conn._unbind()
+                    _POOL.release(conn, commit=ok)  # commit on success, rollback on error
             return self._send(200, {"data": result})
         except core.AppError as e:
             return self._send(e.http, {"error": str(e)})

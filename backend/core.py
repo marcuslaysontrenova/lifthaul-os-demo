@@ -373,19 +373,20 @@ def require(actor, action):
 # --------------------------------------------------------------------------- #
 # Audit
 # --------------------------------------------------------------------------- #
-# Request-scoped correlation id. server._handle sets this per request (under _DB_LOCK,
-# which serializes DB access) so every audit event within one request shares an id and
-# the whole chain of governed writes is traceable end-to-end.
-_correlation_id = None
+# Request-scoped correlation id. server._handle sets this per request so every audit
+# event within one request shares an id and the whole chain of governed writes is
+# traceable end-to-end. THREAD-LOCAL so concurrent requests (connection-pool mode, no
+# global DB lock) never overwrite each other's id — audit trails stay per-request.
+import threading as _threading
+_correlation_ctx = _threading.local()
 
 
 def set_correlation_id(cid):
-    global _correlation_id
-    _correlation_id = cid
+    _correlation_ctx.cid = cid
 
 
 def correlation_id():
-    return _correlation_id
+    return getattr(_correlation_ctx, "cid", None)
 
 
 def audit(conn, actor, action, entity, entity_id, old=None, new=None, reason=None,
@@ -396,7 +397,7 @@ def audit(conn, actor, action, entity, entity_id, old=None, new=None, reason=Non
         (now(), actor["id"], actor["role"], action, entity, entity_id,
          json.dumps(old) if old is not None else None,
          json.dumps(new) if new is not None else None, reason,
-         correlation_id if correlation_id is not None else _correlation_id))
+         correlation_id if correlation_id is not None else getattr(_correlation_ctx, "cid", None)))
 
 
 def list_audit(conn, entity=None, entity_id=None):

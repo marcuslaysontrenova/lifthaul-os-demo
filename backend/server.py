@@ -130,6 +130,11 @@ _DB_LOCK = threading.Lock()                          # serialize DB access (sing
 _POOL = db_pool.build(_DATABASE_URL) if db_pool.should_pool(_DATABASE_URL) else None
 _conn = db_pool.ConnProxy(_conn_single) if _POOL else _conn_single
 _store = pdfgen.DbStore(_conn)                       # durable across process/container restarts
+# Backpressure: bound in-flight pooled requests to the pool capacity so a booking spike
+# sheds load gracefully (503, retryable) instead of exhausting connections or piling up
+# threads. Excess requests wait up to LIFTHAUL_CHECKOUT_TIMEOUT before being shed.
+_INFLIGHT = threading.BoundedSemaphore(_POOL.capacity) if _POOL else None
+_CHECKOUT_TIMEOUT = float(os.environ.get("LIFTHAUL_CHECKOUT_TIMEOUT", "10") or "10")
 
 
 def _seed_users():
@@ -2991,6 +2996,10 @@ class Handler(BaseHTTPRequestHandler):
                         _conn.rollback()
                         raise
             else:
+                if not _INFLIGHT.acquire(timeout=_CHECKOUT_TIMEOUT):
+                    # Pool saturated by a spike — shed load gracefully (retryable).
+                    return self._send(503, {"error": "server busy, please retry shortly",
+                                            "retry_after": 1})
                 conn = _POOL.checkout()          # per-request connection: run concurrently
                 _conn._bind(conn)
                 ok = False
@@ -3000,6 +3009,7 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     _conn._unbind()
                     _POOL.release(conn, commit=ok)  # commit on success, rollback on error
+                    _INFLIGHT.release()
             return self._send(200, {"data": result})
         except core.AppError as e:
             return self._send(e.http, {"error": str(e)})

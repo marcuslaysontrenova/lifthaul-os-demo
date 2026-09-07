@@ -1,0 +1,48 @@
+{
+  "generated_at_epoch": 1788787049.242796,
+  "base_url": "http://127.0.0.1:8790",
+  "profile": "idempotency",
+  "warning": "Local diagnostic only; not production capacity evidence.",
+  "targets": {
+    "p95_ms": 3000.0,
+    "max_error_rate": 0.01
+  },
+  "stages": [
+    {
+      "requests": 20,
+      "accepted": 20,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "throughput_rps": 15.479,
+      "elapsed_seconds": 1.292,
+      "latency_ms": {
+        "min": 71.036,
+        "median": 412.421,
+        "p95": 1050.476,
+        "p99": 1074.86,
+        "max": 1074.86
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "operations": {
+        "booking_idempotency": {
+          "requests": 20,
+          "accepted": 20,
+          "p95_ms": 1050.476,
+          "statuses": {
+            "200": 20
+          }
+        }
+      },
+      "sample_errors": [],
+      "concurrent_users": 20,
+      "idempotency_key": "PERF-IDEM-df27bd3f56",
+      "unique_response_refs": [
+        "LH-HDVRBD"
+      ],
+      "integrity_pass": true
+    }
+  ],
+  "gate_pass": true
+}

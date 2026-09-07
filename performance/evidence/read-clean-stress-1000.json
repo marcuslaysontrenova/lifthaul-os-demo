@@ -1,0 +1,132 @@
+{
+  "generated_at_epoch": 1788787098.2517657,
+  "base_url": "http://127.0.0.1:8790",
+  "profile": "read",
+  "warning": "Local diagnostic only; not production capacity evidence.",
+  "targets": {
+    "p95_ms": 2000.0,
+    "max_error_rate": 0.01
+  },
+  "stages": [
+    {
+      "requests": 1000,
+      "accepted": 984,
+      "error_count": 16,
+      "error_rate": 0.016,
+      "throughput_rps": 294.534,
+      "elapsed_seconds": 3.395,
+      "latency_ms": {
+        "min": 12.33,
+        "median": 27.787,
+        "p95": 2031.622,
+        "p99": 2054.975,
+        "max": 2273.254
+      },
+      "status_counts": {
+        "0": 16,
+        "200": 984
+      },
+      "operations": {
+        "liveness": {
+          "requests": 200,
+          "accepted": 195,
+          "p95_ms": 2030.09,
+          "statuses": {
+            "0": 5,
+            "200": 195
+          }
+        },
+        "payment_channels": {
+          "requests": 200,
+          "accepted": 196,
+          "p95_ms": 2031.622,
+          "statuses": {
+            "0": 4,
+            "200": 196
+          }
+        },
+        "readiness": {
+          "requests": 200,
+          "accepted": 197,
+          "p95_ms": 2036.86,
+          "statuses": {
+            "0": 3,
+            "200": 197
+          }
+        },
+        "service_levels": {
+          "requests": 200,
+          "accepted": 196,
+          "p95_ms": 2034.098,
+          "statuses": {
+            "0": 4,
+            "200": 196
+          }
+        },
+        "vehicle_taxonomy": {
+          "requests": 200,
+          "accepted": 200,
+          "p95_ms": 1558.426,
+          "statuses": {
+            "200": 200
+          }
+        }
+      },
+      "sample_errors": [
+        {
+          "operation": "payment_channels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "service_levels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "readiness",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "service_levels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "payment_channels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "liveness",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "service_levels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "payment_channels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "liveness",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "readiness",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        }
+      ],
+      "concurrent_users": 1000,
+      "requests_per_user": 1
+    }
+  ],
+  "gate_pass": false
+}

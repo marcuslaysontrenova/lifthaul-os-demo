@@ -2062,6 +2062,7 @@ ROUTES.update(_ltfrb_routes())
 
 def _public_booking_routes():
     import public_booking as pb
+    import industrial_projects as industrial
 
     def pb_submit(a, b, p):
         body = dict(b or {})
@@ -2074,6 +2075,32 @@ def _public_booking_routes():
                                               note=b.get("note"), quote_amount=b.get("quote_amount"))
     def pb_levels(a, b, p):  return pb.service_levels_catalog(b.get("service_class") if b else None)
     def pb_bulk(a, b, p):    return pb.submit_bulk(_conn, a, b.get("rows"))
+    def project_control(a, b, p): return industrial.get_project_control(_conn, a, int(p["id"]))
+    def survey_schedule(a, b, p): return industrial.schedule_survey(
+        _conn, a, int(p["id"]), b.get("scheduled_at"), b.get("assigned_surveyor"))
+    def survey_complete(a, b, p): return industrial.complete_survey(
+        _conn, a, int(p["id"]), measurements=b.get("measurements"), findings=b.get("findings"),
+        evidence_refs=b.get("evidence_refs"), access_conditions=b.get("access_conditions"),
+        ground_conditions=b.get("ground_conditions"), clearances=b.get("clearances"),
+        hazards=b.get("hazards"), power_lines=b.get("power_lines", False),
+        required_resources=b.get("required_resources"))
+    def survey_approve(a, b, p): return industrial.approve_survey(
+        _conn, a, int(p["id"]), b.get("decision"), note=b.get("note"),
+        override_reason=b.get("override_reason"))
+    def specialized_create(a, b, p): return {"id": industrial.register_specialized_resource(
+        _conn, a, code=b.get("code"), name=b.get("name"), resource_type=b.get("resource_type"),
+        carrier_id=b.get("carrier_id"), capacity_kg=b.get("capacity_kg"),
+        service_areas=b.get("service_areas"), specifications=b.get("specifications"),
+        certification_expiry=b.get("certification_expiry"),
+        inspection_valid_until=b.get("inspection_valid_until"))}
+    def specialized_verify(a, b, p): return {"status": industrial.verify_specialized_resource(
+        _conn, a, int(p["id"]), b.get("decision"), b.get("source"),
+        maintenance_status=b.get("maintenance_status", "SERVICEABLE"))}
+    def package_reserve(a, b, p): return industrial.reserve_resource_package(
+        _conn, a, int(p["id"]), start_at=b.get("start_at"), end_at=b.get("end_at"),
+        items=b.get("items"), control_evidence=b.get("control_evidence"))
+    def package_approve(a, b, p): return industrial.approve_resource_plan(
+        _conn, a, int(p["id"]), note=b.get("note"))
 
     import public_provider as pp2
 
@@ -2091,6 +2118,14 @@ def _public_booking_routes():
         ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,
         ("POST", "/admin/marketplace/public-bookings/:id/review"): pb_review,
         ("POST", "/admin/marketplace/public-bookings/bulk"): pb_bulk,
+        ("GET", "/admin/marketplace/industrial/bookings/:id"): project_control,
+        ("POST", "/admin/marketplace/industrial/bookings/:id/surveys"): survey_schedule,
+        ("POST", "/admin/marketplace/industrial/surveys/:id/complete"): survey_complete,
+        ("POST", "/admin/marketplace/industrial/surveys/:id/approve"): survey_approve,
+        ("POST", "/admin/marketplace/industrial/resources"): specialized_create,
+        ("POST", "/admin/marketplace/industrial/resources/:id/verify"): specialized_verify,
+        ("POST", "/admin/marketplace/industrial/bookings/:id/resource-plans/reserve"): package_reserve,
+        ("POST", "/admin/marketplace/industrial/resource-plans/:id/approve"): package_approve,
         ("POST", "/public/providers"): prov_submit,
         ("POST", "/public/providers/verify"): prov_verify,
         ("POST", "/public/providers/resend"): prov_resend,

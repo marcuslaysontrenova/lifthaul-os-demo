@@ -22,8 +22,15 @@ OPS = {"id": 8, "role": "ops", "perms": {"delivery.verification.issue", "deliver
 
 
 def _bk(c, dest="Luzon", vehicle="6w", km=50):
-    return pb.submit(c, {"contact_name": "A", "contact_phone": "0917", "origin_island": "Luzon",
-                         "dest_island": dest, "vehicle": vehicle, "km": km})["booking_id"]
+    payload = {"contact_name": "A", "contact_phone": "0917", "origin_island": "Luzon",
+               "dest_island": dest, "vehicle": vehicle, "km": km}
+    if vehicle in ("crane", "lowbed"):
+        payload.update({"booking_mode": "MANAGED_PROJECT", "service_line": "EQUIPMENT",
+                        "cargo_category": "MACHINERY_EQUIPMENT", "cargo": "Industrial equipment",
+                        "weight_kg": 2000, "package_length_cm": 100, "package_width_cm": 100,
+                        "package_height_cm": 100, "site_access_confirmed": True,
+                        "cargo_photo_count": 1})
+    return pb.submit(c, payload)["booking_id"]
 
 
 def _issued(c, dest="Luzon", stop=None, recipient="Maria Santos"):

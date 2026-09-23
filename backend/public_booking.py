@@ -44,6 +44,16 @@ VEHICLE_CAPACITY_KG = {
 }
 MATCHING_VERSION = "CARGO_MATCH_V2"
 DEFAULT_SAFETY_ALLOWANCE_PCT = 0.10
+BOOKING_MODES = {"INSTANT_BOOK", "MANAGED_PROJECT"}
+SERVICE_LINES = {"INDUSTRIAL", "HEAVY", "EQUIPMENT", "CARGO"}
+PROJECT_RESOURCES = {
+    "TRANSPORT", "LOWBED_TRAILER", "CRANE", "FORKLIFT", "RIGGING_CREW", "EQUIPMENT_OPERATOR",
+    "HELPERS", "ESCORT", "SAFETY_OFFICER", "PERMITS", "CARGO_INSURANCE", "INTER_ISLAND",
+}
+MANAGED_HANDLING = {
+    "CRANE_BOOM", "FORKLIFT_SUPPORT", "TOP_LOADING", "FLATBED", "CONTAINER_CHASSIS",
+    "HAZARDOUS_MATERIAL", "OVERSIZED",
+}
 
 # Public choice -> administrator-managed vehicle category. Capacity, dimensions and active status are
 # read from mkt_vehicle_categories; these labels are never trusted as the source of truth.
@@ -118,6 +128,14 @@ SCHEMA_COLUMNS = [
     ("administration_fee_tax_amount", "REAL"), ("tax_rate", "REAL"),
     ("tax_code", "TEXT"), ("tax_type", "TEXT"), ("tax_mode", "TEXT"),
     ("withholding_amount", "REAL"), ("excluded_charges_ack", "INTEGER"),
+    # Industrial project intake remains on the canonical booking. These fields determine whether a
+    # request may use Instant Book or must enter the governed survey / estimation workflow.
+    ("booking_mode", "TEXT"), ("service_line", "TEXT"), ("project_stage", "TEXT"),
+    ("assessment_status", "TEXT"), ("site_survey_required", "INTEGER"),
+    ("human_approval_required", "INTEGER"), ("project_risk_level", "TEXT"),
+    ("risk_factors", "TEXT"), ("requested_resources", "TEXT"),
+    ("pickup_site_details", "TEXT"), ("delivery_site_details", "TEXT"),
+    ("positioning_requirements", "TEXT"), ("cargo_photo_count", "INTEGER"),
 ]
 
 PAYMENT_PREFERENCES = {
@@ -484,6 +502,117 @@ def clean_cargo(payload):
             "splittable": bool(payload.get("splittable"))}
 
 
+def assess_project(payload, cargo=None, route=None):
+    """Server-authoritative routing between Instant Book and Managed Project.
+
+    The client may request Managed Project, but may never force a complex or uncertain job into
+    Instant Book. This assessment does not approve equipment: it records the reasons a qualified
+    operations reviewer must survey, estimate, or approve the work.
+    """
+    cargo = cargo or clean_cargo(payload)
+    route = route or classify_route(payload.get("origin_island"), payload.get("dest_island"))
+    requested_mode = str(payload.get("booking_mode") or "").strip().upper()
+    if requested_mode and requested_mode not in BOOKING_MODES:
+        raise core.ValidationError("unsupported booking mode")
+    service_line = str(payload.get("service_line") or "").strip().upper()
+    if not service_line:
+        if cargo["category"] == "MACHINERY_EQUIPMENT":
+            service_line = "INDUSTRIAL"
+        elif set(cargo["special_handling"]).intersection({"CRANE_BOOM", "FORKLIFT_SUPPORT"}):
+            service_line = "EQUIPMENT"
+        elif set(cargo["special_handling"]).intersection({"FLATBED", "OVERSIZED", "CONTAINER_CHASSIS"}):
+            service_line = "HEAVY"
+        else:
+            service_line = "CARGO"
+    if service_line not in SERVICE_LINES:
+        raise core.ValidationError("unsupported service line")
+
+    resources = payload.get("requested_resources") or []
+    if isinstance(resources, str):
+        resources = [resources]
+    if not isinstance(resources, list) or len(resources) > len(PROJECT_RESOURCES):
+        raise core.ValidationError("invalid project resource selection")
+    resources = list(dict.fromkeys(str(item).strip().upper() for item in resources if str(item).strip()))
+    unknown = [item for item in resources if item not in PROJECT_RESOURCES]
+    if unknown:
+        raise core.ValidationError("unsupported project resource")
+    if route["inter_island"] and "INTER_ISLAND" not in resources:
+        resources.append("INTER_ISLAND")
+    if not resources:
+        resources.append("TRANSPORT")
+
+    try:
+        photo_count = int(payload.get("cargo_photo_count") or 0)
+    except (TypeError, ValueError):
+        raise core.ValidationError("cargo photo count must be a whole number")
+    if photo_count < 0 or photo_count > 20:
+        raise core.ValidationError("cargo photo count must be between 0 and 20")
+
+    handling = set(cargo["special_handling"])
+    specs_unknown = payload.get("technical_specs_unknown") in (True, 1, "1", "true", "TRUE", "yes", "YES")
+    missing_weight = cargo["weight_kg"] is None
+    missing_dimensions = cargo["length_cm"] is None
+    complex_resource = len(set(resources) - {"TRANSPORT", "CARGO_INSURANCE", "INTER_ISLAND"}) > 0
+    managed_reason = (
+        requested_mode == "MANAGED_PROJECT" or service_line in {"INDUSTRIAL", "HEAVY", "EQUIPMENT"}
+        or cargo["category"] in {"MACHINERY_EQUIPMENT", "HAZARDOUS_REGULATED"}
+        or str(payload.get("vehicle") or "").lower() in {"lowbed", "crane", "manual"}
+        or bool(handling.intersection(MANAGED_HANDLING)) or complex_resource or specs_unknown
+    )
+    booking_mode = "MANAGED_PROJECT" if managed_reason else "INSTANT_BOOK"
+
+    risks = []
+    if specs_unknown or missing_weight:
+        risks.append("TECHNICAL_SPECIFICATIONS_UNCONFIRMED")
+    if missing_dimensions:
+        risks.append("CARGO_DIMENSIONS_UNCONFIRMED")
+    if cargo["category"] == "HAZARDOUS_REGULATED" or "HAZARDOUS_MATERIAL" in handling:
+        risks.append("HAZARDOUS_OR_REGULATED_CARGO")
+    if "OVERSIZED" in handling:
+        risks.append("OVERSIZED_LOAD")
+    if handling.intersection({"CRANE_BOOM", "TOP_LOADING"}) or "CRANE" in resources:
+        risks.append("ENGINEERED_LIFT_REQUIRED")
+    if complex_resource:
+        risks.append("MULTI_RESOURCE_COORDINATION")
+    if route["inter_island"] and booking_mode == "MANAGED_PROJECT":
+        risks.append("INTER_ISLAND_PROJECT_LEG")
+    if booking_mode == "MANAGED_PROJECT" and not payload.get("site_access_confirmed"):
+        risks.append("SITE_ACCESS_NOT_CONFIRMED")
+    if booking_mode == "MANAGED_PROJECT" and photo_count == 0:
+        risks.append("PROJECT_EVIDENCE_PENDING")
+    risks = list(dict.fromkeys(risks))
+
+    survey_triggers = {
+        "TECHNICAL_SPECIFICATIONS_UNCONFIRMED", "CARGO_DIMENSIONS_UNCONFIRMED",
+        "HAZARDOUS_OR_REGULATED_CARGO", "OVERSIZED_LOAD", "ENGINEERED_LIFT_REQUIRED",
+        "SITE_ACCESS_NOT_CONFIRMED",
+    }
+    site_survey = booking_mode == "MANAGED_PROJECT" and bool(set(risks).intersection(survey_triggers))
+    if booking_mode == "INSTANT_BOOK":
+        risk_level = "STANDARD"
+        stage = "INQUIRY"
+        status = "INSTANT_ELIGIBILITY_REVIEW"
+    else:
+        risk_level = "HIGH" if set(risks).intersection({
+            "HAZARDOUS_OR_REGULATED_CARGO", "OVERSIZED_LOAD", "ENGINEERED_LIFT_REQUIRED"
+        }) else "CONTROLLED"
+        stage = "SURVEY_REQUIRED" if site_survey else "ESTIMATION"
+        status = "HUMAN_REVIEW_REQUIRED"
+    return {
+        "booking_mode": booking_mode, "requested_booking_mode": requested_mode or "AUTO",
+        "service_line": service_line, "project_stage": stage, "assessment_status": status,
+        "site_survey_required": site_survey,
+        "human_approval_required": booking_mode == "MANAGED_PROJECT",
+        "risk_level": risk_level, "risk_factors": risks, "requested_resources": resources,
+        "cargo_photo_count": photo_count,
+        "message": ("Site Survey Required — a qualified LiftHaul reviewer must verify the site, "
+                    "equipment and crew plan before pricing or reservation." if site_survey else
+                    "Managed Project — operations will validate the combined resource plan and issue a quotation."
+                    if booking_mode == "MANAGED_PROJECT" else
+                    "Instant Book eligibility may continue, subject to unit-level verification and availability."),
+    }
+
+
 def _extra_vehicle_denials(vehicle, cargo, inter_island=False):
     handling = set(cargo.get("special_handling") or [])
     code = vehicle["code"]
@@ -538,9 +667,23 @@ def recommend_vehicles(conn, payload):
     if not isinstance(payload, dict):
         raise core.ValidationError("invalid recommendation payload")
     cargo = clean_cargo(payload)
-    if cargo["weight_kg"] is None:
-        raise core.ValidationError("total cargo weight is required before vehicle matching")
     route = classify_route(payload.get("origin_island"), payload.get("dest_island"))
+    project = assess_project(payload, cargo, route)
+    if cargo["weight_kg"] is None or cargo["length_cm"] is None:
+        if project["booking_mode"] != "MANAGED_PROJECT":
+            missing = "total cargo weight" if cargo["weight_kg"] is None else "complete cargo dimensions"
+            raise core.ValidationError(f"{missing} is required before vehicle matching")
+        return {
+            "matching_version": MATCHING_VERSION, "manual_assessment_required": True,
+            "message": project["message"], "cargo": cargo, "route": route,
+            "project_assessment": project, "options": [], "rejected": [],
+        }
+    if project["site_survey_required"]:
+        return {
+            "matching_version": MATCHING_VERSION, "manual_assessment_required": True,
+            "message": project["message"], "cargo": cargo, "route": route,
+            "project_assessment": project, "options": [], "rejected": [],
+        }
     import marketplace as mkt
     cargo_code = PUBLIC_CARGO_TYPES[cargo["category"]]
     dims = ((cargo["length_cm"], cargo["width_cm"], cargo["height_cm"])
@@ -556,7 +699,8 @@ def recommend_vehicles(conn, payload):
         safety = float(vehicle.get("safety_allowance_pct") or DEFAULT_SAFETY_ALLOWANCE_PCT)
         required_weight = cargo["weight_kg"] * (1 + safety)
         body = (vehicle.get("body_type") or "").lower()
-        volume_for_gate = None if body in ("flatbed", "lowbed", "container_chassis") else cargo.get("volume_cbm")
+        volume_for_gate = (None if body in ("flatbed", "lowbed", "container_chassis")
+                           or vehicle.get("lifting_capable") else cargo.get("volume_cbm"))
         gate = mkt.is_vehicle_eligible(conn, cargo_code, code, weight_kg=required_weight,
                                        volume_cbm=volume_for_gate, dims=dims)
         reasons = list(gate["reasons"]) + _extra_vehicle_denials(vehicle, cargo, route["inter_island"])
@@ -606,7 +750,7 @@ def recommend_vehicles(conn, payload):
         "message": ("Your cargo requires a customized transport assessment. Please submit the booking for review by our operations team."
                     if manual else
                     "Vehicle eligibility was calculated from administrator-managed verified category limits."),
-        "cargo": cargo, "route": route, "options": options,
+        "cargo": cargo, "route": route, "project_assessment": project, "options": options,
         "rejected": [{**r, "explanations": [REASON_LABELS.get(x, x.replace("_", " ").capitalize())
                                               for x in r["reasons"]]} for r in rejected],
     }
@@ -623,8 +767,10 @@ def validate_vehicle_capacity(vehicle, cargo):
 def validate_vehicle_match(conn, payload, cargo):
     """Final-submit guard: the chosen option must still be in the deterministic eligible pool."""
     if cargo.get("weight_kg") is None:
-        return {"matching_version": "LEGACY_CAPACITY_ONLY", "vehicle_count": 1,
-                "safety_allowance_pct": None, "decision": "LEGACY"}
+        project = assess_project(payload, cargo)
+        if project["booking_mode"] == "INSTANT_BOOK":
+            return {"matching_version": "LEGACY_CAPACITY_ONLY", "vehicle_count": 1,
+                    "safety_allowance_pct": None, "decision": "LEGACY"}
     result = recommend_vehicles(conn, payload)
     vehicle = str(payload.get("vehicle") or "")
     count = int(payload.get("vehicle_count") or 1)
@@ -704,17 +850,22 @@ def submit(conn, payload):
             return track(conn, tok)  # idempotent replay
 
     route = classify_route(payload.get("origin_island"), payload.get("dest_island"))
+    cargo = clean_cargo(payload)
+    project = assess_project(payload, cargo, route)
     svc = classify_service(payload.get("vehicle"))
+    if project["booking_mode"] == "MANAGED_PROJECT":
+        svc["service_class"] = "ENGINEERED"
     level = resolve_service_level(payload.get("service_level"), svc["service_class"])
     sched = resolve_schedule(payload)
     stops = _clean_stops(payload.get("stops"))
     origin = _clean_location(payload, "origin_location", "origin_island", payload.get("origin_city"))
     destination = _clean_location(payload, "destination_location", "dest_island", payload.get("dest_city"))
     distance = resolve_distance(origin, destination, payload.get("km"), route["inter_island"])
-    cargo = clean_cargo(payload)
     validate_vehicle_capacity(payload["vehicle"], cargo)
     match = validate_vehicle_match(conn, payload, cargo)
     q = quote(conn, payload["vehicle"], distance["km"], route["inter_island"], level)
+    if project["booking_mode"] == "MANAGED_PROJECT":
+        q = _with_administration_fee(conn, None, "ESTIMATE_REQUIRED", note=project["message"])
     routing = routing_candidate(svc["service_class"])
     intended = "protected" if str(payload.get("payment", "protected")).lower().startswith("prot") else "operator"
     payment_method = str(payload.get("payment_method") or ("protected" if intended == "protected" else "operator")).lower()
@@ -771,6 +922,19 @@ def submit(conn, payload):
          q.get("tax_amount"), q.get("transport_tax_amount"), q.get("administration_fee_tax_amount"),
          q.get("tax_rate"), q.get("tax_code"), q.get("tax_type"), q.get("tax_mode"),
          q.get("withholding_amount"), bid))
+    conn.execute(
+        "UPDATE mkt_bookings SET booking_mode=?,service_line=?,project_stage=?,assessment_status=?,"
+        "site_survey_required=?,human_approval_required=?,project_risk_level=?,risk_factors=?,"
+        "requested_resources=?,pickup_site_details=?,delivery_site_details=?,positioning_requirements=?,"
+        "cargo_photo_count=? WHERE id=?",
+        (project["booking_mode"], project["service_line"], project["project_stage"],
+         project["assessment_status"], int(project["site_survey_required"]),
+         int(project["human_approval_required"]), project["risk_level"],
+         json.dumps(project["risk_factors"]), json.dumps(project["requested_resources"]),
+         str(payload.get("pickup_site_details") or "")[:1000],
+         str(payload.get("delivery_site_details") or "")[:1000],
+         str(payload.get("positioning_requirements") or "")[:1000],
+         project["cargo_photo_count"], bid))
     if stops:
         _persist_stops(conn, bid, stops)
     # Protected Payment: eligibility recorded; NO live transaction (no carrier yet, funds gate OFF).
@@ -785,7 +949,10 @@ def submit(conn, payload):
                 "administration_fee": q.get("administration_fee"), "tax_amount": q.get("tax_amount"),
                 "customer_total": q.get("amount"), "fee_version": q.get("fee_version"),
                 "matching_version": match["matching_version"], "matching_decision": match["decision"],
-                "excluded_charges_ack": True})
+                "booking_mode": project["booking_mode"], "service_line": project["service_line"],
+                "project_stage": project["project_stage"], "site_survey_required": project["site_survey_required"],
+                "human_approval_required": project["human_approval_required"],
+                "risk_factors": project["risk_factors"], "excluded_charges_ack": True})
     conn.commit()
 
     return {
@@ -793,6 +960,7 @@ def submit(conn, payload):
         "service": ("Inter-Island" if route["inter_island"] else "Domestic"),
         "inter_island": route["inter_island"], "service_class": svc["service_class"],
         "routing_candidate": routing,
+        "project_assessment": project,
         "estimate": q.get("amount"), "estimate_status": q["status"], "estimate_note": q.get("note"),
         "distance": distance,
         "cargo": {"category": cargo["category"], "description": cargo["description"],
@@ -926,7 +1094,9 @@ def track(conn, token):
         "service_level,schedule_type,scheduled_at,distance_km,distance_source,transport_amount,"
         "administration_fee_rate,administration_fee,tax_amount,transport_tax_amount,"
         "administration_fee_tax_amount,tax_rate,tax_code,tax_type,tax_mode,withholding_amount,"
-        "cargo_category,package_count,weight_kg,cargo_description "
+        "cargo_category,package_count,weight_kg,cargo_description,booking_mode,service_line,project_stage,"
+        "assessment_status,site_survey_required,human_approval_required,project_risk_level,risk_factors,"
+        "requested_resources,cargo_photo_count "
         "FROM mkt_bookings WHERE tracking_token=?", (token,)).fetchone()
     if not r:
         raise core.NotFoundError("booking not found")
@@ -934,7 +1104,7 @@ def track(conn, token):
     bid = d["id"]
     ii = bool(d.get("inter_island"))
     raw = d.get("status") or "REQUEST_RECEIVED"
-    eng = d.get("service_class") == "ENGINEERED"
+    eng = d.get("service_class") == "ENGINEERED" or d.get("booking_mode") == "MANAGED_PROJECT"
     stages = list(_CUST_STAGES_II if ii else _CUST_STAGES)
     if eng:  # engineered jobs never show a fake instant-quote stage
         stages = ["Estimate Required" if s == "Quotation Ready" else s for s in stages]
@@ -976,6 +1146,7 @@ def track(conn, token):
     actions.append("CONTACT_SUPPORT")
 
     import marketplace_payments as pay
+    import industrial_projects as industrial
     ref = "LH-" + ("II" if ii else "") + token[-6:].upper()
     return {
         "ref": ref,
@@ -992,6 +1163,19 @@ def track(conn, token):
         "distance": {"km": d.get("distance_km"), "source": d.get("distance_source")},
         "cargo": {"category": d.get("cargo_category"), "description": d.get("cargo_description"),
                   "weight_kg": d.get("weight_kg"), "package_count": d.get("package_count")},
+        "project_assessment": {
+            "booking_mode": d.get("booking_mode") or "INSTANT_BOOK",
+            "service_line": d.get("service_line") or "CARGO",
+            "project_stage": d.get("project_stage") or "INQUIRY",
+            "assessment_status": d.get("assessment_status"),
+            "site_survey_required": bool(d.get("site_survey_required")),
+            "human_approval_required": bool(d.get("human_approval_required")),
+            "risk_level": d.get("project_risk_level"),
+            "risk_factors": json.loads(d.get("risk_factors") or "[]"),
+            "requested_resources": json.loads(d.get("requested_resources") or "[]"),
+            "cargo_photo_count": d.get("cargo_photo_count") or 0,
+        },
+        "industrial_control": industrial.project_summary(conn, bid, customer_safe=True),
         "quote_breakdown": {
             "transport_service_charge": (None if eng else d.get("transport_amount")),
             "transport_subtotal": (None if eng else d.get("transport_amount")),
@@ -1058,9 +1242,17 @@ def admin_queue(conn, actor, limit=100):
     rows = conn.execute(
         "SELECT id,tracking_token,status,service_type,service_class,routing_candidate,inter_island,"
         "route_class,requested_vehicle_category,quote_amount,quote_status,contact_name,contact_phone,"
-        "contact_email,created_at FROM mkt_bookings WHERE source='PUBLIC_MARKETPLACE'" + frag +
+        "contact_email,booking_mode,service_line,project_stage,assessment_status,site_survey_required,"
+        "human_approval_required,project_risk_level,risk_factors,requested_resources,created_at "
+        "FROM mkt_bookings WHERE source='PUBLIC_MARKETPLACE'" + frag +
         " ORDER BY id DESC LIMIT ?", list(params) + [limit]).fetchall()
-    return {"source": "PUBLIC_MARKETPLACE", "count": len(rows), "requests": [dict(r) for r in rows]}
+    import industrial_projects as industrial
+    requests = []
+    for row in rows:
+        item = dict(row)
+        item["industrial_control"] = industrial.project_summary(conn, row["id"])
+        requests.append(item)
+    return {"source": "PUBLIC_MARKETPLACE", "count": len(rows), "requests": requests}
 
 
 # --------------------------------------------------------------------------- #
@@ -1070,6 +1262,7 @@ def admin_queue(conn, actor, limit=100):
 ACTION_STATUS = {
     "REVIEW": "REVIEWED",                 # acknowledged, in triage
     "ASSIGN_ESTIMATOR": "ESTIMATION",     # engineered / needs a priced plan
+    "COMPLETE_SURVEY": "ESTIMATION",      # records qualified survey completion before pricing
     "QUOTE": "QUOTED",                    # staff-priced (or auto-quote confirmed)
     "MOVE_TO_MARKETPLACE": "MATCHING",    # ready for the existing matching pipeline
     "DECLINE": "DECLINED",                # rejected / spam / out of scope
@@ -1086,13 +1279,22 @@ def review(conn, actor, booking_id, action, note=None, quote_amount=None):
         raise core.ValidationError(f"unknown review action '{action}'")
     frag, params = tenant.predicate(actor)
     row = conn.execute(
-        "SELECT id,status,special_instructions FROM mkt_bookings WHERE id=? AND source='PUBLIC_MARKETPLACE'"
+        "SELECT id,status,special_instructions,booking_mode,site_survey_required FROM mkt_bookings "
+        "WHERE id=? AND source='PUBLIC_MARKETPLACE'"
         + frag, [booking_id] + list(params)).fetchone()
     if not row:
         raise core.NotFoundError("public booking not found")
     cur = row["status"]
     if cur in _TERMINAL:
         raise core.ConflictError(f"booking is {cur}; no further action")
+    if action == "COMPLETE_SURVEY":
+        # Backward-compatible operator action, but never allow a free-text note to stand in for a
+        # governed survey. The structured survey endpoint owns measurements, evidence and approval.
+        import industrial_projects as industrial
+        if not industrial.latest_approved_survey(conn, booking_id):
+            raise core.ConflictError("complete and approve the structured site-survey record first")
+    if row["site_survey_required"] and action in {"QUOTE", "MOVE_TO_MARKETPLACE"}:
+        raise core.ConflictError("site survey must be completed before quotation or marketplace release")
     new = ACTION_STATUS[action]
     sets, vals = "status=?, updated_at=?", [new, _now()]
     if action == "QUOTE" and quote_amount is not None:
@@ -1100,6 +1302,8 @@ def review(conn, actor, booking_id, action, note=None, quote_amount=None):
         vals.append(float(quote_amount))
     if action == "MOVE_TO_MARKETPLACE":
         sets += ", routing_candidate='MARKETPLACE_CANDIDATE'"
+    if action == "COMPLETE_SURVEY":
+        sets += ", site_survey_required=0,assessment_status='SURVEY_APPROVED',project_stage='ESTIMATION'"
     if note:
         existing = row["special_instructions"] or ""
         vals.append(((existing + " | ") if existing else "") + f"[{action}] {str(note)[:400]}")

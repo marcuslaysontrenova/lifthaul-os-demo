@@ -66,7 +66,8 @@ p{margin:0}a{color:inherit;text-decoration:none}svg{max-width:100%}
 .field .req{color:var(--accent-2)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:520px){.grid2{grid-template-columns:1fr}}
-input,select{font-family:inherit;font-size:15px;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:11px 12px;width:100%}
+input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:11px 12px;width:100%}
+textarea{min-height:82px;resize:vertical}
 input:focus,select:focus{border-color:var(--primary);outline:none;box-shadow:0 0 0 3px rgba(95,185,42,.16)}
 .route{position:relative}
 .route .leg{display:flex;gap:10px;align-items:flex-start}
@@ -101,6 +102,14 @@ input:focus,select:focus{border-color:var(--primary);outline:none;box-shadow:0 0
 .cargo-card{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:14px;margin:0 0 14px}
 .cargo-card legend{padding:0 7px;font-size:14px;font-weight:800;color:var(--ink)}
 .cargo-intro{font-size:12.5px;color:var(--ink-2);margin:-2px 0 12px}
+.booking-path{border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 0 14px;background:var(--surface)}
+.booking-path h3{font-size:15px;margin-bottom:4px}.booking-path>p{font-size:12px;color:var(--muted);margin-bottom:10px}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.mode-card{display:block;border:1px solid var(--line);border-radius:10px;padding:11px;background:var(--surface-2);cursor:pointer}
+.mode-card:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 2px rgba(242,97,26,.16)}.mode-card input{width:auto;margin-right:5px;accent-color:var(--accent)}
+.mode-card b{font-size:13px}.mode-card span{display:block;font-size:11px;color:var(--muted);margin-top:4px;line-height:1.35}
+.project-intake{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}.project-intake[hidden]{display:none}
+.project-intake h4{font-size:13px;margin-bottom:7px}.resource-grid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+@media(max-width:620px){.mode-grid{grid-template-columns:1fr}}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:620px){.grid3{grid-template-columns:1fr}}
 .handling{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
@@ -211,9 +220,9 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 <header class="hero" id="book">
   <div class="wrap">
     <div>
-      <div class="eyebrow">On-demand · nationwide</div>
-      <h1>Move anything across the Philippines — <span class="hl">matched in minutes.</span></h1>
-      <p class="lead">Book a vehicle from a motorcycle to a lowbed or crane, Luzon to Visayas to Mindanao and inter-island. Get an instant, transparent quote and choose <b>Protected Payment</b> — provider-governed settlement after verified delivery when the live-funds gate is approved.</p>
+      <div class="eyebrow">Managed industrial transport · nationwide</div>
+      <h1>Move heavy, specialized cargo — <span class="hl">with the right equipment and crew.</span></h1>
+      <p class="lead">Plan machinery relocation, heavy haul and equipment deployment through one governed workflow: survey, estimate, schedule, transport, lift, position and verify completion. Standardized cargo can still use Instant Book when every safety gate passes.</p>
       <div class="pillrow">
         <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/></svg>Protected Payment</span>
         <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>LTFRB-verified carriers</span>
@@ -232,6 +241,15 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
             <div><strong>Official Philippine address hierarchy</strong><span>PSA PSGC · 30 June 2026 · fields unlock in order</span></div>
             <span class="geo-status" id="geoStatus" role="status" aria-live="polite">Loading locations…</span>
           </div>
+
+          <section class="booking-path" aria-labelledby="bookingPathTitle">
+            <h3 id="bookingPathTitle">Choose the right booking path</h3>
+            <p>Complex work cannot be forced into instant pricing. LiftHaul automatically upgrades unsafe or uncertain requests to Managed Project.</p>
+            <div class="mode-grid">
+              <label class="mode-card"><input type="radio" name="bookingMode" value="MANAGED_PROJECT" checked> <b>Managed Project</b><span>Industrial moves, heavy haul, cranes, forklifts, rigging crews, permits or uncertain site conditions.</span></label>
+              <label class="mode-card"><input type="radio" name="bookingMode" value="INSTANT_BOOK"> <b>Instant Book</b><span>Standardized cargo, known specifications and repeatable routes that pass every capacity and serviceability gate.</span></label>
+            </div>
+          </section>
 
           <fieldset class="cargo-card" id="cargoCard">
             <legend>Step 2 · Cargo details, weight and dimensions</legend>
@@ -283,6 +301,34 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
               <label class="handling-option" data-for="MACHINERY_EQUIPMENT"><input type="checkbox" name="specialHandling" value="OVERSIZED">Oversized-load handling</label>
               <label class="handling-option" data-for="GENERAL"><input type="checkbox" name="specialHandling" value="HELPER">Helper / manpower</label>
             </div></div>
+            <div class="project-intake" id="projectIntake">
+              <h4>Managed Project requirements</h4>
+              <div class="grid2">
+                <div class="field"><label for="serviceLine">Service line</label><select id="serviceLine"><option value="INDUSTRIAL">Industrial · machinery relocation / rigging</option><option value="HEAVY">Heavy · lowbed / oversized transport</option><option value="EQUIPMENT">Equipment · crane / forklift with operator</option><option value="CARGO">Standard cargo</option></select></div>
+                <label class="handling-option" style="align-self:end"><input type="checkbox" id="technicalSpecsUnknown">Exact weight or dimensions are not yet confirmed</label>
+              </div>
+              <label class="field-hint">Combined resources required</label>
+              <div class="resource-grid" id="projectResources">
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="TRANSPORT" checked>Transport</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="LOWBED_TRAILER">Lowbed trailer</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="CRANE">Crane</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="FORKLIFT">Forklift</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="RIGGING_CREW">Rigging crew</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="EQUIPMENT_OPERATOR">Equipment operator</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="HELPERS">Helpers</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="ESCORT">Escort</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="SAFETY_OFFICER">Safety officer</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="PERMITS">Permit coordination</label>
+                <label class="handling-option"><input type="checkbox" name="projectResource" value="CARGO_INSURANCE">Cargo insurance review</label>
+              </div>
+              <div class="grid2">
+                <div class="field"><label for="pickupSiteDetails">Pickup access and site conditions</label><textarea id="pickupSiteDetails" maxlength="1000" placeholder="Gate width/height, floor level, loading bay, overhead lines, ground conditions"></textarea></div>
+                <div class="field"><label for="deliverySiteDetails">Delivery access and site conditions</label><textarea id="deliverySiteDetails" maxlength="1000" placeholder="Clearances, unloading zone, surface and positioning constraints"></textarea></div>
+              </div>
+              <div class="field"><label for="positioningRequirements">Final positioning or installation requirements</label><textarea id="positioningRequirements" maxlength="1000" placeholder="Where and how the cargo or equipment must be placed"></textarea></div>
+              <label class="handling-option"><input type="checkbox" id="siteAccessConfirmed">I have confirmed the stated site access and clearance information</label>
+              <p class="cargo-intro" style="margin-top:8px">LiftHaul may require a site survey, load plan, permit check, or qualified human approval before quotation and resource reservation.</p>
+            </div>
           </fieldset>
 
           <fieldset class="location-card pickup" id="oLocationCard" data-complete="false">

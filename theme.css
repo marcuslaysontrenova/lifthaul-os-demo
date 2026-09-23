@@ -465,6 +465,154 @@ button[type="submit"]:not(.line):not(.ghost):hover {
   color: var(--accent) !important;
 }
 
+/*
+ * Digital hero concept selected for the public homepage. This is intentionally
+ * scoped to the left hero column so the existing live map, navigation and all
+ * downstream product sections keep their established behavior.
+ */
+.hero .wrap {
+  padding-top: 38px;
+  padding-bottom: 34px;
+  grid-template-columns: minmax(0, .98fr) minmax(0, 1.02fr);
+  gap: 52px;
+}
+
+.hero .hero-copy {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  padding: 10px 0;
+}
+
+.hero .hero-copy .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  color: var(--lh-lasalle-deep);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .17em;
+}
+
+.hero .hero-copy .eyebrow::before {
+  content: "";
+  width: 30px;
+  height: 2px;
+  flex: 0 0 auto;
+  border-radius: 99px;
+  background: var(--lh-tangerine);
+}
+
+.hero .hero-copy h1 {
+  margin-top: 20px;
+  max-width: 720px;
+  font-size: clamp(54px, 4.65vw, 72px);
+  font-weight: 900;
+  line-height: .95;
+  letter-spacing: -.058em;
+}
+
+.hero .hero-copy h1 .solid {
+  white-space: nowrap;
+}
+
+.hero .hero-copy h1 .outline {
+  color: transparent;
+  -webkit-text-stroke: 1.7px rgba(7, 18, 11, .66);
+  text-stroke: 1.7px rgba(7, 18, 11, .66);
+}
+
+.hero .hero-copy .lead {
+  max-width: 680px;
+  margin-top: 28px;
+  color: #234b32;
+  font-size: clamp(17px, 1.35vw, 20px);
+  font-weight: 520;
+  line-height: 1.55;
+}
+
+.hero .hero-copy .cta {
+  margin-top: 30px;
+}
+
+.hero .hero-copy .cta .btn {
+  min-height: 58px;
+  border-radius: 14px;
+  font-weight: 850;
+}
+
+.hero .hero-copy .cta .btn.line {
+  background: var(--lh-panel) !important;
+  color: var(--lh-panel-ink) !important;
+  border-color: rgba(255, 255, 255, .12) !important;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .18) !important;
+}
+
+.hero .hero-copy .cta .btn.line:hover {
+  background: var(--lh-panel-soft) !important;
+  border-color: rgba(255, 255, 255, .22) !important;
+}
+
+.hero .hero-copy .pillrow {
+  margin-top: 24px;
+}
+
+.hero .hero-copy .pillrow .pill {
+  min-height: 46px;
+  background: rgba(255, 255, 255, .18) !important;
+  color: var(--lh-lasalle-deep) !important;
+  border-color: rgba(0, 61, 36, .16) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(9px);
+}
+
+.hero .hero-copy .pillrow .pill svg {
+  color: var(--lh-lasalle-strong) !important;
+}
+
+@media (min-width: 921px) {
+  .hero {
+    background-image:
+      linear-gradient(rgba(0, 61, 36, .055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 61, 36, .055) 1px, transparent 1px),
+      radial-gradient(circle at 80% 8%, rgba(255, 255, 255, .14), transparent 27rem),
+      linear-gradient(145deg, rgba(255, 255, 255, .05), rgba(0, 107, 60, .07)) !important;
+    background-size: 44px 44px, 44px 44px, auto, auto !important;
+  }
+}
+
+@media (max-width: 920px) {
+  .hero .wrap {
+    grid-template-columns: 1fr;
+    gap: 34px;
+    padding-top: 34px;
+  }
+
+  .hero .hero-copy h1 {
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 680px) {
+  .hero .hero-copy {
+    padding-top: 2px;
+  }
+
+  .hero .hero-copy h1 {
+    margin-top: 16px;
+    font-size: clamp(44px, 14.4vw, 64px);
+  }
+
+  .hero .hero-copy h1 .solid {
+    white-space: normal;
+  }
+
+  .hero .hero-copy .lead {
+    margin-top: 22px;
+    font-size: 16px;
+  }
+}
+
 .lh-logo,
 .progress .active b,
 .lh-nav button[aria-current="page"] {

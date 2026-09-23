@@ -1,0 +1,52 @@
+name: Performance smoke gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "performance/**"
+      - ".github/workflows/performance-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-http-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Start isolated API
+        run: |
+          APP_ENV=test DATABASE_URL=/tmp/lifthaul-performance-smoke.sqlite PORT=8790 \
+            python backend/server.py > /tmp/lifthaul-performance-server.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8790/readyz && exit 0
+            sleep 1
+          done
+          cat /tmp/lifthaul-performance-server.log
+          exit 1
+      - name: Read-path concurrency gate
+        run: |
+          python performance/local_http_probe.py \
+            --profile read --stages 1,25,100 --requests-per-user 2 \
+            --p95-ms 2000 --max-error-rate 0.01 \
+            --output performance-read-evidence.json
+      - name: Booking idempotency gate
+        run: |
+          python performance/local_http_probe.py \
+            --profile idempotency --stages 20 \
+            --p95-ms 3000 --max-error-rate 0.01 \
+            --output performance-idempotency-evidence.json
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-smoke-evidence
+          path: |
+            performance-*-evidence.json
+            /tmp/lifthaul-performance-server.log

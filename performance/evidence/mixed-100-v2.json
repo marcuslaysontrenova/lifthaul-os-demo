@@ -1,0 +1,180 @@
+{
+  "generated_at_epoch": 1788786683.589174,
+  "base_url": "http://127.0.0.1:8790",
+  "profile": "mixed",
+  "warning": "Local diagnostic only; not production capacity evidence.",
+  "targets": {
+    "p95_ms": 3000.0,
+    "max_error_rate": 0.01
+  },
+  "stages": [
+    {
+      "requests": 100,
+      "accepted": 84,
+      "error_count": 16,
+      "error_rate": 0.16,
+      "throughput_rps": 30.729,
+      "elapsed_seconds": 3.254,
+      "latency_ms": {
+        "min": 8.415,
+        "median": 1461.179,
+        "p95": 3105.277,
+        "p99": 3111.416,
+        "max": 3154.882
+      },
+      "status_counts": {
+        "200": 79,
+        "403": 5,
+        "429": 16
+      },
+      "operations": {
+        "booking_create": {
+          "requests": 10,
+          "accepted": 2,
+          "p95_ms": 1540.602,
+          "statuses": {
+            "200": 2,
+            "429": 8
+          }
+        },
+        "browse_and_rates": {
+          "requests": 25,
+          "accepted": 25,
+          "p95_ms": 1975.843,
+          "statuses": {
+            "200": 25
+          }
+        },
+        "cargo_and_route": {
+          "requests": 15,
+          "accepted": 12,
+          "p95_ms": 1475.993,
+          "statuses": {
+            "200": 12,
+            "429": 3
+          }
+        },
+        "fleet_management_read": {
+          "requests": 3,
+          "accepted": 3,
+          "p95_ms": 1527.372,
+          "statuses": {
+            "200": 3
+          }
+        },
+        "payment_channel_read": {
+          "requests": 5,
+          "accepted": 5,
+          "p95_ms": 3111.416,
+          "statuses": {
+            "200": 5
+          }
+        },
+        "provider_document_boundary": {
+          "requests": 5,
+          "accepted": 5,
+          "p95_ms": 3098.796,
+          "statuses": {
+            "200": 5
+          }
+        },
+        "sign_in": {
+          "requests": 15,
+          "accepted": 15,
+          "p95_ms": 3154.882,
+          "statuses": {
+            "200": 15
+          }
+        },
+        "staff_authentication": {
+          "requests": 2,
+          "accepted": 2,
+          "p95_ms": 1860.638,
+          "statuses": {
+            "200": 2
+          }
+        },
+        "tracking": {
+          "requests": 5,
+          "accepted": 5,
+          "p95_ms": 3105.277,
+          "statuses": {
+            "200": 5
+          }
+        },
+        "vehicle_recommendation": {
+          "requests": 10,
+          "accepted": 5,
+          "p95_ms": 1493.895,
+          "statuses": {
+            "200": 5,
+            "429": 5
+          }
+        },
+        "webhook_rejection": {
+          "requests": 5,
+          "accepted": 5,
+          "p95_ms": 3108.702,
+          "statuses": {
+            "403": 5
+          }
+        }
+      },
+      "sample_errors": [
+        {
+          "operation": "cargo_and_route",
+          "status": 429,
+          "error": "rate limit exceeded, try again shortly"
+        },
+        {
+          "operation": "cargo_and_route",
+          "status": 429,
+          "error": "HTTPError 429; response read failed: ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host"
+        },
+        {
+          "operation": "cargo_and_route",
+          "status": 429,
+          "error": "HTTPError 429; response read failed: ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host"
+        },
+        {
+          "operation": "vehicle_recommendation",
+          "status": 429,
+          "error": "HTTPError 429; response read failed: ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host"
+        },
+        {
+          "operation": "vehicle_recommendation",
+          "status": 429,
+          "error": "rate limit exceeded, try again shortly"
+        },
+        {
+          "operation": "vehicle_recommendation",
+          "status": 429,
+          "error": "rate limit exceeded, try again shortly"
+        },
+        {
+          "operation": "vehicle_recommendation",
+          "status": 429,
+          "error": "rate limit exceeded, try again shortly"
+        },
+        {
+          "operation": "vehicle_recommendation",
+          "status": 429,
+          "error": "rate limit exceeded, try again shortly"
+        },
+        {
+          "operation": "booking_create",
+          "status": 429,
+          "error": "rate limit exceeded, try again shortly"
+        },
+        {
+          "operation": "booking_create",
+          "status": 429,
+          "error": "rate limit exceeded, try again shortly"
+        }
+      ],
+      "concurrent_users": 100,
+      "requests_per_user": 1
+    }
+  ],
+  "gate_pass": false
+}

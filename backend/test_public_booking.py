@@ -16,6 +16,7 @@ import marketplace_payments as pay
 
 
 SUP = {"id": 0, "role": "super_admin", "perms": {"*"}, "tenant_id": None}
+SAFETY = {"id": 901, "role": "safety_officer", "perms": {"*"}, "tenant_id": None}
 
 
 def _p(**kw):
@@ -91,11 +92,11 @@ class Quote(unittest.TestCase):
         self.assertIn(r["estimate_status"], ("QUOTED", "QUOTED_INDICATIVE"))
 
     def test_engineered_requires_estimator(self):
-        for v in ("crane", "lowbed"):
-            r = pb.submit(self.c, _p(vehicle=v, km=10))
-            self.assertIsNone(r["estimate"])
-            self.assertEqual(r["estimate_status"], "ESTIMATE_REQUIRED")
-            self.assertEqual(r["routing_candidate"], "ENGINEERED_REVIEW")
+        r = pb.submit(self.c, _p(vehicle="manual", booking_mode="MANAGED_PROJECT",
+                                 service_line="EQUIPMENT", technical_specs_unknown=True, km=10))
+        self.assertIsNone(r["estimate"])
+        self.assertEqual(r["estimate_status"], "ESTIMATE_REQUIRED")
+        self.assertEqual(r["routing_candidate"], "ENGINEERED_REVIEW")
 
     def test_server_ignores_tampered_frontend_total(self):
         r = pb.submit(self.c, _p(vehicle="sedan", km=10, amount=999999, estimate=999999, total=999999))
@@ -199,6 +200,74 @@ class CargoFirstVehicleMatching(unittest.TestCase):
         self.assertTrue(r["manual_assessment_required"])
 
 
+class IndustrialManagedProject(unittest.TestCase):
+    def setUp(self): self.c = db.connect(":memory:")
+
+    def test_unknown_specifications_require_site_survey(self):
+        r = pb.recommend_vehicles(self.c, _p(
+            booking_mode="MANAGED_PROJECT", service_line="INDUSTRIAL",
+            cargo_category="MACHINERY_EQUIPMENT", cargo="Production machine",
+            weight_kg=None, package_length_cm=None, package_width_cm=None,
+            package_height_cm=None, technical_specs_unknown=True))
+        self.assertTrue(r["manual_assessment_required"])
+        self.assertTrue(r["project_assessment"]["site_survey_required"])
+        self.assertEqual(r["project_assessment"]["project_stage"], "SURVEY_REQUIRED")
+
+    def test_instant_book_cannot_bypass_engineered_lift_review(self):
+        r = pb.recommend_vehicles(self.c, _p(
+            booking_mode="INSTANT_BOOK", service_line="CARGO",
+            cargo_category="MACHINERY_EQUIPMENT", cargo="Industrial press",
+            weight_kg=4000, package_length_cm=300, package_width_cm=180,
+            package_height_cm=190, special_handling=["CRANE_BOOM"],
+            site_access_confirmed=True, cargo_photo_count=2))
+        self.assertEqual(r["project_assessment"]["booking_mode"], "MANAGED_PROJECT")
+        self.assertTrue(r["project_assessment"]["human_approval_required"])
+        self.assertTrue(r["manual_assessment_required"])
+
+    def test_managed_project_persists_governed_assessment_without_instant_price(self):
+        r = pb.submit(self.c, _p(
+            booking_mode="MANAGED_PROJECT", service_line="HEAVY", vehicle="manual",
+            cargo_category="MACHINERY_EQUIPMENT", cargo="Oversized production line",
+            weight_kg=18000, package_length_cm=900, package_width_cm=280,
+            package_height_cm=320, special_handling=["OVERSIZED", "CRANE_BOOM"],
+            requested_resources=["LOWBED_TRAILER", "CRANE", "RIGGING_CREW", "SAFETY_OFFICER"],
+            pickup_site_details="Factory gate and slab require survey",
+            delivery_site_details="Final positioning inside production hall",
+            positioning_requirements="Lift and position onto prepared foundation",
+            cargo_photo_count=4, site_access_confirmed=False))
+        self.assertIsNone(r["estimate"])
+        self.assertEqual(r["estimate_status"], "ESTIMATE_REQUIRED")
+        self.assertEqual(r["project_assessment"]["project_stage"], "SURVEY_REQUIRED")
+        row = self.c.execute(
+            "SELECT booking_mode,service_line,site_survey_required,human_approval_required,"
+            "project_stage,requested_resources FROM mkt_bookings WHERE id=?", (r["booking_id"],)).fetchone()
+        self.assertEqual(row["booking_mode"], "MANAGED_PROJECT")
+        self.assertEqual(row["service_line"], "HEAVY")
+        self.assertEqual(row["site_survey_required"], 1)
+        self.assertEqual(row["human_approval_required"], 1)
+        self.assertIn("RIGGING_CREW", json.loads(row["requested_resources"]))
+        tracked = pb.track(self.c, r["tracking_token"])
+        self.assertTrue(tracked["project_assessment"]["site_survey_required"])
+
+    def test_managed_project_with_complete_inputs_still_requires_human_quotation(self):
+        rec = pb.recommend_vehicles(self.c, _p(
+            booking_mode="MANAGED_PROJECT", service_line="HEAVY",
+            cargo_category="CONSTRUCTION_MATERIALS", cargo="Steel assemblies",
+            weight_kg=5000, package_length_cm=300, package_width_cm=180,
+            package_height_cm=150, site_access_confirmed=True, cargo_photo_count=2))
+        self.assertFalse(rec["manual_assessment_required"])
+        selected = rec["options"][0]
+        r = pb.submit(self.c, _p(
+            booking_mode="MANAGED_PROJECT", service_line="HEAVY",
+            vehicle=selected["id"], vehicle_count=selected["vehicle_count"],
+            cargo_category="CONSTRUCTION_MATERIALS", cargo="Steel assemblies",
+            weight_kg=5000, package_length_cm=300, package_width_cm=180,
+            package_height_cm=150, site_access_confirmed=True, cargo_photo_count=2))
+        self.assertIsNone(r["estimate"])
+        self.assertEqual(r["project_assessment"]["project_stage"], "ESTIMATION")
+        self.assertTrue(r["project_assessment"]["human_approval_required"])
+
+
 class Routing(unittest.TestCase):
     def setUp(self): self.c = db.connect(":memory:")
 
@@ -207,7 +276,8 @@ class Routing(unittest.TestCase):
         self.assertEqual(r["routing_candidate"], "MARKETPLACE_CANDIDATE")
 
     def test_engineered_is_review(self):
-        r = pb.submit(self.c, _p(vehicle="crane"))
+        r = pb.submit(self.c, _p(vehicle="manual", booking_mode="MANAGED_PROJECT",
+                                 service_line="EQUIPMENT", technical_specs_unknown=True))
         self.assertEqual(r["routing_candidate"], "ENGINEERED_REVIEW")
 
 
@@ -292,7 +362,8 @@ class CustomerTracking(unittest.TestCase):
             self.assertIn(leg, names)
 
     def test_engineered_projection_no_price(self):
-        t = pb.track(self.c, self._tok(vehicle="crane"))
+        t = pb.track(self.c, self._tok(vehicle="manual", booking_mode="MANAGED_PROJECT",
+                                       service_line="EQUIPMENT", technical_specs_unknown=True))
         self.assertIsNone(t["estimate"])
         self.assertIn("Estimate Required", [s["name"] for s in t["stages"]])
 
@@ -360,7 +431,9 @@ class AdminQueue(unittest.TestCase):
     def setUp(self): self.c = db.connect(":memory:")
 
     def test_appears_in_queue_with_source(self):
-        pb.submit(self.c, _p()); pb.submit(self.c, _p(vehicle="crane"))
+        pb.submit(self.c, _p()); pb.submit(self.c, _p(
+            vehicle="manual", booking_mode="MANAGED_PROJECT", service_line="EQUIPMENT",
+            technical_specs_unknown=True))
         q = pb.admin_queue(self.c, SUP)
         self.assertEqual(q["source"], "PUBLIC_MARKETPLACE")
         self.assertEqual(q["count"], 2)
@@ -395,6 +468,28 @@ class OperatorReview(unittest.TestCase):
 
     def test_assign_estimator(self):
         self.assertEqual(pb.review(self.c, SUP, self.bid, "ASSIGN_ESTIMATOR")["status"], "ESTIMATION")
+
+    def test_site_survey_blocks_quote_until_evidence_is_recorded(self):
+        bid = pb.submit(self.c, _p(
+            vehicle="manual", booking_mode="MANAGED_PROJECT", service_line="INDUSTRIAL",
+            technical_specs_unknown=True))["booking_id"]
+        with self.assertRaises(core.ConflictError):
+            pb.review(self.c, SUP, bid, "QUOTE", quote_amount=250000)
+        with self.assertRaises(core.ConflictError):
+            pb.review(self.c, SUP, bid, "COMPLETE_SURVEY")
+        import industrial_projects as industrial
+        survey = industrial.schedule_survey(self.c, SUP, bid, "2026-10-01T09:00:00+08:00")
+        industrial.complete_survey(
+            self.c, SUP, survey["survey_id"], measurements={"cargo_length_m": 3.2},
+            findings="Access suitable subject to lift plan", evidence_refs=["evidence://survey/SR-100"])
+        industrial.approve_survey(self.c, SAFETY, survey["survey_id"], "APPROVED", "Reviewed")
+        pb.review(self.c, SUP, bid, "COMPLETE_SURVEY")
+        pb.review(self.c, SUP, bid, "QUOTE", quote_amount=250000)
+        row = self.c.execute(
+            "SELECT site_survey_required,assessment_status,status FROM mkt_bookings WHERE id=?", (bid,)).fetchone()
+        self.assertEqual(row["site_survey_required"], 0)
+        self.assertEqual(row["assessment_status"], "SURVEY_APPROVED")
+        self.assertEqual(row["status"], "QUOTED")
 
     def test_decline_is_terminal(self):
         pb.review(self.c, SUP, self.bid, "DECLINE")
@@ -435,14 +530,17 @@ class ServiceLevels(unittest.TestCase):
 
     def test_economy_not_eligible_for_engineered(self):
         with self.assertRaises(core.ValidationError):
-            pb.submit(self.c, _p(vehicle="crane", service_level="ECONOMY"))
+            pb.submit(self.c, _p(vehicle="manual", booking_mode="MANAGED_PROJECT",
+                                 service_line="EQUIPMENT", technical_specs_unknown=True,
+                                 service_level="ECONOMY"))
 
     def test_unknown_level_rejected(self):
         with self.assertRaises(core.ValidationError):
             pb.submit(self.c, _p(service_level="TELEPORT"))
 
     def test_engineered_defaults_to_heavy_haul_no_price(self):
-        r = pb.submit(self.c, _p(vehicle="lowbed"))
+        r = pb.submit(self.c, _p(vehicle="manual", booking_mode="MANAGED_PROJECT",
+                                 service_line="HEAVY", technical_specs_unknown=True))
         self.assertEqual(r["service_level"], "ENGINEERED_HEAVY_HAUL")
         self.assertIsNone(r["estimate"])
 

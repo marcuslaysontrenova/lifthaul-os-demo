@@ -554,6 +554,10 @@ window.RGO_API = (function(){
     regulatorySummary:function(){return req('GET','/admin/marketplace/regulatory-summary');},
     publicBookingQueue:function(){return req('GET','/admin/marketplace/public-booking-queue');},
     publicBookingReview:function(id,b){return req('POST','/admin/marketplace/public-bookings/'+id+'/review',b);},
+    industrialProject:function(id){return req('GET','/admin/marketplace/industrial/bookings/'+id);},
+    industrialScheduleSurvey:function(id,b){return req('POST','/admin/marketplace/industrial/bookings/'+id+'/surveys',b);},
+    industrialCompleteSurvey:function(id,b){return req('POST','/admin/marketplace/industrial/surveys/'+id+'/complete',b);},
+    industrialApproveSurvey:function(id,b){return req('POST','/admin/marketplace/industrial/surveys/'+id+'/approve',b);},
     apiClients:function(){return req('GET','/admin/integrations/api-clients');},
     apiClientCreate:function(b){return req('POST','/admin/integrations/api-clients',b);},
     apiClientRevoke:function(id){return req('POST','/admin/integrations/api-clients/'+id+'/revoke');},
@@ -1216,6 +1220,9 @@ window.RGO_API = (function(){
     if(act==='rcArchive')return rcArchive(arg);
     if(act==='kybVerify')return kybVerify(arg);
     if(act==='pbReview')return pbReview(arg);
+    if(act==='pbSurveySchedule')return pbSurveySchedule(arg);
+    if(act==='pbSurveyComplete')return pbSurveyComplete(arg);
+    if(act==='pbSurveyApprove')return pbSurveyApprove(arg);
     if(act==='apiClientNew')return apiClientNew();
     if(act==='apiWebhookNew')return apiWebhookNew();
     if(act==='apiClientRevoke')return apiClientRevoke(arg);
@@ -1559,16 +1566,20 @@ window.RGO_API = (function(){
         var rows=(q&&q.requests)||[];
         var chip=function(s){var c=(s==='DECLINED')?'c-crit':(s==='MATCHING'||s==='QUOTED')?'c-good':(s==='ESTIMATION')?'c-warn':'c-info';return '<span class="chip '+c+'">'+esc(s)+'</span>';};
         host.innerHTML=
-          '<div class="access-note"><span>📥</span><div><b>Marketplace Intake.</b> Public nationwide booking requests (source <code>PUBLIC_MARKETPLACE</code>) land as canonical bookings. Triage here — review, quote, assign estimator, move to marketplace matching, or decline. Every action needs <code>marketplace.booking.manage</code> and is audited. Engineered lifts (crane / lowbed) require an estimate — never an instant price.</div></div>'+
-          '<div class="panel"><div class="panel-h"><h3>Public Booking Queue</h3><div class="spacer"></div><span class="cnt">'+rows.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>ID</th><th>Contact</th><th>Route</th><th>Service</th><th>Vehicle</th><th class="right">Estimate</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
+          '<div class="access-note"><span>📥</span><div><b>Industrial &amp; Marketplace Intake.</b> Instant Book and Managed Project requests share one canonical booking. Managed work records service line, risk, resources, survey and human-approval gates. Survey-required work cannot be quoted or released to matching until qualified survey evidence is recorded.</div></div>'+
+          '<div class="panel"><div class="panel-h"><h3>Public Booking Queue</h3><div class="spacer"></div><span class="cnt">'+rows.length+'</span></div><div class="tblwrap" style="border:0"><table class="tbl"><thead><tr><th>ID</th><th>Contact</th><th>Route</th><th>Project</th><th>Vehicle</th><th class="right">Estimate</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
           (rows.map(function(r){
-            var eng=(r.service_class==='ENGINEERED');
+            var eng=(r.service_class==='ENGINEERED'||r.booking_mode==='MANAGED_PROJECT'),survey=!!r.site_survey_required,ctl=r.industrial_control||{},sv=ctl.survey||null;
             var est=eng?'<span class="chip c-warn">ESTIMATE REQ</span>':(r.quote_amount!=null?peso(r.quote_amount):'—');
             var acts='<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':REVIEW">Review</button> '+
-              (eng?'<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':ASSIGN_ESTIMATOR">Estimator</button> ':'<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':QUOTE">Quote</button> ')+
-              '<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':MOVE_TO_MARKETPLACE">→ Marketplace</button> '+
+              (eng?'<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':ASSIGN_ESTIMATOR">Estimator</button> ':'')+
+              (survey&&!sv?'<button class="btn line sm" data-act="pbSurveySchedule" data-arg="'+r.id+'">Schedule survey</button> ':
+               survey&&sv&&sv.status==='SCHEDULED'?'<button class="btn line sm" data-act="pbSurveyComplete" data-arg="'+sv.id+'">Complete survey</button> ':
+               survey&&sv&&sv.status==='COMPLETED'?'<button class="btn line sm" data-act="pbSurveyApprove" data-arg="'+sv.id+'">Approve survey</button> ':
+               '<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':QUOTE">Quote</button> <button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':MOVE_TO_MARKETPLACE">→ Marketplace</button> ')+
               '<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':DECLINE">Decline</button>';
-            return '<tr><td>#'+esc(r.id)+'</td><td>'+esc(r.contact_name||'')+'<br><span class="es">'+esc(r.contact_phone||r.contact_email||'')+'</span></td><td>'+esc(r.route_class||'')+(r.inter_island?' <span class="chip c-info">inter-island</span>':'')+'</td><td>'+esc(r.service_class||'')+'</td><td>'+esc(r.requested_vehicle_category||'')+'</td><td class="tnum">'+est+'</td><td>'+chip(r.status||'')+'</td><td style="white-space:nowrap">'+acts+'</td></tr>';
+            var project=esc(r.booking_mode||'INSTANT_BOOK')+'<br><span class="es">'+esc(r.service_line||'CARGO')+' · '+esc(r.project_risk_level||'STANDARD')+'</span>'+(survey?'<br><span class="chip c-warn">'+esc(sv?('SURVEY '+sv.status):'SURVEY REQUIRED')+'</span>':'');
+            return '<tr><td>#'+esc(r.id)+'</td><td>'+esc(r.contact_name||'')+'<br><span class="es">'+esc(r.contact_phone||r.contact_email||'')+'</span></td><td>'+esc(r.route_class||'')+(r.inter_island?' <span class="chip c-info">inter-island</span>':'')+'</td><td>'+project+'</td><td>'+esc(r.requested_vehicle_category||'')+'</td><td class="tnum">'+est+'</td><td>'+chip(r.status||'')+'</td><td style="white-space:nowrap">'+acts+'</td></tr>';
           }).join('')||'<tr><td colspan="8" class="empty">No public booking requests.</td></tr>')+
           '</tbody></table></div></div>';
       }).catch(apiErr);
@@ -1582,6 +1593,20 @@ window.RGO_API = (function(){
     if(action==='DECLINE'&&!window.confirm('Decline this public booking request?'))return;
     if(action==='REVIEW'||action==='ASSIGN_ESTIMATOR'){var n=window.prompt('Note (optional):','');if(n)body.note=n;}
     RGO_API.publicBookingReview(id,body).then(function(d){toast('Booking #'+id+' → '+d.status+' · audited');refreshAdmin();}).catch(function(e){toast('Rejected: '+e.message);});
+  }
+  function pbSurveySchedule(id){
+    var at=window.prompt('Survey schedule (ISO-8601, including timezone):',new Date(Date.now()+86400000).toISOString());if(!at)return;
+    RGO_API.industrialScheduleSurvey(id,{scheduled_at:at}).then(function(d){toast('Survey v'+d.revision+' scheduled · audited');refreshAdmin();}).catch(apiErr);
+  }
+  function pbSurveyComplete(id){
+    var findings=window.prompt('Survey findings (required):','');if(!findings)return;
+    var dims=window.prompt('Verified cargo/site measurements (L × W × H, metres):','');if(!dims)return;
+    var evidence=window.prompt('Private evidence reference (required; do not paste credentials):','');if(!evidence)return;
+    RGO_API.industrialCompleteSurvey(id,{measurements:{verified_dimensions:dims},findings:findings,evidence_refs:[evidence]}).then(function(){toast('Survey completed · independent approval required');refreshAdmin();}).catch(apiErr);
+  }
+  function pbSurveyApprove(id){
+    var note=window.prompt('Safety approval note:','Reviewed against measurements, site access and evidence.');if(note===null)return;
+    RGO_API.industrialApproveSurvey(id,{decision:'APPROVED',note:note}).then(function(){toast('Survey approved · estimation gate opened');refreshAdmin();}).catch(apiErr);
   }
   // ---------- Goods Protection (Cargo Insurance orchestration) ----------
   function adminInsurance(){

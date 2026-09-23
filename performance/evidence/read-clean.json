@@ -1,0 +1,287 @@
+{
+  "generated_at_epoch": 1788787083.3354158,
+  "base_url": "http://127.0.0.1:8790",
+  "profile": "read",
+  "warning": "Local diagnostic only; not production capacity evidence.",
+  "targets": {
+    "p95_ms": 2000.0,
+    "max_error_rate": 0.01
+  },
+  "stages": [
+    {
+      "requests": 2,
+      "accepted": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "throughput_rps": 16.945,
+      "elapsed_seconds": 0.118,
+      "latency_ms": {
+        "min": 27.165,
+        "median": 55.882,
+        "p95": 84.599,
+        "p99": 84.599,
+        "max": 84.599
+      },
+      "status_counts": {
+        "200": 2
+      },
+      "operations": {
+        "liveness": {
+          "requests": 1,
+          "accepted": 1,
+          "p95_ms": 84.599,
+          "statuses": {
+            "200": 1
+          }
+        },
+        "readiness": {
+          "requests": 1,
+          "accepted": 1,
+          "p95_ms": 27.165,
+          "statuses": {
+            "200": 1
+          }
+        }
+      },
+      "sample_errors": [],
+      "concurrent_users": 1,
+      "requests_per_user": 2
+    },
+    {
+      "requests": 50,
+      "accepted": 50,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "throughput_rps": 45.221,
+      "elapsed_seconds": 1.106,
+      "latency_ms": {
+        "min": 11.665,
+        "median": 28.297,
+        "p95": 531.431,
+        "p99": 1027.981,
+        "max": 1027.981
+      },
+      "status_counts": {
+        "200": 50
+      },
+      "operations": {
+        "liveness": {
+          "requests": 10,
+          "accepted": 10,
+          "p95_ms": 525.67,
+          "statuses": {
+            "200": 10
+          }
+        },
+        "payment_channels": {
+          "requests": 10,
+          "accepted": 10,
+          "p95_ms": 531.431,
+          "statuses": {
+            "200": 10
+          }
+        },
+        "readiness": {
+          "requests": 10,
+          "accepted": 10,
+          "p95_ms": 530.625,
+          "statuses": {
+            "200": 10
+          }
+        },
+        "service_levels": {
+          "requests": 10,
+          "accepted": 10,
+          "p95_ms": 1027.981,
+          "statuses": {
+            "200": 10
+          }
+        },
+        "vehicle_taxonomy": {
+          "requests": 10,
+          "accepted": 10,
+          "p95_ms": 546.871,
+          "statuses": {
+            "200": 10
+          }
+        }
+      },
+      "sample_errors": [],
+      "concurrent_users": 25,
+      "requests_per_user": 2
+    },
+    {
+      "requests": 200,
+      "accepted": 200,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "throughput_rps": 155.072,
+      "elapsed_seconds": 1.29,
+      "latency_ms": {
+        "min": 11.676,
+        "median": 25.27,
+        "p95": 555.242,
+        "p99": 1032.461,
+        "max": 1035.507
+      },
+      "status_counts": {
+        "200": 200
+      },
+      "operations": {
+        "liveness": {
+          "requests": 40,
+          "accepted": 40,
+          "p95_ms": 1016.309,
+          "statuses": {
+            "200": 40
+          }
+        },
+        "payment_channels": {
+          "requests": 40,
+          "accepted": 40,
+          "p95_ms": 548.35,
+          "statuses": {
+            "200": 40
+          }
+        },
+        "readiness": {
+          "requests": 40,
+          "accepted": 40,
+          "p95_ms": 540.55,
+          "statuses": {
+            "200": 40
+          }
+        },
+        "service_levels": {
+          "requests": 40,
+          "accepted": 40,
+          "p95_ms": 549.314,
+          "statuses": {
+            "200": 40
+          }
+        },
+        "vehicle_taxonomy": {
+          "requests": 40,
+          "accepted": 40,
+          "p95_ms": 555.242,
+          "statuses": {
+            "200": 40
+          }
+        }
+      },
+      "sample_errors": [],
+      "concurrent_users": 100,
+      "requests_per_user": 2
+    },
+    {
+      "requests": 1000,
+      "accepted": 992,
+      "error_count": 8,
+      "error_rate": 0.008,
+      "throughput_rps": 311.748,
+      "elapsed_seconds": 3.208,
+      "latency_ms": {
+        "min": 9.882,
+        "median": 25.646,
+        "p95": 1556.692,
+        "p99": 2049.955,
+        "max": 2067.97
+      },
+      "status_counts": {
+        "0": 8,
+        "200": 992
+      },
+      "operations": {
+        "liveness": {
+          "requests": 200,
+          "accepted": 200,
+          "p95_ms": 1552.775,
+          "statuses": {
+            "200": 200
+          }
+        },
+        "payment_channels": {
+          "requests": 200,
+          "accepted": 198,
+          "p95_ms": 1551.748,
+          "statuses": {
+            "0": 2,
+            "200": 198
+          }
+        },
+        "readiness": {
+          "requests": 200,
+          "accepted": 198,
+          "p95_ms": 1554.134,
+          "statuses": {
+            "0": 2,
+            "200": 198
+          }
+        },
+        "service_levels": {
+          "requests": 200,
+          "accepted": 198,
+          "p95_ms": 1556.168,
+          "statuses": {
+            "0": 2,
+            "200": 198
+          }
+        },
+        "vehicle_taxonomy": {
+          "requests": 200,
+          "accepted": 198,
+          "p95_ms": 1564.102,
+          "statuses": {
+            "0": 2,
+            "200": 198
+          }
+        }
+      },
+      "sample_errors": [
+        {
+          "operation": "readiness",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "service_levels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "vehicle_taxonomy",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "readiness",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "payment_channels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "vehicle_taxonomy",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "payment_channels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        },
+        {
+          "operation": "service_levels",
+          "status": 0,
+          "error": "URLError: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+        }
+      ],
+      "concurrent_users": 500,
+      "requests_per_user": 2
+    }
+  ],
+  "gate_pass": true
+}

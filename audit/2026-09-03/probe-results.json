@@ -1,0 +1,23 @@
+{
+  "scope": "authorized local test data only",
+  "run_1": {
+    "missing_weight": {"accepted": true, "weight_kg": null, "decision": "LEGACY"},
+    "nonnumeric_weight": {"accepted": true, "weight_kg": null, "decision": "LEGACY"},
+    "incomplete_locations": {"accepted": true, "decision": "RECOMMENDED"},
+    "safety_boundary": {"909_kg_includes_van": true, "910_kg_includes_van": false},
+    "pricing": {"transport": 260.0, "administration_fee": 26.0, "applicable_tax": 34.0, "total": 320.0},
+    "recommendation_performance": {"iterations": 500, "median_ms": 1.303, "p95_ms": 2.189, "max_ms": 4.119},
+    "concurrent_duplicate_submission": {"attempts": 24, "persisted_rows": 2, "distinct_booking_ids_returned": 2, "error_responses": 22}
+  },
+  "run_2": {
+    "missing_weight": {"accepted": true, "weight_kg": null, "decision": "LEGACY"},
+    "nonnumeric_weight": {"accepted": true, "weight_kg": null, "decision": "LEGACY"},
+    "incomplete_locations": {"accepted": true, "decision": "RECOMMENDED"},
+    "safety_boundary": {"909_kg_includes_van": true, "910_kg_includes_van": false},
+    "pricing": {"transport": 260.0, "administration_fee": 26.0, "applicable_tax": 34.0, "total": 320.0},
+    "recommendation_performance": {"iterations": 500, "median_ms": 1.24, "p95_ms": 1.786, "max_ms": 4.424},
+    "concurrent_duplicate_submission": {"attempts": 24, "persisted_rows": 1, "distinct_booking_ids_returned": 1, "error_responses": 23}
+  },
+  "interpretation": "The first run reproduced duplicate persistence. Both runs reproduced response-contract errors and unsafe input acceptance. The timing result is a service-function microbenchmark, not an HTTP or production load test."
+}
+

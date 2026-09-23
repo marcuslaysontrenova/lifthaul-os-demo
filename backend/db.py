@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 24  # client authentication recovery + actionable workspace projections
+SCHEMA_VERSION = 25  # public driver application + governed carrier sponsorship
 
 
 def _now():
@@ -163,6 +163,8 @@ def _seed_platform(conn):
     availability.init(conn); availability.seed(conn)                     # Carrier Operations: driver/vehicle availability overlay (computed effective status; feeds eligibility + governed reassignment closure; never a second source of truth)
     import public_provider
     public_provider.init(conn); public_provider.seed(conn)               # Public Service-Provider self-registration: carrier APPLICATION + PENDING carrier_principal login + one-time contact-code verification (reuses users/sessions/carrier_principals; no new domain)
+    import public_driver
+    public_driver.init(conn); public_driver.seed(conn)                   # Public driver application: contact verification first; carrier sponsorship creates canonical driver/principal; no self-verification
     import samantha_bd
     samantha_bd.init(conn); samantha_bd.seed(conn)                       # Samantha — AI Business Development Manager: governed BD pipeline (demand + supply) with deterministic qualification + human-approved outreach (sends fail closed with no provider; reuses core/tenant/audit/notifications)
     import core, rates

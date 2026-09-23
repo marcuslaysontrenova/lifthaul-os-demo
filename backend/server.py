@@ -2115,12 +2115,18 @@ def _public_booking_routes():
         _conn, a, int(p["id"]), note=b.get("note"))
 
     import public_provider as pp2
+    import public_driver as pd
 
     def prov_submit(a, b, p):   return pp2.submit(_conn, b)              # public provider self-registration -> contact-code challenge
     def prov_verify(a, b, p):   return pp2.verify(_conn, b)             # verify one-time code -> activate login + session token
     def prov_resend(a, b, p):   return pp2.resend(_conn, b)             # re-issue a one-time contact code
     def prov_variants(a, b, p): return pp2.variants(_conn)              # public taxonomy for the reg UI
     def prov_classify(a, b, p): return pp2.classify_preview(_conn, b.get("specs", b))   # public classify preview
+    def driver_submit(a, b, p): return pd.submit(_conn, b)
+    def driver_verify(a, b, p): return pd.verify(_conn, b)
+    def driver_resend(a, b, p): return pd.resend(_conn, b)
+    def driver_queue(a, b, p): return pd.list_applications(_conn, a, b.get("status"))
+    def driver_sponsor(a, b, p): return pd.sponsor(_conn, a, int(p["id"]), int(b["carrier_id"]))
 
     return {
         ("POST", "/public/bookings"): pb_submit,
@@ -2143,6 +2149,11 @@ def _public_booking_routes():
         ("POST", "/public/providers/resend"): prov_resend,
         ("GET", "/public/vehicle-variants"): prov_variants,
         ("POST", "/public/fleet/classify"): prov_classify,
+        ("POST", "/public/drivers"): driver_submit,
+        ("POST", "/public/drivers/verify"): driver_verify,
+        ("POST", "/public/drivers/resend"): driver_resend,
+        ("GET", "/admin/marketplace/public-driver-applications"): driver_queue,
+        ("POST", "/admin/marketplace/public-driver-applications/:id/sponsor"): driver_sponsor,
     }
 
 

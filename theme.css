@@ -533,12 +533,20 @@ button[type="submit"]:not(.line):not(.ghost):hover {
 
 .hero .hero-copy .cta {
   margin-top: 30px;
+  display: flex !important;
+  width: auto;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .hero .hero-copy .cta .btn {
-  min-height: 58px;
-  border-radius: 14px;
+  width: auto;
+  min-height: 48px;
+  padding: 11px 18px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 850;
+  flex: 0 0 auto;
 }
 
 .hero .hero-copy .cta .btn.line {

@@ -16,4 +16,8 @@
  * is used only if apiBase here is empty.
  */
 var lifthaulLocalHost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-window.RGO_CONFIG = { apiBase: lifthaulLocalHost ? "http://localhost:8787" : "" };
+window.RGO_CONFIG = {
+  apiBase: lifthaulLocalHost
+    ? "http://localhost:8787"
+    : "https://lifthaul-api-production.up.railway.app"
+};

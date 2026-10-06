@@ -2,8 +2,23 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
 import db
 import core
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+class TestProductionImageContract(unittest.TestCase):
+    def test_docker_image_includes_canonical_vehicle_catalogue(self):
+        dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn(
+            "COPY vehicle-catalogue.json ./vehicle-catalogue.json",
+            dockerfile,
+            "Production image must include the canonical catalogue loaded at API startup",
+        )
+        self.assertTrue((REPO_ROOT / "vehicle-catalogue.json").is_file())
 
 
 class TestDbFactory(unittest.TestCase):

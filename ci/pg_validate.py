@@ -1048,7 +1048,12 @@ def main():
     rres = mp.submit_release(conn, mka, ri["release_instruction_id"])
     check(rres["status"] == "COMPLETED", "release submitted to provider on PostgreSQL")
     po = conn.execute("SELECT * FROM mkt_payouts WHERE id=?", (rres["payout_id"],)).fetchone()
-    check(po["status"] == "PAID" and po["provider_beneficiary_reference"] is not None, "carrier payout snapshot on PostgreSQL")
+    # Delivery release credits the provider's governed earnings balance; it must
+    # not silently disburse money. Beneficiary validation and the provider
+    # reference are added only when a separately-authorized payout request is
+    # processed by provider_payouts.
+    check(po["status"] == "AVAILABLE" and po["provider_beneficiary_reference"] is None,
+          "carrier payout snapshot available for governed disbursement on PostgreSQL")
     # a second transaction: dispute freeze -> release blocked -> partial resolution (SoD)
     prq2 = mp.create_payment_requirement(conn, mka, asg2["assignment_id"])
     mp.record_funding_event(conn, fin, prq2["id"], "full")

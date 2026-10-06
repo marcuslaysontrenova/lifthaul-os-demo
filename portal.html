@@ -24,7 +24,7 @@ h1,h2,h3{line-height:1.16;letter-spacing:-.02em;margin:0}p{margin:0}code{font-fa
 .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
 .topbar{background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
 .topbar .in{max-width:1120px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px}
-.wordmark{font-weight:800;font-size:20px;letter-spacing:-.03em}.wordmark b:last-child{color:var(--primary)}
+.wordmark{font-weight:800;font-size:20px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}.wordmark b:last-child{color:var(--primary)}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
 .chip.c-good{background:var(--good-bg);color:var(--good)}.chip.c-warn{background:var(--warn-bg);color:var(--warn)}
 .chip.c-crit{background:var(--crit-bg);color:var(--crit)}.chip.c-info{background:var(--info-bg);color:var(--info)}.chip.c-mut{background:var(--surface-3);color:var(--muted)}
@@ -67,13 +67,14 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .hide{display:none}
 @media(prefers-reduced-motion:reduce){.btn{transition:none}.paystep.current:after{box-shadow:none}}
 </style>
-<link rel="stylesheet" href="theme.css?v=9">
+<link rel="stylesheet" href="theme.css?v=10">
 </head>
 <body>
 <div class="topbar"><div class="in">
-  <div class="wordmark"><b>Lift</b><b>Haul</b></div>
+  <a class="wordmark" href="index.html" aria-label="LiftHaul home"><b>Lift</b><b>Haul</b></a>
   <span class="chip">Carrier / Fleet Owner Portal</span>
   <span class="sp"></span>
+  <a class="btn line sm" href="index.html">Home</a>
   <span id="whoami" class="cnt hide"></span>
   <button id="logoutBtn" class="btn line sm hide" onclick="doLogout()">Sign out</button>
 </div></div>

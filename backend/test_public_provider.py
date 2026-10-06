@@ -6,6 +6,7 @@ attempt-limited / expiry-checked, a verified login resolves to its OWN carrier o
 never marketplace-eligible from this surface (compliance stays independent). The classification preview is
 read-only.
 """
+import json
 import os
 import unittest
 
@@ -131,6 +132,26 @@ class PublicProviderRegistration(unittest.TestCase):
         self.assertIn("PUBLIC_PROVIDER_APPLIED", acts)
         self.assertIn("PROVIDER_SIGNUP_CODE_ISSUED", acts)
         self.assertIn("PROVIDER_SIGNUP_VERIFIED", acts)
+
+    def test_heavy_equipment_capabilities_are_saved_with_application(self):
+        caps = ["heavy_haulage", "crane_heavy_lift", "material_handling"]
+        r = pp.submit(self.conn, _payload(provider_type="CRANE_COMPANY", capabilities=caps))
+        row = self.conn.execute(
+            "SELECT cargo_capabilities FROM mkt_carriers WHERE id=?", (r["carrier_id"],)
+        ).fetchone()
+        self.assertEqual(json.loads(row["cargo_capabilities"]), caps)
+
+    def test_initial_light_vehicle_category_is_saved_with_application(self):
+        r = pp.submit(self.conn, _payload(
+            provider_type="OWNER_OPERATOR",
+            capabilities=["vehicle:motorcycle", "cargo_delivery"],
+            initial_vehicle_category="MOTORCYCLE",
+        ))
+        row = self.conn.execute(
+            "SELECT vehicle_categories,cargo_capabilities FROM mkt_carriers WHERE id=?", (r["carrier_id"],)
+        ).fetchone()
+        self.assertEqual(json.loads(row["vehicle_categories"]), ["MOTORCYCLE"])
+        self.assertEqual(json.loads(row["cargo_capabilities"]), ["vehicle:motorcycle", "cargo_delivery"])
 
 
 class OtpProductionBoundary(unittest.TestCase):

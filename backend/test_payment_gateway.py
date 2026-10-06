@@ -7,8 +7,16 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(__file__))
 
 import db
+import core
 import payment_gateway as pg
 import public_booking
+
+CERTIFICATION_EVIDENCE = {
+    "evidence_reference": "TEST-VAULT/payment-provider/sandbox-run-001",
+    "provider_test_run_id": "xendit-sandbox-test-run-001",
+    "executed_at": "2026-08-30T01:00:00+00:00",
+    "provider_environment": "SANDBOX",
+}
 
 
 ALL_TESTS = {name: True for name in pg.REQUIRED_CERTIFICATION_TESTS}
@@ -95,8 +103,15 @@ class PaymentGatewayTests(unittest.TestCase):
         public_booking.review(self.conn, self.admin, self.booking_id, "QUOTE", quote_amount=1250)
         self.client = FakeXendit()
 
+    def test_provider_client_requires_https_api_base(self):
+        with self.assertRaises(core.ForbiddenError):
+            pg.XenditClient("test-secret", "http://api.xendit.invalid")
+
     def certify(self, channel="gcash"):
-        return pg.certify_channel(self.conn, self.admin, channel, "SANDBOX", ALL_TESTS)
+        return pg.certify_channel(
+            self.conn, self.admin, channel, "SANDBOX", ALL_TESTS,
+            evidence=CERTIFICATION_EVIDENCE,
+        )
 
     def ready(self, channel="gcash"):
         self.certify(channel)
@@ -126,6 +141,18 @@ class PaymentGatewayTests(unittest.TestCase):
         self.assertEqual([c["key"] for c in public["channels"]], ["gcash"])
         self.assertNotIn("secret", str(public).lower())
 
+    def test_channel_certification_rejects_untraceable_checkbox_only_claim(self):
+        with self.assertRaises(core.ValidationError):
+            pg.certify_channel(self.conn, self.admin, "gcash", "SANDBOX", ALL_TESTS)
+        wrong_environment = dict(CERTIFICATION_EVIDENCE, provider_environment="PRODUCTION")
+        with self.assertRaises(core.ValidationError):
+            pg.certify_channel(self.conn, self.admin, "gcash", "SANDBOX", ALL_TESTS,
+                               evidence=wrong_environment)
+        future_evidence = dict(CERTIFICATION_EVIDENCE, executed_at="2999-01-01T00:00:00+00:00")
+        with self.assertRaises(core.ValidationError):
+            pg.certify_channel(self.conn, self.admin, "gcash", "SANDBOX", ALL_TESTS,
+                               evidence=future_evidence)
+
     def test_admin_readiness_report_is_secret_free_and_fail_closed(self):
         self.certify()
         report = pg.security_readiness(self.conn, self.admin)
@@ -140,6 +167,32 @@ class PaymentGatewayTests(unittest.TestCase):
         outsider = {"id": 812, "role": "customer", "tenant_id": 1, "perms": set()}
         with self.assertRaises(Exception):
             pg.security_readiness(self.conn, outsider)
+
+    def test_production_flags_and_certification_cannot_bypass_payment_dna(self):
+        production_evidence = dict(CERTIFICATION_EVIDENCE, provider_environment="PRODUCTION")
+        self.conn.execute(
+            "INSERT INTO gateway_channel_certifications(provider,environment,channel_key,status,tests_json,"
+            "evidence_json,certified_by,certified_at) VALUES('XENDIT','PRODUCTION','gcash','CERTIFIED',?,?,?,?)",
+            (__import__("json").dumps(ALL_TESTS), __import__("json").dumps(production_evidence),
+             self.admin["id"], "2026-08-30T02:00:00+00:00"),
+        )
+        self.conn.commit()
+        with patch.dict(os.environ, {
+            "PAYMENT_GATEWAY_MODE": "production",
+            "PAYMENT_PROVIDER_CERTIFIED": "true",
+            "PAYMENT_PRODUCTION_PILOT_APPROVED": "true",
+            "PAYMENT_RECONCILIATION_AUTOMATION": "true",
+            "PAYMENT_REGULATORY_ROLE_APPROVED": "true",
+            "PAYMENT_SAFEGUARDED_FUNDS_APPROVED": "true",
+            "PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED": "true",
+            "PAYMENT_DR_RESTORE_APPROVED": "true",
+        }, clear=False):
+            public = pg.available_channels(self.conn)
+            report = pg.security_readiness(self.conn, self.admin)
+        self.assertFalse(public["available"])
+        self.assertFalse(public["payment_dna"]["live_money_allowed"])
+        self.assertFalse(report["live_activation_ready"])
+        self.assertIn("Payment & Settlement DNA", " ".join(report["blockers"]))
 
     def test_session_creation_is_provider_backed_and_idempotent(self):
         created = self.ready()
@@ -211,6 +264,56 @@ class PaymentGatewayTests(unittest.TestCase):
         self.assertEqual(result["payment"]["status"], "UNDER_REVIEW")
         self.assertNotEqual(pg._row(self.conn, created["transaction_id"])["status"], "PAID")
 
+    def test_provider_dispute_webhook_freezes_paid_transaction_and_is_idempotent(self):
+        created = self.ready()
+        pg.process_webhook(self.conn, "webhook-secret", self.success_webhook(), client=self.client)
+        tx = pg._row(self.conn, created["transaction_id"])
+        payload = {
+            "event": "dispute.action_required", "created": "2026-08-30T04:00:00Z",
+            "id": "dp-verified-001", "payment_id": tx["provider_payment_id"],
+            "reference_id": tx["reference_id"], "status": "ACTION_REQUIRED",
+            "amount": tx["amount"], "currency": "PHP", "due_date": "2026-09-05T00:00:00Z",
+            "category": "FRAUDULENT", "channel_code": "GCASH",
+        }
+        first = pg.process_webhook(self.conn, "webhook-secret", payload, client=self.client)
+        second = pg.process_webhook(self.conn, "webhook-secret", payload, client=self.client)
+        self.assertEqual(first["status"], "UNDER_REVIEW")
+        self.assertFalse(first["release_authorized"])
+        self.assertTrue(second["idempotent"])
+        self.assertEqual(pg._row(self.conn, created["transaction_id"])["status"], "UNDER_REVIEW")
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM gateway_disputes").fetchone()[0], 1)
+        fee = self.conn.execute(
+            "SELECT status FROM platform_fee_settlements WHERE gateway_transaction_id=?",
+            (created["transaction_id"],),
+        ).fetchone()
+        self.assertEqual(fee["status"], "DISPUTE_REVIEW_REQUIRED")
+
+    def test_dispute_with_wrong_currency_is_review_required_not_release(self):
+        created = self.ready()
+        pg.process_webhook(self.conn, "webhook-secret", self.success_webhook(), client=self.client)
+        tx = pg._row(self.conn, created["transaction_id"])
+        result = pg.process_webhook(self.conn, "webhook-secret", {
+            "event": "dispute.lost", "created": "2026-08-30T05:00:00Z",
+            "id": "dp-mismatch-001", "payment_id": tx["provider_payment_id"],
+            "reference_id": tx["reference_id"], "status": "LOST",
+            "amount": tx["amount"], "currency": "USD",
+        }, client=self.client)
+        self.assertEqual(result["status"], "REVIEW_REQUIRED")
+        self.assertFalse(result["release_authorized"])
+
+    def test_dispute_with_malformed_amount_fails_closed_without_crashing(self):
+        created = self.ready()
+        pg.process_webhook(self.conn, "webhook-secret", self.success_webhook(), client=self.client)
+        tx = pg._row(self.conn, created["transaction_id"])
+        result = pg.process_webhook(self.conn, "webhook-secret", {
+            "event": "dispute.under_review", "created": "2026-08-30T05:30:00Z",
+            "id": "dp-malformed-001", "payment_id": tx["provider_payment_id"],
+            "reference_id": tx["reference_id"], "status": "UNDER_REVIEW",
+            "amount": "not-a-number", "currency": "PHP",
+        }, client=self.client)
+        self.assertEqual(result["status"], "REVIEW_REQUIRED")
+        self.assertEqual(pg._row(self.conn, created["transaction_id"])["status"], "UNDER_REVIEW")
+
     def test_delayed_webhook_api_success_remains_under_review(self):
         created = self.ready()
         pending = pg.refresh_transaction(self.conn, created["transaction_id"], client=self.client)
@@ -259,6 +362,19 @@ class PaymentGatewayTests(unittest.TestCase):
         tx = pg._row(self.conn, created["transaction_id"])
         self.assertEqual(tx["status"], "PARTIALLY_REFUNDED")
         self.assertEqual(tx["refunded_amount"], 250)
+
+    def test_production_refund_unwind_remains_available_when_revenue_dna_inactive(self):
+        created = self.ready()
+        pg.process_webhook(self.conn, "webhook-secret", self.success_webhook(), client=self.client)
+        with patch.dict(os.environ, {"PAYMENT_GATEWAY_MODE": "production"}, clear=False):
+            refund = pg.request_refund(
+                self.conn, self.admin, created["transaction_id"], 250,
+                "REQUESTED_BY_CUSTOMER", "rf-production-unwind", client=self.client)
+        self.assertEqual(refund["status"], "PENDING")
+        audit = self.conn.execute(
+            "SELECT action FROM audit_logs WHERE action='PAYMENT_DNA_UNWIND_ALLOWED' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        self.assertIsNotNone(audit)
 
     def test_manual_payment_requires_second_operator_and_official_record(self):
         pg.accept_final_quote(self.conn, self.token, "quote-accept-manual")
@@ -348,7 +464,8 @@ class PaymentGatewayTests(unittest.TestCase):
                 "idempotency_key": "booking-gateway-restart",
             })
             public_booking.review(first, self.admin, result["booking_id"], "QUOTE", quote_amount=900)
-            pg.certify_channel(first, self.admin, "gcash", "SANDBOX", ALL_TESTS)
+            pg.certify_channel(first, self.admin, "gcash", "SANDBOX", ALL_TESTS,
+                               evidence=CERTIFICATION_EVIDENCE)
             pg.accept_final_quote(first, result["tracking_token"], "restart-accept")
             pg.create_payment_session(first, result["tracking_token"], "gcash", "restart-payment",
                                       client=FakeXendit())

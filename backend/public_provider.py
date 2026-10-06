@@ -190,6 +190,7 @@ def submit(conn, payload):
                      "representative": str(payload.get("representative", ""))[:200]},
         "service_areas": payload.get("service_areas") or ([payload.get("island_group")] if payload.get("island_group") else []),
         "cargo_capabilities": payload.get("capabilities") or [],
+        "vehicle_categories": payload.get("vehicle_categories") or ([payload.get("initial_vehicle_category")] if payload.get("initial_vehicle_category") else []),
         "risk_status": "UNVERIFIED",
     }
     cid = mo_create(conn, actor, _carrier_type(provider_type), legal_name, attrs)

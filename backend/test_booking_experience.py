@@ -141,12 +141,17 @@ class BookingMarkup(unittest.TestCase):
 
     def test_customer_maps_and_payment_checkout_are_functional_not_decorative(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")
+        book = (ROOT / "book.html").read_text(encoding="utf-8")
         track = (ROOT / "track.html").read_text(encoding="utf-8")
-        map_js = (ROOT / "network-map.js").read_text(encoding="utf-8")
+        map_js = (ROOT / "booking-experience.js").read_text(encoding="utf-8")
         checkout_js = (ROOT / "payment-checkout.js").read_text(encoding="utf-8")
-        self.assertIn('src="network-map.js?v=1"', home)
+        # The approved landing page intentionally has one primary booking CTA and no
+        # duplicate coverage planner.  The functional route map belongs to booking.
+        self.assertNotIn('src="network-map.js?v=1"', home)
+        self.assertIn('id="routeMap"', book)
+        self.assertIn('src="booking-experience.js"', book)
         self.assertIn("L.tileLayer", map_js)
-        self.assertIn("data-area", map_js)
+        self.assertIn("lifthaul:distancechange", map_js)
         self.assertNotIn("cloneNode(true)", home)
         self.assertIn('src="payment-checkout.js?v=1"', track)
         self.assertIn("/public/payments/channels", checkout_js)

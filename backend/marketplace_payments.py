@@ -32,6 +32,7 @@ import json
 import core
 import tenant
 import admin_platform
+import revenue_dna
 
 # --------------------------------------------------------------------------- #
 PR_STATUSES = ("DRAFT", "PAYMENT_REQUIRED", "FUNDING_INSTRUCTIONS_READY", "PENDING_FUNDING",
@@ -43,7 +44,7 @@ RECON_STATUSES = ("UNMATCHED", "POSSIBLE_MATCH", "MATCHED", "PARTIAL", "OVERPAID
                   "CHARGEBACK", "MANUAL_REVIEW", "RECONCILED")
 RELEASE_STATUSES = ("DRAFT", "PENDING_APPROVAL", "APPROVED", "SUBMITTED_TO_PROVIDER", "PROCESSING",
                     "COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "CANCELLED", "REVERSED", "MANUAL_REVIEW")
-PAYOUT_STATUSES = ("NOT_ELIGIBLE", "ELIGIBLE", "PENDING_APPROVAL", "APPROVED", "SUBMITTED",
+PAYOUT_STATUSES = ("NOT_ELIGIBLE", "ELIGIBLE", "AVAILABLE", "PENDING_APPROVAL", "APPROVED", "SUBMITTED",
                    "PROCESSING", "PAID", "FAILED", "REVERSED", "FROZEN", "CANCELLED")
 DISPUTE_STATUSES = ("OPEN", "ACKNOWLEDGED", "EVIDENCE_REQUIRED", "UNDER_REVIEW", "FUNDS_FROZEN",
                     "MEDIATION", "PROPOSED_RESOLUTION", "AWAITING_PARTY_RESPONSE", "APPROVED",
@@ -343,10 +344,14 @@ def live_funds_enabled(conn):
 def _assert_live_allowed(conn, provider_name):
     """A non-MOCK (live) rail may only be engaged when live_funds_enabled() is TRUE. Otherwise the
     request is refused before any provider call — no live custody by accident or by config drift."""
-    if (provider_name or "MOCK").upper() != "MOCK" and not live_funds_enabled(conn):
-        raise core.ForbiddenError(
-            "LIVE protected-funds are disabled (LIVE_PROTECTED_FUNDS_ENABLED=false). Requires an "
-            "approved PH legal operating model AND an active licensed provider. No funds move.")
+    if (provider_name or "MOCK").upper() != "MOCK":
+        if not live_funds_enabled(conn):
+            raise core.ForbiddenError(
+                "LIVE protected-funds are disabled (LIVE_PROTECTED_FUNDS_ENABLED=false). Requires an "
+                "approved PH legal operating model AND an active licensed provider. No funds move.")
+        revenue_dna.guard_payment_operation(
+            conn, {"id": 0, "role": "system", "tenant_id": None, "perms": set()},
+            "create_live_protected_payment", moving_real_funds=True)
 
 
 def create_payment_requirement(conn, actor, assignment_id, provider_name="MOCK", idem_key=None):
@@ -651,6 +656,7 @@ def submit_release(conn, actor, instruction_id, scenario=None):
     if ri["status"] != "APPROVED":
         raise ValueError("release must be APPROVED before provider submission")
     pr = _row(conn, "mkt_payment_requirements", ri["payment_requirement_id"])
+    _assert_live_allowed(conn, pr["provider"])
     # guard: no release during freeze / above available
     if (pr["frozen_amount"] or 0) > 0:
         raise ValueError("cannot release during an active freeze")
@@ -672,17 +678,22 @@ def submit_release(conn, actor, instruction_id, scenario=None):
         "INSERT INTO mkt_payouts(tenant_id,payment_requirement_id,release_instruction_id,carrier_id,"
         "gross_value,carrier_amount,platform_commission,payment_fee,tax,net_payout,currency,payout_provider,"
         "provider_beneficiary_reference,status,payout_date,mock_label,created_at,correlation_id) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'PAID',?,?,?,?)",
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'AVAILABLE',NULL,?,?,?)",
         (pr.get("tenant_id"), pr["id"], instruction_id, pr["carrier_id"], pr["gross_value"],
          pr["carrier_amount"], pr["platform_fee"], pr["payment_fee"], pr["tax"], ri["payout_amount"],
-         pr["currency"], pr["provider"], res["reference"], _now(), (pr.get("mock_label") or "MOCK_ONLY"),
-         _now(), _cid()))
+         pr["currency"], pr["provider"], None, (pr.get("mock_label") or "MOCK_ONLY"), _now(), _cid()))
     pid = cur.lastrowid
     tenant.stamp(conn, actor, "mkt_payouts", pid)
     core.audit(conn, actor, "MKT_RELEASE_SUBMITTED", "mkt_release_instructions", instruction_id, None,
-               {"payout_id": pid, "provider_ref": res["reference"]})
+               {"payout_id": pid, "release_provider_ref": res["reference"],
+                "payout_status": "AVAILABLE"})
+    # Release and beneficiary disbursement are separate financial events.  The carrier/fleet wallet
+    # receives an available earning here; a governed on-demand or scheduled payout moves it.
+    import provider_payouts
+    provider_payouts.credit_release(conn, actor, pid)
     conn.commit()
-    return {"status": "COMPLETED", "payout_id": pid, "provider_reference": res["reference"]}
+    return {"status": "COMPLETED", "payout_id": pid, "payout_status": "AVAILABLE",
+            "provider_reference": res["reference"]}
 
 
 # --------------------------------------------------------------------------- #

@@ -53,6 +53,7 @@ jobs:
       APP_ENV: production
       APP_SECRET: CI-LiftHaul-Application-Secret-2026-000000000
       CORS_ORIGINS: http://localhost:3000
+      REVENUE_DNA_ENFORCEMENT: enforce
       PORT: "8787"
       LIFTHAUL_CI: "true"
       LH_ADMIN_EMAIL: admin@ci.lifthaul.invalid

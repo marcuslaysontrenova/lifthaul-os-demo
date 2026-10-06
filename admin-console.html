@@ -11,7 +11,7 @@
     --muted:#5b6b52; --danger:#c0392b; --ok:#2e7d32;
     --mode-view:#5b6b7b; --mode-edit:#70C247; --mode-approval:#D59B24; --mode-finance:#006B3C; --mode-dispatch:#2f6fb0;
   }
-  *{box-sizing:border-box;margin:0} body{font-family:Inter,Arial,Helvetica,sans-serif;color:var(--ink);background:var(--surface-2)}
+  *{box-sizing:border-box;margin:0} body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:var(--surface-2)}
   a{color:inherit}
   /* login */
   #login{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(120% 120% at 80% -20%,rgba(112,194,71,.16),transparent 55%),linear-gradient(120deg,#003b22,#006b3c)}
@@ -58,7 +58,7 @@
   .dlg h3{font-size:16px} .dlg .rule{color:var(--muted);font-size:12px;margin-top:3px}
 </style>
   <script src="config.js"></script>
-<link rel="stylesheet" href="theme.css?v=9">
+<link rel="stylesheet" href="theme.css?v=10">
 </head>
 <body>
 
@@ -274,6 +274,7 @@ const MENU = [
     {id:'ai_killswitch', label:'Kill Switch'},
   ]},
   {sect:'SaaS and Commercial', items:[
+    {id:'revenue_dna', label:'Revenue & Compliance DNA'},
     {id:'saas_products', label:'Products'},
     {id:'saas_plans', label:'Plans and Editions'},
     {id:'saas_plan_designer', label:'Plan Designer'},
@@ -1109,6 +1110,79 @@ Object.assign(SCREENS, {
     c.innerHTML=header(it,'Customer health — deterministic metrics. AI must not autonomously suspend or terminate a customer.',
       `<button class="btn sm" onclick="saasHealth()">Assess tenant</button>`)+`<div id="shres"></div>`; },
 });
+// ---- Revenue & Compliance DNA: one canonical activation gate above every earning engine ----
+Object.assign(SCREENS, {
+  revenue_dna: async (it,c)=>{
+    const [s,d]=await Promise.all([api('GET','/admin/revenue-dna/summary'),api('GET','/admin/revenue-dna/schemes')]);
+    const mode=s.enforcement_mode==='enforce'?'ACTIVE':'DRAFT';
+    c.innerHTML=header(it,'Every way LiftHaul can earn, mapped to its Philippine legal, tax, payment, transport, safety, privacy and evidence gates.')+
+      `<div class="note"><b>Runtime enforcement: ${pill(mode)} ${rdEsc(s.enforcement_mode)}</b> — schemes begin non-active. Revenue activation requires verified evidence, an independent submitter/approver/activator chain, and current controls. Payment never means accreditation or government approval.</div>`+
+      `<div class="kv"><div class="k">Governed schemes</div><div><b>${s.total_schemes}</b></div>`+
+      `<div class="k">Active</div><div><b>${s.active_schemes}</b></div>`+
+      `<div class="k">Blocked / incomplete</div><div><b>${s.blocked_schemes}</b></div>`+
+      `<div class="k">Ready to submit</div><div><b>${s.ready_for_approval}</b></div></div>`+
+      table(['Scheme','Category','Phase','Regulatory gate','Readiness','Status','Action'],d.schemes,r=>[
+        `<b>${rdEsc(r.name)}</b><br><span style="color:var(--muted)">${rdEsc(r.code)}</span>`,rdEsc(r.category),rdEsc(r.launch_phase),
+        rdEsc(r.regulatory_level),`${r.readiness.verified_controls}/${r.readiness.required_controls} verified${r.readiness.missing_controls.length?` · <span style="color:var(--danger)">${r.readiness.missing_controls.length} open</span>`:''}`,
+        pill(rdPill(r.status))+' '+rdEsc(r.status),`<button class="btn sm" onclick="rdOpen('${rdEsc(r.code)}')">Open checklist</button>`])+
+      `<div id="rdDetail"></div>`;
+  },
+});
+
+function rdEsc(v){ return String(v===null||v===undefined?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function rdPill(s){ return s==='ACTIVE'?'ACTIVE':(s==='SUSPENDED'||s==='BLOCKED'||s==='RETIRED')?'INACTIVE':s==='APPROVED'?'ACTIVE':'DRAFT'; }
+function rdActions(d){
+  const b=[];
+  if(['ASSESSMENT','BLOCKED','SUSPENDED'].includes(d.status)) b.push(`<button class="btn sm" onclick="rdTransition('${rdEsc(d.code)}','submit')">Submit for approval</button>`);
+  if(d.status==='READY_FOR_APPROVAL') b.push(`<button class="btn sm" onclick="rdTransition('${rdEsc(d.code)}','approve')">Approve</button>`);
+  if(d.status==='APPROVED') b.push(`<button class="btn sm" onclick="rdTransition('${rdEsc(d.code)}','activate')">Activate</button>`);
+  if(d.status==='ACTIVE') b.push(`<button class="btn sm danger" onclick="rdTransition('${rdEsc(d.code)}','suspend')">Suspend</button>`);
+  return b.join(' ');
+}
+async function rdOpen(code){
+  const el=document.getElementById('rdDetail'); el.innerHTML='<div class="empty">Loading checklist…</div>';
+  try{
+    const d=await api('GET','/admin/revenue-dna/schemes/'+encodeURIComponent(code));
+    const links=(d.legal_basis||[]).map(x=>`<a href="${rdEsc(x.url)}" target="_blank" rel="noopener">${rdEsc(x.authority)} · ${rdEsc(x.topic)}</a>`).join('<br>');
+    const controls=table(['Control','Owner','Status','Evidence','Action'],d.controls,r=>[
+      `<b>${rdEsc(r.title)}</b><br><span style="color:var(--muted)">${rdEsc(r.category)} · ${rdEsc(r.code)}</span><br>${rdEsc(r.description)}`,
+      rdEsc(r.owner_role),pill(rdPill(r.status))+' '+rdEsc(r.status),r.evidence_id?'#'+r.evidence_id:'—',
+      r.status==='VERIFIED'?'Verified':`<button class="btn sm" onclick="rdEvidence('${rdEsc(code)}','${rdEsc(r.code)}')">Add evidence ref</button>`]);
+    const pending=(d.evidence||[]).filter(x=>x.status==='SUBMITTED');
+    const pendingTable=pending.length?`<h3>Evidence awaiting independent verification</h3>`+table(['Id','Control','Reference','Submitted by','Action'],pending,r=>[
+      r.id,rdEsc((d.controls.find(c=>c.id===r.control_id)||{}).title||r.control_id),rdEsc(r.evidence_ref),r.submitted_by,
+      `<button class="btn sm" onclick="rdVerify(${r.id},'VERIFIED','${rdEsc(code)}')">Verify</button> <button class="btn sm danger" onclick="rdVerify(${r.id},'REJECTED','${rdEsc(code)}')">Reject</button>`]):'';
+    el.innerHTML=`<div class="wrap" style="padding:18px;margin-top:18px"><h2 class="screen">${rdEsc(d.name)}</h2>`+
+      `<div class="sub">${rdEsc(d.description)}</div><div class="bar">${rdActions(d)}</div>`+
+      `<div class="kv"><div class="k">Applicability</div><div>${rdEsc(d.applicability)}</div>`+
+      `<div class="k">Revenue model</div><div>${rdEsc(d.pricing_model)}</div>`+
+      `<div class="k">Existing engine</div><div>${rdEsc(d.existing_module)}</div>`+
+      `<div class="k">Owner</div><div>${rdEsc(d.owner_role)}</div>`+
+      `<div class="k">Primary-source register</div><div>${links}</div></div>`+
+      `<h3>Activation checklist · ${d.readiness.verified_controls}/${d.readiness.required_controls} complete</h3>${controls}${pendingTable}</div>`;
+    el.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){ el.innerHTML=`<div class="note" style="color:var(--danger)">${rdEsc(e.message)}</div>`; }
+}
+async function rdEvidence(code,control){
+  const ref=prompt('Governed evidence reference (document URL/id — never paste secrets):'); if(!ref) return;
+  const desc=prompt('Short evidence description:','Current verified document')||'';
+  const expiry=prompt('Expiry date if applicable (YYYY-MM-DD; blank if none):','')||null;
+  try{ await api('POST','/admin/revenue-dna/schemes/'+encodeURIComponent(code)+'/controls/'+encodeURIComponent(control)+'/evidence',{evidence_ref:ref,description:desc,expires_at:expiry}); await rdOpen(code); }
+  catch(e){ alert(e.message); }
+}
+async function rdVerify(id,decision,code){
+  const reason=decision==='REJECTED'?prompt('Rejection reason:'):prompt('Verification note (optional):','');
+  if(decision==='REJECTED'&&!reason) return;
+  try{ await api('POST','/admin/revenue-dna/evidence/'+id+'/verify',{decision,reason}); await rdOpen(code); }
+  catch(e){ alert(e.message); }
+}
+async function rdTransition(code,action){
+  const reason=prompt((action==='suspend'?'Suspension reason (required):':'Decision note:'),'')||'';
+  if(action==='suspend'&&!reason) return;
+  if(!confirm(action.toUpperCase()+' '+code+'? Separation-of-duties and current evidence will be checked server-side.')) return;
+  try{ await api('POST','/admin/revenue-dna/schemes/'+encodeURIComponent(code)+'/'+action,{reason}); render(CURRENT); }
+  catch(e){ alert(e.message); }
+}
 // ---- Nationwide Marketplace screens (foundation + onboarding; all actions hit persisted APIs) ----
 Object.assign(SCREENS, {
   mkt_cargo: async (it,c)=>{ const d=await api('GET','/admin/marketplace/cargo');

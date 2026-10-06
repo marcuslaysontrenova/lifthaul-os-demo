@@ -36,6 +36,15 @@ import re
 
 import core
 import tenant
+
+
+# Accepted only at legacy API boundaries; all new records persist the canonical code.
+LEGACY_VEHICLE_CODE_ALIASES = {
+    "elf_4w": "four_wheel_closed",
+    "ref_van_light": "truck_6w_ref",
+    "truck_6w_wing": "truck_10w_wing",
+    "prime_mover": "tractor_head",
+}
 import marketplace as mkt
 
 # --------------------------------------------------------------------------- #
@@ -561,6 +570,12 @@ def activate_carrier(conn, actor, carrier_id):
     core.require(actor, "marketplace.carrier.activate")
     row = _guarded(conn, actor, "mkt_carriers", carrier_id)
     _fail_closed_activation(conn, row, "CARRIER", carrier_id, actor)
+    # A deposit blocks activation only after an evidence-backed policy is deliberately activated.
+    # The default seeded policy is DRAFT, so this adds no hidden registration fee.
+    import provider_security_deposit as _psd
+    deposit_gate = _psd.gate(conn, actor.get("tenant_id"), carrier_id)
+    if not deposit_gate["ok"]:
+        raise ValueError(f"carrier activation blocked (security deposit): {deposit_gate['reasons']}")
     _set(conn, "mkt_carriers", carrier_id, status="ACTIVE", activated_by=actor["id"],
          activated_at=_now(), updated_by=actor["id"])
     core.audit(conn, actor, "MKT_CARRIER_ACTIVATED", "mkt_carriers", carrier_id, {"status": row["status"]}, {"status": "ACTIVE"})
@@ -618,6 +633,7 @@ def _fail_closed_activation(conn, row, subject_type, subject_id, actor):
 def register_vehicle(conn, actor, carrier_id, category_code, plate_number, **attrs):
     core.require(actor, "marketplace.vehicle.manage")
     carrier = _guarded(conn, actor, "mkt_carriers", carrier_id)   # cross-tenant carrier -> 404
+    category_code = LEGACY_VEHICLE_CODE_ALIASES.get(category_code, category_code)
     cat = conn.execute("SELECT * FROM mkt_vehicle_categories WHERE code=?", (category_code,)).fetchone()
     if not cat:
         raise ValueError(f"unknown vehicle category '{category_code}'")
@@ -710,13 +726,15 @@ def list_vehicles(conn, actor, carrier_id=None, status=None):
 def register_driver(conn, actor, carrier_id, full_name, **attrs):
     core.require(actor, "marketplace.driver.manage")
     _guarded(conn, actor, "mkt_carriers", carrier_id)
+    authorized = [LEGACY_VEHICLE_CODE_ALIASES.get(code, code)
+                  for code in (attrs.get("authorized_categories") or [])]
     cur = conn.execute(
         "INSERT INTO mkt_drivers(carrier_id,full_name,identity_ref,licence_number,licence_class,"
         "licence_expiry,authorized_categories,training,safety_qualifications,route_experience,"
         "port_experience,emergency_contact,status,created_by,created_at,correlation_id) "
         "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'APPLICATION',?,?,?)",
         (carrier_id, full_name, attrs.get("identity_ref"), attrs.get("licence_number"),
-         attrs.get("licence_class"), attrs.get("licence_expiry"), _j(attrs.get("authorized_categories")),
+         attrs.get("licence_class"), attrs.get("licence_expiry"), _j(authorized),
          attrs.get("training"), attrs.get("safety_qualifications"), attrs.get("route_experience"),
          attrs.get("port_experience"), attrs.get("emergency_contact"), actor["id"], _now(), _cid()))
     did = cur.lastrowid

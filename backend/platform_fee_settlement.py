@@ -18,11 +18,13 @@ import hashlib
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 
 import core
 import tenant
+import revenue_dna
 
 
 PROVIDER = "WISE"
@@ -117,6 +119,9 @@ class WiseAdminFeeClient:
     """
     def __init__(self, cfg=None, timeout=20):
         self.cfg = cfg or settlement_config()
+        parsed = urllib.parse.urlsplit(str(self.cfg.get("api_base") or ""))
+        if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise WiseFeeError("Wise API base URL must be HTTPS without embedded credentials")
         self.timeout = timeout
 
     def _url(self, path):
@@ -133,7 +138,7 @@ class WiseAdminFeeClient:
             headers["X-External-Correlation-Id"] = str(correlation_id)[:36]
         request = urllib.request.Request(self._url(path), data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310: HTTPS validated in constructor
                 raw = response.read().decode("utf-8")
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as exc:
@@ -232,8 +237,15 @@ def record_verified_payment(conn, gateway_transaction_id, client=None):
     if abs(gross - float(source.get("quote_amount") or 0)) > 0.01:
         integrity.append("paid amount does not match final quotation")
     cfg = settlement_config()
-    blockers = integrity + _blockers(cfg)
-    status = "REVIEW_REQUIRED" if integrity else ("BLOCKED_CONFIGURATION" if blockers else "READY")
+    dna = revenue_dna.payment_dna_readiness(conn)
+    dna_blockers = [] if dna["live_money_allowed"] else [
+        "Payment & Settlement DNA is not ACTIVE with current verified evidence"
+    ]
+    config_blockers = _blockers(cfg)
+    blockers = integrity + dna_blockers + config_blockers
+    status = ("REVIEW_REQUIRED" if integrity else
+              ("BLOCKED_DNA" if dna_blockers else
+               ("BLOCKED_CONFIGURATION" if config_blockers else "READY")))
     idem = f"WISE-ADMIN-FEE:{gateway_transaction_id}:v1"
     cur = conn.execute(
         "INSERT INTO platform_fee_settlements(tenant_id,booking_id,gateway_transaction_id,provider,"
@@ -260,8 +272,24 @@ def attempt_transfer(conn, settlement_id, client=None, actor=None):
     if actor is not None:
         core.require(actor, "marketplace.payment.reconcile")
         tenant.guard(actor, row)
-    if row["status"] in {"SUBMITTED", "PROCESSING", "COMPLETED"}:
+    if row["status"] in {"PROCESSING", "COMPLETED"}:
         return {**_public(row), "idempotent": True}
+    payment_actor = actor or _system_actor()
+    try:
+        revenue_dna.guard_payment_operation(
+            conn, payment_actor, "transfer_lifthaul_administration_fee", moving_real_funds=True)
+    except core.ForbiddenError:
+        dna = revenue_dna.payment_dna_readiness(conn)
+        blockers = [
+            "Payment & Settlement DNA is not ACTIVE with current verified evidence",
+            *[f"unresolved:{code}" for code in dna["missing_controls"]],
+        ]
+        conn.execute(
+            "UPDATE platform_fee_settlements SET status='BLOCKED_DNA',blocker_json=?,updated_at=? WHERE id=?",
+            (json.dumps(blockers, sort_keys=True), _now(), settlement_id),
+        )
+        conn.commit()
+        return _public(_row(conn, settlement_id))
     cfg = settlement_config()
     blockers = _blockers(cfg)
     if blockers:
@@ -275,25 +303,32 @@ def attempt_transfer(conn, settlement_id, client=None, actor=None):
     correlation_id = str(uuid.uuid5(uuid.NAMESPACE_URL, row["idempotency_key"]))
     customer_tx_id = correlation_id
     try:
-        quote = wise.create_quote(amount=row["fee_amount"], currency=row["currency"], correlation_id=correlation_id)
-        quote_id = quote.get("id") or quote.get("quoteUuid") or quote.get("quote_id")
-        if not quote_id:
-            raise WiseFeeError("Wise quote response has no identifier")
-        transfer = wise.create_transfer(
-            quote_id=quote_id, customer_transaction_id=customer_tx_id,
-            reference=f"LiftHaul admin fee booking {row['booking_id']}", correlation_id=correlation_id,
-        )
-        transfer_id = transfer.get("id") or transfer.get("transferId")
-        if not transfer_id:
-            raise WiseFeeError("Wise transfer response has no identifier")
-        conn.execute(
-            "UPDATE platform_fee_settlements SET wise_quote_id=?,wise_transfer_id=?,wise_status=?,"
-            "status='SUBMITTED',submitted_at=?,provider_response_hash=?,updated_at=? WHERE id=?",
-            (str(quote_id), str(transfer_id), str(transfer.get("status") or "created"), _now(),
-             _hash({"quote": quote_id, "transfer": transfer_id, "status": transfer.get("status")}),
-             _now(), settlement_id),
-        )
-        conn.commit()  # durable provider id before attempting to fund
+        if row.get("wise_transfer_id"):
+            # Resume the exact durable provider transfer after an uncertain fund
+            # request/crash. Never create another quote/transfer for the same fee.
+            quote_id = row.get("wise_quote_id")
+            transfer_id = row["wise_transfer_id"]
+            transfer = {"status": row.get("wise_status") or "created"}
+        else:
+            quote = wise.create_quote(amount=row["fee_amount"], currency=row["currency"], correlation_id=correlation_id)
+            quote_id = quote.get("id") or quote.get("quoteUuid") or quote.get("quote_id")
+            if not quote_id:
+                raise WiseFeeError("Wise quote response has no identifier")
+            transfer = wise.create_transfer(
+                quote_id=quote_id, customer_transaction_id=customer_tx_id,
+                reference=f"LiftHaul admin fee booking {row['booking_id']}", correlation_id=correlation_id,
+            )
+            transfer_id = transfer.get("id") or transfer.get("transferId")
+            if not transfer_id:
+                raise WiseFeeError("Wise transfer response has no identifier")
+            conn.execute(
+                "UPDATE platform_fee_settlements SET wise_quote_id=?,wise_transfer_id=?,wise_status=?,"
+                "status='SUBMITTED',submitted_at=?,provider_response_hash=?,updated_at=? WHERE id=?",
+                (str(quote_id), str(transfer_id), str(transfer.get("status") or "created"), _now(),
+                 _hash({"quote": quote_id, "transfer": transfer_id, "status": transfer.get("status")}),
+                 _now(), settlement_id),
+            )
+            conn.commit()  # durable provider id before attempting to fund
         funded = wise.fund_transfer(transfer_id=transfer_id, correlation_id=correlation_id)
         provider_status = str(funded.get("status") or transfer.get("status") or "processing").lower()
         completed = provider_status in {"outgoing_payment_sent", "completed"}
@@ -369,6 +404,36 @@ def handle_refund(conn, gateway_transaction_id, refunded_amount):
     core.audit(conn, _system_actor(), "ADMIN_FEE_REFUND_IMPACT_RECORDED",
                "platform_fee_settlements", row["id"],
                new={"refunded_amount": refunded, "recovery_amount": recovery, "status": status})
+    conn.commit()
+    return _public(_row(conn, row["id"]))
+
+
+def handle_dispute(conn, gateway_transaction_id, disputed_amount=None, event_type=None):
+    """Freeze LiftHaul fee treatment when the underlying customer payment is disputed.
+
+    A provider dispute webhook is evidence of risk, never authority to claw back,
+    re-transfer or release money automatically. Finance must reconcile the final
+    provider outcome through the governed recovery process.
+    """
+    row = conn.execute(
+        "SELECT * FROM platform_fee_settlements WHERE gateway_transaction_id=?",
+        (gateway_transaction_id,),
+    ).fetchone()
+    if not row:
+        return {"status": "NOT_APPLICABLE"}
+    row = dict(row)
+    disputed = round(float(disputed_amount if disputed_amount is not None else row["gross_amount"]), 2)
+    recovery = round(min(float(row["fee_amount"]),
+                         disputed * (float(row["fee_amount"]) / float(row["gross_amount"]))), 2)
+    conn.execute(
+        "UPDATE platform_fee_settlements SET status='DISPUTE_REVIEW_REQUIRED',recovery_amount=?,"
+        "recovery_status='OPEN',safe_error=?,updated_at=? WHERE id=?",
+        (recovery, f"provider event {str(event_type or 'dispute')[:100]}", _now(), row["id"]),
+    )
+    core.audit(conn, _system_actor(), "ADMIN_FEE_DISPUTE_IMPACT_RECORDED",
+               "platform_fee_settlements", row["id"],
+               new={"disputed_amount": disputed, "recovery_amount": recovery,
+                    "automatic_release": False})
     conn.commit()
     return _public(_row(conn, row["id"]))
 

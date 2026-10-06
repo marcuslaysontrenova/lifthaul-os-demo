@@ -32,6 +32,8 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: REVENUE_DNA_ENFORCEMENT
+        value: enforce
       - key: DATABASE_URL
         fromDatabase:
           name: lifthaul-db

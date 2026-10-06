@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 25  # public driver application + governed carrier sponsorship
+SCHEMA_VERSION = 27  # refundable provider-security-deposit liability and safeguarding controls
 
 
 def _now():
@@ -87,6 +87,8 @@ def _seed_platform(conn):
     import marketplace_onboarding
     import marketplace_matching
     import marketplace_payments
+    import provider_payouts
+    import provider_security_deposit
     import payment_gateway
     import marketplace_trips
     admin_platform.init(conn)
@@ -109,6 +111,8 @@ def _seed_platform(conn):
     marketplace_onboarding.init(conn); marketplace_onboarding.seed(conn)  # Marketplace Inc.2: shipper/carrier/vehicle/driver onboarding + compliance
     marketplace_matching.init(conn); marketplace_matching.seed(conn)     # Marketplace Inc.3: booking/pricing/matching/offers/assignment
     marketplace_payments.init(conn); marketplace_payments.seed(conn)     # Marketplace Inc.4: protected payment/release/payout/disputes/refunds
+    provider_payouts.init(conn); provider_payouts.seed(conn)              # Provider/fleet earnings wallet + governed on-demand/weekly payouts
+    provider_security_deposit.init(conn); provider_security_deposit.seed(conn)  # Refundable provider-held security deposit; DRAFT/inert until legal + PSP approval
     payment_gateway.init(conn); payment_gateway.seed(conn)               # Licensed-gateway edge: checkout sessions, verified webhooks, channel certification + reconciliation
     marketplace_trips.init(conn); marketplace_trips.seed(conn)           # Marketplace Inc.5: trip execution/GPS/geofence/proof-of-delivery
     import marketplace_trust
@@ -159,6 +163,8 @@ def _seed_platform(conn):
     cargo_insurance.init(conn); cargo_insurance.seed(conn)               # Cargo Insurance Compliance: provider-uploaded certificate + independent review + expiry monitoring as a marketplace-eligibility gate (NOT an insurance product; separate from vehicle insurance; config-gated)
     import referral
     referral.init(conn); referral.seed(conn)                             # Referral Rewards: SINGLE-LEVEL direct referral (no downline/override); codes + server-side attribution + real-event qualification + fraud screen + finance-approved payout + campaigns/budget/caps; feature-flagged OFF by default
+    import revenue_dna
+    revenue_dna.init(conn); revenue_dna.seed(conn)                       # Revenue & Compliance DNA: canonical earning-scheme registry + evidence/SoD/approval/activation gates; non-active by default
     import availability
     availability.init(conn); availability.seed(conn)                     # Carrier Operations: driver/vehicle availability overlay (computed effective status; feeds eligibility + governed reassignment closure; never a second source of truth)
     import public_provider

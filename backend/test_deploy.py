@@ -80,6 +80,7 @@ class TestCors(unittest.TestCase):
             "CORS_ORIGINS": "https://app.lifthaul.example",
             "LH_ADMIN_EMAIL": "platform-admin@lifthaul.example",
             "LH_ADMIN_PASSWORD": "LiftHaul-Admin-2026-Strong",
+            "REVENUE_DNA_ENFORCEMENT": "enforce",
         }
         self.assertEqual(server._production_config_errors(env), [])
 
@@ -118,6 +119,7 @@ class TestCors(unittest.TestCase):
             "CORS_ORIGINS": "http://localhost:3000",
             "LH_ADMIN_EMAIL": "platform-admin@lifthaul.example",
             "LH_ADMIN_PASSWORD": "LiftHaul-Admin-2026-Strong",
+            "REVENUE_DNA_ENFORCEMENT": "enforce",
         }
         self.assertTrue(any("HTTPS" in e for e in server._production_config_errors(env)))
         env["LIFTHAUL_CI"] = "true"

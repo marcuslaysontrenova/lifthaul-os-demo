@@ -806,6 +806,13 @@ def create_assignment(conn, actor, booking_id):
                                              area=b.get("origin_zone"))
         if not gate["ok"]:
             raise ValueError(f"assignment blocked (LTFRB authority): {gate['reasons']}")
+    # Re-check the provider security requirement at assignment time. This is inert while policy is
+    # DRAFT, but prevents a provider whose regulated-provider-held balance fell below an active
+    # minimum from accepting new work.
+    import provider_security_deposit as _psd
+    deposit_gate = _psd.gate(conn, b.get("tenant_id"), o["carrier_id"])
+    if not deposit_gate["ok"]:
+        raise ValueError(f"assignment blocked (security deposit): {deposit_gate['reasons']}")
     snap = conn.execute("SELECT * FROM mkt_pricing_snapshots WHERE booking_id=? ORDER BY id DESC LIMIT 1",
                         (booking_id,)).fetchone()
     high_value = (snap and snap["total"] and snap["total"] >= HIGH_VALUE_THRESHOLD) or (o["amount"] >= HIGH_VALUE_THRESHOLD)

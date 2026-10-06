@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 
@@ -74,7 +75,8 @@ class PublicDriverFlow(unittest.TestCase):
 
     def test_validation_and_duplicate_controls(self):
         for update in ({"consent": False}, {"licence_number": ""}, {"password": "weak"},
-                       {"years_experience": -1}):
+                       {"years_experience": -1}, {"licence_expiry": "2020-01-01"},
+                       {"licence_expiry": "not-a-date"}, {"partner_track": "UNSUPPORTED"}):
             with self.subTest(update=update), self.assertRaises(core.ValidationError):
                 pd.submit(self.conn, payload(**update))
         pd.submit(self.conn, payload())
@@ -83,6 +85,42 @@ class PublicDriverFlow(unittest.TestCase):
         with self.assertRaises(core.ConflictError):
             pd.submit(self.conn, payload(email="other@example.test", username="other@example.test",
                                          licence_number="n01-23-456789"))
+
+    def test_heavy_equipment_operator_track_is_persisted_separately_from_provider_ownership(self):
+        r = pd.submit(self.conn, payload(
+            partner_track="HEAVY_EQUIPMENT_OPERATOR",
+            authorized_categories=["HEAVY_EQUIPMENT"],
+        ))
+        app = self.conn.execute(
+            "SELECT partner_track,authorized_categories FROM public_driver_applications WHERE id=?",
+            (r["application_id"],),
+        ).fetchone()
+        self.assertEqual(app["partner_track"], "HEAVY_EQUIPMENT_OPERATOR")
+        self.assertEqual(json.loads(app["authorized_categories"]), ["HEAVY_EQUIPMENT"])
+
+    def test_canonical_vehicle_code_is_validated_and_persisted(self):
+        r = pd.submit(self.conn, payload(
+            partner_track="LIGHT_VEHICLE_DRIVER",
+            vehicle_category_code="mini_van",
+            authorized_categories=["VAN"],
+        ))
+        app = self.conn.execute(
+            "SELECT partner_track,vehicle_category_code FROM public_driver_applications WHERE id=?",
+            (r["application_id"],),
+        ).fetchone()
+        self.assertEqual(app["vehicle_category_code"], "mini_van")
+        with self.assertRaises(core.ValidationError):
+            pd.submit(self.conn, payload(
+                email="wrong-track@example.test", username="wrong-track@example.test",
+                licence_number="N01-23-456788", partner_track="MOTORCYCLE_RIDER",
+                vehicle_category_code="mini_van",
+            ))
+        with self.assertRaises(core.ValidationError):
+            pd.submit(self.conn, payload(
+                email="unknown@example.test", username="unknown@example.test",
+                licence_number="N01-23-456787", partner_track="LIGHT_VEHICLE_DRIVER",
+                vehicle_category_code="not_a_vehicle",
+            ))
 
     def test_audit_trail_and_ui_route(self):
         r = pd.submit(self.conn, payload())

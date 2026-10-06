@@ -10,6 +10,7 @@ import json
 import secrets
 
 import core
+import marketplace as mkt
 import public_provider as otp
 import tenant
 
@@ -18,6 +19,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS public_driver_applications(
   id INTEGER PRIMARY KEY, tenant_id INTEGER, user_id INTEGER NOT NULL,
   full_name TEXT NOT NULL, email TEXT, mobile TEXT, base_location TEXT,
+  partner_track TEXT NOT NULL DEFAULT 'TRUCK_DRIVER',
+  vehicle_category_code TEXT,
   employment_mode TEXT, current_company TEXT, licence_number TEXT NOT NULL,
   licence_class TEXT NOT NULL, licence_expiry TEXT NOT NULL,
   authorized_categories TEXT, years_experience INTEGER DEFAULT 0,
@@ -38,6 +41,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_public_driver_licence ON public_driver_appl
 
 def init(conn):
     conn.executescript(SCHEMA)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(public_driver_applications)").fetchall()}
+    if "partner_track" not in columns:
+        conn.execute("ALTER TABLE public_driver_applications ADD COLUMN partner_track TEXT NOT NULL DEFAULT 'TRUCK_DRIVER'")
+    if "vehicle_category_code" not in columns:
+        conn.execute("ALTER TABLE public_driver_applications ADD COLUMN vehicle_category_code TEXT")
     conn.commit()
 
 
@@ -64,6 +72,21 @@ def submit(conn, payload):
     licence_number = _clean(payload, "licence_number", 80).upper()
     licence_class = _clean(payload, "licence_class", 80)
     licence_expiry = _clean(payload, "licence_expiry", 20)
+    partner_track = _clean(payload, "partner_track", 40) or "TRUCK_DRIVER"
+    vehicle_category_code = _clean(payload, "vehicle_category_code", 80)
+    allowed_tracks = {"MOTORCYCLE_RIDER", "LIGHT_VEHICLE_DRIVER", "TRUCK_DRIVER", "HEAVY_EQUIPMENT_OPERATOR"}
+    if partner_track not in allowed_tracks:
+        raise core.ValidationError("partner_track is not supported")
+    if vehicle_category_code:
+        catalogue = {v["code"]: v for v in mkt.canonical_vehicle_catalogue()["vehicles"]}
+        vehicle = catalogue.get(vehicle_category_code)
+        if not vehicle or not vehicle.get("active"):
+            raise core.ValidationError("vehicle_category_code is not an active canonical LiftHaul category")
+        expected_track = ("MOTORCYCLE_RIDER" if vehicle["group"] == "Motorcycle Delivery" else
+                          "LIGHT_VEHICLE_DRIVER" if vehicle["group"] == "Light Vehicles" else
+                          "TRUCK_DRIVER")
+        if partner_track != expected_track:
+            raise core.ValidationError("vehicle_category_code does not match the selected partner track")
     if not full_name:
         raise core.ValidationError("full name is required")
     if not (email or mobile):
@@ -74,6 +97,13 @@ def submit(conn, payload):
         raise core.ValidationError("password must be at least 8 characters")
     if not (licence_number and licence_class and licence_expiry):
         raise core.ValidationError("professional licence number, class, and expiry are required")
+    import datetime
+    try:
+        expiry_date = datetime.date.fromisoformat(licence_expiry[:10])
+    except (TypeError, ValueError):
+        raise core.ValidationError("professional licence expiry must be a valid date")
+    if expiry_date <= datetime.date.today():
+        raise core.ValidationError("professional licence must be unexpired")
     duplicate = conn.execute("SELECT 1 FROM public_driver_applications WHERE licence_number=? UNION ALL "
                              "SELECT 1 FROM mkt_drivers WHERE UPPER(licence_number)=? LIMIT 1",
                              (licence_number, licence_number)).fetchone()
@@ -99,12 +129,12 @@ def submit(conn, payload):
     conn.execute("UPDATE users SET status='PENDING_DRIVER_REVIEW' WHERE id=?", (uid,))
     now = core.now()
     cur = conn.execute(
-        "INSERT INTO public_driver_applications(tenant_id,user_id,full_name,email,mobile,base_location,"
+        "INSERT INTO public_driver_applications(tenant_id,user_id,full_name,email,mobile,base_location,partner_track,vehicle_category_code,"
         "employment_mode,current_company,licence_number,licence_class,licence_expiry,authorized_categories,"
         "years_experience,route_experience,safety_qualifications,emergency_contact,consent_at,status,created_at,updated_at) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING_CONTACT',?,?)",
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING_CONTACT',?,?)",
         (actor.get("tenant_id"), uid, full_name, email or None, mobile or None,
-         _clean(payload, "base_location", 300) or None,
+         _clean(payload, "base_location", 300) or None, partner_track, vehicle_category_code or None,
          _clean(payload, "employment_mode", 40) or "SEEKING_FLEET",
          _clean(payload, "current_company", 200) or None, licence_number, licence_class,
          licence_expiry, json.dumps(categories), years,
@@ -114,7 +144,9 @@ def submit(conn, payload):
     app_id = cur.lastrowid
     challenge = _issue(conn, app_id, uid, login, email, mobile)
     core.audit(conn, actor, "PUBLIC_DRIVER_APPLIED", "public_driver_applications", app_id, None,
-               {"user_id": uid, "licence_class": licence_class, "status": "PENDING_CONTACT"})
+               {"user_id": uid, "licence_class": licence_class, "partner_track": partner_track,
+                "vehicle_category_code": vehicle_category_code or None,
+                "status": "PENDING_CONTACT"})
     conn.commit()
     out = {"ref": f"DRV-{app_id}", "application_id": app_id, "challenge_id": challenge["challenge_id"],
            "login": login, "status": "VERIFY_CONTACT", "channel": challenge["channel"],

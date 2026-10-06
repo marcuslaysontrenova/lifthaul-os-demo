@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Join LiftHaul — Provider Registration</title>
 <meta name="description" content="Create a LiftHaul provider account for your truck, fleet, crane, or heavy equipment business. Verify your contact, complete your profile, and submit documents for review.">
+<script>
+(function(){
+  try{
+    var q=new URLSearchParams(location.search),raw=(q.get('type')||'').toUpperCase(),track=(q.get('track')||'').toUpperCase();
+    if(['CRANE_COMPANY','RIGGING_CONTRACTOR','EQUIPMENT_RENTAL'].indexOf(raw)>-1)document.documentElement.classList.add('equipment-registration');
+    else if(track==='LIGHT'||['MOTORCYCLE_DELIVERY','LIGHT_VEHICLE','VAN_OPERATOR'].indexOf(raw)>-1)document.documentElement.classList.add('light-registration');
+  }catch(e){}
+})();
+</script>
 <style>
 :root{
   --green-900:#103d24;--green-800:#145b2d;--green-700:#1c7338;--apple:#62b62f;--apple-dark:#4f9c25;
@@ -60,21 +69,69 @@ details.optional{border:1px solid var(--line);border-radius:11px;margin:3px 0 19
 .hide{display:none!important}.otp-wrap{max-width:560px;margin:32px auto 72px;padding:0 24px}.otp-wrap .panel-body{padding-top:22px}.otp-code{max-width:250px;letter-spacing:.14em;font-size:20px;font-weight:750}
 .status-good{color:var(--good)}.status-row{margin-top:14px;padding:14px;border-radius:10px;background:var(--good-bg)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 17px;border-radius:10px;font-size:14px;box-shadow:var(--shadow);z-index:99;max-width:92vw;text-align:center}
+.equipment-experience{display:none}
+.equipment-registration .generic-hero{display:none}
+.equipment-registration .equipment-experience{display:block}
+.equipment-hero{position:relative;min-height:690px;overflow:hidden;background:#0b1510;color:#fff}
+.equipment-scene{position:absolute;inset:0;background-color:#0b1510;background-position:center;background-size:cover;background-repeat:no-repeat;transition:background-image .35s ease,transform 7s ease;transform:scale(1.015)}
+.equipment-hero:hover .equipment-scene{transform:scale(1.04)}
+.equipment-scene::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,14,8,.92),rgba(4,14,8,.68) 43%,rgba(4,14,8,.12) 72%),linear-gradient(0deg,rgba(4,14,8,.75),transparent 48%)}
+.equipment-hero-in{position:relative;z-index:2;max-width:1320px;min-height:690px;margin:auto;padding:74px 32px 46px;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:48px;align-items:end}
+.equipment-eyebrow{display:flex;align-items:center;gap:14px;font-size:12px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}.equipment-eyebrow::before{content:"";width:42px;height:3px;background:#ff641f}
+.equipment-title{font-size:clamp(68px,8vw,124px);font-weight:950;line-height:.82;letter-spacing:-.07em;margin:30px 0 24px;max-width:900px}.equipment-title span{display:block;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.9)}
+.equipment-copy{max-width:690px;font-size:clamp(17px,1.45vw,22px);line-height:1.5;color:rgba(255,255,255,.82)}
+.equipment-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}.equipment-cta{min-height:56px;padding:0 23px;display:inline-flex;align-items:center;gap:22px;border:1px solid rgba(255,255,255,.3);background:rgba(5,20,11,.78);color:#fff;text-decoration:none;font-size:14px;font-weight:900}.equipment-cta.primary{background:#ff641f;border-color:#ff641f;color:#101812}.equipment-cta:hover{transform:translateY(-2px)}
+.equipment-modes{border-left:1px solid rgba(255,255,255,.3);padding-left:24px}.equipment-modes-label{text-transform:uppercase;letter-spacing:.18em;font-size:11px;font-weight:900;color:rgba(255,255,255,.6);margin-bottom:12px}.equipment-mode{width:100%;border:0;border-top:1px solid rgba(255,255,255,.22);background:transparent;color:rgba(255,255,255,.62);padding:17px 4px;display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;text-align:left;cursor:pointer}.equipment-mode:last-child{border-bottom:1px solid rgba(255,255,255,.22)}.equipment-mode strong{font-size:17px}.equipment-mode .arrow{opacity:0;transform:translateX(-7px)}.equipment-mode:hover,.equipment-mode.active{color:#fff}.equipment-mode.active strong{color:#78df4a}.equipment-mode.active .arrow{opacity:1;transform:none}
+.equipment-capabilities{padding:86px 0 94px;background:#f6f8f4;border-bottom:1px solid var(--line)}.equipment-wrap{max-width:1320px;margin:auto;padding:0 32px}.equipment-cap-head{display:grid;grid-template-columns:1.2fr .8fr;gap:60px;align-items:end;margin-bottom:35px}.equipment-cap-head h2{font-size:clamp(48px,6vw,86px);line-height:.91;letter-spacing:-.065em}.equipment-cap-head p{margin:0;color:#385144;font-size:18px;line-height:1.6}.equipment-cap-head small{display:block;color:var(--green-700);font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;margin-bottom:15px}
+.capability-grid{display:grid;grid-template-columns:1.1fr .9fr .9fr;gap:14px}.capability-choice{position:relative;min-height:390px;overflow:hidden;background:#102018;color:#fff}.capability-choice input{position:absolute;opacity:0;pointer-events:none}.capability-choice label{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:27px;cursor:pointer;border:3px solid transparent;z-index:2}.capability-choice img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;transition:transform .45s ease}.capability-choice::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(2,14,7,.93),rgba(2,14,7,.06) 70%)}.capability-choice input:checked+label{border-color:#78df4a;background:rgba(57,154,32,.12)}.capability-choice input:focus-visible+label{outline:3px solid #fff;outline-offset:-7px}.capability-choice:hover img{transform:scale(1.035)}.capability-kicker{color:#78df4a;text-transform:uppercase;letter-spacing:.14em;font-size:11px;font-weight:900}.capability-choice h3{font-size:31px;margin:7px 0 6px}.capability-choice p{margin:0;color:rgba(255,255,255,.76);font-size:13px;max-width:390px}.cap-check{position:absolute;right:21px;top:20px;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.55);display:grid;place-items:center;font-weight:900;background:rgba(5,16,9,.45)}.capability-choice input:checked+label .cap-check{background:#78df4a;border-color:#78df4a;color:#0b1b10}.capability-choice input:checked+label .cap-check::before{content:"✓"}.capability-choice input:not(:checked)+label .cap-check::before{content:"+"}
+.capability-note{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-top:17px;padding:15px 18px;background:#fff;border:1px solid var(--line);font-size:13px;color:var(--muted)}.capability-note strong{color:var(--ink)}.capability-note a{color:var(--green-800);font-weight:850;white-space:nowrap}
+.equipment-registration .top-label::after{content:"Heavy equipment operator registration"}.equipment-registration .top-label{font-size:0}.equipment-registration .top-label::after{font-size:13px}
+.equipment-registration .progress{padding-top:25px}
+.equipment-only{display:none}.equipment-registration .equipment-only{display:block}.equipment-registration .generic-only{display:none}
+.light-experience,.light-only{display:none}
+.light-registration .generic-hero{display:none}.light-registration .light-experience,.light-registration .light-only{display:block}.light-registration .generic-only,.light-registration .equipment-only,.light-registration .light-incompatible{display:none}
+.light-registration .top-label{font-size:0}.light-registration .top-label::after{content:"Light vehicle partner registration";font-size:13px}
+.light-hero{position:relative;min-height:650px;color:#fff;background:#0a2013;overflow:hidden}
+.light-hero::before{content:"";position:absolute;inset:0;background:none center 58%/cover no-repeat;transform:scale(1.01)}
+.light-registration .light-hero::before{background-image:url('assets/visual/lifthaul-complete-fleet-hero-v4.webp')}
+.light-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,22,11,.94) 0%,rgba(4,22,11,.78) 38%,rgba(4,22,11,.2) 70%,rgba(4,22,11,.08)),linear-gradient(0deg,rgba(3,18,9,.65),transparent 52%)}
+.light-hero-in{position:relative;z-index:2;max-width:1200px;min-height:650px;margin:auto;padding:92px 28px 58px;display:flex;align-items:flex-end}
+.light-hero-copy{max-width:720px}.light-kicker{text-transform:uppercase;letter-spacing:.18em;font-size:13px;font-weight:900;color:#9cf16c}.light-hero h1{font-size:clamp(50px,7vw,88px);line-height:.92;letter-spacing:-.06em;margin:18px 0 24px}.light-hero p{font-size:clamp(17px,1.8vw,22px);line-height:1.55;color:rgba(255,255,255,.86);max-width:690px}.light-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}.light-btn{display:inline-flex;align-items:center;justify-content:center;min-height:54px;padding:0 21px;border-radius:10px;background:var(--apple);color:#10240f;text-decoration:none;font-weight:900}.light-btn.secondary{color:#fff;background:rgba(4,22,11,.7);border:1px solid rgba(255,255,255,.4)}
+.light-section{background:#f7faf5;padding:82px 0;border-bottom:1px solid var(--line)}.light-wrap{max-width:1200px;margin:auto;padding:0 28px}.light-head{display:grid;grid-template-columns:1fr .75fr;gap:44px;align-items:end;margin-bottom:32px}.light-head h2{font-size:clamp(40px,5vw,68px);line-height:.95;letter-spacing:-.055em}.light-head p{margin:0;color:#405449;font-size:17px;line-height:1.65}
+.light-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.vehicle-card{background:#fff;border:2px solid transparent;border-radius:18px;overflow:hidden;box-shadow:0 12px 35px rgba(18,62,31,.08);transition:transform .18s,border-color .18s}.vehicle-card:hover{transform:translateY(-3px)}.vehicle-card.selected{border-color:var(--apple);box-shadow:0 0 0 4px rgba(98,182,47,.13),0 16px 40px rgba(18,62,31,.1)}.vehicle-media{aspect-ratio:16/9;background:#dfe9dc;overflow:hidden}.vehicle-media img{width:100%;height:100%;object-fit:cover;display:block}.vehicle-body{padding:22px}.vehicle-body h3{font-size:26px}.vehicle-body>p{color:var(--muted);margin:8px 0 14px}.vehicle-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 0 18px}.vehicle-meta span{background:var(--soft);border-radius:8px;padding:9px 10px;color:#36513c;font-size:12px}.vehicle-meta strong{display:block;color:var(--ink);font-size:12px}.vehicle-card-actions{display:flex;align-items:center;gap:15px;flex-wrap:wrap}.vehicle-card-actions button{border:0;border-radius:9px;padding:12px 15px;background:var(--green-900);color:#fff;font-weight:850;cursor:pointer}.vehicle-card-actions a{font-size:13px;font-weight:850;color:var(--green-700)}
+.light-band{padding:76px 0;background:#fff;border-bottom:1px solid var(--line)}.steps8{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:28px}.step8{padding:20px;border:1px solid var(--line);border-radius:14px;background:#fbfcfa}.step8 b{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--apple);margin-bottom:16px}.step8 strong{display:block}.step8 span{display:block;color:var(--muted);font-size:13px;margin-top:5px}.benefit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px}.light-benefit{padding:18px;border-left:3px solid var(--apple);background:var(--soft);font-weight:750;color:var(--ink)}
+.requirements-shell{display:grid;grid-template-columns:.65fr 1.35fr;gap:24px;margin-top:30px}.requirement-nav{display:grid;gap:9px;align-content:start}.requirement-nav button{padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;text-align:left;font-weight:800;color:var(--green-900);cursor:pointer}.requirement-nav button.active{background:var(--green-900);color:#fff;border-color:var(--green-900)}.requirement-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:25px}.requirement-card h3{font-size:27px}.requirement-list{columns:2;gap:28px;margin:19px 0;padding-left:19px}.requirement-list li{break-inside:avoid;margin:0 0 10px;color:#425448}.passenger-warning{padding:14px 15px;background:#fff4dc;border-left:4px solid #d79b13;color:#5d4306;border-radius:6px;font-size:13px}.planning-note{font-size:12px;color:var(--muted);margin-top:12px}
+.light-selected{display:flex;justify-content:space-between;gap:16px;align-items:center}.light-selected strong{font-size:15px}.light-registration:not(.light-category-selected) .progress,.light-registration:not(.light-category-selected) .layout{display:none}.light-registration .progress{padding-top:28px}.light-registration .provider-types{grid-template-columns:repeat(2,1fr)}.vehicle-media{display:block}
 @media(max-width:850px){.hero-in{grid-template-columns:1fr}.time-card{display:none}.layout{grid-template-columns:1fr}.aside{position:static}.progress{overflow:auto}.progress div{min-width:130px}}
-@media(max-width:620px){.top-label{display:none}.top-in{padding:12px 16px}.top-link:not(.button){display:none}.hero-in{padding:36px 18px 32px}.hero p{font-size:16px}.progress{padding-left:18px;padding-right:18px}.layout{padding:0 14px;margin-top:17px}.panel-head,.panel-body{padding-left:18px;padding-right:18px}.provider-types,.grid2{grid-template-columns:1fr}.actions .btn{width:100%}.aside{gap:10px}}
+@media(max-width:980px){.equipment-hero-in{grid-template-columns:1fr;align-content:end}.equipment-modes{border-left:0;padding-left:0;display:grid;grid-template-columns:repeat(3,1fr)}.equipment-modes-label{grid-column:1/-1}.equipment-mode{display:block}.equipment-mode .equipment-num,.equipment-mode .arrow{display:none}.equipment-cap-head{grid-template-columns:1fr;gap:22px}.capability-grid{grid-template-columns:1fr 1fr}.capability-choice:first-child{grid-column:1/-1}}
+@media(max-width:900px){.light-head,.requirements-shell{grid-template-columns:1fr}.steps8{grid-template-columns:repeat(2,1fr)}.benefit-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.top-label{display:none}.top-in{padding:12px 16px}.top-link:not(.button){display:none}.hero-in{padding:36px 18px 32px}.hero p{font-size:16px}.progress{padding-left:18px;padding-right:18px}.layout{padding:0 14px;margin-top:17px}.panel-head,.panel-body{padding-left:18px;padding-right:18px}.provider-types,.grid2{grid-template-columns:1fr}.actions .btn{width:100%}.aside{gap:10px}.equipment-hero,.equipment-hero-in{min-height:720px}.equipment-hero-in{padding:70px 18px 28px}.equipment-title{font-size:58px}.equipment-copy{font-size:16px}.equipment-actions{display:grid}.equipment-cta{justify-content:space-between}.equipment-modes{display:block}.equipment-mode{display:grid}.equipment-capabilities{padding:62px 0}.equipment-wrap{padding:0 16px}.equipment-cap-head h2{font-size:49px}.capability-grid{grid-template-columns:1fr}.capability-choice:first-child{grid-column:auto}.capability-choice{min-height:330px}.capability-note{align-items:flex-start;flex-direction:column}}
+@media(max-width:620px){.light-hero,.light-hero-in{min-height:690px}.light-hero::before{background-position:61% center}.light-hero-in{padding:68px 18px 36px}.light-hero h1{font-size:51px}.light-actions{display:grid}.light-section,.light-band{padding:58px 0}.light-wrap{padding:0 16px}.light-head{gap:18px}.light-head h2{font-size:43px}.light-grid,.steps8,.benefit-grid{grid-template-columns:1fr}.vehicle-meta{grid-template-columns:1fr}.requirement-list{columns:1}.light-registration .provider-types{grid-template-columns:1fr}.light-selected{align-items:flex-start;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
-<link rel="stylesheet" href="theme.css?v=9">
+<link rel="stylesheet" href="theme.css?v=10">
+<style>
+html.light-registration body{background:#f4f7f3!important;background-image:none!important;color:#142018}
+.light-registration .progress{background:#f4f7f3!important;color:#607064}.light-registration .progress .active{color:#145b2d}
+.light-registration .layout .panel,.light-registration .layout .side-card{background:#fff!important;color:#142018!important;border-color:#d8e3d5}
+.light-registration .layout .panel-head{border-color:#d8e3d5}.light-registration .layout .panel h2,.light-registration .layout .panel h3,.light-registration .layout .panel strong,.light-registration .layout .side-card h3,.light-registration .layout .side-card strong{color:#142018!important}.light-registration .layout .panel-head p,.light-registration .layout .panel p,.light-registration .layout .side-card>p{color:#607064!important}
+.light-registration .layout .side-card.dark{background:#103d24!important;color:#fff!important;border-color:#103d24}.light-registration .layout .side-card.dark h3{color:#fff!important}.light-registration .layout .side-card.dark p{color:#d8e8dc!important}
+.light-registration .layout .notice{background:#eef5ea!important;color:#31523a!important}.light-registration .layout .notice.warn{background:#fff7e8!important;color:#674509!important}
+.light-registration .layout input,.light-registration .layout select{background:#fff!important;color:#142018!important;border-color:#cbd9c7!important}
+.light-registration .layout .provider-option label{background:#fff!important;color:#142018!important}.light-registration .layout .provider-option input:checked+label{background:#f2faed!important}.light-registration .layout .provider-option label small{color:#607064!important}
+.light-registration .layout details.optional{background:#fbfcfa;border-color:#d8e3d5}
+.light-registration .layout .next li{border-color:#d8e3d5}.light-registration .layout .next b{background:#eef5ea;color:#145b2d}
+</style>
 </head>
 <body>
 <header class="top"><div class="top-in">
   <a class="brand" href="index.html" aria-label="LiftHaul home">Lift<em>Haul</em></a>
   <span class="top-label">Provider registration</span><span class="spacer"></span>
-  <a class="top-link" href="index.html">Home</a>
+  <a id="providerBackLink" class="top-link" href="index.html">Home</a>
   <a class="top-link button" href="portal.html">Already registered? Sign in</a>
 </div></header>
 
-<section class="hero"><div class="hero-in">
+<section class="hero generic-hero"><div class="hero-in">
   <div><div class="eyebrow">Join the provider network</div>
     <h1>Put your truck or equipment to work.</h1>
     <p>Create one provider account now. Add vehicles, drivers, service areas, and documents inside your private workspace after your contact is verified.</p>
@@ -83,22 +140,83 @@ details.optional{border:1px solid var(--line);border-radius:11px;margin:3px 0 19
   <div class="time-card"><strong>About 2 minutes</strong><span>to create your account</span></div>
 </div></section>
 
+<section class="light-experience light-hero" aria-labelledby="lightHeroTitle">
+  <div class="light-hero-in"><div class="light-hero-copy">
+    <div class="light-kicker">Light vehicle partner registration</div>
+    <h1 id="lightHeroTitle">Drive. Deliver.<br>Earn with LiftHaul.</h1>
+    <p>Register your motorcycle or light vehicle, receive delivery opportunities matched to its verified capacity, and choose the bookings that work for you.</p>
+    <div class="light-actions"><a class="light-btn" href="#lightVehicles">Choose Your Vehicle →</a><a class="light-btn secondary" href="#lightRequirements">View Registration Requirements</a></div>
+  </div></div>
+</section>
+
+<section id="lightVehicles" class="light-experience light-section" aria-labelledby="lightVehiclesTitle"><div class="light-wrap">
+  <div class="light-head"><div><div class="eyebrow">One account · multiple approved units</div><h2 id="lightVehiclesTitle">What vehicle would you like to register?</h2></div><p>Start with one category. After contact verification, your Fleet Workspace lets you add more units under the same partner account. Every vehicle keeps its own review, document, and eligibility status.</p></div>
+  <div class="light-grid">
+    <article class="vehicle-card" data-light-card="MOTORCYCLE"><picture class="vehicle-media"><source data-srcset="assets/visual/lifthaul-light-motorcycle-v1.webp" type="image/webp"><img loading="lazy" decoding="async" data-src="assets/visual/lifthaul-light-motorcycle-v1.png" alt="LiftHaul delivery motorcycle with branded cargo box"></picture><div class="vehicle-body"><h3>Motorcycle Delivery</h3><p>For parcels, documents, food, and small-item delivery with an approved carrier or box.</p><div class="vehicle-meta"><span><strong>Typical cargo</strong>Documents · food · small parcels</span><span><strong>Planning capacity</strong>About 5–20 kg*</span></div><div class="vehicle-card-actions"><button type="button" onclick="chooseLightVehicle('MOTORCYCLE','form')">Register This Vehicle</button><a href="#lightRequirements" onclick="chooseLightVehicle('MOTORCYCLE','requirements')">View Requirements</a></div></div></article>
+    <article class="vehicle-card" data-light-card="SUV"><picture class="vehicle-media"><source data-srcset="assets/visual/lifthaul-light-suv-v1.webp" type="image/webp"><img loading="lazy" decoding="async" data-src="assets/visual/lifthaul-light-suv-v1.png" alt="LiftHaul SUV configured for secured business cargo"></picture><div class="vehicle-body"><h3>SUV</h3><p>For approved cargo and specialized business deliveries using a restrained rear cargo area.</p><div class="vehicle-meta"><span><strong>Typical cargo</strong>Business supplies · secured packages</span><span><strong>Planning capacity</strong>About 200–500 kg*</span></div><div class="vehicle-card-actions"><button type="button" onclick="chooseLightVehicle('SUV','form')">Register This Vehicle</button><a href="#lightRequirements" onclick="chooseLightVehicle('SUV','requirements')">View Requirements</a></div></div></article>
+    <article class="vehicle-card" data-light-card="PICKUP"><picture class="vehicle-media"><source data-srcset="assets/visual/lifthaul-light-pickup-v1.webp" type="image/webp"><img loading="lazy" decoding="async" data-src="assets/visual/lifthaul-light-pickup-v1.png" alt="LiftHaul pickup carrying safely restrained cargo"></picture><div class="vehicle-body"><h3>Pickup Truck</h3><p>For appliances, furniture, agricultural products, and construction materials secured in the bed.</p><div class="vehicle-meta"><span><strong>Typical cargo</strong>Furniture · appliances · materials</span><span><strong>Planning capacity</strong>About 500–1,000 kg*</span></div><div class="vehicle-card-actions"><button type="button" onclick="chooseLightVehicle('PICKUP','form')">Register This Vehicle</button><a href="#lightRequirements" onclick="chooseLightVehicle('PICKUP','requirements')">View Requirements</a></div></div></article>
+    <article class="vehicle-card" data-light-card="LIGHT_VAN"><picture class="vehicle-media"><source data-srcset="assets/visual/lifthaul-light-van-v1.webp" type="image/webp"><img loading="lazy" decoding="async" data-src="assets/visual/lifthaul-light-van-v1.png" alt="LiftHaul MPV and L300-style enclosed light van"></picture><div class="vehicle-body"><h3>MPV / Light Van</h3><p>For multi-package and scheduled business deliveries that require an enclosed cargo area.</p><div class="vehicle-meta"><span><strong>Typical cargo</strong>Multiple parcels · boxed goods</span><span><strong>Planning capacity</strong>About 500–1,200 kg*</span></div><div class="vehicle-card-actions"><button type="button" onclick="chooseLightVehicle('LIGHT_VAN','form')">Register This Vehicle</button><a href="#lightRequirements" onclick="chooseLightVehicle('LIGHT_VAN','requirements')">View Requirements</a></div></div></article>
+  </div><p class="planning-note">*Planning estimates only. LiftHaul verifies the final allowable payload against the exact make, model, documents, configuration, and approved vehicle-capacity reference before matching work.</p>
+</div></section>
+
+<section class="light-experience light-band" aria-labelledby="registrationWorksTitle"><div class="light-wrap">
+  <div class="light-head"><h2 id="registrationWorksTitle">How registration works</h2><p>A saved, governed path from partner account to individually approved vehicle. Approval is never automatic.</p></div>
+  <div class="steps8"><div class="step8"><b>1</b><strong>Select vehicle type</strong><span>See fields and requirements that fit the unit.</span></div><div class="step8"><b>2</b><strong>Create or sign in</strong><span>Use one partner account for all units.</span></div><div class="step8"><b>3</b><strong>Driver &amp; vehicle</strong><span>Enter identity and unit information.</span></div><div class="step8"><b>4</b><strong>Upload documents</strong><span>Follow guided, quality-checked uploads.</span></div><div class="step8"><b>5</b><strong>Areas &amp; availability</strong><span>Declare routes, schedules, and cargo.</span></div><div class="step8"><b>6</b><strong>Payout information</strong><span>Add a provider-supported verified account.</span></div><div class="step8"><b>7</b><strong>Submit for verification</strong><span>LiftHaul reviews each unit separately.</span></div><div class="step8"><b>8</b><strong>Approval &amp; access</strong><span>Only eligible vehicles receive matching access.</span></div></div>
+  <div class="benefit-grid"><div class="light-benefit">Choose preferred routes and schedules</div><div class="light-benefit">Receive capacity-matched opportunities</div><div class="light-benefit">Keep digital booking and earnings records</div><div class="light-benefit">Use Protected Payment where available</div><div class="light-benefit">Build a verified service record</div><div class="light-benefit">Receive document-expiry alerts</div></div>
+</div></section>
+
+<section id="lightRequirements" class="light-experience light-section" aria-labelledby="requirementsTitle"><div class="light-wrap">
+  <div class="light-head"><h2 id="requirementsTitle">Review requirements before you begin.</h2><p>Requirements change with the vehicle and intended service. Select a category to preview what should be prepared; final requirements remain subject to regulatory and LiftHaul review.</p></div>
+  <div class="requirements-shell"><div class="requirement-nav" aria-label="Vehicle requirement previews"><button type="button" data-req="MOTORCYCLE" onclick="chooseLightVehicle('MOTORCYCLE','requirements')">Motorcycle Delivery</button><button type="button" data-req="SUV" onclick="chooseLightVehicle('SUV','requirements')">SUV</button><button type="button" data-req="PICKUP" onclick="chooseLightVehicle('PICKUP','requirements')">Pickup Truck</button><button type="button" data-req="LIGHT_VAN" onclick="chooseLightVehicle('LIGHT_VAN','requirements')">MPV / Light Van</button></div><div class="requirement-card"><h3 id="lightRequirementTitle">Choose a vehicle category</h3><p id="lightRequirementIntro">You can review driver, vehicle, photograph, ownership, insurance, regulatory, and payout requirements before creating an account.</p><ul id="lightRequirementList" class="requirement-list"><li>Valid driver licence and government ID</li><li>OR/CR and ownership or authorization evidence</li><li>Insurance and applicable regulatory documents</li><li>Guided exterior, interior, plate, and odometer photos</li><li>Declared service areas, schedules, and cargo limits</li><li>Verified bank or supported e-wallet payout details</li></ul><div id="passengerWarning" class="passenger-warning hide"><strong>Cargo registration does not authorize passenger transport.</strong> Passenger services require a separate regulatory, insurance, and operating-compliance track and are not activated here.</div></div></div>
+</div></section>
+
+<section class="equipment-experience equipment-hero" aria-labelledby="equipmentHeroTitle">
+  <div id="equipmentScene" class="equipment-scene" aria-hidden="true"></div>
+  <div class="equipment-hero-in">
+    <div>
+      <div class="equipment-eyebrow">Heavy equipment provider onboarding</div>
+      <h1 id="equipmentHeroTitle" class="equipment-title"><b id="equipmentLineOne">Every load.</b><span id="equipmentLineTwo">Every machine.</span></h1>
+      <p id="equipmentIntro" class="equipment-copy">Register the company accountable for heavy haulage, engineered lifting, or material-handling equipment. Capability selection starts the application; verification and document review determine eligibility.</p>
+      <div class="equipment-actions"><a class="equipment-cta primary" href="#equipmentCapabilities">Choose capability <b>→</b></a><a class="equipment-cta" href="#registration">Create provider account <b>↘</b></a></div>
+    </div>
+    <aside class="equipment-modes" aria-label="Preview heavy equipment capabilities">
+      <div class="equipment-modes-label">Explore provider capabilities</div>
+      <button class="equipment-mode active" type="button" data-equipment-scene="haul"><span class="equipment-num">01</span><strong>Heavy haulage</strong><span class="arrow">→</span></button>
+      <button class="equipment-mode" type="button" data-equipment-scene="lift"><span class="equipment-num">02</span><strong>Heavy lift</strong><span class="arrow">→</span></button>
+      <button class="equipment-mode" type="button" data-equipment-scene="handle"><span class="equipment-num">03</span><strong>Fleet handling</strong><span class="arrow">→</span></button>
+    </aside>
+  </div>
+</section>
+
+<section id="equipmentCapabilities" class="equipment-experience equipment-capabilities" aria-labelledby="capabilityTitle">
+  <div class="equipment-wrap">
+    <div class="equipment-cap-head"><div><small>Step before account creation</small><h2 id="capabilityTitle">Choose capability,<br>not guesswork.</h2></div><p>Select every service your business can document and operate. LiftHaul uses these declarations to organize later equipment, operator, insurance, permit, and review requirements—not to grant automatic approval.</p></div>
+    <div class="capability-grid" role="group" aria-label="Heavy equipment provider capabilities">
+      <article class="capability-choice"><img loading="lazy" decoding="async" data-src="assets/visual/lifthaul-cinematic-hero-v1.webp" alt="Prime mover transporting an excavator on a lowbed trailer"><input id="capHeavyHaul" class="equipment-capability" type="checkbox" value="heavy_haulage"><label for="capHeavyHaul"><span class="cap-check" aria-hidden="true"></span><span class="capability-kicker">Long-haul capability</span><h3>Prime movers &amp; lowbeds</h3><p>Oversized or heavy cargo movement requiring declared equipment, route constraints, permits, and load evidence.</p></label></article>
+      <article class="capability-choice"><img loading="lazy" decoding="async" data-src="assets/visual/lifthaul-heavy-lift-v1.webp" alt="Mobile crane executing an industrial heavy lift"><input id="capHeavyLift" class="equipment-capability" type="checkbox" value="crane_heavy_lift"><label for="capHeavyLift"><span class="cap-check" aria-hidden="true"></span><span class="capability-kicker">Engineered operations</span><h3>Cranes &amp; heavy lift</h3><p>Lifting work subject to equipment records, qualified operators, site conditions, rigging evidence, and lift-specific controls.</p></label></article>
+      <article class="capability-choice"><img loading="lazy" decoding="async" data-src="assets/visual/lifthaul-fleet-handling-v1.webp" alt="Forklift handling cargo beside a logistics vehicle"><input id="capMaterialHandling" class="equipment-capability" type="checkbox" value="material_handling"><label for="capMaterialHandling"><span class="cap-check" aria-hidden="true"></span><span class="capability-kicker">Site and fleet support</span><h3>Material handling</h3><p>Forklifts, boom trucks, and related equipment matched to load, site access, operator, and handoff requirements.</p></label></article>
+    </div>
+    <div class="capability-note"><span><strong>Declaration only.</strong> Final categories and job access remain subject to equipment records, operator qualifications, permits where applicable, insurance, and LiftHaul review.</span><a href="#registration">Continue to account details →</a></div>
+  </div>
+</section>
+
 <div class="progress" aria-label="Provider onboarding progress">
   <div class="active"><b>1</b> Create account</div><div><b>2</b> Verify contact</div><div><b>3</b> Complete profile</div><div><b>4</b> Review &amp; activation</div>
 </div>
 
 <main id="registration" class="layout">
   <section id="regPanel" class="panel" aria-labelledby="formTitle">
-    <div class="panel-head"><h2 id="formTitle">Create your provider account</h2><p>Only the essentials are required. You can finish your fleet profile later.</p></div>
+    <div class="panel-head"><h2 id="formTitle"><span class="generic-only">Create your provider account</span><span class="equipment-only">Create your heavy-equipment provider account</span><span class="light-only">Create your light-vehicle partner account</span></h2><p>Only the essentials are required. You can finish each vehicle application in your private Fleet Workspace.</p></div>
     <div class="panel-body">
+      <div class="notice light-only light-selected"><div><span>Selected vehicle</span><strong id="selectedLightVehicleLabel">Choose a category above</strong></div><a href="#lightVehicles">Change selection</a></div>
       <div id="driverNotice" class="notice warn driver-notice"><span>ℹ</span><div><strong>Are you registering only as an employed driver?</strong>Your verified fleet owner adds drivers inside the Fleet Workspace. If you own the vehicle, choose Owner-operator below. Otherwise, contact your fleet administrator or <a href="support.html">LiftHaul support</a>.</div></div>
 
       <p class="section-title">1. What best describes you?</p>
       <div class="provider-types" role="radiogroup" aria-label="Provider type">
-        <div class="provider-option"><input id="typeOwner" name="ptype" type="radio" value="OWNER_OPERATOR"><label for="typeOwner"><strong>Owner-operator</strong><small>I own or operate one vehicle.</small></label></div>
-        <div class="provider-option"><input id="typeFleet" name="ptype" type="radio" value="FLEET_OPERATOR"><label for="typeFleet"><strong>Trucking or fleet company</strong><small>I manage multiple trucks or drivers.</small></label></div>
-        <div class="provider-option"><input id="typeEquipment" name="ptype" type="radio" value="CRANE_COMPANY"><label for="typeEquipment"><strong>Crane or heavy equipment</strong><small>I provide lifting or specialized equipment.</small></label></div>
-        <div class="provider-option"><input id="typeLogistics" name="ptype" type="radio" value="LOGISTICS_PROVIDER"><label for="typeLogistics"><strong>Logistics or delivery service</strong><small>I coordinate transport or delivery services.</small></label></div>
+        <div class="provider-option light-compatible"><input id="typeOwner" name="ptype" type="radio" value="OWNER_OPERATOR"><label for="typeOwner"><strong>Owner-operator</strong><small>I own or operate one vehicle.</small></label></div>
+        <div class="provider-option light-compatible"><input id="typeFleet" name="ptype" type="radio" value="FLEET_OPERATOR"><label for="typeFleet"><strong>Fleet or company account</strong><small>I manage multiple vehicles or drivers.</small></label></div>
+        <div class="provider-option light-incompatible"><input id="typeEquipment" name="ptype" type="radio" value="CRANE_COMPANY"><label for="typeEquipment"><strong>Crane or heavy equipment</strong><small>I provide lifting or specialized equipment.</small></label></div>
+        <div class="provider-option light-incompatible"><input id="typeLogistics" name="ptype" type="radio" value="LOGISTICS_PROVIDER"><label for="typeLogistics"><strong>Logistics or delivery service</strong><small>I coordinate transport or delivery services.</small></label></div>
       </div>
 
       <p class="section-title">2. Tell us how to identify and contact you</p>
@@ -131,10 +249,10 @@ details.optional{border:1px solid var(--line);border-radius:11px;margin:3px 0 19
   </section>
 
   <aside class="aside" aria-label="Provider onboarding information">
-    <section class="side-card"><h3>What happens next</h3><p>No vehicle or compliance paperwork is needed on this screen.</p>
+    <section class="side-card"><h3>What happens next</h3><p>No vehicle or compliance paperwork is needed on this first account screen.</p>
       <ol class="next"><li><b>1</b><span>Confirm the one-time code sent to your contact.</span></li><li><b>2</b><span>Open your private Fleet Workspace.</span></li><li><b>3</b><span>Add vehicles, drivers, service areas, and documents.</span></li><li><b>4</b><span>Track review results and resolve any missing item.</span></li></ol>
     </section>
-    <section class="side-card"><h3>Prepare these later</h3><ul class="checklist"><li>Business registration and permits</li><li>LTFRB authority, when applicable</li><li>Vehicle OR/CR and insurance</li><li>Driver licences and required qualifications</li><li>Verified payout-account information</li></ul></section>
+    <section class="side-card"><h3>Prepare these later</h3><ul class="checklist"><li>Business registration and permits</li><li>LTFRB authority, when applicable</li><li>Vehicle or equipment ownership and insurance</li><li>Driver or operator licences and qualifications</li><li class="light-only">Guided vehicle, plate, cargo-area, and odometer photographs</li><li class="equipment-only">Inspection, load-test, rigging, or lift-plan evidence when applicable</li><li>Verified payout-account information</li></ul></section>
     <section class="side-card dark"><h3>Need help choosing?</h3><p>Register the person or company responsible for the vehicle. Employed drivers are added by their fleet owner.</p><p><a href="support.html">Contact LiftHaul support →</a></p></section>
   </aside>
 </main>
@@ -162,13 +280,45 @@ function $(s){return document.querySelector(s)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function toast(m){var t=$('#toast');t.textContent=m;t.classList.remove('hide');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.add('hide')},3200)}
 function selectedType(){var el=document.querySelector('input[name="ptype"]:checked');return el?el.value:''}
+var lightVehicles={MOTORCYCLE:{label:'Motorcycle Delivery',category:'MOTORCYCLE',intro:'Small-parcel delivery with an approved delivery box or carrier.',extra:['Delivery-box or carrier type and dimensions','Maximum package weight and rain protection','Insulated-box availability when relevant']},SUV:{label:'SUV',category:'LIGHT',intro:'Cargo-focused SUV registration with restraint and usable-space evidence.',extra:['Rear cargo-space dimensions and maximum cargo weight','Foldable-seat configuration and cargo restraint or barrier','Cargo-only service declaration']},PICKUP:{label:'Pickup Truck',category:'LIGHT',intro:'Open, canopied, or enclosed pickup bed with secure-load evidence.',extra:['Truck-bed length, width, height, and maximum payload','Open bed, canopy, or enclosed configuration','Tie-down points and weather-protection equipment']},LIGHT_VAN:{label:'MPV / Light Van',category:'VAN',intro:'Enclosed light-vehicle cargo registration for multiple packages and scheduled work.',extra:['Interior cargo dimensions and maximum payload','Removable or foldable seats and cargo configuration','Side-door and rear-door access','Cargo-only service declaration']}};
+var _lightMode=document.documentElement.classList.contains('light-registration'),_lightVehicle='';
+function selectedCapabilities(){var values=Array.prototype.slice.call(document.querySelectorAll('.equipment-capability:checked')).map(function(el){return el.value});if(_lightMode&&_lightVehicle)values.push('vehicle:'+_lightVehicle.toLowerCase(),'cargo_delivery');return values}
+function syncEquipmentMode(){
+  if(_lightMode){document.documentElement.classList.remove('equipment-registration');return}var active=selectedType()==='CRANE_COMPANY';document.documentElement.classList.toggle('equipment-registration',active);
+}
+function hydrateTrackMedia(track){
+  var scope=track==='light'?'.light-experience':'.equipment-experience';
+  Array.prototype.forEach.call(document.querySelectorAll(scope+' [data-src],'+scope+' [data-srcset]'),function(node){
+    if(node.dataset.src){node.src=node.dataset.src;node.removeAttribute('data-src')}
+    if(node.dataset.srcset){node.srcset=node.dataset.srcset;node.removeAttribute('data-srcset')}
+  });
+  if(track==='equipment'){$('#equipmentScene').style.backgroundImage="url('assets/visual/lifthaul-cinematic-hero-v1.webp')"}
+}
 function selectTypeFromQuery(){
-  var raw='';try{raw=(new URLSearchParams(location.search).get('type')||'').toUpperCase()}catch(e){}
+  var raw='',track='';try{var q=new URLSearchParams(location.search);raw=(q.get('type')||'').toUpperCase();track=(q.get('track')||'').toUpperCase()}catch(e){}
   var map={TRUCK_OWNER:'OWNER_OPERATOR',VAN_OPERATOR:'OWNER_OPERATOR',MOTORCYCLE_DELIVERY:'OWNER_OPERATOR',HAULING_COMPANY:'FLEET_OPERATOR',HEAVY_HAUL_COMPANY:'FLEET_OPERATOR',RIGGING_CONTRACTOR:'CRANE_COMPANY',EQUIPMENT_RENTAL:'CRANE_COMPANY',COURIER_LOGISTICS:'LOGISTICS_PROVIDER',SUBCONTRACTOR:'LOGISTICS_PROVIDER',SPECIALIZED_TRANSPORT:'LOGISTICS_PROVIDER'};
   if(raw==='DRIVER')$('#driverNotice').classList.add('show');
-  var value=map[raw]||raw,el=document.querySelector('input[name="ptype"][value="'+value+'"]');if(el)el.checked=true;
+  var value=map[raw]||raw;if(_lightMode&&!value)value='OWNER_OPERATOR';var el=document.querySelector('input[name="ptype"][value="'+value+'"]');if(el)el.checked=true;syncEquipmentMode();
+  if(_lightMode)hydrateTrackMedia('light');else if(document.documentElement.classList.contains('equipment-registration'))hydrateTrackMedia('equipment');
 }
 selectTypeFromQuery();
+(function configureReturnRoute(){try{var q=new URLSearchParams(location.search);if(q.get('from')==='driver'){var link=$('#providerBackLink');link.href='driver-register.html#partnerPaths';link.textContent='Back to driver options'}}catch(e){}})();
+Array.prototype.forEach.call(document.querySelectorAll('input[name="ptype"]'),function(el){el.addEventListener('change',syncEquipmentMode)});
+
+function renderLightRequirements(){if(!_lightVehicle||!lightVehicles[_lightVehicle])return;var v=lightVehicles[_lightVehicle],base=['Valid driver licence, government ID, and driver photograph','OR/CR and ownership or driver-to-vehicle authorization','Insurance and applicable regulatory documents','Front, rear, both sides, cargo area, plate, odometer, and condition photos','Service areas, schedule, accepted and excluded cargo','Verified bank or provider-supported e-wallet payout details'];$('#lightRequirementTitle').textContent=v.label+' requirements';$('#lightRequirementIntro').textContent=v.intro;$('#lightRequirementList').innerHTML=base.concat(v.extra).map(function(x){return'<li>'+esc(x)+'</li>'}).join('');$('#passengerWarning').classList.toggle('hide',_lightVehicle!=='SUV'&&_lightVehicle!=='LIGHT_VAN');Array.prototype.forEach.call(document.querySelectorAll('[data-req]'),function(b){b.classList.toggle('active',b.getAttribute('data-req')===_lightVehicle)})}
+function chooseLightVehicle(code,destination){if(!lightVehicles[code])return;_lightVehicle=code;document.documentElement.classList.add('light-category-selected');Array.prototype.forEach.call(document.querySelectorAll('[data-light-card]'),function(card){card.classList.toggle('selected',card.getAttribute('data-light-card')===code)});$('#selectedLightVehicleLabel').textContent=lightVehicles[code].label;renderLightRequirements();var chosen=selectedType();if(chosen!=='OWNER_OPERATOR'&&chosen!=='FLEET_OPERATOR'){$('#typeOwner').checked=true}try{sessionStorage.setItem('lifthaul_light_vehicle_draft',code);var u=new URL(location.href);u.searchParams.set('vehicle',code);history.replaceState(null,'',u)}catch(e){}if(destination==='none')return;var target=destination==='requirements'?$('#lightRequirements'):$('#registration');if(target)setTimeout(function(){target.scrollIntoView({behavior:'smooth',block:'start'})},20)}
+(function restoreLightSelection(){if(!_lightMode)return;var code='';try{var q=new URLSearchParams(location.search);code=(q.get('vehicle')||sessionStorage.getItem('lifthaul_light_vehicle_draft')||'').toUpperCase()}catch(e){}if(lightVehicles[code])chooseLightVehicle(code,'none')})();
+window.addEventListener('load',function(){if(!_lightMode)return;var id=location.hash.slice(1);if(id==='registration'||id==='lightRequirements'){var target=document.getElementById(id);if(target)setTimeout(function(){target.scrollIntoView({block:'start'})},80)}});
+
+var equipmentScenes={
+  haul:{img:'assets/visual/lifthaul-cinematic-hero-v1.webp',one:'Every load.',two:'Every machine.',intro:'Register the company accountable for heavy haulage, engineered lifting, or material-handling equipment. Capability selection starts the application; verification and document review determine eligibility.'},
+  lift:{img:'assets/visual/lifthaul-heavy-lift-v1.webp',one:'Lift precisely.',two:'Prove readiness.',intro:'Declare crane and heavy-lift capability, then document the accountable operator, equipment, insurance, site controls, and lift-specific requirements during onboarding.'},
+  handle:{img:'assets/visual/lifthaul-fleet-handling-v1.webp',one:'Handle every handoff.',two:'Keep evidence.',intro:'Register material-handling capacity with the equipment, qualified operators, service areas, and operational evidence needed for governed job matching.'}
+};
+Array.prototype.forEach.call(document.querySelectorAll('.equipment-mode'),function(btn){btn.addEventListener('click',function(){
+  Array.prototype.forEach.call(document.querySelectorAll('.equipment-mode'),function(b){b.classList.remove('active')});btn.classList.add('active');
+  var s=equipmentScenes[btn.getAttribute('data-equipment-scene')];$('#equipmentScene').style.backgroundImage="url('"+s.img+"')";$('#equipmentLineOne').textContent=s.one;$('#equipmentLineTwo').textContent=s.two;$('#equipmentIntro').textContent=s.intro;
+})});
 
 var _refCode='';
 (function(){try{_refCode=(new URLSearchParams(location.search).get('ref')||'').trim()}catch(e){}if(_refCode&&API.configured()){API.post('/public/referral/validate',{code:_refCode}).then(function(d){if(d&&d.valid){toast('Referral applied');$('#regMsg').textContent='Referral applied. Registration remains free.'}else{_refCode='';$('#regMsg').textContent='The referral code is not valid. You can still register.'}}).catch(function(){})}})();
@@ -180,12 +330,15 @@ function submitProvider(){
   var pt=selectedType(),legal=$('#legal').value.trim(),rep=$('#rep').value.trim(),em=$('#email').value.trim(),mob=$('#mobile').value.trim(),pw=$('#password').value;
   $('#regMsg').classList.remove('error');
   if(!pt){fail('Choose the provider type that best describes you.',document.querySelector('input[name="ptype"]'));return}
+  var capabilities=selectedCapabilities();
+  if(pt==='CRANE_COMPANY'&&!capabilities.length){fail('Select at least one heavy-equipment capability before creating the account.',$('#equipmentCapabilities'));location.hash='equipmentCapabilities';return}
+  if(_lightMode&&!_lightVehicle){fail('Choose the motorcycle or light-vehicle category you want to register first.',$('#lightVehicles'));location.hash='lightVehicles';return}
   if(!legal){fail('Enter your business or operator name.',$('#legal'));return}
   if(!rep){fail('Enter the name of the contact person.',$('#rep'));return}
   if(!em||!/^\S+@\S+\.\S+$/.test(em)){fail('Enter a valid email address.',$('#email'));return}
   if(!mob){fail('Enter a mobile number.',$('#mobile'));return}
   if(pw.length<8){fail('Create a password with at least 8 characters.',$('#password'));return}
-  var body={provider_type:pt,legal_name:legal,trade_name:$('#trade').value.trim(),representative:rep,username:em,password:pw,mobile:mob,email:em,website:$('#website').value.trim(),tin:$('#tin').value.trim(),registration_type:$('#regtype').value,registration_number:$('#regno').value.trim(),operating_address:$('#base').value.trim(),island_group:$('#island').value,referral_code:_refCode||undefined};
+  var body={provider_type:pt,capabilities:capabilities,initial_vehicle_category:_lightVehicle?lightVehicles[_lightVehicle].category:undefined,initial_vehicle_variant:_lightVehicle||undefined,legal_name:legal,trade_name:$('#trade').value.trim(),representative:rep,username:em,password:pw,mobile:mob,email:em,website:$('#website').value.trim(),tin:$('#tin').value.trim(),registration_type:$('#regtype').value,registration_number:$('#regno').value.trim(),operating_address:$('#base').value.trim(),island_group:$('#island').value,referral_code:_refCode||undefined};
   if(!API.configured()){fail('Account creation is unavailable in this static preview. Connect the hosted LiftHaul service to continue.');return}
   setSubmitBusy(true);$('#regMsg').textContent='Creating your secure provider account…';
   API.post('/public/providers',body).then(function(r){

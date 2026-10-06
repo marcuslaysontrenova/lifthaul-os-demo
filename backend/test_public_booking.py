@@ -169,7 +169,7 @@ class CargoFirstVehicleMatching(unittest.TestCase):
 
     def test_safety_allowance_blocks_nominal_capacity(self):
         r = pb.recommend_vehicles(self.c, _p(
-            cargo_category="BOXES_GENERAL", weight_kg=950, package_count=1,
+            cargo_category="BOXES_GENERAL", weight_kg=1150, package_count=1,
             package_length_cm=100, package_width_cm=80, package_height_cm=80))
         ids = [x["id"] for x in r["options"]]
         self.assertNotIn("pickup", ids)

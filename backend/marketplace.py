@@ -33,6 +33,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+from pathlib import Path
 
 import core
 
@@ -521,51 +522,44 @@ def list_lanes(conn, status=None):
 # --------------------------------------------------------------------------- #
 _SEED_ACTOR = {"id": 0, "role": "system", "perms": {"*"}, "tenant_id": None}
 
-# code, name, class_group, attrs
-_VEHICLES = [
-    ("motorcycle", "Motorcycle", "MOTORCYCLE_SMALL",
-     dict(payload_kg=30, volume_cbm=0.06, opening_length_cm=40, opening_width_cm=40, opening_height_cm=40)),
-    ("motorcycle_box", "Motorcycle w/ Cargo Box", "MOTORCYCLE_SMALL",
-     dict(payload_kg=50, volume_cbm=0.15, opening_length_cm=50, opening_width_cm=45, opening_height_cm=45)),
-    ("sedan", "Sedan / Hatchback", "MOTORCYCLE_SMALL",
-     dict(payload_kg=200, volume_cbm=0.4, opening_length_cm=90, opening_width_cm=90, opening_height_cm=50)),
-    ("mpv", "MPV / SUV", "MOTORCYCLE_SMALL",
-     dict(payload_kg=300, volume_cbm=1.0, opening_length_cm=110, opening_width_cm=100, opening_height_cm=80)),
-    ("multicab", "Multicab", "LIGHT_COMMERCIAL",
-     dict(payload_kg=500, volume_cbm=1.8, opening_length_cm=180, opening_width_cm=130, opening_height_cm=120)),
-    ("pickup", "Pickup Truck", "LIGHT_COMMERCIAL",
-     dict(payload_kg=1000, volume_cbm=2.5, opening_length_cm=180, opening_width_cm=140, opening_height_cm=50)),
-    ("small_van", "Small Closed Van", "LIGHT_COMMERCIAL",
-     dict(payload_kg=800, volume_cbm=3.5, opening_length_cm=200, opening_width_cm=140, opening_height_cm=150)),
-    ("l300_van", "L300 / Closed Van", "LIGHT_COMMERCIAL",
-     dict(payload_kg=1000, volume_cbm=5.0, opening_length_cm=250, opening_width_cm=150, opening_height_cm=150)),
-    ("ref_van_light", "Light Refrigerated Van", "LIGHT_COMMERCIAL",
-     dict(payload_kg=900, volume_cbm=4.0, refrigerated=1, opening_length_cm=250, opening_width_cm=150, opening_height_cm=150)),
-    ("elf_4w", "4-Wheel Elf (Dropside/Closed)", "LIGHT_COMMERCIAL",
-     dict(payload_kg=2000, volume_cbm=8.0, opening_length_cm=300, opening_width_cm=170, opening_height_cm=180)),
-    ("truck_6w", "6-Wheel Truck", "MEDIUM_HEAVY",
-     dict(payload_kg=8000, volume_cbm=24.0, opening_length_cm=500, opening_width_cm=210, opening_height_cm=220, port_eligible=1)),
-    ("truck_6w_wing", "6-Wheel Wing Van", "MEDIUM_HEAVY",
-     dict(payload_kg=7500, volume_cbm=30.0, body_type="wing_van", opening_length_cm=560, opening_width_cm=220, opening_height_cm=230, port_eligible=1)),
-    ("truck_6w_ref", "6-Wheel Refrigerated Truck", "MEDIUM_HEAVY",
-     dict(payload_kg=7000, volume_cbm=22.0, refrigerated=1, opening_length_cm=500, opening_width_cm=210, opening_height_cm=220, port_eligible=1)),
-    ("truck_10w", "10-Wheel Truck", "MEDIUM_HEAVY",
-     dict(payload_kg=15000, volume_cbm=40.0, opening_length_cm=730, opening_width_cm=230, opening_height_cm=240, port_eligible=1)),
-    ("truck_10w_wing", "10-Wheel Wing Van", "MEDIUM_HEAVY",
-     dict(payload_kg=14000, volume_cbm=45.0, body_type="wing_van", opening_length_cm=800, opening_width_cm=240, opening_height_cm=250, port_eligible=1)),
-    ("truck_12w", "12-Wheel Truck", "MEDIUM_HEAVY",
-     dict(payload_kg=20000, volume_cbm=50.0, opening_length_cm=900, opening_width_cm=240, opening_height_cm=250, port_eligible=1)),
-    ("flatbed_10w", "10-Wheel Flatbed", "MEDIUM_HEAVY",
-     dict(payload_kg=15000, volume_cbm=0, body_type="flatbed", port_eligible=1)),
-    ("container_chassis", "Container Truck (Chassis)", "MEDIUM_HEAVY",
-     dict(payload_kg=25000, volume_cbm=67.0, body_type="container_chassis", port_eligible=1)),
-    ("lowbed_trailer", "Low-Bed Trailer", "SPECIALIZED",
-     dict(payload_kg=40000, volume_cbm=0, body_type="lowbed", requires_special_permit=1, port_eligible=1)),
-    ("boom_truck", "Boom Truck", "SPECIALIZED",
-     dict(payload_kg=8000, volume_cbm=0, lifting_capable=1, lifting_capacity_kg=10000)),
-    ("crane_truck", "Crane Truck", "SPECIALIZED",
-     dict(payload_kg=10000, volume_cbm=0, lifting_capable=1, lifting_capacity_kg=25000, requires_special_permit=1)),
-]
+_CATALOGUE_PATH = Path(__file__).resolve().parent.parent / "vehicle-catalogue.json"
+
+
+def canonical_vehicle_catalogue():
+    """Return the one governed UI/registration/booking vehicle catalogue."""
+    data = json.loads(_CATALOGUE_PATH.read_text(encoding="utf-8"))
+    vehicles = data.get("vehicles") or []
+    codes = [v.get("code") for v in vehicles]
+    if not vehicles or len(codes) != len(set(codes)):
+        raise RuntimeError("canonical vehicle catalogue is empty or contains duplicate codes")
+    return data
+
+
+def _catalogue_seed_rows():
+    rows = []
+    special_bodies = {
+        "container_chassis": "container_chassis", "flatbed_10w": "flatbed",
+        "lowbed_trailer": "lowbed", "dropdeck_trailer": "flatbed",
+        "specialized_heavyhaul": "flatbed",
+    }
+    for item in canonical_vehicle_catalogue()["vehicles"]:
+        dims = item["cargo_dimensions_cm"]
+        length, width, height = dims["length"], dims["width"], dims["height"]
+        volume = round(length * width * height / 1000000, 3) if height else 0
+        attrs = dict(
+            body_type=special_bodies.get(item["code"], item["body_type"]),
+            axle_config=item["wheel_configuration"], payload_kg=item["payload_kg"]["max"],
+            volume_cbm=volume, length_cm=length, width_cm=width, height_cm=height,
+            opening_length_cm=length, opening_width_cm=width, opening_height_cm=height,
+            refrigerated=int(item["code"] == "truck_6w_ref"),
+            port_eligible=int(item["group"] == "Heavy Hauling & Trailers"),
+            requires_special_permit=int(item["registration_class"] == "SPECIALIZED"),
+        )
+        rows.append((item["code"], item["display_name"], item["registration_class"], attrs))
+    return rows
+
+
+_VEHICLES = _catalogue_seed_rows()
 
 # code, name, cargo_class, flags
 _CARGO = [

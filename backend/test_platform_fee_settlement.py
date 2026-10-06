@@ -6,12 +6,14 @@ from unittest.mock import patch
 import db
 import platform_fee_settlement as pfs
 import public_booking as pb
+import revenue_dna as rd
 
 
 class FakeWise:
-    def __init__(self, fund_status="processing", fail=False):
+    def __init__(self, fund_status="processing", fail=False, fail_fund=False):
         self.fund_status = fund_status
         self.fail = fail
+        self.fail_fund = fail_fund
         self.quote_amounts = []
         self.transfer_ids = []
         self.fund_calls = 0
@@ -28,6 +30,8 @@ class FakeWise:
 
     def fund_transfer(self, *, transfer_id, correlation_id):
         self.fund_calls += 1
+        if self.fail_fund:
+            raise pfs.WiseFeeError("simulated uncertain fund request")
         return {"status": self.fund_status}
 
     def get_transfer(self, transfer_id, correlation_id=None):
@@ -50,6 +54,19 @@ class AdministrationFeeWiseSettlementTests(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
         self.conn = db.connect(":memory:")
+        maker = {"id": 801, "role": "admin", "perms": {"*"}, "tenant_id": None}
+        verifier = {"id": 802, "role": "admin", "perms": {"*"}, "tenant_id": None}
+        approver = {"id": 803, "role": "admin", "perms": {"*"}, "tenant_id": None}
+        activator = {"id": 804, "role": "admin", "perms": {"*"}, "tenant_id": None}
+        for control in rd.get_scheme(self.conn, maker, rd.PAYMENT_DNA_SCHEME)["controls"]:
+            evidence = rd.submit_evidence(
+                self.conn, maker, rd.PAYMENT_DNA_SCHEME, control["code"],
+                f"TEST-EVIDENCE/{control['code']}", issued_by="Test accountable authority",
+                expires_at="2099-12-31")
+            rd.verify_evidence(self.conn, verifier, evidence["evidence_id"], "VERIFIED")
+        rd.submit_for_approval(self.conn, maker, rd.PAYMENT_DNA_SCHEME)
+        rd.approve(self.conn, approver, rd.PAYMENT_DNA_SCHEME)
+        rd.activate(self.conn, activator, rd.PAYMENT_DNA_SCHEME)
         result = pb.submit(self.conn, {
             "contact_name": "Fee Settlement Test", "contact_phone": "+639171234567",
             "origin_island": "LUZON", "dest_island": "LUZON",
@@ -68,6 +85,12 @@ class AdministrationFeeWiseSettlementTests(unittest.TestCase):
         )
         self.transaction_id = cur.lastrowid
         self.conn.commit()
+
+    def test_wise_client_requires_https_api_base(self):
+        cfg = pfs.settlement_config()
+        cfg["api_base"] = "http://api.wise.invalid"
+        with self.assertRaises(pfs.WiseFeeError):
+            pfs.WiseAdminFeeClient(cfg)
 
     def test_exact_10_percent_is_submitted_once_and_never_duplicated(self):
         wise = FakeWise("outgoing_payment_sent")
@@ -92,6 +115,15 @@ class AdministrationFeeWiseSettlementTests(unittest.TestCase):
         self.assertEqual(wise.quote_amounts, [])
         self.assertIsNone(result["wise_transfer_id"])
 
+    def test_flags_and_credentials_cannot_bypass_inactive_payment_dna(self):
+        actor = {"id": 900, "role": "admin", "perms": {"*"}, "tenant_id": None}
+        rd.suspend(self.conn, actor, rd.PAYMENT_DNA_SCHEME, "adversarial test")
+        wise = FakeWise("outgoing_payment_sent")
+        result = pfs.record_verified_payment(self.conn, self.transaction_id, client=wise)
+        self.assertEqual(result["status"], "BLOCKED_DNA")
+        self.assertEqual(wise.quote_amounts, [])
+        self.assertEqual(wise.fund_calls, 0)
+
     def test_non_provider_verified_payment_is_never_settled(self):
         self.conn.execute(
             "UPDATE gateway_payment_transactions SET verification_method='MANUAL_OFFICIAL_RECORD' WHERE id=?",
@@ -108,6 +140,19 @@ class AdministrationFeeWiseSettlementTests(unittest.TestCase):
         self.assertEqual(result["status"], "ACTION_REQUIRED")
         self.assertIsNone(result["wise_transfer_id"])
         self.assertNotEqual(result["status"], "COMPLETED")
+
+    def test_retry_resumes_durable_transfer_without_creating_duplicate(self):
+        uncertain = FakeWise(fail_fund=True)
+        first = pfs.record_verified_payment(self.conn, self.transaction_id, client=uncertain)
+        self.assertEqual(first["status"], "ACTION_REQUIRED")
+        self.assertEqual(len(uncertain.quote_amounts), 1)
+        self.assertEqual(len(uncertain.transfer_ids), 1)
+        retry = FakeWise("outgoing_payment_sent")
+        completed = pfs.attempt_transfer(self.conn, first["id"], client=retry)
+        self.assertEqual(completed["status"], "COMPLETED")
+        self.assertEqual(retry.quote_amounts, [])
+        self.assertEqual(retry.transfer_ids, [])
+        self.assertEqual(retry.fund_calls, 1)
 
     def test_refund_after_submission_creates_fee_recovery_case(self):
         result = pfs.record_verified_payment(self.conn, self.transaction_id, client=FakeWise("processing"))

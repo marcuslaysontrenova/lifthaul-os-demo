@@ -194,9 +194,7 @@ footer a:hover{color:#fff}
 .payflow{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.paynode{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;position:relative}.paynode .n{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:var(--primary);color:#fff;font-size:12px;font-weight:800}.paynode h3{font-size:15px;margin-top:12px}.paynode p{font-size:13px;color:var(--ink-2);margin-top:6px}.faq{display:grid;grid-template-columns:1fr 1fr;gap:12px}.faq details{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px}.faq summary{font-weight:750;cursor:pointer}.faq p{font-size:14px;color:var(--ink-2);margin-top:9px}.compliance-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.factlist{display:grid;gap:10px}.fact{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:13px 15px}.fact b{display:block}.fact span{color:var(--ink-2);font-size:13px}.legal-note{background:var(--warn-bg);border:1px solid #e8cd96;border-left:4px solid var(--warn);border-radius:var(--radius-sm);padding:14px 16px;color:#684306;font-size:13.5px}
 @media(max-width:980px){.payflow{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.compliance-grid,.faq{grid-template-columns:1fr}}@media(max-width:560px){.payflow{grid-template-columns:1fr}}
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="network-map.css?v=1">
-<link rel="stylesheet" href="theme.css?v=9">
+<link rel="stylesheet" href="theme.css?v=10">
 </head>
 <body>
 
@@ -219,8 +217,13 @@ footer a:hover{color:#fff}
       <a href="#faq">FAQ</a>
       <span class="navdiv" aria-hidden="true"></span>
       <a href="track.html">Track</a>
-      <a href="client.html">Client workspace</a>
-      <a href="portal.html">Provider workspace</a>
+      <details class="workspace-menu">
+        <summary>Workspaces</summary>
+        <div class="workspace-popover">
+          <a href="client.html">Client workspace</a>
+          <a href="portal.html">Provider workspace</a>
+        </div>
+      </details>
     </div>
     <div class="sp"></div>
     <a class="btn line sm hidesm" href="client.html">Client login</a>
@@ -235,9 +238,9 @@ footer a:hover{color:#fff}
 <header class="hero" id="home">
   <div class="wrap">
     <div class="hero-copy">
-      <div class="eyebrow">Nationwide logistics infrastructure</div>
+      <div class="eyebrow">Every delivery scale. One accountable platform.</div>
       <h1><span class="solid">Move anything.</span><br><span class="outline">Govern every mile.</span></h1>
-      <p class="lead">One accountable platform for trucks, cranes and heavy-haul services—connecting verified providers, live delivery evidence and protected-payment controls across the Philippines.</p>
+      <p class="lead">From branded motorcycles and sedans to L300 vans, ELF/NKR-class trucks, trailers and heavy equipment—one governed platform for every delivery scale.</p>
       <div class="cta">
         <a class="btn lg" href="book.html">Book a Service →</a>
         <a class="btn line lg" href="provider.html">Join the provider network ↗</a>
@@ -248,7 +251,7 @@ footer a:hover{color:#fff}
         <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Payment status verified by provider</span>
       </div>
     </div>
-    <aside class="herocard" aria-label="What you get">
+    <aside class="herocard" aria-label="What you get" hidden aria-hidden="true">
       <h3>One booking. One accountable timeline.</h3>
       <p class="muted" style="font-size:14px;margin-top:6px">Pickup, route, provider, payment, delivery evidence, dispute and settlement in one governed record.</p>
       <div class="mapscene">
@@ -327,7 +330,7 @@ footer a:hover{color:#fff}
         <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16V7h11v9M14 10h4l3 3v3M3 16h18"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></div>
         <h3>Individual / Owner-Operator</h3>
         <p>You own and drive your own truck. List your unit, stay compliant, and take jobs on your schedule.</p>
-        <button class="go" onclick="location.href='provider.html?type=OWNER_OPERATOR'">Register your unit →</button>
+        <button class="go" onclick="location.href='provider.html?track=LIGHT'">Register your light vehicle →</button>
       </article>
       <article class="rolecard">
         <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="8" width="13" height="9" rx="1"/><path d="M15 11h4l3 3v3h-7z"/><circle cx="6" cy="19" r="1.8"/><circle cx="18" cy="19" r="1.8"/></svg></div>
@@ -339,7 +342,7 @@ footer a:hover{color:#fff}
         <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V6l10 3M4 6l10 3"/><rect x="10" y="13" width="8" height="6" rx="1"/><path d="M18 16h3"/></svg></div>
         <h3>Heavy Equipment Operator</h3>
         <p>Cranes, boom trucks, forklifts, excavators. Bring your certifications and get matched to lifting and rigging jobs.</p>
-        <button class="go" onclick="location.href='provider.html?type=CRANE_COMPANY'">Register as an operator →</button>
+        <button class="go" onclick="location.href='driver-register.html?track=HEAVY_EQUIPMENT_OPERATOR#partnerPaths'">Register as an operator →</button>
       </article>
     </div>
   </div>
@@ -590,7 +593,7 @@ footer a:hover{color:#fff}
       </div>
       <div><h4>Join as</h4>
         <a href="driver-register.html">Driver</a>
-        <a href="provider.html?type=OWNER_OPERATOR">Owner-Operator</a>
+        <a href="provider.html?track=LIGHT">Motorcycle / Light Vehicle</a>
         <a href="provider.html?type=FLEET_OPERATOR">Trucker / Fleet</a>
         <a href="provider.html?type=CRANE_COMPANY">Equipment Operator</a></div>
       <div><h4>Platform</h4>
@@ -645,7 +648,5 @@ footer a:hover{color:#fff}
 
 })();
 </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="network-map.js?v=1"></script>
 </body>
 </html>

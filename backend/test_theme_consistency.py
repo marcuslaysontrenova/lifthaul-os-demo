@@ -9,6 +9,7 @@ PUBLIC_PAGES = (
     "book.html",
     "track.html",
     "provider.html",
+    "driver-register.html",
     "portal.html",
     "driver.html",
     "client.html",
@@ -55,11 +56,11 @@ class ThemeConsistency(unittest.TestCase):
         for relative in PUBLIC_PAGES:
             with self.subTest(page=relative):
                 markup = (ROOT / relative).read_text(encoding="utf-8")
-                self.assertIn('href="theme.css?v=9"', markup)
+                self.assertIn('href="theme.css?v=10"', markup)
 
     def test_bundled_frontend_loads_shared_theme(self):
         markup = (ROOT / "backend" / "frontend" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('href="../../theme.css?v=9"', markup)
+        self.assertIn('href="../../theme.css?v=10"', markup)
 
 
 if __name__ == "__main__":

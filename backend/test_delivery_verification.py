@@ -25,7 +25,9 @@ def _bk(c, dest="Luzon", vehicle="6w", km=50):
     payload = {"contact_name": "A", "contact_phone": "0917", "origin_island": "Luzon",
                "dest_island": dest, "vehicle": vehicle, "km": km}
     if vehicle in ("crane", "lowbed"):
-        payload.update({"booking_mode": "MANAGED_PROJECT", "service_line": "EQUIPMENT",
+        # Heavy equipment is no longer accepted as a guessed standard vehicle. Route it through
+        # the canonical manual/project assessment while preserving engineered-service policy.
+        payload.update({"vehicle": "manual", "booking_mode": "MANAGED_PROJECT", "service_line": "EQUIPMENT",
                         "cargo_category": "MACHINERY_EQUIPMENT", "cargo": "Industrial equipment",
                         "weight_kg": 2000, "package_length_cm": 100, "package_width_cm": 100,
                         "package_height_cm": 100, "site_access_confirmed": True,

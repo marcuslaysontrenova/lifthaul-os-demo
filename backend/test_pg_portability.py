@@ -47,6 +47,7 @@ import marketplace_onboarding
 import marketplace_matching
 import marketplace_payments
 import marketplace_trips
+import revenue_dna
 import dbconn
 
 # The canonical DDL surface (same parts pgcompat.full_postgres_ddl assembles),
@@ -56,7 +57,7 @@ _SCHEMA_PARTS = [core.SCHEMA, ops.OPS_SCHEMA, admin.ADMIN_SCHEMA, catalog.CATALO
                  masterdata.SCHEMA, crm_admin.SCHEMA, workflow.SCHEMA, wfgov.SCHEMA, forms.SCHEMA,
                  sysconfig.SCHEMA, integrations.SCHEMA, reporting.SCHEMA, ai_admin.SCHEMA, saas.SCHEMA,
                  marketplace.SCHEMA, marketplace_onboarding.SCHEMA, marketplace_matching.SCHEMA,
-                 marketplace_payments.SCHEMA, marketplace_trips.SCHEMA,
+                 marketplace_payments.SCHEMA, marketplace_trips.SCHEMA, revenue_dna.SCHEMA,
                  "CREATE TABLE IF NOT EXISTS schema_version(version INTEGER, applied_at TEXT);"]
 _ALL_DDL = "\n".join(_SCHEMA_PARTS)
 

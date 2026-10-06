@@ -43,6 +43,8 @@ import notifications_engine as ne
 import driver_reassignment as dr
 import fleet_registration as fr
 import availability as av
+import provider_payouts as ppo
+import provider_security_deposit as psd
 
 
 # --------------------------------------------------------------------------- #
@@ -494,11 +496,19 @@ def finance(conn, actor, requested=None):
     payout = conn.execute(
         "SELECT id,beneficiary_name,entity_name,account_masked,status,created_at FROM mkt_payout_accounts "
         "WHERE carrier_id=? ORDER BY id DESC", (cid,)).fetchall()
+    payout_profile = ppo.profile(conn, actor, cid)
+    payout_wallet = ppo.wallet(conn, actor, cid)
+    payout_requests = ppo.list_requests(conn, _svc(actor, "marketplace.payout.view"), cid)
+    security_deposit = psd.statement(conn, actor, cid)
     return {
         "carrier_id": cid,
         "totals": {"earned": round(earned, 2), "released": round(released, 2), "held": round(held, 2)},
         "settlements": settlements,
         "payout_accounts": [dict(p) for p in payout],   # account already masked at rest
+        "payout_profile": payout_profile,
+        "earnings_wallet": payout_wallet,
+        "payout_requests": payout_requests,
+        "security_deposit": security_deposit,
     }
 
 
@@ -609,6 +619,33 @@ def submit_payout_account(conn, actor, beneficiary_name, entity_name, provider_r
                                    cooling_hours=cooling_hours)
     return {"payout_account_id": pid, "status": "SUBMITTED",
             "note": "submitted — a finance reviewer must approve before any payout"}
+
+
+def configure_payout_profile(conn, actor, beneficiary_type, allocation_mode, payout_mode,
+                             payout_account_id, destination_channel, requested=None, **attrs):
+    """Choose who earns and when to disburse. This cannot approve an unverified destination."""
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    return ppo.configure_profile(
+        conn, _svc(actor, *_SELF_SERVICE["submit_payout"]), cid,
+        beneficiary_type=beneficiary_type, allocation_mode=allocation_mode,
+        payout_mode=payout_mode, payout_account_id=payout_account_id,
+        destination_channel=destination_channel,
+        driver_share_bps=attrs.get("driver_share_bps", 0),
+        owner_share_bps=attrs.get("owner_share_bps", 10000),
+        policy_code=attrs.get("policy_code"), split_supported=attrs.get("split_supported", False),
+        provider_name=attrs.get("provider_name", "MOCK"))
+
+
+def request_payout(conn, actor, amount, idempotency_key, requested=None):
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    return ppo.request_payout(conn, _svc(actor, *_SELF_SERVICE["submit_payout"]), cid,
+                              amount, idempotency_key)
+
+
+def request_security_deposit_refund(conn, actor, requested=None):
+    """Offboarding refund request for the carrier's own refundable deposit."""
+    cid = resolve_carrier(conn, actor, requested, write=True)
+    return psd.request_refund(conn, _svc(actor, *_SELF_SERVICE["submit_payout"]), cid)
 
 
 def submit_offer(conn, actor, booking_id, amount, vehicle_id=None, driver_id=None, requested=None, **attrs):

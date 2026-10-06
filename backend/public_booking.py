@@ -59,7 +59,7 @@ MANAGED_HANDLING = {
 # read from mkt_vehicle_categories; these labels are never trusted as the source of truth.
 PUBLIC_VEHICLE_CATEGORIES = {
     "moto": "motorcycle", "sedan": "sedan", "mpv": "mpv", "pickup": "pickup",
-    "van": "l300_van", "refvan": "ref_van_light", "6w": "truck_6w",
+    "van": "l300_van", "refvan": "truck_6w_ref", "6w": "truck_6w",
     "6wref": "truck_6w_ref", "10w": "truck_10w_wing",
     "lowbed": "lowbed_trailer", "crane": "crane_truck",
 }

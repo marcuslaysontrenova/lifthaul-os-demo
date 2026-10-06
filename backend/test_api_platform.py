@@ -182,6 +182,10 @@ class Webhooks(unittest.TestCase):
     def test_bad_url_rejected(self):
         with self.assertRaises(core.ValidationError):
             ap.create_webhook(self.c, SUP, "ftp://x", ["booking.created"])
+        with self.assertRaises(core.ValidationError):
+            ap.create_webhook(self.c, SUP, "http://x.example/h", ["booking.created"])
+        with self.assertRaises(core.ValidationError):
+            ap.create_webhook(self.c, SUP, "https://127.0.0.1/h", ["booking.created"])
 
     def test_unknown_event_rejected(self):
         with self.assertRaises(core.ValidationError):

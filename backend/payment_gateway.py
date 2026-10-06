@@ -28,10 +28,12 @@ import json
 import os
 import secrets
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import core
 import tenant
+import revenue_dna
 
 
 STATUSES = (
@@ -76,6 +78,10 @@ REQUIRED_CERTIFICATION_TESTS = (
     "end_to_end_channel",
 )
 
+REQUIRED_CERTIFICATION_EVIDENCE = (
+    "evidence_reference", "provider_test_run_id", "executed_at", "provider_environment",
+)
+
 PRODUCTION_SECURITY_FLAGS = (
     ("provider_certified", "Provider commercial and technical certification"),
     ("production_pilot_approved", "Controlled low-value production pilot"),
@@ -90,6 +96,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS gateway_channel_certifications(
   id INTEGER PRIMARY KEY, provider TEXT NOT NULL, environment TEXT NOT NULL,
   channel_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', tests_json TEXT,
+  evidence_json TEXT,
   certified_by INTEGER, certified_at TEXT, notes TEXT,
   UNIQUE(provider,environment,channel_key));
 
@@ -124,6 +131,14 @@ CREATE TABLE IF NOT EXISTS gateway_refunds(
   status TEXT NOT NULL DEFAULT 'PENDING', idempotency_key TEXT NOT NULL,
   requested_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
   UNIQUE(transaction_id,idempotency_key));
+
+CREATE TABLE IF NOT EXISTS gateway_disputes(
+  id INTEGER PRIMARY KEY, provider TEXT NOT NULL, provider_dispute_id TEXT NOT NULL,
+  transaction_id INTEGER, event_type TEXT NOT NULL, status TEXT,
+  status_reason TEXT, channel_code TEXT, amount REAL, currency TEXT,
+  due_date TEXT, category TEXT, provider_payment_id TEXT, reference_id TEXT,
+  payload_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE(provider,provider_dispute_id));
 
 CREATE TABLE IF NOT EXISTS gateway_manual_reviews(
   id INTEGER PRIMARY KEY, tenant_id INTEGER, booking_id INTEGER NOT NULL, transaction_id INTEGER,
@@ -173,6 +188,7 @@ def init(conn):
     migrations = {
         "gateway_manual_reviews": {"tenant_id": "INTEGER"},
         "gateway_reconciliation_runs": {"run_key": "TEXT"},
+        "gateway_channel_certifications": {"evidence_json": "TEXT"},
     }
     for table, columns in migrations.items():
         have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -218,13 +234,53 @@ def _production_gate_failures(cfg):
 
 def _certified(conn, channel_key, environment):
     row = conn.execute(
-        "SELECT status,tests_json FROM gateway_channel_certifications WHERE provider=? AND environment=? AND channel_key=?",
+        "SELECT status,tests_json,evidence_json FROM gateway_channel_certifications WHERE provider=? AND environment=? AND channel_key=?",
         (PROVIDER, environment, channel_key),
     ).fetchone()
     if not row or row["status"] != "CERTIFIED":
         return False
     tests = json.loads(row["tests_json"] or "{}")
-    return all(tests.get(name) is True for name in REQUIRED_CERTIFICATION_TESTS)
+    try:
+        evidence = json.loads(row["evidence_json"] or "{}")
+    except (TypeError, ValueError):
+        return False
+    return (
+        all(tests.get(name) is True for name in REQUIRED_CERTIFICATION_TESTS)
+        and all(str(evidence.get(name) or "").strip() for name in REQUIRED_CERTIFICATION_EVIDENCE)
+        and str(evidence.get("provider_environment") or "").upper() == str(environment).upper()
+    )
+
+
+def _certification_evidence(evidence, environment):
+    """Validate the external-provider evidence needed before a channel can be certified.
+
+    The application records references, not provider credentials or customer payment data.  This
+    prevents a privileged user from converting a set of checked test boxes into certification with
+    no traceable provider run.
+    """
+    evidence = evidence if isinstance(evidence, dict) else {}
+    missing = [name for name in REQUIRED_CERTIFICATION_EVIDENCE
+               if not str(evidence.get(name) or "").strip()]
+    if missing:
+        raise core.ValidationError("payment channel certification evidence is incomplete: " + ", ".join(missing))
+    provider_environment = str(evidence["provider_environment"]).strip().upper()
+    if provider_environment != environment:
+        raise core.ValidationError("provider evidence environment does not match certification environment")
+    executed_raw = str(evidence["executed_at"]).strip()
+    try:
+        executed_at = datetime.datetime.fromisoformat(executed_raw.replace("Z", "+00:00"))
+        if executed_at.tzinfo is None:
+            raise ValueError("timezone required")
+        if executed_at > datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=5):
+            raise ValueError("future evidence")
+    except ValueError as exc:
+        raise core.ValidationError("executed_at must be a non-future ISO-8601 timestamp with timezone") from exc
+    return {
+        "evidence_reference": str(evidence["evidence_reference"]).strip()[:500],
+        "provider_test_run_id": str(evidence["provider_test_run_id"]).strip()[:200],
+        "executed_at": executed_at.astimezone(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "provider_environment": provider_environment,
+    }
 
 
 def available_channels(conn):
@@ -232,6 +288,10 @@ def available_channels(conn):
     cfg = gateway_config()
     configured = bool(cfg["secret_key"] and cfg["webhook_token"] and cfg["return_base_url"].startswith("https://"))
     production_failures = _production_gate_failures(cfg) if cfg["mode"] == "production" else []
+    dna = revenue_dna.payment_dna_readiness(conn)
+    if cfg["mode"] == "production" and not dna["live_money_allowed"]:
+        production_failures.append(
+            "Payment & Settlement DNA is not ACTIVE with current verified evidence")
     production_gate = not production_failures
     ready = cfg["mode"] != "disabled" and configured and cfg["provider_certified"] and production_gate
     channels = []
@@ -260,6 +320,7 @@ def available_channels(conn):
         "provider": PROVIDER, "mode": cfg["mode"], "environment": cfg["environment"],
         "available": bool(channels), "channels": channels, "reason": reason,
         "authoritative_confirmation": "Verified provider webhook plus server-to-server status check",
+        "payment_dna": dna,
     }
 
 
@@ -287,6 +348,7 @@ def security_readiness(conn, actor):
         if _certified(conn, key, cfg["environment"]):
             certified.append(key)
     blockers = []
+    dna = revenue_dna.payment_dna_readiness(conn)
     if cfg["mode"] != "production":
         blockers.append("Gateway is not in production mode")
     blockers.extend(label for key, label in PRODUCTION_SECURITY_FLAGS if not approvals[key])
@@ -295,6 +357,8 @@ def security_readiness(conn, actor):
     if not all((configured["provider_secret_configured"], configured["webhook_authentication_configured"],
                 configured["secure_https_return_url"])):
         blockers.append("Provider credentials, callback authentication, or HTTPS return URL is incomplete")
+    if not dna["live_money_allowed"]:
+        blockers.append("Payment & Settlement DNA is not ACTIVE with current verified evidence")
     return {
         "provider": PROVIDER,
         "mode": cfg["mode"],
@@ -302,6 +366,7 @@ def security_readiness(conn, actor):
         "architecture_controls": configured,
         "production_approvals": approvals,
         "certified_channels": certified,
+        "payment_dna": dna,
         "live_activation_ready": not blockers,
         "blockers": blockers,
         "public_terminology": "Protected Payment",
@@ -310,7 +375,7 @@ def security_readiness(conn, actor):
     }
 
 
-def certify_channel(conn, actor, channel_key, environment, tests, notes=None):
+def certify_channel(conn, actor, channel_key, environment, tests, notes=None, evidence=None):
     core.require(actor, "marketplace.payment.override")
     key = str(channel_key or "").lower()
     env = str(environment or "").upper()
@@ -320,6 +385,7 @@ def certify_channel(conn, actor, channel_key, environment, tests, notes=None):
     missing = [name for name in REQUIRED_CERTIFICATION_TESTS if tests.get(name) is not True]
     if missing:
         raise core.ValidationError("payment channel certification is incomplete: " + ", ".join(missing))
+    evidence = _certification_evidence(evidence, env)
     if env == "PRODUCTION":
         if not _certified(conn, key, "SANDBOX"):
             raise core.ConflictError("sandbox certification is required before production certification")
@@ -333,26 +399,32 @@ def certify_channel(conn, actor, channel_key, environment, tests, notes=None):
     payload = json.dumps(tests, sort_keys=True)
     if existing:
         conn.execute(
-            "UPDATE gateway_channel_certifications SET status='CERTIFIED',tests_json=?,certified_by=?,certified_at=?,notes=? WHERE id=?",
-            (payload, actor["id"], _now(), str(notes or "")[:1000], existing["id"]),
+            "UPDATE gateway_channel_certifications SET status='CERTIFIED',tests_json=?,evidence_json=?,certified_by=?,certified_at=?,notes=? WHERE id=?",
+            (payload, json.dumps(evidence, sort_keys=True), actor["id"], _now(),
+             str(notes or "")[:1000], existing["id"]),
         )
         cid = existing["id"]
     else:
         cur = conn.execute(
-            "INSERT INTO gateway_channel_certifications(provider,environment,channel_key,status,tests_json,certified_by,certified_at,notes) VALUES(?,?,?,'CERTIFIED',?,?,?,?)",
-            (PROVIDER, env, key, payload, actor["id"], _now(), str(notes or "")[:1000]),
+            "INSERT INTO gateway_channel_certifications(provider,environment,channel_key,status,tests_json,evidence_json,certified_by,certified_at,notes) VALUES(?,?,?,'CERTIFIED',?,?,?,?,?)",
+            (PROVIDER, env, key, payload, json.dumps(evidence, sort_keys=True), actor["id"],
+             _now(), str(notes or "")[:1000]),
         )
         cid = cur.lastrowid
     core.audit(conn, actor, "PAYMENT_CHANNEL_CERTIFIED", "gateway_channel_certifications", cid, None,
                {"provider": PROVIDER, "environment": env, "channel": key})
     conn.commit()
-    return {"id": cid, "provider": PROVIDER, "environment": env, "channel": key, "status": "CERTIFIED"}
+    return {"id": cid, "provider": PROVIDER, "environment": env, "channel": key,
+            "status": "CERTIFIED", "evidence_reference": evidence["evidence_reference"]}
 
 
 class XenditClient:
     def __init__(self, secret_key, base_url="https://api.xendit.co", timeout=15):
         if not secret_key:
             raise core.ForbiddenError("payment provider credential is not configured")
+        parsed = urllib.parse.urlsplit(str(base_url or ""))
+        if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise core.ForbiddenError("payment provider API base URL must be HTTPS without embedded credentials")
         self.secret_key = secret_key
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -372,7 +444,7 @@ class XenditClient:
             "User-Agent": "LiftHaulOS/1.0",
         })
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:  # nosec B310: HTTPS validated in constructor
                 return json.loads(response.read() or b"{}")
         except urllib.error.HTTPError as exc:
             try:
@@ -492,6 +564,10 @@ def create_payment_session(conn, token, channel_key, idempotency_key, client=Non
         return result
 
     cfg = gateway_config()
+    if cfg["mode"] == "production":
+        revenue_dna.guard_payment_operation(
+            conn, {"id": 0, "role": "system", "tenant_id": None, "perms": set()},
+            "create_customer_payment_session", moving_real_funds=True)
     reference = ("LH-%s-%s" % (booking["id"], secrets.token_hex(6)))[:64]
     created = _now()
     cur = conn.execute(
@@ -665,7 +741,8 @@ def refresh_transaction(conn, transaction_id, client=None):
 
 def _webhook_event_key(payload):
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-    identity = data.get("payment_id") or data.get("payment_session_id") or data.get("id") or data.get("payment_request_id")
+    identity = (data.get("payment_id") or data.get("payment_session_id") or data.get("id")
+                or data.get("payment_request_id") or payload.get("id") or payload.get("payment_id"))
     return _hash({"event": payload.get("event"), "created": payload.get("created"), "identity": identity})
 
 
@@ -690,6 +767,81 @@ def process_webhook(conn, callback_token, payload, client=None):
         (PROVIDER, event_key, event_type, _hash(payload), _now()),
     )
     event_id = cur.lastrowid
+    if event_type.startswith("dispute."):
+        # Xendit dispute payloads are top-level (not nested in ``data``). A
+        # dispute freezes the transaction; it never authorizes release or
+        # reverses itself solely because a later provider event says "won".
+        dispute_id = str(payload.get("id") or "").strip()
+        payment_id = payload.get("payment_id")
+        reference = payload.get("reference_id")
+        if not dispute_id:
+            conn.execute(
+                "UPDATE gateway_webhook_events SET processing_status='REVIEW_REQUIRED',safe_error='dispute id missing',processed_at=? WHERE id=?",
+                (_now(), event_id),
+            )
+            conn.commit()
+            return {"accepted": True, "event_id": event_id, "status": "REVIEW_REQUIRED"}
+        row = conn.execute(
+            "SELECT * FROM gateway_payment_transactions WHERE provider_payment_id=? OR reference_id=? "
+            "ORDER BY id DESC LIMIT 1",
+            (payment_id, reference),
+        ).fetchone() if (payment_id or reference) else None
+        if not row:
+            conn.execute(
+                "UPDATE gateway_webhook_events SET processing_status='UNMATCHED',safe_error='dispute transaction not found',processed_at=? WHERE id=?",
+                (_now(), event_id),
+            )
+            conn.commit()
+            return {"accepted": True, "event_id": event_id, "status": "UNMATCHED"}
+        row = dict(row)
+        raw_amount = payload.get("amount")
+        invalid_amount = False
+        try:
+            amount = float(raw_amount) if raw_amount is not None else None
+            invalid_amount = amount is not None and amount <= 0
+        except (TypeError, ValueError):
+            amount = None
+            invalid_amount = True
+        currency = str(payload.get("currency") or "").upper()
+        mismatch = (
+            invalid_amount
+            or (currency and currency != str(row["currency"]).upper())
+            or (amount is not None and float(amount) > float(row["amount"]) + 0.001)
+            or (reference and reference != row["reference_id"])
+        )
+        provider_status = str(payload.get("status") or event_type.split(".", 1)[-1]).upper()
+        conn.execute(
+            "INSERT INTO gateway_disputes(provider,provider_dispute_id,transaction_id,event_type,status,"
+            "status_reason,channel_code,amount,currency,due_date,category,provider_payment_id,reference_id,"
+            "payload_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(provider,provider_dispute_id) DO UPDATE SET event_type=excluded.event_type,"
+            "status=excluded.status,status_reason=excluded.status_reason,due_date=excluded.due_date,"
+            "payload_hash=excluded.payload_hash,updated_at=excluded.updated_at",
+            (PROVIDER, dispute_id, row["id"], event_type, provider_status,
+             str(payload.get("status_reason") or "")[:500], str(payload.get("channel_code") or "")[:100],
+             amount, currency or row["currency"], payload.get("due_date"),
+             str(payload.get("category") or "")[:120], payment_id, reference,
+             _hash(payload), _now(), _now()),
+        )
+        review_reason = ("provider dispute evidence mismatch" if mismatch else
+                         "provider dispute requires governed financial review")
+        conn.execute(
+            "UPDATE gateway_payment_transactions SET status='UNDER_REVIEW',review_reason=?,updated_at=? WHERE id=?",
+            (review_reason, _now(), row["id"]),
+        )
+        conn.execute("UPDATE mkt_bookings SET payment_status='UNDER_REVIEW',updated_at=? WHERE id=?",
+                     (_now(), row["booking_id"]))
+        conn.execute(
+            "UPDATE gateway_webhook_events SET transaction_id=?,processing_status=?,safe_error=?,processed_at=? WHERE id=?",
+            (row["id"], "REVIEW_REQUIRED" if mismatch else "PROCESSED",
+             review_reason if mismatch else None, _now(), event_id),
+        )
+        conn.commit()
+        import platform_fee_settlement as pfs
+        pfs.handle_dispute(conn, row["id"], amount, event_type)
+        return {"accepted": True, "event_id": event_id, "transaction_id": row["id"],
+                "status": "REVIEW_REQUIRED" if mismatch else "UNDER_REVIEW",
+                "release_authorized": False}
     if event_type in {"refund.succeeded", "refund.failed"}:
         refund_ref = data.get("id") or data.get("refund_id")
         request_id = data.get("payment_request_id")
@@ -797,6 +949,13 @@ def request_refund(conn, actor, transaction_id, amount, reason, idempotency_key,
     ).fetchone()
     if existing:
         return {"refund_id": existing["id"], "status": existing["status"], "idempotent": True}
+    if gateway_config()["mode"] == "production":
+        # A suspension stops new revenue and payouts, but must not trap customer
+        # funds. Existing verified payments may be unwound through the governed,
+        # permissioned and idempotent refund path.
+        revenue_dna.guard_payment_operation(
+            conn, actor, "request_customer_refund", moving_real_funds=True,
+            risk_reducing_unwind=True)
     reference = ("LHRF-%s-%s" % (transaction_id, secrets.token_hex(5)))[:64]
     cur = conn.execute(
         "INSERT INTO gateway_refunds(transaction_id,provider,reference_id,amount,currency,reason,status,idempotency_key,requested_by,created_at,updated_at) VALUES(?,?,?,?,'PHP',?,'PENDING',?,?,?,?)",

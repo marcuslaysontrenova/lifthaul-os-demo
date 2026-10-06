@@ -216,8 +216,11 @@ class ReleaseTests(Base):
         res = mp.submit_release(self.c, self.ac, ri["release_instruction_id"])
         self.assertEqual(res["status"], "COMPLETED")
         po = self.c.execute("SELECT * FROM mkt_payouts WHERE id=?", (res["payout_id"],)).fetchone()
-        self.assertEqual(po["status"], "PAID")
-        self.assertTrue(po["provider_beneficiary_reference"])
+        self.assertEqual(po["status"], "AVAILABLE")
+        self.assertFalse(po["provider_beneficiary_reference"])
+        earning = self.c.execute("SELECT * FROM mkt_provider_earnings WHERE source_payout_id=?",
+                                 (res["payout_id"],)).fetchone()
+        self.assertEqual(earning["status"], "AVAILABLE")
 
     def test_release_provider_failure_deadletters(self):
         prid, _ = self._releasable()
@@ -309,6 +312,15 @@ class LiveBoundaryIntegrityTests(Base):
 
     def test_live_status_blocked(self):
         self.assertEqual(mp.live_status()["live_protected_payment"], "BLOCKED")
+
+    def test_three_live_flags_still_cannot_bypass_payment_dna(self):
+        for key in ("payments.live_protected_funds_enabled",
+                    "payments.legal_operating_model_approved",
+                    "payments.licensed_provider_active"):
+            ap.set_config(self.c, "platform", "", key, "true", actor=self.ac)
+        self.assertTrue(mp.live_funds_enabled(self.c))
+        with self.assertRaises(core.ForbiddenError):
+            mp._assert_live_allowed(self.c, "FUTURE_LIVE_PROVIDER")
 
     def test_integrity_runs(self):
         prid, _ = self._releasable()

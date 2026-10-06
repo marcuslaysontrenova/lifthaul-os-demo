@@ -127,6 +127,8 @@ class ProtectedPaymentDomainTests(unittest.TestCase):
         self.assertFalse(pp.live_funds_enabled(self.c))       # still missing licensed_provider_active
         ap.set_config(self.c, "platform", "", "payments.licensed_provider_active", "true", actor=self.sup)
         self.assertTrue(pp.live_funds_enabled(self.c))
+        with self.assertRaises(core.ForbiddenError):
+            pp.assert_live_allowed(self.c, moving_real_funds=True)
 
     # ---- 17. finance queues ----
     def test_finance_queues(self):

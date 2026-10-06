@@ -251,11 +251,22 @@ Carrier-facing (session actor = a bound carrier principal):
 | GET | `/portal/carrier/overview` | Eligibility summary panel (company / fleet / drivers / marketplace status) |
 | GET | `/portal/carrier/profile` · `/compliance` · `/fleet` · `/drivers` | Profile, document/CPC status + expiry watch, fleet, drivers (each with per-item eligibility reasons) |
 | GET | `/portal/carrier/invitations` · `/assignments` · `/trips` | Offers, active assignments, trips (scoped to this carrier) |
-| GET | `/portal/carrier/finance` · `/cases` · `/notifications` · `/performance` | Earnings + Protected Payment + payout status; disputes/claims/Goods-Protection; masked comms; trust score |
+| GET | `/portal/carrier/finance` · `/cases` · `/notifications` · `/performance` | Earnings + Protected Payment + payout status + separately classified refundable security-deposit statement; disputes/claims/Goods-Protection; masked comms; trust score |
 | POST | `/portal/carrier/vehicles` · `/drivers` | Register a vehicle (→DRAFT) / driver (→APPLICATION) |
 | POST | `/portal/carrier/vehicles/:id/maintenance` | Toggle own vehicle maintenance hold (cannot mark ACTIVE) |
 | POST | `/portal/carrier/documents` | Upload a compliance document (→SUBMITTED, never self-verified) |
 | POST | `/portal/carrier/payout-account` | Submit a payout account (→pending approval; masked at rest) |
+| POST | `/portal/carrier/payout-profile` | Select independent-driver/owner/fleet beneficiary model and on-demand or weekly payout policy; requires an already verified payout account |
+| POST | `/portal/carrier/payout-requests` | Reserve available earnings and request a governed payout using an idempotency key |
+| POST | `/portal/carrier/security-deposit/refund` | Request return of the carrier's unapplied refundable deposit during offboarding; open cases pause with a visible reason |
+| GET | `/admin/carrier-portal/payout-requests` | Finance payout queue across the tenant |
+| POST | `/admin/carrier-portal/payout-requests/:id/submit` | Independently submit an eligible payout through the configured provider adapter; `PAID` requires a provider reference |
+| POST | `/admin/carrier-portal/security-deposit/policies` | Propose a risk-based deposit policy (DRAFT only) |
+| POST | `/admin/carrier-portal/security-deposit/policies/:id/activate` | Independent activation requiring legal, PSP-contract, tax and terms evidence |
+| POST | `/admin/carrier-portal/security-deposit/fund` | Record verified provider-held funding using an idempotency key and provider reference |
+| POST | `/admin/carrier-portal/security-deposit/:id/applications` | Request an adjudicated, noticed and evidenced permitted deduction |
+| POST | `/admin/carrier-portal/security-deposit/applications/:id/confirm` | Independent checker confirms actual provider movement before reducing the liability |
+| POST | `/admin/carrier-portal/security-deposit/refunds/:id/confirm` | Confirm offboarding refund only with provider reference |
 | POST | `/portal/carrier/offers` · `/offers/:id/withdraw` | Submit / withdraw a marketplace offer |
 | POST | `/portal/carrier/assignments/:id/respond` | Accept / decline an assignment |
 | POST | `/portal/carrier/trips/:id/pod` | Submit proof-of-delivery evidence (OTP never entered here) |

@@ -1,0 +1,105 @@
+name: Payment Security Certification Gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "*.html"
+      - "*.css"
+      - "*.js"
+      - "assets/**"
+      - "requirements.txt"
+      - ".github/workflows/payment-security-certification.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "*.html"
+      - "*.css"
+      - "*.js"
+      - "assets/**"
+      - "requirements.txt"
+      - ".github/workflows/payment-security-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-regression:
+    name: Complete repository regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run every backend, contract and landing-page test
+        run: python -m unittest discover -s backend -p 'test_*.py'
+
+  dependency-audit:
+    name: Production dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install current pinned auditor
+        run: python -m pip install pip-audit==2.10.1
+      - name: Audit the production lock file
+        run: python -m pip_audit -r requirements.txt
+      - name: Generate dependency SBOM
+        run: python -m pip_audit -r requirements.txt --format cyclonedx-json --output dependency-sbom.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: payment-dependency-sbom
+          path: dependency-sbom.json
+          if-no-files-found: ignore
+
+  static-security:
+    name: High-confidence Python security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install current pinned scanner
+        run: python -m pip install bandit==1.9.4
+      - name: Scan production Python modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find backend -maxdepth 1 -type f -name '*.py' ! -name 'test_*' -print0)
+          python -m bandit "${files[@]}" -ll -iii -f json -o bandit-payment-security.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: payment-static-security
+          path: bandit-payment-security.json
+          if-no-files-found: ignore
+
+  financial-regression:
+    name: Revenue, payment, payout and recovery regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run financial control suites
+        working-directory: backend
+        run: >-
+          python -m unittest
+          test_revenue_dna
+          test_payment_gateway
+          test_marketplace_payments
+          test_platform_fee_settlement
+          test_marketplace_trust_closure
+          test_carrier_portal
+          test_rental
+          test_billing
+          test_deploy

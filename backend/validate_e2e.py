@@ -13,14 +13,22 @@ then run again with --persist.)
 """
 import json
 import sys
+import urllib.parse
 import urllib.request
 
 STATE = "rgo_e2e_state.json"
 
 
+def _validated_harness_base(value):
+    parsed = urllib.parse.urlsplit(str(value or ""))
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("E2E base URL must be an HTTP(S) endpoint")
+    return str(value).rstrip("/")
+
+
 class Api:
     def __init__(self, base):
-        self.base = base.rstrip("/")
+        self.base = _validated_harness_base(base)
         self.token = None
 
     def call(self, method, path, body=None):
@@ -30,7 +38,7 @@ class Api:
         if self.token and path != "/login":
             req.add_header("Authorization", "Bearer " + self.token)
         try:
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310: operator-supplied HTTP(S) harness URL validated above
                 return json.loads(r.read()).get("data")
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"{method} {path} -> {e.code} {e.read().decode()[:200]}")
@@ -115,7 +123,7 @@ def check_persist(base):
 
 # helpers
 def _get(base, path):
-    with urllib.request.urlopen(base.rstrip("/") + path, timeout=10) as r:
+    with urllib.request.urlopen(_validated_harness_base(base) + path, timeout=10) as r:  # nosec B310: validated harness URL
         json.loads(r.read())
 
 

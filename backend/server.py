@@ -78,6 +78,8 @@ def _production_config_errors(env=None):
                       any(c.isdigit() for c in bootstrap_pw))
     if bootstrap_pw and (len(bootstrap_pw) < 14 or weak or not all(strong_classes)):
         errors.append("LH_ADMIN_PASSWORD must be 14+ characters with upper, lower and numeric characters")
+    if str(env.get("REVENUE_DNA_ENFORCEMENT", "")).strip().lower() != "enforce":
+        errors.append("REVENUE_DNA_ENFORCEMENT must be 'enforce' outside development/test")
     gateway_mode = str(env.get("PAYMENT_GATEWAY_MODE", "disabled")).strip().lower()
     if gateway_mode == "production":
         for key in ("XENDIT_SECRET_KEY", "XENDIT_WEBHOOK_TOKEN", "PAYMENT_ENABLED_CHANNELS",
@@ -1399,6 +1401,7 @@ def _phase10_routes():
     quotas/billing/promotions/marketplace. Permission-gated (RBAC) + entitlement-aware; tenant-scoped;
     audited; immutable plan/billing snapshots."""
     import saas
+    import revenue_dna as rd
 
     def prod_list(a, b, p):  return {"products": saas.list_products(_conn, a)}
     def prod_create(a, b, p): return {"id": saas.create_product(_conn, a, b["code"], b["name"], market=b.get("market", "PH"), currency=b.get("currency", "PHP"), description=b.get("description"))}
@@ -1432,14 +1435,18 @@ def _phase10_routes():
         return {"quota": saas.quota_status(_conn, a, b["meter_code"], tenant_id=b.get("tenant_id"))}
     def usage_record(a, b, p): return saas.record_usage(_conn, a, b["meter_code"], quantity=b.get("quantity", 1), idem_key=b.get("idem_key"), source=b.get("source", "app"), entity_ref=b.get("entity_ref"), tenant_id=b.get("tenant_id"))
     def usage_sum(a, b, p):  return saas.usage_summary(_conn, a)
-    def billing_gen(a, b, p): return saas.generate_billing_evidence(_conn, a, int(b["subscription_id"]), b["period_start"], b["period_end"], addons=b.get("addons", 0), discount=b.get("discount", 0), credit=b.get("credit", 0))
+    def billing_gen(a, b, p):
+        rd.guard(_conn, a, "enterprise_subscription", operation="generate subscription billing evidence")
+        return saas.generate_billing_evidence(_conn, a, int(b["subscription_id"]), b["period_start"], b["period_end"], addons=b.get("addons", 0), discount=b.get("discount", 0), credit=b.get("credit", 0))
     def billing_list(a, b, p): return {"evidence": saas.list_billing_evidence(_conn, a)}
     # promotions / exceptions / marketplace / health
     def promo_create(a, b, p): return {"id": saas.create_promotion(_conn, a, b["code"], b["discount_type"], b["discount_amount"], allowed_plans=b.get("allowed_plans"), ends_at=b.get("ends_at"), usage_limit=b.get("usage_limit"), approver=b.get("approver"))}
     def promo_redeem(a, b, p): return saas.redeem_promotion(_conn, a, b["code"], int(b["subscription_id"]))
     def exc_create(a, b, p): return {"id": saas.create_exception(_conn, a, int(b["tenant_id"]), b["kind"], b.get("scope_ref"), b["reason"], b["ends_at"], b["approver"])}
     def fee_create(a, b, p): return {"version": saas.create_fee_policy(_conn, a, b["code"], b["fee_type"], b["fee_value"], min_fee=b.get("min_fee", 0), max_fee=b.get("max_fee"))}
-    def mkt_txn(a, b, p):    return saas.record_marketplace_transaction(_conn, a, int(b["tenant_id"]), b["booking_ref"], b["gross_value"], b["carrier_amount"], b["fee_policy_code"])
+    def mkt_txn(a, b, p):
+        rd.guard(_conn, a, "provider_success_fee", operation="record marketplace platform fee")
+        return saas.record_marketplace_transaction(_conn, a, int(b["tenant_id"]), b["booking_ref"], b["gross_value"], b["carrier_amount"], b["fee_policy_code"])
     def health(a, b, p):     return saas.customer_health(_conn, a, tenant_id=b.get("tenant_id"))
     def migration(a, b, p):
         core.require(a, "saas.subscription.view")
@@ -2180,7 +2187,8 @@ def _payment_gateway_routes():
         token = b.pop("_xendit_callback_token", None)
         return pg.process_webhook(_conn, token, b)
     def certify(a, b, p): return pg.certify_channel(
-        _conn, a, b["channel"], b["environment"], b.get("tests", {}), b.get("notes"))
+        _conn, a, b["channel"], b["environment"], b.get("tests", {}), b.get("notes"),
+        b.get("evidence"))
     def reconcile(a, b, p): return pg.reconcile_daily(_conn, a)
     def readiness(a, b, p): return pg.security_readiness(_conn, a)
     def refund(a, b, p): return pg.request_refund(
@@ -2424,6 +2432,13 @@ def _carrier_portal_routes():
     def payout(a, b, p):    return cp.submit_payout_account(_conn, a, b["beneficiary_name"], b["entity_name"],
                                                             b["provider_reference"], b["account_number"],
                                                             cooling_hours=b.get("cooling_hours"))
+    def payout_profile(a, b, p): return cp.configure_payout_profile(
+        _conn, a, b["beneficiary_type"], b["allocation_mode"], b["payout_mode"],
+        int(b["payout_account_id"]), b["destination_channel"],
+        **{k: v for k, v in b.items() if k not in ("beneficiary_type", "allocation_mode", "payout_mode",
+                                                    "payout_account_id", "destination_channel")})
+    def payout_request(a, b, p): return cp.request_payout(_conn, a, b["amount"], b["idempotency_key"])
+    def deposit_refund(a, b, p): return cp.request_security_deposit_refund(_conn, a)
     def off_new(a, b, p):   return cp.submit_offer(_conn, a, int(b["booking_id"]), b["amount"],
                                                    vehicle_id=b.get("vehicle_id"), driver_id=b.get("driver_id"),
                                                    **{k: v for k, v in b.items() if k not in ("booking_id", "amount", "vehicle_id", "driver_id")})
@@ -2460,6 +2475,9 @@ def _carrier_portal_routes():
         ("POST", "/portal/carrier/pairing-check"): pair,
         ("POST", "/portal/carrier/documents"): doc_up,
         ("POST", "/portal/carrier/payout-account"): payout,
+        ("POST", "/portal/carrier/payout-profile"): payout_profile,
+        ("POST", "/portal/carrier/payout-requests"): payout_request,
+        ("POST", "/portal/carrier/security-deposit/refund"): deposit_refund,
         ("POST", "/portal/carrier/offers"): off_new,
         ("POST", "/portal/carrier/offers/:id/withdraw"): off_wd,
         ("POST", "/portal/carrier/assignments/:id/respond"): asg_resp,
@@ -2467,6 +2485,14 @@ def _carrier_portal_routes():
         ("POST", "/admin/carrier-portal/bind"): bind,
         ("POST", "/admin/carrier-portal/principals/:id/revoke"): revoke,
         ("GET", "/admin/carrier-portal/overview/:carrier_id"): op_overview,
+        ("POST", "/admin/carrier-portal/payout-requests/:id/submit"): lambda a, b, p: __import__("provider_payouts").submit_payout(_conn, a, int(p["id"]), scenario=b.get("scenario")),
+        ("GET", "/admin/carrier-portal/payout-requests"): lambda a, b, p: {"requests": __import__("provider_payouts").list_requests(_conn, a)},
+        ("POST", "/admin/carrier-portal/security-deposit/policies"): lambda a, b, p: {"id": __import__("provider_security_deposit").propose_policy(_conn, a, **b)},
+        ("POST", "/admin/carrier-portal/security-deposit/policies/:id/activate"): lambda a, b, p: {"status": __import__("provider_security_deposit").activate_policy(_conn, a, int(p["id"]), **b)},
+        ("POST", "/admin/carrier-portal/security-deposit/fund"): lambda a, b, p: __import__("provider_security_deposit").record_funding(_conn, a, int(b.pop("carrier_id")), b.pop("amount"), **b),
+        ("POST", "/admin/carrier-portal/security-deposit/:id/applications"): lambda a, b, p: {"id": __import__("provider_security_deposit").request_application(_conn, a, int(p["id"]), **b)},
+        ("POST", "/admin/carrier-portal/security-deposit/applications/:id/confirm"): lambda a, b, p: {"status": __import__("provider_security_deposit").confirm_application(_conn, a, int(p["id"]), **b)},
+        ("POST", "/admin/carrier-portal/security-deposit/refunds/:id/confirm"): lambda a, b, p: {"status": __import__("provider_security_deposit").confirm_refund(_conn, a, int(p["id"]), **b)},
         # carrier-portal reassignment (intra-carrier only; never re-match)
         ("POST", "/portal/carrier/reassignments"): lambda a, b, p: cp.open_reassignment(_conn, a, int(b["assignment_id"]), b["reason"], evidence=b.get("evidence")),
         ("POST", "/portal/carrier/reassignments/:id/substitute"): lambda a, b, p: cp.propose_substitute(_conn, a, int(p["id"]), new_driver_id=b.get("driver_id"), new_vehicle_id=b.get("vehicle_id")),
@@ -2655,6 +2681,7 @@ ROUTES.update(_referral_routes())
 ROUTES.update(_delivery_verification_routes())
 def _rental_routes():
     import rental as rt
+    import revenue_dna as rd
 
     def rate_set(a, b, p):  return rt.set_rental_rate(_conn, a, b["vehicle_category"], b["rate_unit"], b["rate"],
                                                        **{k: v for k, v in b.items() if k not in ("vehicle_category", "rate_unit", "rate")})
@@ -2668,8 +2695,10 @@ def _rental_routes():
                                                     standby_quantity=b.get("standby_quantity", 0),
                                                     meter_start=b.get("meter_start"), meter_end=b.get("meter_end"),
                                                     notes=b.get("notes"))
-    def finalize(a, b, p):  return rt.finalize_rental(_conn, a, int(p["id"]), discount=b.get("discount", 0),
-                                                       fund_protected=b.get("fund_protected", True))
+    def finalize(a, b, p):
+        rd.guard(_conn, a, "heavy_equipment_rental", operation="finalize rental revenue")
+        return rt.finalize_rental(_conn, a, int(p["id"]), discount=b.get("discount", 0),
+                                  fund_protected=b.get("fund_protected", True))
     def settle(a, b, p):    return rt.settle_rental(_conn, a, int(p["id"]))
     def cancel(a, b, p):    return rt.cancel_rental(_conn, a, int(p["id"]), b.get("reason", ""))
     def a_list(a, b, p):    return {"agreements": rt.list_agreements(_conn, a, status=b.get("status"),
@@ -2905,6 +2934,60 @@ ROUTES.update(_surcharge_routes())
 ROUTES.update(_driver_app_routes())
 ROUTES.update(_fleet_routes())
 ROUTES.update(_availability_routes())
+
+
+def _revenue_dna_routes():
+    """Canonical monetisation registry and Philippine compliance activation gates."""
+    import revenue_dna as rd
+
+    def dna_summary(a, b, p):
+        return rd.summary(_conn, a)
+
+    def dna_list(a, b, p):
+        return {"schemes": rd.list_schemes(_conn, a)}
+
+    def dna_get(a, b, p):
+        return rd.get_scheme(_conn, a, p["code"])
+
+    def dna_update(a, b, p):
+        return rd.update_scheme(_conn, a, p["code"], **b)
+
+    def dna_evidence(a, b, p):
+        return rd.submit_evidence(
+            _conn, a, p["code"], p["control"], b["evidence_ref"],
+            description=b.get("description"), issued_by=b.get("issued_by"),
+            issued_at=b.get("issued_at"), expires_at=b.get("expires_at"))
+
+    def dna_verify(a, b, p):
+        return rd.verify_evidence(_conn, a, int(p["id"]), b["decision"], reason=b.get("reason"))
+
+    def dna_submit(a, b, p):
+        return rd.submit_for_approval(_conn, a, p["code"], reason=b.get("reason"))
+
+    def dna_approve(a, b, p):
+        return rd.approve(_conn, a, p["code"], reason=b.get("reason"))
+
+    def dna_activate(a, b, p):
+        return rd.activate(_conn, a, p["code"], reason=b.get("reason"))
+
+    def dna_suspend(a, b, p):
+        return rd.suspend(_conn, a, p["code"], b.get("reason"))
+
+    return {
+        ("GET", "/admin/revenue-dna/summary"): dna_summary,
+        ("GET", "/admin/revenue-dna/schemes"): dna_list,
+        ("GET", "/admin/revenue-dna/schemes/:code"): dna_get,
+        ("POST", "/admin/revenue-dna/schemes/:code/update"): dna_update,
+        ("POST", "/admin/revenue-dna/schemes/:code/controls/:control/evidence"): dna_evidence,
+        ("POST", "/admin/revenue-dna/evidence/:id/verify"): dna_verify,
+        ("POST", "/admin/revenue-dna/schemes/:code/submit"): dna_submit,
+        ("POST", "/admin/revenue-dna/schemes/:code/approve"): dna_approve,
+        ("POST", "/admin/revenue-dna/schemes/:code/activate"): dna_activate,
+        ("POST", "/admin/revenue-dna/schemes/:code/suspend"): dna_suspend,
+    }
+
+
+ROUTES.update(_revenue_dna_routes())
 
 
 def _match(method, path):

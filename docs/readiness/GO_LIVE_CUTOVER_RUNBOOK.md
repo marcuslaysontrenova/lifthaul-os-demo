@@ -1,5 +1,10 @@
 # LiftHaul — Go-Live Cutover Runbook (executable)
 
+> Payment activation is governed by the current
+> [Payment Production Certification Register](PAYMENT_PRODUCTION_CERTIFICATION_REGISTER_2026-10-02.md).
+> This runbook's synthetic checks do not replace provider, independent-security, legal or live-money
+> evidence.
+
 **Baseline:** `fef8d69`+ (1,176 tests / 0 failed). This runbook turns the Application go-live blockers
 (Gates 1–10) into **exact commands**. Everything runnable without a hosted host has been **pre-tested in
 this repo** (see the "Verified in-repo" notes) so each step passes first try on your infrastructure.

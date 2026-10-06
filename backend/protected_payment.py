@@ -24,6 +24,7 @@ import core
 import tenant
 import marketplace_payments as pay
 import marketplace_trust_closure as tc
+import revenue_dna
 
 # 1. Canonical state machine (no arbitrary status editing — only declared transitions).
 STATES = ("PAYMENT_REQUIRED", "PAYMENT_INTENT_CREATED", "AWAITING_CUSTOMER_FUNDS", "CUSTOMER_FUNDED",
@@ -193,6 +194,10 @@ def assert_live_allowed(conn, moving_real_funds):
     if moving_real_funds and not live_funds_enabled(conn):
         raise core.ForbiddenError("LIVE FUND MOVEMENT DENIED — requires LEGAL_OPERATING_MODEL_APPROVED "
                                   "AND LICENSED_PAYMENT_PROVIDER_ACTIVE AND LIVE_PROTECTED_FUNDS_ENABLED")
+    if moving_real_funds:
+        revenue_dna.guard_payment_operation(
+            conn, {"id": 0, "role": "system", "tenant_id": None, "perms": set()},
+            "protected_payment_live_fund_movement", moving_real_funds=True)
 
 
 # --------------------------------------------------------------------------- #

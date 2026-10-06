@@ -287,6 +287,10 @@ PHASE10_PERMISSIONS = [
     "saas.quota.manage", "saas.billing.view", "saas.billing.generate", "saas.billing.approve",
     "saas.pricing.view", "saas.pricing.manage", "saas.discount.manage",
     "saas.tenant.provision", "saas.tenant.activate", "saas.tenant.decommission",
+    # Revenue & Compliance DNA — evidence and activation are deliberately separate permissions.
+    "revenue.dna.view", "revenue.dna.manage", "revenue.dna.evidence.manage",
+    "revenue.dna.evidence.verify", "revenue.dna.submit", "revenue.dna.approve",
+    "revenue.dna.activate", "revenue.dna.suspend",
 ]
 for _code in PHASE10_PERMISSIONS:
     CATALOG.append((_code, _code.rsplit(".", 1)[0], _code.rsplit(".", 1)[1], _code))
@@ -427,6 +431,7 @@ ADMIN_ROLES = [
          "saas.product.*", "saas.plan.*", "saas.subscription.*", "saas.entitlement.*", "saas.usage.*",
          "saas.quota.*", "saas.billing.*", "saas.pricing.*", "saas.discount.manage",
          "saas.tenant.provision", "saas.tenant.activate", "saas.tenant.decommission",
+         "revenue.dna.*",
          # Marketplace foundation (platform admin is the marketplace-catalog + lane authority)
          "marketplace.vehicle.*", "marketplace.cargo.*", "marketplace.lane.*"}),
     ("business_admin",       "Business Administrator",       2,

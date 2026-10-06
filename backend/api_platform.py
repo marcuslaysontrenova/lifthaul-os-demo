@@ -16,11 +16,47 @@ import datetime
 import hashlib
 import hmac
 import json
+import ipaddress
 import secrets
+import socket
 import time
+import urllib.parse
 
 import core
 import tenant
+
+
+def _validated_webhook_url(value, *, resolve=False):
+    """Accept public HTTPS webhook destinations only.
+
+    Parsing is performed when a webhook is registered and DNS is checked immediately
+    before the real network call.  The second check limits direct SSRF and common DNS
+    rebinding paths to loopback, link-local and private networks.
+    """
+    url = str(value or "").strip()
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise core.ValidationError("a public https webhook url is required")
+    if parsed.fragment:
+        raise core.ValidationError("webhook url fragments are not permitted")
+    host = parsed.hostname.rstrip(".").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        raise core.ValidationError("webhook destination must be public")
+    try:
+        addresses = [ipaddress.ip_address(host)]
+    except ValueError:
+        addresses = []
+    if resolve:
+        try:
+            addresses.extend(ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(
+                host, parsed.port or 443, type=socket.SOCK_STREAM
+            ))
+        except (OSError, ValueError) as exc:
+            raise core.ValidationError("webhook destination could not be resolved safely") from exc
+    if any(ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or
+           ip.is_reserved or ip.is_unspecified for ip in addresses):
+        raise core.ValidationError("webhook destination must be a public network address")
+    return url
 
 # Granular scopes — an integration client never gets unrestricted access.
 SCOPES = ("bookings:create", "bookings:read", "bookings:update", "quotations:read",
@@ -399,8 +435,7 @@ def api_delivery_verify(conn, actor, payload):
 # --------------------------------------------------------------------------- #
 def create_webhook(conn, actor, url, events, client_ref=None):
     core.require(actor, _MANAGE)
-    if not url or not str(url).lower().startswith(("http://", "https://")):
-        raise core.ValidationError("a valid https url is required")
+    url = _validated_webhook_url(url)
     evs = [e for e in (events or []) if e in EVENTS]
     if not evs:
         raise core.ValidationError("subscribe to at least one valid event")
@@ -489,8 +524,9 @@ def emit_event(conn, tenant_id, event_type, payload, correlation_id=None):
 
 def _http_sender(url, headers, body):   # pragma: no cover (requires network + a hosted deployment)
     import urllib.request
+    url = _validated_webhook_url(url, resolve=True)
     req = urllib.request.Request(url, data=body.encode(), headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=5) as r:
+    with urllib.request.urlopen(req, timeout=5) as r:  # nosec B310: HTTPS + public-IP validation above
         return 200 <= r.status < 300
 
 

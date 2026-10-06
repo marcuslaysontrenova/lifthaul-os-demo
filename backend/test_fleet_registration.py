@@ -84,7 +84,7 @@ class Classification(Base):
             fr.classify(self.c, {"vehicle_type": "SPACESHIP"})
 
     def test_deterministic(self):
-        specs = {"vehicle_type": "TRUCK", "wheels": 6, "body": "wing_van", "payload_kg": 7500}
+        specs = {"vehicle_type": "TRUCK", "wheels": 10, "body": "wing_van", "payload_kg": 7500}
         a = fr.classify(self.c, specs); b = fr.classify(self.c, specs)
         self.assertEqual(a["variant_code"], b["variant_code"])
 
@@ -156,7 +156,7 @@ class Bulk(Base):
     def test_dry_run_and_real_isolate_errors(self):
         rows = [
             {"plate_number": "B1", "vehicle_type": "TRUCK", "wheels": 10, "body": "wing_van", "payload_kg": 15000},
-            {"plate_number": "B2", "vehicle_type": "TRUCK", "wheels": 6, "body": "dropside", "payload_kg": 8000},
+            {"plate_number": "B2", "vehicle_type": "TRUCK", "wheels": 6, "body": "dropside", "payload_kg": 6000},
             {"plate_number": "BAD", "vehicle_type": "UNKNOWN"},
         ]
         dry = fr.bulk_import(self.c, self.op, self.cid, rows, dry_run=True)
@@ -255,7 +255,7 @@ class CsvImport(Base):
     def test_csv_bulk_import(self):
         csv_text = ("plate_number,vehicle_type,wheels,body,payload_kg\n"
                     "CSV-1,TRUCK,10,wing_van,15000\n"
-                    "CSV-2,TRUCK,6,dropside,8000\n"
+                    "CSV-2,TRUCK,6,dropside,6000\n"
                     "CSV-BAD,UNKNOWN,,,\n")
         r = fr.bulk_import_csv(self.c, self.op, self.cid, csv_text)
         self.assertEqual(r["created"], 2)

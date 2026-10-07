@@ -41,6 +41,24 @@ logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO,
 log = logging.getLogger("rgo")
 
 
+def _release_metadata(env=None):
+    """Return non-secret deployment identity for probes and release evidence.
+
+    Railway and Render expose commit/deployment identifiers under different names.
+    Explicit LiftHaul variables take precedence so other hosts can provide the same
+    contract. Missing values stay honest instead of fabricating an identity.
+    """
+    env = os.environ if env is None else env
+    release_sha = next((str(env.get(key, "")).strip() for key in (
+        "LIFTHAUL_RELEASE_SHA", "RAILWAY_GIT_COMMIT_SHA", "RENDER_GIT_COMMIT",
+        "SOURCE_VERSION",
+    ) if str(env.get(key, "")).strip()), "unknown")
+    deployment_id = next((str(env.get(key, "")).strip() for key in (
+        "LIFTHAUL_DEPLOYMENT_ID", "RAILWAY_DEPLOYMENT_ID", "RENDER_SERVICE_ID",
+    ) if str(env.get(key, "")).strip()), "unknown")
+    return {"release_sha": release_sha, "deployment_id": deployment_id}
+
+
 def _production_config_errors(env=None):
     """Return deploy-blocking production configuration errors.
 
@@ -81,6 +99,9 @@ def _production_config_errors(env=None):
     if str(env.get("REVENUE_DNA_ENFORCEMENT", "")).strip().lower() != "enforce":
         errors.append("REVENUE_DNA_ENFORCEMENT must be 'enforce' outside development/test")
     gateway_mode = str(env.get("PAYMENT_GATEWAY_MODE", "disabled")).strip().lower()
+    truthy = lambda key: str(env.get(key, "")).strip().lower() in ("1", "true", "yes", "on")
+    if truthy("LIVE_PROTECTED_FUNDS_ENABLED") and gateway_mode != "production":
+        errors.append("LIVE_PROTECTED_FUNDS_ENABLED requires PAYMENT_GATEWAY_MODE=production")
     if gateway_mode == "production":
         for key in ("XENDIT_SECRET_KEY", "XENDIT_WEBHOOK_TOKEN", "PAYMENT_ENABLED_CHANNELS",
                     "PAYMENT_RETURN_BASE_URL"):
@@ -94,6 +115,15 @@ def _production_config_errors(env=None):
                     "PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED", "PAYMENT_DR_RESTORE_APPROVED"):
             if str(env.get(key, "")).strip().lower() not in ("1", "true", "yes", "on"):
                 errors.append(f"{key} must be enabled for production payments")
+    if truthy("ADMIN_FEE_WISE_ENABLED"):
+        for key in ("WISE_API_KEY", "WISE_PROFILE_ID", "WISE_ADMIN_FEE_RECIPIENT_ID",
+                    "WISE_BALANCE_ID"):
+            if not str(env.get(key, "")).strip():
+                errors.append(f"missing {key} for production Wise settlement")
+        for key in ("WISE_BUSINESS_ACCOUNT_APPROVED", "WISE_API_FUNDING_APPROVED",
+                    "ADMIN_FEE_EARLY_RELEASE_APPROVED"):
+            if not truthy(key):
+                errors.append(f"{key} must be enabled for production Wise settlement")
     return errors
 
 
@@ -3062,7 +3092,7 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         # unauthenticated liveness/readiness probes
         if method == "GET" and path in ("/health", "/healthz"):
-            return self._send(200, {"status": "ok", "env": APP_ENV})
+            return self._send(200, {"status": "ok", "env": APP_ENV, **_release_metadata()})
         if method == "GET" and path in ("/ready", "/readyz"):
             try:
                 if _POOL is None:
@@ -3074,7 +3104,8 @@ class Handler(BaseHTTPRequestHandler):
                         c.execute("SELECT 1").fetchone(); ver = db.current_version(c)
                     finally:
                         _POOL.release(c, commit=False)
-                return self._send(200, {"status": "ready", "schema_version": ver})
+                return self._send(200, {"status": "ready", "schema_version": ver,
+                                        **_release_metadata()})
             except Exception:
                 log.exception("readiness probe failed")
                 return self._send(503, {"status": "not-ready"})

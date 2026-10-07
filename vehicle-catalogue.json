@@ -2,6 +2,14 @@
   "version": "2026.10.05",
   "capacity_notice": "Final eligibility and load capacity are based on the registered vehicle’s verified specifications, documents and applicable legal limits.",
   "required_documents_default": ["OR/CR", "insurance", "inspection photographs", "owner or fleet authorization"],
+  "ui_categories": [
+    {"code":"MOTORCYCLE","display_name":"Motorcycle","vehicle_codes":["motorcycle","motorcycle_box","motorcycle_insulated"]},
+    {"code":"CARS_COMPACT","display_name":"Cars and Compact Vehicles","vehicle_codes":["sedan","hatchback","suv","mpv"]},
+    {"code":"LIGHT_COMMERCIAL","display_name":"Light Commercial","vehicle_codes":["mini_van","l300_van","pickup","pickup_canopy","small_van","small_dropside"]},
+    {"code":"MEDIUM_TRUCKS","display_name":"Medium Trucks","vehicle_codes":["four_wheel_closed","four_wheel_dropside","truck_6w","truck_6w_dropside","truck_6w_aluminum","truck_6w_ref"]},
+    {"code":"HEAVY_TRUCKS","display_name":"Heavy Trucks","vehicle_codes":["truck_10w","truck_10w_dropside","truck_12w","truck_12w_dropside","truck_10w_wing","dump_truck","tanker"]},
+    {"code":"TRAILERS_HEAVY_HAUL","display_name":"Trailers and Heavy Hauling","vehicle_codes":["tractor_head","container_chassis","flatbed_10w","lowbed_trailer","dropdeck_trailer","car_carrier","prime_mover_trailer","specialized_heavyhaul"]}
+  ],
   "vehicles": [
     {"code":"motorcycle","display_name":"Standard Delivery Motorcycle","group":"Motorcycle Delivery","registration_class":"MOTORCYCLE_SMALL","body_type":"open carrier","wheel_configuration":"2 wheels","payload_kg":{"min":1,"max":15},"cargo_dimensions_cm":{"length":45,"width":35,"height":35},"image":"assets/visual/catalogue/lifthaul-vehicle-motorcycle-v1.webp","required_documents":["OR/CR","motorcycle insurance","professional licence","inspection photographs"],"eligible_services":["documents","parcels","small-item delivery"],"booking_rules":["weather protection required for exposed cargo","cargo must be securely restrained"],"manual_review_rules":["oversized item","passenger service request"],"typical_cargo":"Documents, parcels, and small items","active":true},
     {"code":"motorcycle_box","display_name":"Motorcycle with Cargo Box","group":"Motorcycle Delivery","registration_class":"MOTORCYCLE_SMALL","body_type":"enclosed cargo box","wheel_configuration":"2 wheels","payload_kg":{"min":1,"max":20},"cargo_dimensions_cm":{"length":50,"width":45,"height":45},"image":"assets/visual/catalogue/lifthaul-vehicle-motorcycle_box-v1.webp","required_documents":["OR/CR","motorcycle insurance","professional licence","cargo-box photographs"],"eligible_services":["parcels","online-shop deliveries","business documents"],"booking_rules":["item must fit inside the verified box"],"manual_review_rules":["box alteration","oversized item"],"typical_cargo":"Protected parcels and small business deliveries","active":true},

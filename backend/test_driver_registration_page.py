@@ -39,6 +39,12 @@ class DriverRegistrationPage(unittest.TestCase):
         ):
             self.assertIn(vehicle, {v["display_name"] for v in CATALOGUE["vehicles"]})
         self.assertIn("fetch('vehicle-catalogue.json'", HTML)
+        self.assertIn("catalogCategories=data.ui_categories", HTML)
+        self.assertIn("activeGroup='ALL'", HTML)
+        self.assertIn("activeGroup='ALL';renderCatalog()", HTML)
+        self.assertNotIn("activeGroup=restoredCategory", HTML)
+        self.assertIn("All Vehicles", HTML)
+        self.assertNotIn("items.slice(0,4)", HTML)
         self.assertNotIn("items:[[", HTML)
 
     def test_form_is_selection_gated_and_resume_is_session_scoped(self):
@@ -57,6 +63,7 @@ class DriverRegistrationPage(unittest.TestCase):
         self.assertIn("Select This Vehicle", HTML)
         self.assertIn("Own this vehicle? Register the unit", HTML)
         self.assertIn("from=driver", HTML)
+        self.assertIn("← Back to LiftHaul Home", HTML)
 
     def test_catalogue_uses_optimized_media(self):
         self.assertEqual(len(CATALOGUE["vehicles"]), 34)

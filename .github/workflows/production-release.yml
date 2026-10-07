@@ -1,0 +1,171 @@
+name: LiftHaul Exact Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full 40-character SHA already merged to main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: lifthaul-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the exact release candidate
+    runs-on: ubuntu-latest
+    outputs:
+      release_sha: ${{ steps.sha.outputs.release_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+      - id: sha
+        name: Reject abbreviated, unmerged, or mismatched commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested='${{ inputs.release_sha }}'
+          actual=$(git rev-parse HEAD)
+          [[ "$requested" =~ ^[0-9a-fA-F]{40}$ ]]
+          [ "${requested,,}" = "$actual" ]
+          git fetch origin main --depth=1
+          git merge-base --is-ancestor "$actual" origin/main
+          echo "release_sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Complete Python regression suite
+        working-directory: backend
+        env:
+          APP_ENV: test
+        run: python -m unittest discover -p 'test_*.py'
+      - name: Static security and dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install bandit==1.9.4 pip-audit==2.10.1
+          mapfile -d '' files < <(find backend -maxdepth 1 -type f -name '*.py' ! -name 'test_*' -print0)
+          python -m bandit "${files[@]}" -ll -iii
+          python -m pip_audit -r requirements.txt
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Browser UAT release gate
+        working-directory: ci/browser
+        run: |
+          mkdir -p ../artifacts
+          npm install
+          npx playwright install --with-deps chromium firefox webkit
+          python -m http.server 8080 --directory ../.. > ../artifacts/frontend.log 2>&1 &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8080/driver-register.html >/dev/null && break; sleep 1; done
+          APP_BASE=http://127.0.0.1:8080 npx playwright test --config playwright.public-ui.config.js
+
+  deploy-backend:
+    name: Deploy exact backend SHA and run synthetic smoke
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.release_sha }}
+      - id: deploy
+        name: Request exact-commit Railway deployment
+        env:
+          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
+        run: python scripts/go_live/railway_deploy_exact.py
+      - name: Wait for healthy deployment identity
+        env:
+          API_URL: https://lifthaul-api-production.up.railway.app
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            actual=$(curl -fsS "$API_URL/readyz" | python -c 'import json,sys; print(json.load(sys.stdin).get("release_sha", ""))' || true)
+            [ "$actual" = "$RELEASE_SHA" ] && exit 0
+            sleep 10
+          done
+          echo "production never reported the exact tested SHA" >&2
+          exit 1
+      - name: Read-only production preflight
+        env:
+          BASE_URL: https://lifthaul-api-production.up.railway.app
+          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
+          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+        run: python scripts/go_live/preflight.py
+      - name: Synthetic production journey (no funds)
+        env:
+          BASE_URL: https://lifthaul-api-production.up.railway.app
+          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
+          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+        run: python scripts/go_live/prod_e2e.py
+
+  deploy-frontend:
+    name: Deploy exact static frontend to GitHub Pages
+    needs: [verify, deploy-backend]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.release_sha }}
+      - name: Build least-privilege public artifact
+        run: |
+          mkdir -p public-dist
+          rsync -a --prune-empty-dirs \
+            --include='*/' --include='*.html' --include='*.css' --include='*.js' \
+            --include='*.json' --include='*.svg' --include='*.png' --include='*.webp' \
+            --exclude='*' ./ public-dist/
+          rm -rf public-dist/backend public-dist/ci public-dist/docs public-dist/scripts public-dist/prototypes
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: public-dist }
+      - id: pages
+        uses: actions/deploy-pages@v4
+
+  evidence:
+    name: Record immutable release evidence
+    needs: [verify, deploy-backend, deploy-frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write release manifest
+        env:
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
+          DEPLOYMENT_ID: ${{ needs.deploy-backend.outputs.deployment_id }}
+          FRONTEND_RESULT: ${{ needs.deploy-frontend.result }}
+          BACKEND_RESULT: ${{ needs.deploy-backend.result }}
+        run: |
+          mkdir -p evidence
+          python - <<'PY'
+          import json, os
+          with open('evidence/release.json', 'w', encoding='utf-8') as f:
+              json.dump({
+                  'release_sha': os.environ.get('RELEASE_SHA'),
+                  'backend_deployment_id': os.environ.get('DEPLOYMENT_ID'),
+                  'backend_result': os.environ.get('BACKEND_RESULT'),
+                  'frontend_result': os.environ.get('FRONTEND_RESULT'),
+                  'github_run_id': os.environ.get('GITHUB_RUN_ID'),
+                  'rollback_target': 'previous successful Railway deployment and previous successful Pages artifact',
+                  'live_funds_enabled': False,
+              }, f, indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-release-${{ needs.verify.outputs.release_sha }}
+          path: evidence/release.json
+

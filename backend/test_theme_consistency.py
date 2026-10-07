@@ -50,7 +50,14 @@ class ThemeConsistency(unittest.TestCase):
         self.assertNotIn("Book a Truck", public_page)
         self.assertNotIn("Book a Truck", client_app)
         self.assertIn("Book a Service", public_page)
+        self.assertEqual(public_page.count("Book a Service"), 1)
         self.assertIn("Book a Service", client_app)
+
+    def test_dark_surface_contrast_tokens_are_canonical(self):
+        css = (ROOT / "theme.css").read_text(encoding="utf-8").lower()
+        self.assertIn("--lh-on-dark: #ffffff", css)
+        self.assertIn("--lh-on-dark-muted: #d1d5db", css)
+        self.assertIn("--lh-on-dark-accent: #9be33d", css)
 
     def test_every_customer_and_operations_page_loads_shared_theme(self):
         for relative in PUBLIC_PAGES:

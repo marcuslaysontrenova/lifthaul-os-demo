@@ -20,6 +20,27 @@ class TestProductionImageContract(unittest.TestCase):
         )
         self.assertTrue((REPO_ROOT / "vehicle-catalogue.json").is_file())
 
+    def test_release_metadata_prefers_explicit_identity_and_supports_hosts(self):
+        import server
+        explicit = server._release_metadata({
+            "LIFTHAUL_RELEASE_SHA": "tested-sha",
+            "RAILWAY_GIT_COMMIT_SHA": "railway-sha",
+            "LIFTHAUL_DEPLOYMENT_ID": "deploy-123",
+        })
+        self.assertEqual(explicit, {
+            "release_sha": "tested-sha", "deployment_id": "deploy-123",
+        })
+        railway = server._release_metadata({
+            "RAILWAY_GIT_COMMIT_SHA": "railway-sha",
+            "RAILWAY_DEPLOYMENT_ID": "railway-deploy",
+        })
+        self.assertEqual(railway, {
+            "release_sha": "railway-sha", "deployment_id": "railway-deploy",
+        })
+        self.assertEqual(server._release_metadata({}), {
+            "release_sha": "unknown", "deployment_id": "unknown",
+        })
+
 
 class TestDbFactory(unittest.TestCase):
     def test_sqlite_default_and_schema_version(self):
@@ -125,6 +146,29 @@ class TestCors(unittest.TestCase):
         self.assertIn("PAYMENT_SAFEGUARDED_FUNDS_APPROVED must be enabled for production payments", errors)
         self.assertIn("PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED must be enabled for production payments", errors)
         self.assertIn("PAYMENT_DR_RESTORE_APPROVED must be enabled for production payments", errors)
+
+    def test_live_funds_and_provider_settlement_fail_closed_at_startup(self):
+        import server
+        base = {
+            "APP_ENV": "production", "APP_SECRET": "A" * 40,
+            "DATABASE_URL": "postgresql://db/lifthaul",
+            "CORS_ORIGINS": "https://www.lifthaul.com.ph",
+            "LH_ADMIN_EMAIL": "owner@lifthaul.com.ph",
+            "LH_ADMIN_PASSWORD": "StrongBootstrap123",
+            "REVENUE_DNA_ENFORCEMENT": "enforce",
+        }
+        live_funds = dict(base, LIVE_PROTECTED_FUNDS_ENABLED="true")
+        self.assertIn(
+            "LIVE_PROTECTED_FUNDS_ENABLED requires PAYMENT_GATEWAY_MODE=production",
+            server._production_config_errors(live_funds),
+        )
+        wise = dict(base, ADMIN_FEE_WISE_ENABLED="true")
+        errors = server._production_config_errors(wise)
+        self.assertIn("missing WISE_API_KEY for production Wise settlement", errors)
+        self.assertIn(
+            "WISE_BUSINESS_ACCOUNT_APPROVED must be enabled for production Wise settlement",
+            errors,
+        )
 
     def test_plain_http_localhost_is_ci_only(self):
         import server

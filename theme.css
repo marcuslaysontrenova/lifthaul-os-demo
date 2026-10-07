@@ -18,6 +18,12 @@
   --lh-panel-strong: #000000;
   --lh-panel-ink: #ffffff;
   --lh-panel-muted: #e2e2e2;
+  --lh-on-dark: #ffffff;
+  --lh-on-dark-muted: #d1d5db;
+  --lh-on-dark-accent: #9be33d;
+  --lh-success: #78be20;
+  --lh-warning: #f5b942;
+  --lh-error: #ef4444;
   --lh-ink: #14261b;
   --lh-ink-soft: #315441;
   --lh-muted: #66756c;
@@ -193,6 +199,65 @@ body {
     radial-gradient(circle at 12% 2%, rgba(255, 255, 255, .16), transparent 30rem),
     linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(0, 107, 60, .08)) !important;
   background-attachment: fixed !important;
+}
+
+.section-anchor {
+  display: block;
+  position: relative;
+  top: -82px;
+  visibility: hidden;
+}
+
+.context-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 18px;
+}
+
+.context-links a {
+  color: var(--lh-lasalle-deep);
+  font-weight: 800;
+  text-underline-offset: 4px;
+}
+
+.snav .links a:focus-visible,
+.context-links a:focus-visible,
+.top-link:focus-visible,
+.driver-top a:focus-visible {
+  outline: 3px solid var(--lh-on-dark-accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+/* One contrast contract for every black or near-black surface. */
+.surface--dark,
+.rolecard,
+.step,
+.paynode,
+.process-card,
+.payment-card,
+.snav {
+  color: var(--lh-on-dark) !important;
+}
+
+.surface--dark p,
+.rolecard p,
+.step p,
+.paynode p,
+.process-card span,
+.payment-card p,
+.payment-card li {
+  color: var(--lh-on-dark-muted) !important;
+}
+
+.surface--dark a,
+.rolecard a,
+.rolecard .go,
+.snav .links a:hover,
+.snav .links a:focus-visible {
+  color: var(--lh-on-dark-accent) !important;
 }
 
 /* Remove legacy pale page bands while preserving white cards and forms. */

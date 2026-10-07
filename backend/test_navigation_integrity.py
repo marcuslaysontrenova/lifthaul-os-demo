@@ -67,8 +67,23 @@ class NavigationIntegrity(unittest.TestCase):
         provider = (ROOT / "provider.html").read_text(encoding="utf-8")
         self.assertIn("from=driver", driver)
         self.assertIn('id="providerBackLink"', provider)
-        self.assertIn("Back to driver options", provider)
-        self.assertIn("driver-register.html#partnerPaths", provider)
+        self.assertIn("← Back to Vehicle Selection", provider)
+        self.assertIn("driver-register.html#vehicleCatalogue", provider)
+
+    def test_landing_navigation_and_booking_action_are_unambiguous(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        for label in ("Home", "How It Works", "Services", "Vehicles",
+                      "Protected Payment", "Track Booking", "Partner With Us", "Sign In"):
+            self.assertIn(f">{label}<", html)
+        self.assertEqual(html.count("Book a Service"), 1, "booking CTA must exist only in the hero")
+
+    def test_no_root_page_contains_placeholder_hash_links(self):
+        failures = []
+        for page in ROOT.glob("*.html"):
+            html = page.read_text(encoding="utf-8")
+            if 'href="#"' in html:
+                failures.append(page.name)
+        self.assertEqual([], failures, f"placeholder links remain: {failures}")
 
     def test_shared_theme_defines_one_font_stack(self):
         css = (ROOT / "theme.css").read_text(encoding="utf-8")

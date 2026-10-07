@@ -1,0 +1,60 @@
+name: LiftHaul Public UI Release Gate
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - '*.html'
+      - 'theme.css'
+      - 'vehicle-catalogue.json'
+      - 'assets/vehicles/**'
+      - 'assets/visual/**'
+      - 'ci/browser/tests/public-ui.spec.js'
+      - '.github/workflows/public-ui-release-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - '*.html'
+      - 'theme.css'
+      - 'vehicle-catalogue.json'
+      - 'assets/vehicles/**'
+      - 'assets/visual/**'
+      - 'ci/browser/tests/public-ui.spec.js'
+      - '.github/workflows/public-ui-release-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-ui:
+    name: Responsive navigation and catalogue UAT
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Serve the exact checked-out frontend
+        run: |
+          mkdir -p ci/artifacts
+          python -m http.server 8080 > ci/artifacts/lifthaul-frontend.log 2>&1 &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8080/driver-register.html >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/driver-register.html >/dev/null
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install Chromium test runtime
+        working-directory: ci/browser
+        run: |
+          npm install
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Run public UI release gate
+        working-directory: ci/browser
+        env:
+          APP_BASE: http://127.0.0.1:8080
+        run: npx playwright test --config playwright.public-ui.config.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-ui-release-evidence
+          path: |
+            ci/artifacts/**
+

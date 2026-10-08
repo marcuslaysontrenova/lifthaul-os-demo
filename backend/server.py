@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import os
 import signal
 import sys
@@ -18,6 +19,7 @@ import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import core
 import ops
@@ -1600,6 +1602,8 @@ def _marketplace_routes():
         ("POST", "/admin/marketplace/carriers/:id/activate"): ca_activate,
         ("POST", "/admin/marketplace/carriers/:id/suspend"): ca_suspend,
         ("GET", "/admin/marketplace/carrier-vehicles"): ve_list,
+      FRONTEND_DIR = Path(os.environ.get("LIFTHAUL_FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
+STATIC_SUFFIXES = {".html", ".css", ".js", ".json", ".png", ".jpg", ".jpeg", ".svg", ".webp", ".ico"}
         ("POST", "/admin/marketplace/carrier-vehicles"): ve_create,
         ("POST", "/admin/marketplace/carrier-vehicles/:id/verify"): ve_verify,
         ("POST", "/admin/marketplace/carrier-vehicles/:id/activate"): ve_activate,
@@ -3234,3 +3238,33 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+                             if method == "GET":
+            static_file = self._static_file(path)
+            if static_file is not None:
+                return self._send_static(static_file)
+              def _send_static(self, file_path):
+        body = file_path.read_bytes()
+        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", f"{content_type}; charset=utf-8" if content_type.startswith(("text/", "application/javascript", "application/json")) else content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://lifthaul-api-production.up.railway.app; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+        self.send_header("Cache-Control", "no-cache" if file_path.suffix == ".html" else "public, max-age=3600")
+        if self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower() == "https":
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _static_file(self, path):
+        requested = "index.html" if path == "/" else path.lstrip("/")
+        if "/" in requested or "\\" in requested:
+            return None
+        candidate = FRONTEND_DIR / requested
+        if candidate.suffix.lower() not in STATIC_SUFFIXES or not candidate.is_file():
+            return None
+        return candidate

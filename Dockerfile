@@ -9,6 +9,9 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
+# Ship the existing browser application with the API image so the production
+# custom domain serves the LiftHaul landing page instead of an API 404.
+COPY *.html *.css *.js *.json ./frontend/
 # The API seeds and validates vehicle categories from the same canonical catalogue
 # used by registration, booking, pricing, and the public UI.
 COPY vehicle-catalogue.json ./vehicle-catalogue.json

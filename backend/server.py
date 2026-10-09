@@ -3294,8 +3294,23 @@ def _payment_reconciliation_worker(stop_event):
             except Exception: pass
 
 
+class LiftHaulHTTPServer(ThreadingHTTPServer):
+    """Threaded listener sized for short, concurrent public/API bursts.
+
+    ``socketserver.TCPServer`` defaults to a listen backlog of five.  That is
+    small enough for otherwise healthy requests to stall or time out before a
+    handler thread is created during a modest booking/catalogue burst.  The
+    database layer still provides its own bounded concurrency and backpressure;
+    this queue only prevents premature connection loss at the socket boundary.
+    """
+
+    request_queue_size = max(64, int(os.environ.get("LIFTHAUL_LISTEN_BACKLOG", "256") or "256"))
+    daemon_threads = True
+    block_on_close = False
+
+
 def main():
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    srv = LiftHaulHTTPServer(("0.0.0.0", PORT), Handler)
     payment_stop = threading.Event()
     payment_worker = None
     if os.environ.get("PAYMENT_RECONCILIATION_AUTOMATION", "false").strip().lower() in ("1", "true", "yes", "on"):

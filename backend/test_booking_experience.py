@@ -104,9 +104,10 @@ class BookingMarkup(unittest.TestCase):
         self.assertIn("Total Protected-Payment amount", cargo)
         self.assertIn("vehicle-recommendations", cargo)
         self.assertIn("excluded_charges_ack", cargo)
-        self.assertIn("transport=Math.round", cargo)
-        self.assertIn("fee=Math.round(transport*.10)", cargo)
-        self.assertNotIn("fee=Math.round((transport+tax)", cargo)
+        self.assertIn('/public/bookings/estimate', cargo)
+        self.assertNotIn("transport=Math.round", cargo)
+        self.assertNotIn("fee=Math.round(transport*.10)", cargo)
+        self.assertNotIn("var RATES=", cargo)
 
     def test_staff_login_is_direct_real_and_permission_filtered(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")

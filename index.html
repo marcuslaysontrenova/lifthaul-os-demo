@@ -195,36 +195,12 @@ footer a:hover{color:#fff}
 @media(max-width:980px){.payflow{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.compliance-grid,.faq{grid-template-columns:1fr}}@media(max-width:560px){.payflow{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="theme.css?v=10">
+<script src="public-nav.js?v=1" defer></script>
 </head>
 <body>
 
-<!-- NAV -->
-<nav class="snav">
-  <div class="in">
-    <a class="mark" href="#home" aria-label="LiftHaul home">
-      <svg class="logo" width="34" height="34" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-        <rect x="2.5" y="2.5" width="35" height="35" rx="10" fill="#004F2D" stroke="#70C247" stroke-width="2"/>
-        <path d="M20 8.5 L28.8 19.5 H23 V25.6 H17 V19.5 H11.2 Z" fill="#70C247"/>
-        <rect x="11.5" y="28.6" width="17" height="3.3" rx="1.65" fill="#FFFFFF"/>
-      </svg>
-      <span class="wordmark"><b>Lift</b><b>Haul</b></span>
-    </a>
-    <div class="links" id="navlinks">
-      <a href="#home">Home</a>
-      <a href="#how">How It Works</a>
-      <a href="#services">Services</a>
-      <a href="driver-register.html#vehicleCatalogue">Vehicles</a>
-      <a href="#protected">Protected Payment</a>
-      <a href="track.html">Track Booking</a>
-      <a href="#register">Partner With Us</a>
-      <a href="client.html">Sign In</a>
-    </div>
-    <div class="sp"></div>
-    <button class="navtoggle" id="navtoggle" aria-label="Menu" aria-expanded="false">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-    </button>
-  </div>
-</nav>
+<!-- Shared public navigation: one component and one route inventory. -->
+<nav data-lh-public-nav data-active="home"></nav>
 
 <!-- HERO -->
 <header class="hero" id="home">

@@ -6,6 +6,7 @@ on:
     paths:
       - '*.html'
       - 'theme.css'
+      - 'public-nav.js'
       - 'vehicle-catalogue.json'
       - 'assets/vehicles/**'
       - 'assets/visual/**'
@@ -16,6 +17,7 @@ on:
     paths:
       - '*.html'
       - 'theme.css'
+      - 'public-nav.js'
       - 'vehicle-catalogue.json'
       - 'assets/vehicles/**'
       - 'assets/visual/**'
@@ -57,4 +59,3 @@ jobs:
           name: public-ui-release-evidence
           path: |
             ci/artifacts/**
-

@@ -72,3 +72,73 @@ test('vehicle owner route carries the canonical code and provides Home and Back 
   await expect(page.locator('a[href="#"]')).toHaveCount(0);
 });
 
+test('public journey uses one complete top navigation with a visible fare calculator', async ({ page }) => {
+  for (const entry of [
+    ['/index.html', 'Home'],
+    ['/book.html', 'Services'],
+    ['/fare-calculator.html', 'Fare Calculator'],
+    ['/track.html', 'Track Booking'],
+    ['/driver-register.html', 'Partner With Us'],
+    ['/provider.html?track=LIGHT', 'Partner With Us'],
+  ]) {
+    await page.goto(APP + entry[0]);
+    const nav = page.getByRole('navigation', { name: 'Primary navigation' });
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('href', 'index.html');
+    await expect(nav.getByRole('link', { name: 'Fare Calculator' })).toHaveAttribute('href', 'fare-calculator.html');
+    await expect(nav.getByRole('link', { name: entry[1], exact: true })).toHaveAttribute('aria-current', 'page');
+    // Leaflet renders its third-party zoom controls as anchors with href="#". The application
+    // itself must not introduce placeholder links.
+    await expect(page.locator('a[href="#"]:not(.leaflet-control-zoom-in):not(.leaflet-control-zoom-out)')).toHaveCount(0);
+  }
+});
+
+test('fare calculator shows recommendation, versioned breakdown and no payment action', async ({ page }) => {
+  await page.route('**/public/bookings/estimate', async route => {
+    const request = route.request();
+    const payload = request.postDataJSON();
+    expect(payload.weight_kg).toBe(50);
+    expect(payload.additional_stops).toBe(2);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: {
+        estimate: 800.80,
+        estimate_status: 'QUOTED_INDICATIVE',
+        estimate_generated_at: '2026-10-09T00:00:00+00:00',
+        selected_vehicle: { id: 'sedan', name: 'Sedan', reason: 'Best-fit verified category.' },
+        quote_breakdown: {
+          amount: 800.80, transport_subtotal: 650, administration_fee: 65, tax_amount: 85.80,
+          rate_version: 'LH-PH-2026-10-09-BENCHMARK-01', rate_effective_date: '2026-10-09',
+          components: [
+            { code: 'base_transport', label: 'Base transportation charge', amount: 120 },
+            { code: 'distance', label: 'Distance charge', amount: 140 },
+            { code: 'additional_stops', label: 'Additional stops', amount: 90 },
+            { code: 'waiting_time', label: 'Chargeable waiting time', amount: 100 },
+            { code: 'helpers', label: 'Loading / unloading helpers', amount: 200 },
+          ],
+          excluded_charges: ['Expressway tolls', 'Parking'],
+        },
+      } }),
+    });
+  });
+  await page.goto(APP + '/fare-calculator.html');
+  await page.selectOption('#originIsland', 'Luzon');
+  await page.selectOption('#destinationIsland', 'Luzon');
+  await page.fill('#route', 'Makati City to Quezon City');
+  await page.fill('#distance', '10');
+  await page.fill('#weight', '50');
+  await page.fill('#length', '50');
+  await page.fill('#width', '40');
+  await page.fill('#height', '30');
+  await page.fill('#stops', '2');
+  await page.fill('#waiting', '60');
+  await page.fill('#helpers', '1');
+  await page.getByRole('button', { name: /Recommend Vehicle/ }).click();
+  await expect(page.getByText('Sedan', { exact: true })).toBeVisible();
+  await expect(page.getByText('₱800.80')).toBeVisible();
+  await expect(page.getByText(/LH-PH-2026-10-09-BENCHMARK-01/)).toBeVisible();
+  await expect(page.getByText('LiftHaul administration fee (10%)')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Continue to Booking' })).toHaveAttribute('href', 'book.html');
+  await expect(page.getByRole('button', { name: /Pay|Checkout|Confirm payment/i })).toHaveCount(0);
+});

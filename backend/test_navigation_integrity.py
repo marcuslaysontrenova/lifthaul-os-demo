@@ -59,6 +59,8 @@ class NavigationIntegrity(unittest.TestCase):
                 html = (ROOT / page).read_text(encoding="utf-8")
                 if page == "index.html":
                     self.assertIn('href="#home"', html)
+                elif "data-lh-public-nav" in html:
+                    self.assertIn('public-nav.js', html)
                 else:
                     self.assertIn('href="index.html', html)
 
@@ -72,9 +74,11 @@ class NavigationIntegrity(unittest.TestCase):
 
     def test_landing_navigation_and_booking_action_are_unambiguous(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
+        nav = (ROOT / "public-nav.js").read_text(encoding="utf-8")
         for label in ("Home", "How It Works", "Services", "Vehicles",
-                      "Protected Payment", "Track Booking", "Partner With Us", "Sign In"):
-            self.assertIn(f">{label}<", html)
+                      "Fare Calculator", "Protected Payment", "Track Booking",
+                      "Partner With Us", "Sign In"):
+            self.assertIn(label, nav)
         self.assertEqual(html.count("Book a Service"), 1, "booking CTA must exist only in the hero")
 
     def test_no_root_page_contains_placeholder_hash_links(self):

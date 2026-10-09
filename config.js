@@ -16,8 +16,11 @@
  * is used only if apiBase here is empty.
  */
 var lifthaulLocalHost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+var lifthaulSameOrigin = /(^|\.)lifthaul\.com\.ph$/i.test(location.hostname);
 window.RGO_CONFIG = {
   apiBase: lifthaulLocalHost
     ? "http://localhost:8787"
+    : lifthaulSameOrigin
+    ? location.origin
     : "https://lifthaul-api-production.up.railway.app"
 };

@@ -5,6 +5,7 @@
 <title>Driver application — LiftHaul</title>
 <meta name="description" content="Apply to join LiftHaul as a professional driver. Driver applications are separate from fleet and equipment registration.">
 <link rel="stylesheet" href="theme.css?v=10">
+<script src="public-nav.js?v=1" defer></script>
 <style>
 body{margin:0;background:#f4f7f3}.driver-top{background:#090909;color:#fff}.driver-top .wrap{min-height:82px;display:flex;align-items:center;gap:18px}.driver-top a{text-decoration:none}.driver-top .brand{font-size:24px;font-weight:900;color:#fff!important}.driver-top .brand b{color:#78be20!important}.driver-top .sp{flex:1}.driver-top .back{font-size:14px;color:#dce6df}
 .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
@@ -35,7 +36,8 @@ body,body h1,body h2,body h3,body h4,body p,body a,body button,body input,body s
 </style>
 </head>
 <body>
-<nav class="driver-top"><div class="wrap"><a class="brand" href="index.html">Lift<b>Haul</b></a><a class="driver-home-link" href="index.html">← Back to LiftHaul Home</a><span class="sp"></span><div class="driver-nav"><a href="#partnerPaths">Partner paths</a><a href="#vehicleCatalogue">Vehicles</a><a href="#requirements">Requirements</a><a class="nav-cta" href="#partnerPaths">Start registration</a></div></div></nav>
+<nav data-lh-public-nav data-active="partner"></nav>
+<div class="landing-wrap"><a class="driver-home-link lh-page-exit" href="index.html">← Back to LiftHaul Home</a></div>
 <header class="driver-hero"><div class="wrap"><div class="driver-hero-copy"><div class="eyebrow">Verified people · appropriate vehicles · governed access</div><h1>Drive with LiftHaul.<br>Expand Your Opportunities.</h1><p>Register as a driver, select your preferred service areas, and receive booking opportunities that match your approved vehicle category, qualifications, and availability.</p><div class="hero-actions"><a class="hero-action" href="#partnerPaths">Start Driver Registration →</a><a class="hero-action secondary" href="#vehicleCatalogue">View Vehicle Requirements</a></div></div></div></header>
 
 <section id="partnerPaths" class="landing-section" aria-labelledby="partnerTitle"><div class="landing-wrap"><div class="section-head"><div><div class="section-kicker">Choose the accountable role first</div><h2 id="partnerTitle">How would you like to register with LiftHaul?</h2></div><p>Driver approval and vehicle approval are separate. Drivers who do not own the vehicle need authorization from its registered owner; owners and fleets register their units in the Fleet Workspace.</p></div><div class="partner-grid">

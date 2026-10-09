@@ -90,6 +90,21 @@ REASON_LABELS = {
 }
 ADMINISTRATION_FEE_RATE = 0.10
 ADMINISTRATION_FEE_VERSION = "PUBLIC_ADMIN_FEE_V1"
+PUBLIC_FARE_MATRIX_VERSION = "LH-PH-2026-10-09-BENCHMARK-01"
+PUBLIC_FARE_MATRIX_EFFECTIVE_DATE = "2026-10-09"
+# Customer-visible operational add-ons.  These are LiftHaul planning rates, not copied competitor
+# algorithms.  Every estimate records the version so historical bookings remain reproducible.
+PUBLIC_OPERATIONAL_RATES = {
+    "moto": {"additional_stop": 40, "waiting_per_hour": 60, "helper": 0},
+    "sedan": {"additional_stop": 45, "waiting_per_hour": 100, "helper": 200},
+    "mpv": {"additional_stop": 50, "waiting_per_hour": 150, "helper": 200},
+    "pickup": {"additional_stop": 50, "waiting_per_hour": 150, "helper": 250},
+    "van": {"additional_stop": 70, "waiting_per_hour": 150, "helper": 250},
+    "refvan": {"additional_stop": 70, "waiting_per_hour": 200, "helper": 300},
+    "6w": {"additional_stop": 100, "waiting_per_hour": 250, "helper": 400},
+    "6wref": {"additional_stop": 100, "waiting_per_hour": 250, "helper": 400},
+    "10w": {"additional_stop": 150, "waiting_per_hour": 250, "helper": 500},
+}
 ENGINEERED_NOTE = "Engineering estimate required — load charts, permits, route survey and ground-bearing checks price this, not a distance formula."
 EXCLUDED_CHARGES = (
     "Expressway tolls", "Parking", "Ferry or RoRo", "Port and terminal fees",
@@ -116,6 +131,9 @@ SCHEMA_COLUMNS = [
     # Public quote evidence — server-calculated and retained separately from the customer total.
     ("distance_km", "REAL"), ("distance_source", "TEXT"), ("transport_amount", "REAL"),
     ("administration_fee_rate", "REAL"), ("administration_fee", "REAL"),
+    # Immutable public-pricing snapshot. Historical bookings must never silently inherit a newer
+    # matrix after an administrator publishes one.
+    ("fare_rate_version", "TEXT"), ("fare_effective_date", "TEXT"), ("fare_components", "TEXT"),
     # Structured cargo/package details used for vehicle-capacity validation and operations.
     ("cargo_category", "TEXT"), ("package_count", "INTEGER"),
     ("package_length_cm", "REAL"), ("package_width_cm", "REAL"), ("package_height_cm", "REAL"),
@@ -372,7 +390,8 @@ def _with_administration_fee(conn, transport_amount, status, **extra):
             "tax_amount": None, "transport_tax_amount": None,
             "administration_fee_tax_amount": None, "tax_rate": None,
             "tax_code": None, "tax_type": None, "tax_mode": None,
-            "withholding_amount": None,
+            "withholding_amount": None, "rate_version": PUBLIC_FARE_MATRIX_VERSION,
+            "rate_effective_date": PUBLIC_FARE_MATRIX_EFFECTIVE_DATE,
             "status": status,
         }
     else:
@@ -406,7 +425,10 @@ def _with_administration_fee(conn, transport_amount, status, **extra):
             "withholding_amount": withholding,
             "tax_policy_snapshot": {
                 "transport": transport_policy["snapshot"], "administration_fee": fee_policy["snapshot"]},
-            "fee_version": ADMINISTRATION_FEE_VERSION, "status": status,
+            "fee_version": ADMINISTRATION_FEE_VERSION,
+            "rate_version": PUBLIC_FARE_MATRIX_VERSION,
+            "rate_effective_date": PUBLIC_FARE_MATRIX_EFFECTIVE_DATE,
+            "status": status,
         }
     result.update(extra)
     return result
@@ -787,7 +809,40 @@ def validate_vehicle_match(conn, payload, cargo):
             "decision": selected["classification"]}
 
 
-def quote(conn, vehicle, km, inter_island, service_level=None):
+def _quote_operational_components(vehicle, payload):
+    """Return deterministic, customer-visible add-ons from the same inputs used at booking.
+
+    Waiting minutes mean chargeable waiting beyond the included allowance.  Tolls, parking, ferry,
+    permits and other third-party expenses remain excluded until verified rather than guessed.
+    """
+    payload = payload or {}
+    rates = PUBLIC_OPERATIONAL_RATES.get(vehicle, {})
+    try:
+        stops = max(0, min(18, int(payload.get("additional_stops") or 0)))
+        waiting = max(0.0, min(1440.0, float(payload.get("waiting_minutes") or 0)))
+        helpers = max(0, min(8, int(payload.get("helper_count") or 0)))
+    except (TypeError, ValueError):
+        raise core.ValidationError("stops, waiting time and helper count must be valid numbers")
+    components = []
+    if stops:
+        rate = float(rates.get("additional_stop") or 0)
+        components.append({"code": "additional_stops", "label": "Additional stops",
+                           "quantity": stops, "unit": "stop", "rate": rate,
+                           "amount": round(stops * rate, 2)})
+    if waiting:
+        hourly = float(rates.get("waiting_per_hour") or 0)
+        components.append({"code": "waiting_time", "label": "Chargeable waiting time",
+                           "quantity": waiting, "unit": "minute", "rate": round(hourly / 60, 4),
+                           "amount": round(waiting * hourly / 60, 2)})
+    if helpers:
+        rate = float(rates.get("helper") or 0)
+        components.append({"code": "helpers", "label": "Loading / unloading helpers",
+                           "quantity": helpers, "unit": "helper", "rate": rate,
+                           "amount": round(helpers * rate, 2)})
+    return components
+
+
+def quote(conn, vehicle, km, inter_island, service_level=None, pricing_inputs=None):
     """Server-side estimate. Real rate card when one exists; else a server-owned indicative rate for
     STANDARD classes, adjusted by the service-level multiplier. ENGINEERED classes NEVER get a
     fabricated instant price (service level or not)."""
@@ -804,16 +859,71 @@ def quote(conn, vehicle, km, inter_island, service_level=None):
         rc = rates.resolve_rate(conn, veh)
         if rc and rc.get("standard_rate"):
             line = rates.price_line(rc["standard_rate"], 1, max(1, round(km / 200)), 0.0, rc.get("internal_cost", 0.0))
-            transport = round(line["total"] * mult)
+            rate_card_transport = round(line["total"] * mult)
+            operational = _quote_operational_components(vehicle, pricing_inputs)
+            transport = round(rate_card_transport + sum(item["amount"] for item in operational), 2)
             return _with_administration_fee(
-                conn, transport, "QUOTED", source="rate_card", service_level=service_level)
+                conn, transport, "QUOTED", source="rate_card", service_level=service_level,
+                components=[{
+                    "code": "rate_card_transport", "label": "Rate-card transportation charge",
+                    "quantity": 1, "unit": "booking", "rate": rate_card_transport,
+                    "amount": rate_card_transport,
+                }] + operational)
     except Exception:
         pass
     # Ferry/RoRo, ports, tolls, permits and other pass-through/incidental costs are explicitly
     # outside the Haulift booking and Protected Payment amount.
-    transport = round((base + perkm * km) * mult)
+    base_transport = round((base + perkm * km) * mult, 2)
+    components = [
+        {"code": "base_transport", "label": "Base transportation charge", "quantity": 1,
+         "unit": "booking", "rate": base, "amount": round(base * mult, 2)},
+        {"code": "distance", "label": "Distance charge", "quantity": km,
+         "unit": "km", "rate": round(perkm * mult, 2),
+         "amount": round(perkm * km * mult, 2)},
+    ]
+    components.extend(_quote_operational_components(vehicle, pricing_inputs))
+    transport = round(base_transport + sum(item["amount"] for item in components[2:]), 2)
     return _with_administration_fee(
-        conn, transport, "QUOTED_INDICATIVE", source="server_tariff", service_level=service_level)
+        conn, transport, "QUOTED_INDICATIVE", source="server_tariff", service_level=service_level,
+        components=components,
+        excluded_charges=list(EXCLUDED_CHARGES))
+
+
+def preview_estimate(conn, payload):
+    """Calculate a public estimate without creating a booking or payment record.
+
+    This is the single calculator entry point. It deliberately reuses cargo validation, vehicle
+    recommendation, route classification, tax policy and ``quote`` used by ``submit``.
+    """
+    if not isinstance(payload, dict):
+        raise core.ValidationError("invalid estimate payload")
+    route = classify_route(payload.get("origin_island"), payload.get("dest_island"))
+    cargo = clean_cargo(payload)
+    project = assess_project(payload, cargo, route)
+    service_class = "ENGINEERED" if project["booking_mode"] == "MANAGED_PROJECT" else "STANDARD"
+    level = resolve_service_level(payload.get("service_level"), service_class)
+    origin = _clean_location(payload, "origin_location", "origin_island", payload.get("origin_city"))
+    destination = _clean_location(
+        payload, "destination_location", "dest_island", payload.get("dest_city"))
+    distance = resolve_distance(origin, destination, payload.get("km"), route["inter_island"])
+    recommendation = recommend_vehicles(conn, payload)
+    if recommendation["manual_assessment_required"]:
+        q = _with_administration_fee(conn, None, "ESTIMATE_REQUIRED", note=project["message"],
+                                     excluded_charges=list(EXCLUDED_CHARGES))
+        return {"estimate": None, "estimate_status": q["status"], "quote_breakdown": q,
+                "distance": distance, "vehicle_recommendation": recommendation,
+                "project_assessment": project}
+    selected = str(payload.get("vehicle") or recommendation["options"][0]["id"])
+    option = next((item for item in recommendation["options"] if item["id"] == selected), None)
+    if not option:
+        raise core.ValidationError("selected vehicle is not eligible for the declared cargo")
+    q = quote(conn, selected, distance["km"], route["inter_island"], level, payload)
+    return {
+        "estimate": q.get("amount"), "estimate_status": q["status"], "quote_breakdown": q,
+        "distance": distance, "selected_vehicle": option,
+        "vehicle_recommendation": recommendation, "project_assessment": project,
+        "estimate_generated_at": _now(),
+    }
 
 
 def routing_candidate(service_class):
@@ -863,7 +973,7 @@ def submit(conn, payload):
     distance = resolve_distance(origin, destination, payload.get("km"), route["inter_island"])
     validate_vehicle_capacity(payload["vehicle"], cargo)
     match = validate_vehicle_match(conn, payload, cargo)
-    q = quote(conn, payload["vehicle"], distance["km"], route["inter_island"], level)
+    q = quote(conn, payload["vehicle"], distance["km"], route["inter_island"], level, payload)
     if project["booking_mode"] == "MANAGED_PROJECT":
         q = _with_administration_fee(conn, None, "ESTIMATE_REQUIRED", note=project["message"])
     routing = routing_candidate(svc["service_class"])
@@ -916,12 +1026,13 @@ def submit(conn, payload):
         "UPDATE mkt_bookings SET cargo_volume_cbm=?,stackable=?,fragile=?,splittable=?,vehicle_count=?,"
         "safety_allowance_pct=?,matching_version=?,matching_decision=?,tax_amount=?,transport_tax_amount=?,"
         "administration_fee_tax_amount=?,tax_rate=?,tax_code=?,tax_type=?,tax_mode=?,withholding_amount=?,"
-        "excluded_charges_ack=1 WHERE id=?",
+        "fare_rate_version=?,fare_effective_date=?,fare_components=?,excluded_charges_ack=1 WHERE id=?",
         (cargo.get("volume_cbm"), int(cargo["stackable"]), int(cargo["fragile"]), int(cargo["splittable"]),
          match["vehicle_count"], match["safety_allowance_pct"], match["matching_version"], match["decision"],
          q.get("tax_amount"), q.get("transport_tax_amount"), q.get("administration_fee_tax_amount"),
          q.get("tax_rate"), q.get("tax_code"), q.get("tax_type"), q.get("tax_mode"),
-         q.get("withholding_amount"), bid))
+         q.get("withholding_amount"), q.get("rate_version"), q.get("rate_effective_date"),
+         json.dumps(q.get("components") or [], ensure_ascii=False), bid))
     conn.execute(
         "UPDATE mkt_bookings SET booking_mode=?,service_line=?,project_stage=?,assessment_status=?,"
         "site_survey_required=?,human_approval_required=?,project_risk_level=?,risk_factors=?,"
@@ -979,6 +1090,9 @@ def submit(conn, payload):
             "tax_mode": q.get("tax_mode"), "withholding_amount": q.get("withholding_amount"),
             "total_protected_payment": q.get("amount"),
             "customer_total": q.get("amount"), "currency": "PHP",
+            "components": q.get("components") or [],
+            "rate_version": q.get("rate_version"),
+            "rate_effective_date": q.get("rate_effective_date"),
             "included": ["Transport-service charge", "Haulift administration fee (10%)", "Applicable tax"],
             "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },
@@ -1094,6 +1208,7 @@ def track(conn, token):
         "service_level,schedule_type,scheduled_at,distance_km,distance_source,transport_amount,"
         "administration_fee_rate,administration_fee,tax_amount,transport_tax_amount,"
         "administration_fee_tax_amount,tax_rate,tax_code,tax_type,tax_mode,withholding_amount,"
+        "fare_rate_version,fare_effective_date,fare_components,"
         "cargo_category,package_count,weight_kg,cargo_description,booking_mode,service_line,project_stage,"
         "assessment_status,site_survey_required,human_approval_required,project_risk_level,risk_factors,"
         "requested_resources,cargo_photo_count "
@@ -1189,6 +1304,9 @@ def track(conn, token):
             "withholding_amount": (None if eng else d.get("withholding_amount")),
             "total_protected_payment": (None if eng else d.get("quote_amount")),
             "customer_total": (None if eng else d.get("quote_amount")), "currency": "PHP",
+            "components": ([] if eng else json.loads(d.get("fare_components") or "[]")),
+            "rate_version": d.get("fare_rate_version"),
+            "rate_effective_date": d.get("fare_effective_date"),
             "included": ["Transport-service charge", "Haulift administration fee (10%)", "Applicable tax"],
             "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },

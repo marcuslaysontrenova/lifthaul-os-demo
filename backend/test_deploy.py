@@ -20,6 +20,15 @@ class TestProductionImageContract(unittest.TestCase):
         )
         self.assertTrue((REPO_ROOT / "vehicle-catalogue.json").is_file())
 
+    def test_production_image_packages_only_the_governed_public_surface(self):
+        dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        server_source = (REPO_ROOT / "backend" / "server.py").read_text(encoding="utf-8")
+        self.assertIn("COPY *.html *.css *.js vehicle-catalogue.json ./public/", dockerfile)
+        self.assertIn("COPY assets/ ./public/assets/", dockerfile)
+        self.assertIn("PUBLIC_ROOT=/app/public", dockerfile)
+        self.assertIn('p.name == "vehicle-catalogue.json"', server_source)
+        self.assertNotIn('(\".html\", \".css\", \".js\", \".json\")', server_source)
+
     def test_release_metadata_prefers_explicit_identity_and_supports_hosts(self):
         import server
         explicit = server._release_metadata({

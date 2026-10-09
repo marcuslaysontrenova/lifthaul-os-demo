@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import os
 import signal
 import sys
@@ -18,6 +19,8 @@ import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import unquote
 
 import core
 import ops
@@ -35,6 +38,7 @@ DEBUG = os.environ.get("APP_DEBUG", "false").lower() == "true"
 PORT = int(os.environ.get("PORT", "8787"))
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 APP_SECRET = os.environ.get("APP_SECRET")
+PUBLIC_ROOT = Path(os.environ.get("PUBLIC_ROOT") or Path(__file__).resolve().parent.parent).resolve()
 
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO,
                     format='{"ts":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"}')
@@ -2118,6 +2122,7 @@ def _public_booking_routes():
         body["_client_disclosure_required"] = True
         return pb.submit(_conn, body)                                  # public acknowledgement is server-enforced
     def pb_recommend(a, b, p): return pb.recommend_vehicles(_conn, b)
+    def pb_estimate(a, b, p): return pb.preview_estimate(_conn, b)
     def pb_track(a, b, p):   return pb.track(_conn, p["token"])
     def pb_queue(a, b, p):   return pb.admin_queue(_conn, a)
     def pb_review(a, b, p):  return pb.review(_conn, a, int(p["id"]), b["action"],
@@ -2168,6 +2173,7 @@ def _public_booking_routes():
     return {
         ("POST", "/public/bookings"): pb_submit,
         ("POST", "/public/bookings/vehicle-recommendations"): pb_recommend,
+        ("POST", "/public/bookings/estimate"): pb_estimate,
         ("GET", "/public/bookings/track/:token"): pb_track,
         ("GET", "/public/service-levels"): pb_levels,
         ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,
@@ -3080,6 +3086,46 @@ class Handler(BaseHTTPRequestHandler):
         log.info("req_id=%s method=%s path=%s status=%s dur_ms=%s",
                  getattr(self, "_rid", "-"), self.command, self.path.split("?")[0], code, dur)
 
+    def _send_static(self, path, head_only=False):
+        """Serve the exact packaged public release without exposing repository or backend files."""
+        requested = "index.html" if path == "/" else unquote(path).lstrip("/")
+        if (not requested or requested.startswith(".") or "\\" in requested or
+                any(part in ("", ".", "..") for part in requested.split("/"))):
+            return False
+        allowed_root_files = {
+            p.name for p in PUBLIC_ROOT.iterdir()
+            if p.is_file() and (
+                p.suffix.lower() in (".html", ".css", ".js") or
+                p.name == "vehicle-catalogue.json"
+            )
+        }
+        if not (requested in allowed_root_files or requested.startswith("assets/")):
+            return False
+        target = (PUBLIC_ROOT / requested).resolve()
+        try:
+            target.relative_to(PUBLIC_ROOT)
+        except ValueError:
+            return False
+        if not target.is_file():
+            return False
+        body = target.read_bytes()
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type + ("; charset=utf-8" if content_type.startswith("text/") or content_type in ("application/javascript", "application/json") else ""))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache" if target.suffix.lower() == ".html" else "public, max-age=3600")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+        self.send_header("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https:; connect-src 'self' http://127.0.0.1:8787 http://localhost:8787 https://lifthaul-api-production.up.railway.app")
+        if self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower() == "https":
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        self.end_headers()
+        if not head_only:
+            self.wfile.write(body)
+        return True
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._security_headers()
@@ -3109,6 +3155,8 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 log.exception("readiness probe failed")
                 return self._send(503, {"status": "not-ready"})
+        if method == "GET" and self._send_static(path):
+            return
         # public (unauthenticated) marketplace intake: payload cap + basic per-IP rate limit
         if path.startswith("/public/"):
             if int(self.headers.get("Content-Length", 0) or 0) > 32768:
@@ -3187,6 +3235,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self._handle("POST")
+
+    def do_HEAD(self):
+        self._t0 = time.time()
+        self._rid = self.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        path = self.path.split("?")[0]
+        if not self._send_static(path, head_only=True):
+            self._send(404, {"error": "not found"})
 
     def log_message(self, *a):  # handled by _send's structured log
         pass

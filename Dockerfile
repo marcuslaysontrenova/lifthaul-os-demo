@@ -12,9 +12,14 @@ COPY backend/ ./backend/
 # The API seeds and validates vehicle categories from the same canonical catalogue
 # used by registration, booking, pricing, and the public UI.
 COPY vehicle-catalogue.json ./vehicle-catalogue.json
+# Package the exact tested public interface in the same immutable release image as
+# the API. This prevents Railway/custom domains from serving an unrelated stale UI.
+COPY *.html *.css *.js vehicle-catalogue.json ./public/
+COPY assets/ ./public/assets/
 
 ENV APP_ENV=production \
     PORT=8787 \
+    PUBLIC_ROOT=/app/public \
     PYTHONUNBUFFERED=1
 WORKDIR /app/backend
 

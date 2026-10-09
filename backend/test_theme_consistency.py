@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_PAGES = (
     "index.html",
     "book.html",
+    "fare-calculator.html",
     "track.html",
     "provider.html",
     "driver-register.html",
@@ -68,6 +69,26 @@ class ThemeConsistency(unittest.TestCase):
     def test_bundled_frontend_loads_shared_theme(self):
         markup = (ROOT / "backend" / "frontend" / "index.html").read_text(encoding="utf-8")
         self.assertIn('href="../../theme.css?v=10"', markup)
+
+    def test_public_pages_use_one_navigation_component(self):
+        pages = ("index.html", "book.html", "fare-calculator.html", "track.html",
+                 "provider.html", "driver-register.html", "policies.html", "support.html")
+        for relative in pages:
+            with self.subTest(page=relative):
+                markup = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("data-lh-public-nav", markup)
+                self.assertIn('src="public-nav.js?v=1"', markup)
+        nav = (ROOT / "public-nav.js").read_text(encoding="utf-8")
+        for label in ("Home", "How It Works", "Services", "Vehicles", "Fare Calculator",
+                      "Protected Payment", "Track Booking", "Partner With Us", "Sign In"):
+            self.assertIn(label, nav)
+        self.assertNotIn('href="#"', nav)
+
+    def test_booking_preview_uses_server_pricing_not_a_duplicate_browser_matrix(self):
+        script = (ROOT / "cargo-booking.js").read_text(encoding="utf-8")
+        self.assertIn('/public/bookings/estimate', script)
+        self.assertNotIn('var RATES=', script)
+        self.assertNotIn('var TAX_RATE=', script)
 
 
 if __name__ == "__main__":

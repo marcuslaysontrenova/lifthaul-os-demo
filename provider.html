@@ -110,6 +110,7 @@ details.optional{border:1px solid var(--line);border-radius:11px;margin:3px 0 19
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 <link rel="stylesheet" href="theme.css?v=10">
+<script src="public-nav.js?v=1" defer></script>
 <style>
 html.light-registration body{background:#f4f7f3!important;background-image:none!important;color:#142018}
 .light-registration .progress{background:#f4f7f3!important;color:#607064}.light-registration .progress .active{color:#145b2d}
@@ -124,12 +125,8 @@ html.light-registration body{background:#f4f7f3!important;background-image:none!
 </style>
 </head>
 <body>
-<header class="top"><div class="top-in">
-  <a class="brand" href="index.html" aria-label="LiftHaul home">Lift<em>Haul</em></a>
-  <span class="top-label">Provider registration</span><span class="spacer"></span>
-  <a id="providerBackLink" class="top-link" href="index.html">← Back to LiftHaul Home</a>
-  <a class="top-link button" href="portal.html">Already registered? Sign in</a>
-</div></header>
+<nav data-lh-public-nav data-active="partner"></nav>
+<div class="lh-page-exit"><a id="providerBackLink" href="index.html">← Back to LiftHaul Home</a></div>
 
 <section class="hero generic-hero"><div class="hero-in">
   <div><div class="eyebrow">Join the provider network</div>

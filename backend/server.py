@@ -3053,6 +3053,30 @@ def _cors_origin(req_origin):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _static_file(self, path):
+        """Resolve only files in the immutable public-release allowlist."""
+        root = PUBLIC_ROOT.resolve()
+        requested = "index.html" if path == "/" else path.lstrip("/")
+        requested = unquote(requested)
+        if (not requested or requested.startswith(".") or "\\" in requested or
+                any(part in ("", ".", "..") for part in requested.split("/"))):
+            return None
+        allowed_root_files = {
+            p.name for p in root.iterdir()
+            if p.is_file() and (
+                p.suffix.lower() in (".html", ".css", ".js") or
+                p.name == "vehicle-catalogue.json"
+            )
+        }
+        if not (requested in allowed_root_files or requested.startswith("assets/")):
+            return None
+        target = (root / requested).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return None
+        return target if target.is_file() else None
+
     def _security_headers(self):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -3088,25 +3112,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _send_static(self, path, head_only=False):
         """Serve the exact packaged public release without exposing repository or backend files."""
-        requested = "index.html" if path == "/" else unquote(path).lstrip("/")
-        if (not requested or requested.startswith(".") or "\\" in requested or
-                any(part in ("", ".", "..") for part in requested.split("/"))):
-            return False
-        allowed_root_files = {
-            p.name for p in PUBLIC_ROOT.iterdir()
-            if p.is_file() and (
-                p.suffix.lower() in (".html", ".css", ".js") or
-                p.name == "vehicle-catalogue.json"
-            )
-        }
-        if not (requested in allowed_root_files or requested.startswith("assets/")):
-            return False
-        target = (PUBLIC_ROOT / requested).resolve()
-        try:
-            target.relative_to(PUBLIC_ROOT)
-        except ValueError:
-            return False
-        if not target.is_file():
+        target = self._static_file(path)
+        if target is None:
             return False
         body = target.read_bytes()
         content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"

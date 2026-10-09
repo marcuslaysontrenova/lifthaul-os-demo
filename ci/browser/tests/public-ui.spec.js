@@ -93,6 +93,47 @@ test('public journey uses one complete top navigation with a visible fare calcul
   }
 });
 
+test('public navigation changes once at the governed breakpoint without an intermediate overlay', async ({ page }) => {
+  for (const state of [
+    { width: 1300, menu: 'flex', toggle: 'none', position: 'static' },
+    { width: 1280, menu: 'flex', toggle: 'none', position: 'static' },
+    { width: 1121, menu: 'flex', toggle: 'none', position: 'static' },
+    { width: 1120, menu: 'none', toggle: 'grid', position: 'absolute' },
+    { width: 390, menu: 'none', toggle: 'grid', position: 'absolute' },
+  ]) {
+    await page.setViewportSize({ width: state.width, height: 844 });
+    await page.goto(APP + '/index.html?review=navigation-breakpoint');
+    const result = await page.locator('.lh-public-nav').evaluate(nav => {
+      const menu = nav.querySelector('.links');
+      const toggle = nav.querySelector('.navtoggle');
+      return {
+        menu: getComputedStyle(menu).display,
+        position: getComputedStyle(menu).position,
+        toggle: getComputedStyle(toggle).display,
+        overflow: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    });
+    expect(result).toEqual({
+      menu: state.menu,
+      position: state.position,
+      toggle: state.toggle,
+      overflow: false,
+    });
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(APP + '/index.html?review=navigation-keyboard');
+  const toggle = page.locator('.lh-public-nav .navtoggle');
+  await expect(toggle).toHaveAttribute('aria-label', 'Open navigation');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toHaveAttribute('aria-label', 'Close navigation');
+  await expect(page.locator('.lh-public-nav .links')).toHaveCSS('display', 'grid');
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+});
+
 test('fare calculator shows recommendation, versioned breakdown and no payment action', async ({ page }) => {
   await page.route('**/public/bookings/estimate', async route => {
     const request = route.request();

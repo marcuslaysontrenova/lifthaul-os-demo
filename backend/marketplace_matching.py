@@ -254,14 +254,11 @@ def create_booking(conn, actor, shipper_id, cargo_code, origin_zone, dest_zone, 
     if not cargo:
         raise ValueError(f"unknown cargo '{cargo_code}'")
     inter = 1 if a.get("inter_island") else 0
-    cur = conn.execute(
-        "INSERT INTO mkt_bookings(shipper_id,booking_type,service_type,cargo_code,cargo_description,"
-        "quantity,weight_kg,volume_cbm,dim_l_cm,dim_w_cm,dim_h_cm,declared_value,refrigerated,hazardous,"
-        "oversized,lifting_required,loading_required,unloading_required,pickup_address,pickup_zone,"
-        "delivery_address,delivery_zone,pickup_window,delivery_window,origin_zone,dest_zone,route_class,"
-        "inter_island,requested_vehicle_category,status,created_by,created_at,correlation_id) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?,?,?)",
-        (shipper_id, a.get("booking_type"), a.get("service_type"), cargo_code, a.get("cargo_description"),
+    idempotency_key = a.get("idempotency_key")
+    idem_column = ",idempotency_key" if idempotency_key is not None else ""
+    idem_placeholder = ",?" if idempotency_key is not None else ""
+    values = (
+         shipper_id, a.get("booking_type"), a.get("service_type"), cargo_code, a.get("cargo_description"),
          a.get("quantity", 1), a.get("weight_kg"), a.get("volume_cbm"), a.get("dim_l_cm"), a.get("dim_w_cm"),
          a.get("dim_h_cm"), a.get("declared_value"), int(a.get("refrigerated", cargo["refrigerated"]) or 0),
          int(a.get("hazardous", cargo["hazardous"]) or 0), int(a.get("oversized", cargo["oversized"]) or 0),
@@ -269,7 +266,17 @@ def create_booking(conn, actor, shipper_id, cargo_code, origin_zone, dest_zone, 
          a.get("pickup_address"), a.get("pickup_zone", origin_zone), a.get("delivery_address"),
          a.get("delivery_zone", dest_zone), a.get("pickup_window"), a.get("delivery_window"),
          origin_zone, dest_zone, a.get("route_class"), inter, a.get("requested_vehicle_category"),
-         actor["id"], _now(), _cid()))
+         actor["id"], _now(), _cid())
+    if idempotency_key is not None:
+        values += (idempotency_key,)
+    cur = conn.execute(
+        "INSERT INTO mkt_bookings(shipper_id,booking_type,service_type,cargo_code,cargo_description,"
+        "quantity,weight_kg,volume_cbm,dim_l_cm,dim_w_cm,dim_h_cm,declared_value,refrigerated,hazardous,"
+        "oversized,lifting_required,loading_required,unloading_required,pickup_address,pickup_zone,"
+        "delivery_address,delivery_zone,pickup_window,delivery_window,origin_zone,dest_zone,route_class,"
+        "inter_island,requested_vehicle_category,status,created_by,created_at,correlation_id" + idem_column + ") "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?,?,?" + idem_placeholder + ")",
+        values)
     bid = cur.lastrowid
     tenant.stamp(conn, actor, "mkt_bookings", bid)
     core.audit(conn, actor, "MKT_BOOKING_CREATED", "mkt_bookings", bid, None, {"cargo": cargo_code})

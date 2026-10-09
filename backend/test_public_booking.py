@@ -355,6 +355,19 @@ class Idempotency(unittest.TestCase):
         n = self.c.execute("SELECT COUNT(*) c FROM mkt_bookings WHERE idempotency_key='KEY-1'").fetchone()["c"]
         self.assertEqual(n, 1)
 
+    def test_database_rejects_duplicate_public_idempotency_key(self):
+        first = pb.submit(self.c, _p(idempotency_key="DB-UNIQUE-1"))
+        with self.assertRaises(Exception):
+            self.c.execute(
+                "INSERT INTO mkt_bookings(shipper_id,cargo_code,status,idempotency_key) "
+                "VALUES(1,'general','DRAFT','DB-UNIQUE-1')"
+            )
+        self.c.rollback()
+        row = self.c.execute(
+            "SELECT tracking_token FROM mkt_bookings WHERE idempotency_key='DB-UNIQUE-1'"
+        ).fetchone()
+        self.assertEqual(row["tracking_token"], first["tracking_token"])
+
 
 class Tracking(unittest.TestCase):
     def setUp(self): self.c = db.connect(":memory:")

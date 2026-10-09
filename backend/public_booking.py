@@ -197,6 +197,13 @@ def init(conn):
             conn.rollback()
         except Exception:
             pass
+    # Application-level SELECT-before-create cannot prevent duplicates when
+    # several production workers receive the same request concurrently.
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_mkt_bookings_public_idempotency "
+        "ON mkt_bookings(idempotency_key) WHERE idempotency_key IS NOT NULL"
+    )
+    conn.commit()
 
 
 def seed(conn):
@@ -957,7 +964,9 @@ def submit(conn, payload):
         prev = conn.execute("SELECT tracking_token FROM mkt_bookings WHERE idempotency_key=? LIMIT 1", (idem,)).fetchone()
         if prev:
             tok = prev["tracking_token"] if not isinstance(prev, tuple) else prev[0]
-            return track(conn, tok)  # idempotent replay
+            if tok:
+                return track(conn, tok)  # completed idempotent replay
+            raise core.ConflictError("request with this idempotency key is still processing; retry")
 
     route = classify_route(payload.get("origin_island"), payload.get("dest_island"))
     cargo = clean_cargo(payload)
@@ -986,14 +995,33 @@ def submit(conn, payload):
     actor = _service_actor()
     shipper_id = _guest_shipper(conn)
     import marketplace_matching as mm
-    bid = mm.create_booking(
-        conn, actor, shipper_id, "general",
-        (payload.get("origin_island") or "").upper(), (payload.get("dest_island") or "").upper(),
-        service_type=svc["service_class"], requested_vehicle_category=svc["requested_vehicle_category"],
-        inter_island=1 if route["inter_island"] else 0, route_class=route["route_class"],
-        pickup_address=origin["full_address"],
-        delivery_address=destination["full_address"],
-        weight_kg=cargo["weight_kg"], cargo_description=cargo["description"])
+    try:
+        bid = mm.create_booking(
+            conn, actor, shipper_id, "general",
+            (payload.get("origin_island") or "").upper(), (payload.get("dest_island") or "").upper(),
+            service_type=svc["service_class"], requested_vehicle_category=svc["requested_vehicle_category"],
+            inter_island=1 if route["inter_island"] else 0, route_class=route["route_class"],
+            pickup_address=origin["full_address"],
+            delivery_address=destination["full_address"],
+            weight_kg=cargo["weight_kg"], cargo_description=cargo["description"],
+            idempotency_key=idem)
+    except Exception:
+        # PostgreSQL marks a transaction aborted after a uniqueness conflict.
+        # Recover the already-committed request only when this was an
+        # idempotent race; unrelated failures continue to fail loudly.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        prev = (conn.execute(
+            "SELECT tracking_token FROM mkt_bookings WHERE idempotency_key=? LIMIT 1", (idem,)
+        ).fetchone() if idem else None)
+        if prev:
+            tok = prev["tracking_token"] if not isinstance(prev, tuple) else prev[0]
+            if tok:
+                return track(conn, tok)
+            raise core.ConflictError("request with this idempotency key is still processing; retry")
+        raise
 
     token = "pbk_" + secrets.token_urlsafe(18)
     ref = "LH-" + ("II" if route["inter_island"] else "") + token[-6:].upper()

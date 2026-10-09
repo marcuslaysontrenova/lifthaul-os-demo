@@ -81,6 +81,12 @@ class NavigationIntegrity(unittest.TestCase):
             self.assertIn(label, nav)
         self.assertEqual(html.count("Book a Service"), 1, "booking CTA must exist only in the hero")
 
+    def test_landing_has_no_legacy_navigation_breakpoint_override(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn("@media(max-width:1300px)", html)
+        self.assertNotIn(".snav .links{display:none;position:absolute", html)
+        self.assertNotIn("[data-scroll],#navtoggle", html)
+
     def test_no_root_page_contains_placeholder_hash_links(self):
         failures = []
         for page in ROOT.glob("*.html"):

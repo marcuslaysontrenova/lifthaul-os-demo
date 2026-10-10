@@ -787,7 +787,7 @@ input[type="radio"] {
   outline: 3px solid rgba(112, 194, 71, .45);
   outline-offset: 4px;
 }
-@media (max-width: 1120px) {
+@media (max-width: 1200px) {
   .lh-public-nav .navtoggle { display: grid; }
   .lh-public-nav .links {
     display: none;

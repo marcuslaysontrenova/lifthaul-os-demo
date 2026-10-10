@@ -97,7 +97,8 @@ test('public navigation changes once at the governed breakpoint without an inter
   for (const state of [
     { width: 1300, menu: 'flex', toggle: 'none', position: 'static' },
     { width: 1280, menu: 'flex', toggle: 'none', position: 'static' },
-    { width: 1121, menu: 'flex', toggle: 'none', position: 'static' },
+    { width: 1201, menu: 'flex', toggle: 'none', position: 'static' },
+    { width: 1200, menu: 'none', toggle: 'grid', position: 'absolute' },
     { width: 1120, menu: 'none', toggle: 'grid', position: 'absolute' },
     { width: 390, menu: 'none', toggle: 'grid', position: 'absolute' },
   ]) {

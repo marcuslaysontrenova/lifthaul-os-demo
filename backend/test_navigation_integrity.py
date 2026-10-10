@@ -59,6 +59,8 @@ class NavigationIntegrity(unittest.TestCase):
                 html = (ROOT / page).read_text(encoding="utf-8")
                 if page == "index.html":
                     self.assertIn('href="#home"', html)
+                elif "data-lh-public-nav" in html:
+                    self.assertIn('public-nav.js', html)
                 else:
                     self.assertIn('href="index.html', html)
 
@@ -67,8 +69,31 @@ class NavigationIntegrity(unittest.TestCase):
         provider = (ROOT / "provider.html").read_text(encoding="utf-8")
         self.assertIn("from=driver", driver)
         self.assertIn('id="providerBackLink"', provider)
-        self.assertIn("Back to driver options", provider)
-        self.assertIn("driver-register.html#partnerPaths", provider)
+        self.assertIn("← Back to Vehicle Selection", provider)
+        self.assertIn("driver-register.html#vehicleCatalogue", provider)
+
+    def test_landing_navigation_and_booking_action_are_unambiguous(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        nav = (ROOT / "public-nav.js").read_text(encoding="utf-8")
+        for label in ("Home", "How It Works", "Services", "Vehicles",
+                      "Fare Calculator", "Protected Payment", "Track Booking",
+                      "Partner With Us", "Sign In"):
+            self.assertIn(label, nav)
+        self.assertEqual(html.count("Book a Service"), 1, "booking CTA must exist only in the hero")
+
+    def test_landing_has_no_legacy_navigation_breakpoint_override(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn("@media(max-width:1300px)", html)
+        self.assertNotIn(".snav .links{display:none;position:absolute", html)
+        self.assertNotIn("[data-scroll],#navtoggle", html)
+
+    def test_no_root_page_contains_placeholder_hash_links(self):
+        failures = []
+        for page in ROOT.glob("*.html"):
+            html = page.read_text(encoding="utf-8")
+            if 'href="#"' in html:
+                failures.append(page.name)
+        self.assertEqual([], failures, f"placeholder links remain: {failures}")
 
     def test_shared_theme_defines_one_font_stack(self):
         css = (ROOT / "theme.css").read_text(encoding="utf-8")

@@ -10,25 +10,29 @@
 # LH_ADMIN_EMAIL and LH_ADMIN_PASSWORD. The application rejects demo credentials.
 # Full steps: docs/go_live/BACKEND_HOSTING_RUNBOOK.md
 #
-# NOTE ON PLANS (be deliberate): `free` is fine to PROVE the links are real, but
-# Render's free web service spins down when idle (cold starts) and its free
-# Postgres is time-limited. For an actual client pilot, bump both to a paid plan
-# (starter / basic-256mb) — one line each below.
+# This is a stable-production template, not a free demonstration template. Applying
+# it creates billable resources and therefore requires the owner's separate approval.
+# Automatic deployment is disabled: release only the exact SHA that passed the gates.
 
 databases:
   - name: lifthaul-db
     databaseName: lifthaul
     user: lifthaul
-    plan: free            # -> basic-256mb for a real pilot (free PG is time-limited)
+    plan: 0.5c-1g
+    region: singapore
+    connectionPool: pgbouncer
+    ipAllowList: []
+    storageAutoscalingEnabled: true
 
 services:
   - type: web
     name: lifthaul-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: free            # -> starter to remove idle spin-down / cold starts
+    plan: 0.5c-512mb
+    region: singapore
     healthCheckPath: /readyz
-    autoDeploy: true
+    autoDeployTrigger: off
     envVars:
       - key: APP_ENV
         value: production
@@ -46,3 +50,27 @@ services:
         sync: false                  # real operational bootstrap administrator; demo addresses are rejected
       - key: LH_ADMIN_PASSWORD
         sync: false                  # 14+ chars with upper/lower/numeric; no demo default exists
+      - key: LIVE_PROTECTED_FUNDS_ENABLED
+        value: "false"
+      - key: PAYMENT_GATEWAY_MODE
+        value: disabled
+      - key: PAYMENT_PROVIDER
+        value: MOCK
+      - key: PAYMENT_PROVIDER_CERTIFIED
+        value: "false"
+      - key: PAYMENT_PRODUCTION_PILOT_APPROVED
+        value: "false"
+      - key: PAYMENT_RECONCILIATION_AUTOMATION
+        value: "false"
+      - key: PAYMENT_REGULATORY_ROLE_APPROVED
+        value: "false"
+      - key: PAYMENT_SAFEGUARDED_FUNDS_APPROVED
+        value: "false"
+      - key: PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED
+        value: "false"
+      - key: PAYMENT_DR_RESTORE_APPROVED
+        value: "false"
+      - key: PAYMENT_ENABLED_CHANNELS
+        value: ""
+      - key: ADMIN_FEE_WISE_ENABLED
+        value: "false"

@@ -1,0 +1,41 @@
+name: LiftHaul Production Health Monitor
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  probes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Frontend, API, readiness, and release identity
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          curl --fail --silent --show-error --max-time 20 \
+            https://marcuslaysontrenova.github.io/lifthaul-os-demo/ -o evidence/frontend.html
+          curl --fail --silent --show-error --max-time 20 \
+            https://lifthaul-api-production.up.railway.app/healthz -o evidence/health.json
+          curl --fail --silent --show-error --max-time 20 \
+            https://lifthaul-api-production.up.railway.app/readyz -o evidence/ready.json
+          python - <<'PY'
+          import json
+          health=json.load(open('evidence/health.json', encoding='utf-8'))
+          ready=json.load(open('evidence/ready.json', encoding='utf-8'))
+          assert health.get('status') == 'ok', health
+          assert ready.get('status') == 'ready', ready
+          assert ready.get('schema_version') is not None, ready
+          assert ready.get('release_sha') not in (None, '', 'unknown'), ready
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-health-${{ github.run_id }}
+          retention-days: 14
+          path: evidence/**
+

@@ -1,6 +1,6 @@
 # LiftHaul Provider Earnings and Payout Policy
 
-Evidence review date: 6 October 2026 (Asia/Manila)
+Evidence review date: 9 October 2026 (Asia/Manila)
 
 ## What the Philippine competitors publicly describe
 

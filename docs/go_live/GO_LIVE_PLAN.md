@@ -3,9 +3,11 @@
 **Goal:** take LiftHaul from a polished demo to a **live, stable app that handles many
 concurrent bookings** — right-sized for a Philippine heavy-haul pilot, not Lalamove-scale.
 
-**The one honest truth:** the code is ready and proven; the only thing blocking go-live is
-**hosting**, and the first step there is yours (creating the account + billing — the AI is
-barred from that). Everything around it is done.
+> **2026-10-07 status:** the frontend and API are publicly reachable, but the currently
+> published frontend does not match the locally tested candidate, the running API does not
+> report an auditable release SHA, and hosted recovery/rollback/security evidence remains
+> open. See `PRODUCTION_RELEASE_AUDIT_2026-10-07.md`. Public reachability is not production
+> certification.
 
 ---
 

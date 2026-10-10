@@ -19,6 +19,12 @@ def call(method, path, body=None, actor=None):
     return fn(actor, body or {}, params or {})
 
 
+class TestServerConfiguration(unittest.TestCase):
+    def test_listener_backlog_handles_release_gate_burst(self):
+        self.assertGreaterEqual(server.LiftHaulHTTPServer.request_queue_size, 100)
+        self.assertTrue(server.LiftHaulHTTPServer.daemon_threads)
+
+
 class TestApiLifecycle(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

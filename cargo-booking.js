@@ -3,9 +3,7 @@
   window.LiftHaulCargoFirst=true;
   var $=function(s){return document.querySelector(s);};
   var all=function(s){return Array.prototype.slice.call(document.querySelectorAll(s));};
-  var TAX_RATE=.12;
   var SERVICE={EXPRESS:{name:"Express",multiplier:1.5},STANDARD:{name:"Standard",multiplier:1},ECONOMY:{name:"Economy / Consolidated",multiplier:.85},DEDICATED:{name:"Dedicated",multiplier:1.25},ENGINEERED_HEAVY_HAUL:{name:"Engineered Heavy Haul",multiplier:null}};
-  var RATES={moto:[60,8],sedan:[120,14],mpv:[180,18],pickup:[220,22],van:[300,28],refvan:[420,32],"6w":[1200,55],"6wref":[1550,64],"10w":[2500,80],lowbed:[null,null],crane:[null,null],manual:[null,null]};
   var CATALOG=[
     {id:"moto",name:"Motorcycle",payload:30,volume:.06,dims:[40,40,40],body:"cargo carrier",port:false},
     {id:"sedan",name:"Sedan / Hatchback",payload:200,volume:.4,dims:[90,90,50],body:"enclosed",port:false},
@@ -72,7 +70,45 @@
   function findOption(id){return state.match&&state.match.options?state.match.options.find(function(v){return v.id===id;}):null;}
   function chooseVehicle(id,count){state.selected=id;state.vehicleCount=count||1;all(".vopt").forEach(function(b){b.classList.toggle("on",b.getAttribute("data-v")===id);});var opt=findOption(id);populateLevels(id==="manual"||!!(opt&&(opt.special_permit_required||opt.lifting_capable||id==="lowbed"||id==="crane")));estimate();}
   function populateLevels(heavy){var s=$("#svcLevel"),codes=heavy?["ENGINEERED_HEAVY_HAUL","DEDICATED"]:["EXPRESS","STANDARD","ECONOMY","DEDICATED"];s.innerHTML=codes.map(function(c){return '<option value="'+c+'">'+SERVICE[c].name+'</option>';}).join("");s.value=heavy?"ENGINEERED_HEAVY_HAUL":"STANDARD";}
-  function estimate(){var box=$("#estimate"),rate=RATES[state.selected];if(bookingMode()==="MANAGED_PROJECT"){box.hidden=false;box.innerHTML='<div class="quoteonly"><b>Managed Project estimate required.</b> No price is fabricated. Operations will verify the site, equipment, crew, safety plan and permits before presenting the agreed transport-service charge.</div>';if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;}if(!state.selected||!rate){box.hidden=true;if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;}if(rate[0]==null){box.hidden=false;box.innerHTML='<div class="quoteonly">Customized assessment required. No price is fabricated; operations will verify equipment, permits and route constraints before presenting an agreed transport-service charge.</div>';if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;}var km=Number($("#km").value||0);if(!km){box.hidden=true;return;}var m=(SERVICE[$("#svcLevel").value]||SERVICE.STANDARD).multiplier||1,units=state.vehicleCount||1,transport=Math.round((rate[0]+rate[1]*km)*m*units),fee=Math.round(transport*.10),transportTax=Math.round(transport*TAX_RATE),feeTax=Math.round(fee*TAX_RATE),tax=transportTax+feeTax,total=transport+fee+tax;box.hidden=false;box.innerHTML='<span class="step-kicker">Step 6 · Price review</span><div class="row"><span>Agreed transport-service charge preview'+(units>1?' · '+units+' vehicles':'')+'</span><span>'+peso(transport)+'</span></div><div class="row fee"><span>Haulift administration fee · 10%</span><span>'+peso(fee)+'</span></div><div class="row"><span>Applicable tax · configured preview</span><span>'+peso(tax)+'</span></div><div class="row total"><span>Total Protected-Payment amount</span><span>'+peso(total)+'</span></div><div class="row"><span>Excluded: tolls, RoRo/ferry, ports, permits and incidentals</span><span>Paid separately</span></div>';if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(total);}
+  var estimateRequest=0;
+  function estimate(){
+    var box=$("#estimate"),requestId=++estimateRequest;
+    if(bookingMode()==="MANAGED_PROJECT"||state.selected==="manual"){
+      box.hidden=false;box.innerHTML='<div class="quoteonly"><b>Managed Project estimate required.</b> No price is fabricated. Operations will verify the site, equipment, crew, safety plan and permits before presenting the agreed transport-service charge.</div>';
+      if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;
+    }
+    if(!state.selected||!Number($("#km").value||0)){
+      box.hidden=true;if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;
+    }
+    var base=apiBase();
+    if(!base){
+      box.hidden=false;box.innerHTML='<div class="quoteonly"><b>Fare preview unavailable.</b> Connect the hosted LiftHaul pricing service. No browser-side total will be guessed.</div>';
+      if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;
+    }
+    var p=payloadBase();
+    p.vehicle=state.selected;p.vehicle_count=state.vehicleCount||1;
+    p.matching_version=state.match&&state.match.matching_version;
+    p.service_level=$("#svcLevel").value||"STANDARD";
+    p.additional_stops=collectStops().length;
+    box.hidden=false;box.innerHTML='<div class="quoteonly">Validating the selected vehicle and calculating the governed fare…</div>';
+    fetch(base+"/public/bookings/estimate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)})
+      .then(function(r){return r.json().then(function(j){if(!r.ok||j.error)throw new Error(j.error||"Fare estimate failed");return j.data!==undefined?j.data:j;});})
+      .then(function(d){
+        if(requestId!==estimateRequest)return;
+        var q=d.quote_breakdown||{};
+        if(d.estimate==null){box.innerHTML='<div class="quoteonly"><b>Estimate required.</b> '+esc(d.estimate_note||"Operations review is required before pricing.")+'</div>';if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);return;}
+        var components=(q.components||[]).map(function(x){return '<div class="row"><span>'+esc(x.label)+'</span><span>'+peso(x.amount)+'</span></div>';}).join("");
+        box.innerHTML='<span class="step-kicker">Step 6 · Price review</span>'+components+
+          '<div class="row"><span>Transport subtotal</span><span>'+peso(q.transport_subtotal)+'</span></div>'+
+          '<div class="row fee"><span>LiftHaul administration fee · 10%</span><span>'+peso(q.administration_fee)+'</span></div>'+
+          '<div class="row"><span>Applicable tax</span><span>'+peso(q.tax_amount)+'</span></div>'+
+          '<div class="row total"><span>Total Protected-Payment amount</span><span>'+peso(q.amount)+'</span></div>'+
+          '<div class="row"><span>Rate '+esc(q.rate_version)+' · effective '+esc(q.rate_effective_date)+'</span><span></span></div>'+
+          '<div class="row"><span>Excluded: tolls, RoRo/ferry, ports, permits and incidentals</span><span>Verified separately</span></div>';
+        if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(q.amount);
+      })
+      .catch(function(err){if(requestId!==estimateRequest)return;box.innerHTML='<div class="quoteonly"><b>Fare preview unavailable.</b> '+esc(err.message)+' No booking or payment was created.</div>';if(window.LiftHaulBookingUX)LiftHaulBookingUX.updatePaymentAmount(null);});
+  }
   var timer=null;function scheduleMatch(){clearTimeout(timer);timer=setTimeout(requestRecommendation,180);}
   function collectStops(){return all("#stops .stopAddr").map(function(x){return x.value.trim();}).filter(Boolean).map(function(a){return{type:"DROP",address:a};});}
   function showMatch(){$("#bookform").style.display="none";$("#match").classList.add("show");$("#spin").style.display="";$("#newBooking").style.display="none";$("#match").scrollIntoView({behavior:scrollMode(),block:"center"});}

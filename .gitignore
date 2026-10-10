@@ -7,3 +7,5 @@ pytest-cache-files-*/
 *.sqlite3
 rgo_e2e_state.json
 .env
+node_modules/
+ci/artifacts/

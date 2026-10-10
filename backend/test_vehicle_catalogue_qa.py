@@ -58,12 +58,26 @@ class VehicleCatalogueQAGate(unittest.TestCase):
 
     def test_selection_accessibility_persistence_and_filters_are_release_gated(self):
         html = (ROOT / "driver-register.html").read_text(encoding="utf-8")
-        for marker in ("vehicleSearch", "bodyFilter", "payloadFilter", "Show more vehicles",
+        for marker in ("vehicleSearch", "bodyFilter", "payloadFilter", "All Vehicles",
                        "aria-pressed", "selectedVehicleCode", "lifthaul_driver_vehicle_code",
-                       "vehicle_category_code", "loading=\"lazy\"", "role=\"tablist\""):
+                       "vehicle_category_code", "loading=\"lazy\"", "role=\"tablist\"",
+                       "aria-expanded", "aria-controls"):
             self.assertIn(marker, html)
+        self.assertNotIn("Show more vehicles", html)
+        self.assertNotIn("items.slice(0,4)", html)
         self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", html)
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", html)
+
+    def test_ui_categories_are_canonical_complete_and_non_overlapping(self):
+        categories = DATA["ui_categories"]
+        self.assertEqual(
+            [category["display_name"] for category in categories],
+            ["Motorcycle", "Cars and Compact Vehicles", "Light Commercial",
+             "Medium Trucks", "Heavy Trucks", "Trailers and Heavy Hauling"],
+        )
+        categorized = [code for category in categories for code in category["vehicle_codes"]]
+        self.assertEqual(len(categorized), len(set(categorized)), "vehicle appears in multiple UI categories")
+        self.assertEqual(set(categorized), {vehicle["code"] for vehicle in VEHICLES})
 
     def test_capacity_notice_and_passenger_boundary_are_explicit(self):
         self.assertIn("Final eligibility and load capacity", DATA["capacity_notice"])

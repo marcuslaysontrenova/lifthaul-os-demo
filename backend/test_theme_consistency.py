@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_PAGES = (
     "index.html",
     "book.html",
+    "fare-calculator.html",
     "track.html",
     "provider.html",
     "driver-register.html",
@@ -50,7 +51,14 @@ class ThemeConsistency(unittest.TestCase):
         self.assertNotIn("Book a Truck", public_page)
         self.assertNotIn("Book a Truck", client_app)
         self.assertIn("Book a Service", public_page)
+        self.assertEqual(public_page.count("Book a Service"), 1)
         self.assertIn("Book a Service", client_app)
+
+    def test_dark_surface_contrast_tokens_are_canonical(self):
+        css = (ROOT / "theme.css").read_text(encoding="utf-8").lower()
+        self.assertIn("--lh-on-dark: #ffffff", css)
+        self.assertIn("--lh-on-dark-muted: #d1d5db", css)
+        self.assertIn("--lh-on-dark-accent: #9be33d", css)
 
     def test_every_customer_and_operations_page_loads_shared_theme(self):
         for relative in PUBLIC_PAGES:
@@ -61,6 +69,26 @@ class ThemeConsistency(unittest.TestCase):
     def test_bundled_frontend_loads_shared_theme(self):
         markup = (ROOT / "backend" / "frontend" / "index.html").read_text(encoding="utf-8")
         self.assertIn('href="../../theme.css?v=10"', markup)
+
+    def test_public_pages_use_one_navigation_component(self):
+        pages = ("index.html", "book.html", "fare-calculator.html", "track.html",
+                 "provider.html", "driver-register.html", "policies.html", "support.html")
+        for relative in pages:
+            with self.subTest(page=relative):
+                markup = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("data-lh-public-nav", markup)
+                self.assertIn('src="public-nav.js?v=1"', markup)
+        nav = (ROOT / "public-nav.js").read_text(encoding="utf-8")
+        for label in ("Home", "How It Works", "Services", "Vehicles", "Fare Calculator",
+                      "Protected Payment", "Track Booking", "Partner With Us", "Sign In"):
+            self.assertIn(label, nav)
+        self.assertNotIn('href="#"', nav)
+
+    def test_booking_preview_uses_server_pricing_not_a_duplicate_browser_matrix(self):
+        script = (ROOT / "cargo-booking.js").read_text(encoding="utf-8")
+        self.assertIn('/public/bookings/estimate', script)
+        self.assertNotIn('var RATES=', script)
+        self.assertNotIn('var TAX_RATE=', script)
 
 
 if __name__ == "__main__":

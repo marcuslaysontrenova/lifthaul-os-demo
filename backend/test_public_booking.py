@@ -163,6 +163,52 @@ class Quote(unittest.TestCase):
                          q["transport_service_charge"] + q["administration_fee"] + q["applicable_tax"])
         self.assertIn("Ferry or RoRo", q["excluded_client_responsibility"])
 
+    def test_public_calculator_uses_same_quote_engine_as_booking(self):
+        payload = _p(
+            vehicle="sedan", km=10, cargo_category="BOXES_GENERAL", cargo="Documents",
+            weight_kg=50, package_count=1, package_length_cm=50,
+            package_width_cm=40, package_height_cm=30,
+            additional_stops=2, waiting_minutes=60, helper_count=1,
+        )
+        preview = pb.preview_estimate(self.c, payload)
+        booked = pb.submit(self.c, payload)
+        self.assertEqual(preview["estimate"], booked["estimate"])
+        self.assertEqual(preview["quote_breakdown"]["rate_version"], pb.PUBLIC_FARE_MATRIX_VERSION)
+        self.assertEqual(booked["quote_breakdown"]["rate_version"], pb.PUBLIC_FARE_MATRIX_VERSION)
+        components = {item["code"]: item["amount"]
+                      for item in preview["quote_breakdown"]["components"]}
+        self.assertEqual(components["additional_stops"], 90)
+        self.assertEqual(components["waiting_time"], 100)
+        self.assertEqual(components["helpers"], 200)
+        tracked = pb.track(self.c, booked["tracking_token"])
+        self.assertEqual(tracked["quote_breakdown"]["rate_version"], pb.PUBLIC_FARE_MATRIX_VERSION)
+        self.assertEqual(tracked["quote_breakdown"]["components"],
+                         booked["quote_breakdown"]["components"])
+
+    def test_confirmed_booking_retains_rate_snapshot_after_matrix_changes(self):
+        booked = pb.submit(self.c, _p(
+            vehicle="sedan", km=10, cargo_category="BOXES_GENERAL", cargo="Documents",
+            weight_kg=50, package_count=1, package_length_cm=50,
+            package_width_cm=40, package_height_cm=30,
+        ))
+        row = self.c.execute(
+            "SELECT fare_rate_version,fare_effective_date,fare_components FROM mkt_bookings WHERE id=?",
+            (booked["booking_id"],),
+        ).fetchone()
+        self.assertEqual(row["fare_rate_version"], pb.PUBLIC_FARE_MATRIX_VERSION)
+        self.assertEqual(row["fare_effective_date"], pb.PUBLIC_FARE_MATRIX_EFFECTIVE_DATE)
+        self.assertTrue(json.loads(row["fare_components"]))
+
+    def test_public_calculator_does_not_create_booking(self):
+        before = self.c.execute("SELECT COUNT(*) c FROM mkt_bookings").fetchone()["c"]
+        pb.preview_estimate(self.c, _p(
+            vehicle="sedan", km=10, cargo_category="BOXES_GENERAL", cargo="Documents",
+            weight_kg=50, package_count=1, package_length_cm=50,
+            package_width_cm=40, package_height_cm=30,
+        ))
+        after = self.c.execute("SELECT COUNT(*) c FROM mkt_bookings").fetchone()["c"]
+        self.assertEqual(before, after)
+
 
 class CargoFirstVehicleMatching(unittest.TestCase):
     def setUp(self): self.c = db.connect(":memory:")
@@ -308,6 +354,19 @@ class Idempotency(unittest.TestCase):
         self.assertEqual(a["ref"], b["ref"])
         n = self.c.execute("SELECT COUNT(*) c FROM mkt_bookings WHERE idempotency_key='KEY-1'").fetchone()["c"]
         self.assertEqual(n, 1)
+
+    def test_database_rejects_duplicate_public_idempotency_key(self):
+        first = pb.submit(self.c, _p(idempotency_key="DB-UNIQUE-1"))
+        with self.assertRaises(Exception):
+            self.c.execute(
+                "INSERT INTO mkt_bookings(shipper_id,cargo_code,status,idempotency_key) "
+                "VALUES(1,'general','DRAFT','DB-UNIQUE-1')"
+            )
+        self.c.rollback()
+        row = self.c.execute(
+            "SELECT tracking_token FROM mkt_bookings WHERE idempotency_key='DB-UNIQUE-1'"
+        ).fetchone()
+        self.assertEqual(row["tracking_token"], first["tracking_token"])
 
 
 class Tracking(unittest.TestCase):

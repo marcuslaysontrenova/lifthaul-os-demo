@@ -45,8 +45,8 @@ class TestProviderPage(unittest.TestCase):
             "assets/visual/lifthaul-fleet-handling-v1.webp",
         ):
             self.assertIn(asset, PROVIDER_HTML)
-        self.assertGreaterEqual(PROVIDER_HTML.count('loading="lazy"'), 7)
-        self.assertGreaterEqual(PROVIDER_HTML.count('data-src="assets/visual/'), 7)
+        self.assertGreaterEqual(PROVIDER_HTML.count('loading="lazy"'), 3)
+        self.assertGreaterEqual(PROVIDER_HTML.count('data-src="assets/visual/'), 3)
         self.assertIn("function hydrateTrackMedia(track)", PROVIDER_HTML)
         self.assertIn("hydrateTrackMedia('light')", PROVIDER_HTML)
         self.assertIn("hydrateTrackMedia('equipment')", PROVIDER_HTML)
@@ -69,18 +69,16 @@ class TestProviderPage(unittest.TestCase):
 
     def test_light_vehicle_route_has_clean_selection_first_experience(self):
         self.assertIn("Drive. Deliver.", PROVIDER_HTML)
-        self.assertIn("What vehicle would you like to register?", PROVIDER_HTML)
-        for category in ("MOTORCYCLE", "SUV", "PICKUP", "LIGHT_VAN"):
-            self.assertIn(f'data-light-card="{category}"', PROVIDER_HTML)
+        self.assertIn("Select the exact unit before registration.", PROVIDER_HTML)
+        self.assertIn("One canonical vehicle catalogue", PROVIDER_HTML)
+        self.assertNotIn("data-light-card=", PROVIDER_HTML)
+        self.assertNotIn("var lightVehicles=", PROVIDER_HTML)
         self.assertIn("light-registration:not(.light-category-selected)", PROVIDER_HTML)
-        self.assertIn("Register This Vehicle", PROVIDER_HTML)
+        self.assertIn("Open Full Vehicle Catalogue", PROVIDER_HTML)
 
     def test_light_vehicle_assets_and_saved_selection_are_wired(self):
-        for asset in (
-            "lifthaul-light-motorcycle-v1.webp", "lifthaul-light-suv-v1.webp",
-            "lifthaul-light-pickup-v1.webp", "lifthaul-light-van-v1.webp",
-        ):
-            self.assertIn(asset, PROVIDER_HTML)
+        self.assertIn("fetch('vehicle-catalogue.json'", PROVIDER_HTML)
+        self.assertIn("_lightVehicleData", PROVIDER_HTML)
         self.assertIn("lifthaul_light_vehicle_draft", PROVIDER_HTML)
         self.assertIn("initial_vehicle_category", PROVIDER_HTML)
         self.assertIn("initial_vehicle_variant", PROVIDER_HTML)
@@ -88,14 +86,18 @@ class TestProviderPage(unittest.TestCase):
     def test_passenger_service_is_not_implied_by_cargo_registration(self):
         self.assertIn("Cargo registration does not authorize passenger transport.", PROVIDER_HTML)
         self.assertIn("are not activated here", PROVIDER_HTML)
-        self.assertIn("Planning estimates only", PROVIDER_HTML)
+        self.assertIn("Final eligibility and load capacity", PROVIDER_HTML)
 
     def test_light_flow_explains_multi_unit_and_governed_approval(self):
-        self.assertIn("One account · multiple approved units", PROVIDER_HTML)
-        self.assertIn("Every vehicle keeps its own review", PROVIDER_HTML)
+        self.assertIn("one governed catalogue across booking, registration, pricing, and administration", PROVIDER_HTML)
         self.assertIn("Approval is never automatic", PROVIDER_HTML)
         for step in ("Select vehicle type", "Create or sign in", "Payout information", "Approval &amp; access"):
             self.assertIn(step, PROVIDER_HTML)
+
+    def test_secondary_page_has_safe_exit_and_contextual_navigation(self):
+        self.assertIn("← Back to LiftHaul Home", PROVIDER_HTML)
+        self.assertIn("← Back to Vehicle Selection", PROVIDER_HTML)
+        self.assertNotIn("Book a Service", PROVIDER_HTML)
 
 
 if __name__ == "__main__":

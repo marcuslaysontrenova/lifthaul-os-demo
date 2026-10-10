@@ -20,6 +20,7 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote
 
 import core
 import ops
@@ -37,12 +38,29 @@ DEBUG = os.environ.get("APP_DEBUG", "false").lower() == "true"
 PORT = int(os.environ.get("PORT", "8787"))
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 APP_SECRET = os.environ.get("APP_SECRET")
-FRONTEND_DIR = Path(os.environ.get("LIFTHAUL_FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
-STATIC_SUFFIXES = {".html", ".css", ".js", ".json", ".png", ".jpg", ".jpeg", ".svg", ".webp", ".ico"}
+PUBLIC_ROOT = Path(os.environ.get("PUBLIC_ROOT") or Path(__file__).resolve().parent.parent).resolve()
 
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO,
                     format='{"ts":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"}')
 log = logging.getLogger("rgo")
+
+
+def _release_metadata(env=None):
+    """Return non-secret deployment identity for probes and release evidence.
+
+    Railway and Render expose commit/deployment identifiers under different names.
+    Explicit LiftHaul variables take precedence so other hosts can provide the same
+    contract. Missing values stay honest instead of fabricating an identity.
+    """
+    env = os.environ if env is None else env
+    release_sha = next((str(env.get(key, "")).strip() for key in (
+        "LIFTHAUL_RELEASE_SHA", "RAILWAY_GIT_COMMIT_SHA", "RENDER_GIT_COMMIT",
+        "SOURCE_VERSION",
+    ) if str(env.get(key, "")).strip()), "unknown")
+    deployment_id = next((str(env.get(key, "")).strip() for key in (
+        "LIFTHAUL_DEPLOYMENT_ID", "RAILWAY_DEPLOYMENT_ID", "RENDER_SERVICE_ID",
+    ) if str(env.get(key, "")).strip()), "unknown")
+    return {"release_sha": release_sha, "deployment_id": deployment_id}
 
 
 def _production_config_errors(env=None):
@@ -85,6 +103,9 @@ def _production_config_errors(env=None):
     if str(env.get("REVENUE_DNA_ENFORCEMENT", "")).strip().lower() != "enforce":
         errors.append("REVENUE_DNA_ENFORCEMENT must be 'enforce' outside development/test")
     gateway_mode = str(env.get("PAYMENT_GATEWAY_MODE", "disabled")).strip().lower()
+    truthy = lambda key: str(env.get(key, "")).strip().lower() in ("1", "true", "yes", "on")
+    if truthy("LIVE_PROTECTED_FUNDS_ENABLED") and gateway_mode != "production":
+        errors.append("LIVE_PROTECTED_FUNDS_ENABLED requires PAYMENT_GATEWAY_MODE=production")
     if gateway_mode == "production":
         for key in ("XENDIT_SECRET_KEY", "XENDIT_WEBHOOK_TOKEN", "PAYMENT_ENABLED_CHANNELS",
                     "PAYMENT_RETURN_BASE_URL"):
@@ -98,6 +119,15 @@ def _production_config_errors(env=None):
                     "PAYMENT_INDEPENDENT_SECURITY_TEST_APPROVED", "PAYMENT_DR_RESTORE_APPROVED"):
             if str(env.get(key, "")).strip().lower() not in ("1", "true", "yes", "on"):
                 errors.append(f"{key} must be enabled for production payments")
+    if truthy("ADMIN_FEE_WISE_ENABLED"):
+        for key in ("WISE_API_KEY", "WISE_PROFILE_ID", "WISE_ADMIN_FEE_RECIPIENT_ID",
+                    "WISE_BALANCE_ID"):
+            if not str(env.get(key, "")).strip():
+                errors.append(f"missing {key} for production Wise settlement")
+        for key in ("WISE_BUSINESS_ACCOUNT_APPROVED", "WISE_API_FUNDING_APPROVED",
+                    "ADMIN_FEE_EARLY_RELEASE_APPROVED"):
+            if not truthy(key):
+                errors.append(f"{key} must be enabled for production Wise settlement")
     return errors
 
 
@@ -2092,6 +2122,7 @@ def _public_booking_routes():
         body["_client_disclosure_required"] = True
         return pb.submit(_conn, body)                                  # public acknowledgement is server-enforced
     def pb_recommend(a, b, p): return pb.recommend_vehicles(_conn, b)
+    def pb_estimate(a, b, p): return pb.preview_estimate(_conn, b)
     def pb_track(a, b, p):   return pb.track(_conn, p["token"])
     def pb_queue(a, b, p):   return pb.admin_queue(_conn, a)
     def pb_review(a, b, p):  return pb.review(_conn, a, int(p["id"]), b["action"],
@@ -2142,6 +2173,7 @@ def _public_booking_routes():
     return {
         ("POST", "/public/bookings"): pb_submit,
         ("POST", "/public/bookings/vehicle-recommendations"): pb_recommend,
+        ("POST", "/public/bookings/estimate"): pb_estimate,
         ("GET", "/public/bookings/track/:token"): pb_track,
         ("GET", "/public/service-levels"): pb_levels,
         ("GET", "/admin/marketplace/public-booking-queue"): pb_queue,
@@ -3021,31 +3053,29 @@ def _cors_origin(req_origin):
 
 
 class Handler(BaseHTTPRequestHandler):
-    def _send_static(self, file_path):
-        body = file_path.read_bytes()
-        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-        self.send_response(200)
-        self.send_header("Content-Type", f"{content_type}; charset=utf-8" if content_type.startswith(("text/", "application/javascript", "application/json")) else content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://lifthaul-api-production.up.railway.app; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
-        self.send_header("Cache-Control", "no-cache" if file_path.suffix == ".html" else "public, max-age=3600")
-        if self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower() == "https":
-            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-        self.end_headers()
-        self.wfile.write(body)
-
     def _static_file(self, path):
+        """Resolve only files in the immutable public-release allowlist."""
+        root = PUBLIC_ROOT.resolve()
         requested = "index.html" if path == "/" else path.lstrip("/")
-        if "/" in requested or "\\" in requested:
+        requested = unquote(requested)
+        if (not requested or requested.startswith(".") or "\\" in requested or
+                any(part in ("", ".", "..") for part in requested.split("/"))):
             return None
-        candidate = FRONTEND_DIR / requested
-        if candidate.suffix.lower() not in STATIC_SUFFIXES or not candidate.is_file():
+        allowed_root_files = {
+            p.name for p in root.iterdir()
+            if p.is_file() and (
+                p.suffix.lower() in (".html", ".css", ".js") or
+                p.name == "vehicle-catalogue.json"
+            )
+        }
+        if not (requested in allowed_root_files or requested.startswith("assets/")):
             return None
-        return candidate
+        target = (root / requested).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return None
+        return target if target.is_file() else None
 
     def _security_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -3080,6 +3110,29 @@ class Handler(BaseHTTPRequestHandler):
         log.info("req_id=%s method=%s path=%s status=%s dur_ms=%s",
                  getattr(self, "_rid", "-"), self.command, self.path.split("?")[0], code, dur)
 
+    def _send_static(self, path, head_only=False):
+        """Serve the exact packaged public release without exposing repository or backend files."""
+        target = self._static_file(path)
+        if target is None:
+            return False
+        body = target.read_bytes()
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type + ("; charset=utf-8" if content_type.startswith("text/") or content_type in ("application/javascript", "application/json") else ""))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache" if target.suffix.lower() == ".html" else "public, max-age=3600")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+        self.send_header("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https:; connect-src 'self' http://127.0.0.1:8787 http://localhost:8787 https://lifthaul-api-production.up.railway.app")
+        if self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower() == "https":
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        self.end_headers()
+        if not head_only:
+            self.wfile.write(body)
+        return True
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._security_headers()
@@ -3090,13 +3143,9 @@ class Handler(BaseHTTPRequestHandler):
         self._t0 = time.time()
         self._rid = self.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
         path = self.path.split("?")[0]
-        if method == "GET":
-            static_file = self._static_file(path)
-            if static_file is not None:
-                return self._send_static(static_file)
         # unauthenticated liveness/readiness probes
         if method == "GET" and path in ("/health", "/healthz"):
-            return self._send(200, {"status": "ok", "env": APP_ENV})
+            return self._send(200, {"status": "ok", "env": APP_ENV, **_release_metadata()})
         if method == "GET" and path in ("/ready", "/readyz"):
             try:
                 if _POOL is None:
@@ -3108,10 +3157,13 @@ class Handler(BaseHTTPRequestHandler):
                         c.execute("SELECT 1").fetchone(); ver = db.current_version(c)
                     finally:
                         _POOL.release(c, commit=False)
-                return self._send(200, {"status": "ready", "schema_version": ver})
+                return self._send(200, {"status": "ready", "schema_version": ver,
+                                        **_release_metadata()})
             except Exception:
                 log.exception("readiness probe failed")
                 return self._send(503, {"status": "not-ready"})
+        if method == "GET" and self._send_static(path):
+            return
         # public (unauthenticated) marketplace intake: payload cap + basic per-IP rate limit
         if path.startswith("/public/"):
             if int(self.headers.get("Content-Length", 0) or 0) > 32768:
@@ -3191,6 +3243,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._handle("POST")
 
+    def do_HEAD(self):
+        self._t0 = time.time()
+        self._rid = self.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        path = self.path.split("?")[0]
+        if not self._send_static(path, head_only=True):
+            self._send(404, {"error": "not found"})
+
     def log_message(self, *a):  # handled by _send's structured log
         pass
 
@@ -3235,8 +3294,23 @@ def _payment_reconciliation_worker(stop_event):
             except Exception: pass
 
 
+class LiftHaulHTTPServer(ThreadingHTTPServer):
+    """Threaded listener sized for short, concurrent public/API bursts.
+
+    ``socketserver.TCPServer`` defaults to a listen backlog of five.  That is
+    small enough for otherwise healthy requests to stall or time out before a
+    handler thread is created during a modest booking/catalogue burst.  The
+    database layer still provides its own bounded concurrency and backpressure;
+    this queue only prevents premature connection loss at the socket boundary.
+    """
+
+    request_queue_size = max(64, int(os.environ.get("LIFTHAUL_LISTEN_BACKLOG", "256") or "256"))
+    daemon_threads = True
+    block_on_close = False
+
+
 def main():
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    srv = LiftHaulHTTPServer(("0.0.0.0", PORT), Handler)
     payment_stop = threading.Event()
     payment_worker = None
     if os.environ.get("PAYMENT_RECONCILIATION_AUTOMATION", "false").strip().lower() in ("1", "true", "yes", "on"):

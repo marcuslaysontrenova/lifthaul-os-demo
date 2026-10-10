@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LiftHaul Fare Calculator — Plan Before Booking</title>
+  <meta name="description" content="Estimate a LiftHaul delivery using the same governed pricing and vehicle-matching rules used by booking.">
+  <link rel="stylesheet" href="theme.css?v=10">
+  <script src="config.js"></script>
+  <script src="public-nav.js?v=1" defer></script>
+  <style>
+    .fare-hero{background:#78be20;padding:70px 0 54px}.fare-wrap{max-width:1180px;margin:auto;padding:0 24px}.fare-hero h1{max-width:790px;font:950 clamp(45px,6vw,78px)/.98 var(--lh-font);letter-spacing:-.055em;color:#08120c}.fare-hero p{max-width:720px;font-size:18px;line-height:1.55;color:#183c27;margin-top:20px}.fare-main{padding:42px 0 76px;background:#f4f7f3}.fare-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(340px,.8fr);gap:22px;align-items:start}.fare-card{background:#fff;border:1px solid #d5e1d2;border-radius:16px;box-shadow:0 14px 38px rgba(11,39,20,.07);padding:26px}.fare-card h2{font-size:27px;color:#102318}.fare-card .intro{color:#5c6d62;margin:7px 0 23px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:15px}.field{display:grid;gap:7px}.field.full{grid-column:1/-1}.field label{font-weight:850;font-size:13px;color:#173422}.field input,.field select{width:100%;box-sizing:border-box;min-height:48px;padding:0 13px;border:1px solid #c6d5c2;border-radius:9px;background:#fff;color:#13251a;font:650 14px/1 var(--lh-font)}.field small{color:#64736a;line-height:1.4}.fare-action{width:100%;margin-top:20px;min-height:52px;border:0;border-radius:9px;background:#78be20;color:#08120c;font:900 15px/1 var(--lh-font);cursor:pointer}.fare-action:disabled{opacity:.55;cursor:wait}.fare-note{margin-top:14px;padding:13px 15px;border-left:4px solid #78be20;background:#eef6e9;color:#31523a;font-size:12.5px;line-height:1.55}.fare-note.warn{border-color:#d99b16;background:#fff4dd;color:#624506}.fare-result{position:sticky;top:94px}.empty{padding:34px 20px;text-align:center;color:#627168;border:1px dashed #bed0ba;border-radius:12px}.vehicle-result{padding:16px;border-radius:12px;background:#0b0f0d;color:#fff}.vehicle-result small{display:block;color:#9be33d;font-weight:850;text-transform:uppercase;letter-spacing:.08em}.vehicle-result strong{display:block;font-size:22px;margin-top:7px}.vehicle-result p{color:#d1d5db;margin-top:6px;font-size:13px}.breakdown{margin-top:18px;display:grid;gap:0}.line{display:flex;justify-content:space-between;gap:18px;padding:11px 0;border-bottom:1px solid #e2e9df;color:#425349;font-size:13px}.line b{color:#172a1e}.line.total{font-size:17px;border:0;padding-top:17px;color:#0c321c}.rate-meta{margin-top:15px;padding:12px;border-radius:9px;background:#edf4e9;color:#4a5f50;font-size:11.5px;line-height:1.55}.result-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.result-actions a{display:grid;place-items:center;min-height:46px;border-radius:8px;text-decoration:none;font-weight:900;font-size:12px}.result-actions .primary{background:#0b0f0d;color:#fff}.result-actions .secondary{border:1px solid #9cb797;color:#087830}.excluded{margin-top:18px}.excluded summary{cursor:pointer;font-weight:850;color:#31523a}.excluded ul{padding-left:18px;color:#68766d;font-size:12px;line-height:1.55}.privacy{margin-top:24px;color:#68766d;font-size:12px}.privacy a{color:#087830;font-weight:800}@media(max-width:880px){.fare-grid{grid-template-columns:1fr}.fare-result{position:static}}@media(max-width:580px){.fare-wrap{padding:0 16px}.fare-hero{padding:48px 0 42px}.fare-main{padding-top:22px}.fare-card{padding:19px}.fields{grid-template-columns:1fr}.field.full{grid-column:auto}.result-actions{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <nav data-lh-public-nav data-active="fare"></nav>
+  <header class="fare-hero"><div class="fare-wrap">
+    <div class="eyebrow">Transparent planning estimate</div>
+    <h1>Know the estimated cost before you book.</h1>
+    <p>Enter the cargo, route, and handling needs first. LiftHaul recommends an eligible vehicle and uses the same server-side pricing, tax, and 10% administration-fee rules used by the booking workflow.</p>
+  </div></header>
+  <main class="fare-main"><div class="fare-wrap fare-grid">
+    <form class="fare-card" id="fareForm">
+      <h2>Plan the delivery</h2><p class="intro">This estimate does not create a booking or collect payment.</p>
+      <div class="fields">
+        <div class="field"><label for="originIsland">Pickup island group</label><select id="originIsland" required><option value="">Select</option><option>Luzon</option><option>Visayas</option><option>Mindanao</option></select></div>
+        <div class="field"><label for="destinationIsland">Drop-off island group</label><select id="destinationIsland" required><option value="">Select</option><option>Luzon</option><option>Visayas</option><option>Mindanao</option></select></div>
+        <div class="field full"><label for="route">Pickup and destination</label><input id="route" required maxlength="300" placeholder="e.g. Makati City to Quezon City"><small>Full address and map pins are confirmed in booking.</small></div>
+        <div class="field"><label for="distance">Estimated distance (km)</label><input id="distance" required type="number" min="1" max="5000" step="0.1" placeholder="12.5"></div>
+        <div class="field"><label for="cargoCategory">Cargo type</label><select id="cargoCategory" required><option value="BOXES_GENERAL">Boxes / general cargo</option><option value="DOCUMENTS_PARCEL">Documents / parcels</option><option value="APPLIANCE_FURNITURE">Appliances / furniture</option><option value="CONSTRUCTION_MATERIALS">Construction materials</option><option value="REFRIGERATED_PERISHABLE">Refrigerated / perishable</option><option value="MACHINERY_EQUIPMENT">Machinery / equipment</option><option value="HAZARDOUS_REGULATED">Hazardous / regulated</option></select></div>
+        <div class="field"><label for="weight">Total cargo weight (kg)</label><input id="weight" required type="number" min="0.1" max="350000" step="0.1"></div>
+        <div class="field"><label for="length">Longest item (cm)</label><input id="length" required type="number" min="1" max="5000" step="1"></div>
+        <div class="field"><label for="width">Widest item (cm)</label><input id="width" required type="number" min="1" max="5000" step="1"></div>
+        <div class="field"><label for="height">Tallest item (cm)</label><input id="height" required type="number" min="1" max="5000" step="1"></div>
+        <div class="field"><label for="schedule">Service date and time</label><input id="schedule" type="datetime-local"></div>
+        <div class="field"><label for="stops">Additional stops</label><input id="stops" type="number" min="0" max="18" value="0"></div>
+        <div class="field"><label for="waiting">Chargeable waiting (minutes)</label><input id="waiting" type="number" min="0" max="1440" step="15" value="0"><small>Enter only time beyond the included allowance.</small></div>
+        <div class="field"><label for="helpers">Loading / unloading helpers</label><input id="helpers" type="number" min="0" max="8" value="0"></div>
+      </div>
+      <button class="fare-action" id="calculate" type="submit">Recommend Vehicle &amp; Calculate Fare</button>
+      <div class="fare-note">Final eligibility and load capacity are based on the registered vehicle’s verified specifications, documents, availability, and applicable legal limits.</div>
+      <div class="fare-note warn">Tolls, parking, ferry or RoRo, port fees, permits, and other verified third-party expenses are excluded until the actual route and service conditions are confirmed.</div>
+    </form>
+    <section class="fare-card fare-result" aria-live="polite" aria-labelledby="resultTitle">
+      <h2 id="resultTitle">Estimated fare</h2>
+      <div id="result" class="empty">Complete the form to receive a cargo-based vehicle recommendation and itemized estimate.</div>
+    </section>
+  </div></main>
+  <script>
+  (function(){
+    "use strict";
+    var $=function(id){return document.getElementById(id)}, form=$("fareForm"), result=$("result"), button=$("calculate");
+    function money(value){return new Intl.NumberFormat("en-PH",{style:"currency",currency:"PHP"}).format(Number(value||0))}
+    function esc(value){return String(value==null?"":value).replace(/[&<>\"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;","'":"&#39;"}[ch]})}
+    function api(path,body){var base=(window.RGO_CONFIG&&window.RGO_CONFIG.apiBase)||"";if(!base)return Promise.reject(new Error("The hosted LiftHaul service is not configured."));return fetch(base.replace(/\/+$/,"")+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(j){var d=j&&j.data!==undefined?j.data:j;if(!r.ok)throw new Error(d.error||("HTTP "+r.status));return d})})}
+    function payload(){
+      var parts=$("route").value.split(/\s+to\s+/i);
+      var special=$("cargoCategory").value==="REFRIGERATED_PERISHABLE"?["REFRIGERATED"]:[];
+      return {origin_island:$("originIsland").value,dest_island:$("destinationIsland").value,origin_city:parts[0]||$("route").value,dest_city:parts[1]||$("route").value,km:Number($("distance").value),cargo_category:$("cargoCategory").value,cargo:$("cargoCategory").options[$("cargoCategory").selectedIndex].text,package_count:1,weight_kg:Number($("weight").value),package_length_cm:Number($("length").value),package_width_cm:Number($("width").value),package_height_cm:Number($("height").value),additional_stops:Number($("stops").value||0),waiting_minutes:Number($("waiting").value||0),helper_count:Number($("helpers").value||0),special_handling:special,service_level:"STANDARD",schedule_type:$("schedule").value?"SCHEDULED":"NOW",scheduled_at:$("schedule").value?$("schedule").value.slice(0,10):null};
+    }
+    function render(d){
+      var q=d.quote_breakdown||{},v=d.selected_vehicle||(d.vehicle_recommendation&&d.vehicle_recommendation.options&&d.vehicle_recommendation.options[0]);
+      if(!d.estimate||!v){result.className="fare-note warn";result.innerHTML="<b>Manual assessment required.</b><br>"+esc((d.project_assessment&&d.project_assessment.message)||"A LiftHaul reviewer must confirm the equipment, route, and permits before pricing.");return}
+      var lines=(q.components||[]).map(function(x){return '<div class="line"><span>'+esc(x.label)+'</span><b>'+money(x.amount)+'</b></div>'}).join("");
+      lines+='<div class="line"><span>Transport subtotal</span><b>'+money(q.transport_subtotal)+'</b></div>'+
+        '<div class="line"><span>LiftHaul administration fee (10%)</span><b>'+money(q.administration_fee)+'</b></div>'+
+        '<div class="line"><span>Applicable tax</span><b>'+money(q.tax_amount)+'</b></div>'+
+        '<div class="line total"><span>Estimated total</span><b>'+money(q.amount)+'</b></div>';
+      result.className="";result.innerHTML='<div class="vehicle-result"><small>Recommended vehicle</small><strong>'+esc(v.name)+'</strong><p>'+esc(v.reason||"")+'</p></div><div class="breakdown">'+lines+'</div><div class="rate-meta">Rate version <b>'+esc(q.rate_version)+'</b> · effective '+esc(q.rate_effective_date)+' · estimate generated '+esc(d.estimate_generated_at||"")+'. Final price may change only when route, cargo, availability, or verified third-party expenses change.</div><details class="excluded"><summary>Excluded or separately verified charges</summary><ul>'+(q.excluded_charges||[]).map(function(x){return '<li>'+esc(x)+'</li>'}).join("")+'</ul></details><div class="result-actions"><a class="primary" href="book.html">Continue to Booking</a><a class="secondary" href="driver-register.html#vehicleCatalogue">Compare Vehicles</a></div>';
+      try{sessionStorage.setItem("lifthaul_fare_draft",JSON.stringify(payload()))}catch(e){}
+    }
+    form.addEventListener("submit",function(event){event.preventDefault();if(!form.reportValidity())return;button.disabled=true;button.textContent="Calculating…";result.className="empty";result.textContent="Validating cargo and vehicle capacity…";api("/public/bookings/estimate",payload()).then(render).catch(function(error){result.className="fare-note warn";result.innerHTML="<b>Estimate unavailable.</b><br>"+esc(error.message)}).finally(function(){button.disabled=false;button.textContent="Recommend Vehicle & Calculate Fare"})});
+  }());
+  </script>
+</body>
+</html>

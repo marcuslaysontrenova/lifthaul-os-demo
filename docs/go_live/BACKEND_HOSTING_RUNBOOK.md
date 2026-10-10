@@ -1,5 +1,10 @@
 # LiftHaul — Backend Hosting Runbook (PostgreSQL)
 
+> **2026-10-07 status:** Railway already serves the production API. This document
+> remains an infrastructure rebuild/fallback runbook. It is not evidence that the
+> current deployment, backups, rollback, monitoring, or payment activation passed
+> the release gates. See `PRODUCTION_RELEASE_AUDIT_2026-10-07.md`.
+
 **Goal:** turn the public GitHub Pages links from the *offline demo layer* into the
 *real LiftHaul application* by hosting the backend with PostgreSQL and pointing the
 frontend at it.
@@ -36,9 +41,10 @@ hosting account, attaching a payment method, and (optionally) changing DNS. Ever
    (creates the schema), then starts the API. Wait for **Health = live** (`/health`). *(automatic)*
 5. Copy the service URL, e.g. `https://lifthaul-api.onrender.com`.
 
-> Plans: `render.yaml` uses `free` to prove the links are real. Free web spins down when
-> idle (cold starts) and free Postgres is time-limited — bump both to paid (`starter` /
-> `basic-256mb`) for an actual client pilot. One line each in `render.yaml`.
+> Plans: `render.yaml` now declares paid, Singapore-region web and managed PostgreSQL
+> resources, private database access, connection pooling, storage autoscaling, and
+> disabled automatic deployment. Applying the Blueprint creates billable resources and
+> requires separate owner authorization.
 
 ## Option B — Railway (you already use it for TrenovaTech)
 
@@ -83,7 +89,7 @@ posture never returns the code in the API response) → verify → sign in → y
 workspace shows **server-persisted** data. If registration says *"honest offline demo —
 no backend configured,"* then `config.js` `apiBase` is still empty.
 
-## Owner-only checklist (the ONLY things blocking full go-live)
+## Owner-controlled infrastructure checklist
 
 - [ ] Create the hosting account (Render or Railway) — *credential creation, yours*
 - [ ] Attach a payment method IF you choose paid plans — *payment, yours*
@@ -93,5 +99,5 @@ no backend configured,"* then `config.js` `apiBase` is still empty.
 - [ ] Set `config.js` `apiBase` to the hosted origin, push — *config, 30 sec*
 - [ ] (Optional) custom API domain + DNS record at Cloudflare/NameCheap — *DNS, yours*
 
-Everything else — image, schema/migrations, health checks, acceptance proof, frontend
-switch — is already built and verified.
+This checklist is not a production certification. Security review, exact-commit deployment,
+hosted backup/restore, monitoring, UAT, and any payment/legal gates are tracked separately.

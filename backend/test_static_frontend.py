@@ -15,6 +15,11 @@ class StaticFrontendRoutingTests(unittest.TestCase):
         (self.frontend / "secret.txt").write_text("no", encoding="utf-8")
         (self.frontend / "assets").mkdir()
         (self.frontend / "assets" / "fleet.webp").write_bytes(b"fleet")
+        (self.frontend / "data" / "psgc").mkdir(parents=True)
+        (self.frontend / "data" / "psgc" / "manifest.json").write_text(
+            '{"island_groups": []}', encoding="utf-8"
+        )
+        (self.frontend / "data" / "private.json").write_text("{}", encoding="utf-8")
         self.handler = object.__new__(server.Handler)
 
     def tearDown(self):
@@ -35,11 +40,19 @@ class StaticFrontendRoutingTests(unittest.TestCase):
                 self.frontend / "assets" / "fleet.webp",
             )
 
+    def test_packaged_psgc_json_is_served(self):
+        with mock.patch.object(server, "PUBLIC_ROOT", self.frontend):
+            self.assertEqual(
+                self.handler._static_file("/data/psgc/manifest.json"),
+                self.frontend / "data" / "psgc" / "manifest.json",
+            )
+
     def test_nested_and_unapproved_files_are_rejected(self):
         with mock.patch.object(server, "PUBLIC_ROOT", self.frontend):
             self.assertIsNone(self.handler._static_file("/../index.html"))
             self.assertIsNone(self.handler._static_file("/%2e%2e/index.html"))
             self.assertIsNone(self.handler._static_file("/secret.txt"))
+            self.assertIsNone(self.handler._static_file("/data/private.json"))
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ body,body h1,body h2,body h3,body h4,body p,body a,body button,body input,body s
 .selected-track a{color:#087830;font-weight:900}
 .catalog-actions{flex-wrap:wrap}.catalog-actions .owner-route{flex-basis:100%;font-weight:750;color:#506157}
 .catalog-controls>*{min-width:0}.catalog-controls input,.catalog-controls select{box-sizing:border-box;width:100%;min-width:0;max-width:100%}
+.field input,.field select,.field textarea{box-sizing:border-box;max-width:100%}.field input,.field select{height:47px}.field select[multiple]{height:auto;min-height:168px}.field textarea{height:auto}
 .partner-card .secondary-route{margin-top:10px;font-size:12px;color:#506157}
 </style>
 </head>
@@ -79,7 +80,7 @@ body,body h1,body h2,body h3,body h4,body p,body a,body button,body input,body s
     <label class="field"><span>Base city or province *</span><input id="baseLocation" autocomplete="address-level2" required></label>
     <label class="field"><span>Email address *</span><input id="email" type="email" autocomplete="email" required></label>
     <label class="field"><span>Mobile number *</span><input id="mobile" autocomplete="tel" inputmode="tel" required></label>
-    <label class="field full"><span>Create password <small>At least 8 characters; access activates only after sponsorship</small></span><input id="password" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label class="field full"><span>Create password <small>At least 8 characters. Account access and marketplace eligibility are reviewed separately.</small></span><input id="password" type="password" autocomplete="new-password" minlength="8" required></label>
   </div>
   <h3 class="section-title">Professional licence</h3><div class="grid2">
     <label class="field"><span>Licence number *</span><input id="licenceNumber" autocomplete="off" required></label>

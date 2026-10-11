@@ -3109,7 +3109,15 @@ class Handler(BaseHTTPRequestHandler):
                 p.name == "vehicle-catalogue.json"
             )
         }
-        if not (requested in allowed_root_files or requested.startswith("assets/")):
+        is_psgc_release_data = (
+            requested.startswith("data/psgc/") and
+            requested.endswith(".json")
+        )
+        if not (
+            requested in allowed_root_files or
+            requested.startswith("assets/") or
+            is_psgc_release_data
+        ):
             return None
         target = (root / requested).resolve()
         try:

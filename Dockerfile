@@ -16,6 +16,10 @@ COPY vehicle-catalogue.json ./vehicle-catalogue.json
 # the API. This prevents Railway/custom domains from serving an unrelated stale UI.
 COPY *.html *.css *.js vehicle-catalogue.json ./public/
 COPY assets/ ./public/assets/
+# Booking location selectors load the governed PSGC hierarchy at runtime. Keep it
+# in the same immutable image as the booking UI so production cannot publish a
+# form whose region/province/city/barangay controls fail after page load.
+COPY data/psgc/ ./public/data/psgc/
 
 ENV APP_ENV=production \
     PORT=8787 \

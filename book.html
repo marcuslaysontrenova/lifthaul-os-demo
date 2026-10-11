@@ -193,7 +193,6 @@ footer{background:var(--ink);color:#c9d8bd;padding:40px 0 24px}
 footer .in{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
 footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 .fnote{margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#93a684}
-.demoflag{display:inline-flex;align-items:center;gap:7px;background:var(--warn-bg);color:#7a4a04;border:1px solid #e9c98a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
 </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="booking-experience.css">
@@ -515,7 +514,6 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
 
 <footer><div class="wrap"><div class="in">
   <a class="mark" href="index.html"><svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="35" height="35" rx="10" fill="#0b0f06" stroke="#5FB92A" stroke-width="2"/><path d="M20 8.5 L28.8 19.5 H23 V25.6 H17 V19.5 H11.2 Z" fill="#F2611A"/><rect x="11.5" y="28.6" width="17" height="3.3" rx="1.65" fill="#5FB92A"/></svg><span class="wordmark footwm" style="color:#fff"><b>Lift</b><b>Haul</b></span></a>
-  <span class="demoflag">● Demo prototype — pre-launch</span>
 </div>
   <div class="fnote">© <span id="yr"></span> LiftHaul Enterprise · Nationwide PH heavy-haul &amp; delivery marketplace · Powered by LiftHaul · Developed by TrenovaTech.ai · payment activation is environment-gated · verification never fabricated</div>
 </div></footer>
@@ -665,7 +663,7 @@ footer .wordmark{color:#fff}.footwm b:last-child{color:var(--accent)}
           renderTrack(d.ref,"Request received · "+v.name,sub,(d.inter_island?II_STAGES:STD_STAGES),0);
           if(d.tracking_token){var ex=document.getElementById("bkTrack");if(ex)ex.remove();$("#ref").insertAdjacentHTML("afterend",'<a id="bkTrack" class="btn accent block" style="margin-top:12px" href="track.html?t='+encodeURIComponent(d.tracking_token)+'">Track this booking →</a>');}
         }).catch(function(error){bookingFailure(error&&error.message?error.message:"The booking service is unavailable. No booking was created.");});
-    } else { bookingFailure("Connect the hosted LiftHaul API before submitting. This production-safe demo does not create local or fake bookings."); }
+    } else { bookingFailure("The booking service is temporarily unavailable. Please retry later; no booking, payment or dispatch was created."); }
   });
 
   $("#yr").textContent=new Date().getFullYear();

@@ -146,7 +146,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
 
 <footer><div class="in">
   <span>© <span id="yr"></span> LiftHaul Enterprise · Powered by LiftHaul · Developed by TrenovaTech.ai</span>
-  <span>Demo prototype · verified payment activation is environment-gated</span>
+  <span>Protected Payment channels appear only after provider certification and activation</span>
 </div></footer>
 
 <script src="payment-checkout.js?v=1"></script>
@@ -178,7 +178,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
     var pp=d.protected_payment||{};
     var stages=(d.stages||[]).map(function(s){var i=s.state==="done"?"✓":s.state==="current"?"●":"○";return '<div class="tstep '+s.state+'"><div class="ic">'+i+'</div><div class="nm">'+esc(s.name)+'</div></div>';}).join("");
     var acts=(d.actions||[]).map(function(a){
-      if(a==="CONTACT_SUPPORT")return '<a class="chip" href="mailto:support@lifthaul.demo">'+ACT_LABEL[a]+'</a>';
+      if(a==="CONTACT_SUPPORT")return '<a class="chip" href="support.html">'+ACT_LABEL[a]+'</a>';
       return '<span class="chip">'+(ACT_LABEL[a]||a)+'</span>';
     }).join("");
     $("#result").innerHTML=
@@ -215,7 +215,7 @@ footer .in{max-width:1140px;margin:0 auto;padding:0 22px;display:flex;justify-co
     activeToken=token;
     var base=paymentBase();
     if(!base){
-      showErr("Live tracking connects to the LiftHaul backend, which isn't configured in this demo. Once the API is hosted (localStorage.lifthaul_api_base), this page shows the real, persisted status of booking "+token+".");
+      showErr("Tracking is temporarily unavailable. Please retry later or open Support and provide your booking reference. No booking status was changed.");
       return;
     }
     fetch(base.replace(/\/+$/,"")+"/public/bookings/track/"+encodeURIComponent(token))

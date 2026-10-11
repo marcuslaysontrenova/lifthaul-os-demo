@@ -176,7 +176,6 @@ footer h4{color:#fff;font-size:12px;letter-spacing:.14em;text-transform:uppercas
 footer a{display:block;color:#c9d8bd;font-size:14px;padding:4px 0}
 footer a:hover{color:#fff}
 .fnote{margin-top:30px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:#93a684;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
-.demoflag{display:inline-flex;align-items:center;gap:7px;background:var(--warn-bg);color:#7a4a04;border:1px solid #e9c98a;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
 .payflow{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.paynode{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;position:relative}.paynode .n{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:var(--primary);color:#fff;font-size:12px;font-weight:800}.paynode h3{font-size:15px;margin-top:12px}.paynode p{font-size:13px;color:var(--ink-2);margin-top:6px}.faq{display:grid;grid-template-columns:1fr 1fr;gap:12px}.faq details{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px}.faq summary{font-weight:750;cursor:pointer}.faq p{font-size:14px;color:var(--ink-2);margin-top:9px}.compliance-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.factlist{display:grid;gap:10px}.fact{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:13px 15px}.fact b{display:block}.fact span{color:var(--ink-2);font-size:13px}.legal-note{background:var(--warn-bg);border:1px solid #e8cd96;border-left:4px solid var(--warn);border-radius:var(--radius-sm);padding:14px 16px;color:#684306;font-size:13.5px}
 @media(max-width:980px){.payflow{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.compliance-grid,.faq{grid-template-columns:1fr}}@media(max-width:560px){.payflow{grid-template-columns:1fr}}
 </style>
@@ -203,9 +202,9 @@ footer a:hover{color:#fff}
         <a class="btn line lg" href="provider.html">Join the provider network ↗</a>
       </div>
       <div class="pillrow">
-        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>Provider eligibility gates</span>
-        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/></svg>Evidence-based verification</span>
-        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Payment status verified by provider</span>
+        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>Requirements shown before registration</span>
+        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z"/></svg>Documents reviewed before activation</span>
+        <span class="pill"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Provider evidence required for payment status</span>
       </div>
     </div>
     <aside class="herocard" aria-label="What you get" hidden aria-hidden="true">
@@ -504,7 +503,7 @@ footer a:hover{color:#fff}
         <div class="fact"><b>Client and provider separation</b><span>A provider cannot self-verify; a dispute opener cannot decide their own case; payout changes require independent review.</span></div>
         <div class="fact"><b>Privacy and audit</b><span>Workspaces are organization-scoped, sensitive credentials are not stored in business records, and governed actions retain an audit trail.</span></div>
       </div>
-      <div class="legal-note"><b>Pre-launch regulatory status</b><br>Payment role, merchant-acquisition structure, safeguarded funds, marketplace transport authority, privacy notices and final contracts require partner/counsel approval before the related production capability or public claim is activated.</div>
+      <div class="legal-note"><b>Service activation status</b><br>Payment role, merchant-acquisition structure, safeguarded funds, marketplace transport authority, privacy notices and final contracts require partner or counsel approval before the related capability or public claim is activated.</div>
     </div>
   </div>
 </section>
@@ -552,7 +551,6 @@ footer a:hover{color:#fff}
           <span class="wordmark" style="color:#fff;font-size:22px"><b>Lift</b><b style="color:var(--accent)">Haul</b></span>
         </a>
         <p style="max-width:26em;font-size:14px">The Philippine network for drivers, owner-operators, truckers and heavy-equipment operators — verified onboarding, LTFRB-aware compliance, protected payments.</p>
-        <div class="demoflag" style="margin-top:16px">● Demo prototype — pre-launch</div>
       </div>
       <div><h4>Join as</h4>
         <a href="driver-register.html">Driver</a>
@@ -574,8 +572,8 @@ footer a:hover{color:#fff}
         <a href="policies.html#protected-payment">Protected-Payment Terms</a></div>
     </div>
     <div class="fnote">
-      <span>© <span id="yr"></span> LiftHaul (demo) · Powered by LiftHaul OS · Developed by TrenovaTech.ai</span>
-      <span>Prototype · in-browser only · no live funds · verification never fabricated</span>
+      <span>© <span id="yr"></span> LiftHaul · Powered by LiftHaul OS · Developed by TrenovaTech.ai</span>
+      <span>Protected Payment availability depends on approved provider activation · Terms apply</span>
     </div>
   </div>
 </footer>

@@ -96,7 +96,7 @@ class BookingMarkup(unittest.TestCase):
         self.assertIn('src="booking-experience.js"', html)
         self.assertIn('src="cargo-booking.js"', html)
         self.assertNotIn("lifthaul_bookings", html)
-        self.assertIn("does not create local or fake bookings", html)
+        self.assertIn("no booking, payment or dispatch was created", html)
         experience = (ROOT / "booking-experience.js").read_text(encoding="utf-8")
         self.assertIn("lifthaul:distancechange", experience)
         self.assertIn("getDistance", experience)

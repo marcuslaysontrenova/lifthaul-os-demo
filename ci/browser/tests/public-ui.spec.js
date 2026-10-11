@@ -93,6 +93,43 @@ test('public journey uses one complete top navigation with a visible fare calcul
   }
 });
 
+test('booking geography loads from the packaged PSGC manifest without console errors', async ({ page }) => {
+  const errors = [];
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  await page.goto(APP + '/book.html?review=psgc-release-gate');
+  await expect(page.locator('#geoStatus')).toContainText('barangays ready');
+  await expect(page.locator('#oIsland option')).toHaveCount(4);
+  expect(errors.filter(message => /geographic manifest/i.test(message))).toEqual([]);
+});
+
+for (const layout of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'tablet', width: 768, height: 1024 },
+  { name: 'mobile', width: 390, height: 844 },
+]) {
+  test(`driver registration fields remain compact and inside the ${layout.name} viewport`, async ({ page }) => {
+    await page.setViewportSize({ width: layout.width, height: layout.height });
+    await page.goto(APP + '/driver-register.html?track=LIGHT_VEHICLE_DRIVER&review=form-controls');
+    const measurements = await page.locator('#fullName').evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return {
+        height: Math.round(rect.height),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        viewport: window.innerWidth,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    expect(measurements.height).toBe(47);
+    expect(measurements.left).toBeGreaterThanOrEqual(0);
+    expect(measurements.right).toBeLessThanOrEqual(measurements.viewport);
+    expect(measurements.overflow).toBeLessThanOrEqual(0);
+    await expect(page.getByText(/Account access and marketplace eligibility are reviewed separately/)).toBeVisible();
+  });
+}
+
 test('public navigation changes once at the governed breakpoint without an intermediate overlay', async ({ page }) => {
   for (const state of [
     { width: 1300, menu: 'flex', toggle: 'none', position: 'static' },

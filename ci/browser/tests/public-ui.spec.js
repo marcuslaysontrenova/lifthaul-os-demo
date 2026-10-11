@@ -184,3 +184,65 @@ test('fare calculator shows recommendation, versioned breakdown and no payment a
   await expect(page.getByRole('link', { name: 'Continue to Booking' })).toHaveAttribute('href', 'book.html');
   await expect(page.getByRole('button', { name: /Pay|Checkout|Confirm payment/i })).toHaveCount(0);
 });
+
+test('assistant prepares a shipment and hands the reviewed draft to booking', async ({ page }) => {
+  const shipment = {
+    cargo: 'Investor presentation equipment', weight_kg: 80, package_count: 2,
+    package_length_cm: 70, package_width_cm: 50, package_height_cm: 45,
+    origin_island: 'Luzon', dest_island: 'Luzon',
+    origin_city: 'Makati City', dest_city: 'Quezon City', km: 18,
+  };
+  await page.route('**/public/assistant/message', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: {
+        mode: 'guided', intent: 'booking', shipment,
+        reply: 'Shipment details are ready for your review.',
+        actions: [{ label: 'Review booking details', href: 'book.html' }],
+        sources: ['LiftHaul vehicle matching service'], booking_created: false,
+      } }),
+    });
+  });
+
+  await page.goto(APP + '/index.html?review=assistant-release-gate');
+  const launcher = page.getByRole('button', { name: 'Ask LiftHaul' });
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+  await expect(page.getByRole('dialog', { name: 'LiftHaul Assistant' })).toBeVisible();
+  await page.getByRole('button', { name: 'Prepare shipment' }).click();
+  await page.getByRole('link', { name: 'Review booking details' }).click();
+
+  await expect(page).toHaveURL(/book\.html/);
+  await expect(page.getByText(/Assistant draft loaded/)).toBeVisible();
+  await expect(page.getByLabel(/Package description/)).toHaveValue(shipment.cargo);
+  await expect(page.getByRole('spinbutton', { name: 'Total weight *', exact: true })).toHaveValue(String(shipment.weight_kg));
+  await expect(page.getByText(/Nothing has been submitted/)).toBeVisible();
+});
+
+for (const layout of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+]) {
+  test(`assistant is keyboard-operable without ${layout.name} viewport overflow`, async ({ page }) => {
+    await page.setViewportSize({ width: layout.width, height: layout.height });
+    await page.goto(APP + '/index.html?review=assistant-responsive');
+    const launcher = page.getByRole('button', { name: 'Ask LiftHaul' });
+    await launcher.focus();
+    await page.keyboard.press('Enter');
+    const panel = page.getByRole('dialog', { name: 'LiftHaul Assistant' });
+    await expect(panel).toBeVisible();
+    const bounds = await panel.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+               width: innerWidth, height: innerHeight };
+    });
+    expect(bounds.left).toBeGreaterThanOrEqual(0);
+    expect(bounds.right).toBeLessThanOrEqual(bounds.width);
+    expect(bounds.top).toBeGreaterThanOrEqual(0);
+    expect(bounds.bottom).toBeLessThanOrEqual(bounds.height);
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(launcher).toBeFocused();
+  });
+}

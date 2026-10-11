@@ -10,6 +10,7 @@ Run:  python server.py           # serves on http://127.0.0.1:8787 with a seeded
 from __future__ import annotations
 
 import json
+import ipaddress
 import logging
 import mimetypes
 import os
@@ -2116,6 +2117,10 @@ ROUTES.update(_ltfrb_routes())
 def _public_booking_routes():
     import public_booking as pb
     import industrial_projects as industrial
+    import public_assistant as assistant
+
+    def assistant_message(a, b, p):
+        return assistant.respond(_conn, b)
 
     def pb_submit(a, b, p):
         body = dict(b or {})
@@ -2171,6 +2176,7 @@ def _public_booking_routes():
     def driver_sponsor(a, b, p): return pd.sponsor(_conn, a, int(p["id"]), int(b["carrier_id"]))
 
     return {
+        ("POST", "/public/assistant/message"): assistant_message,
         ("POST", "/public/bookings"): pb_submit,
         ("POST", "/public/bookings/vehicle-recommendations"): pb_recommend,
         ("POST", "/public/bookings/estimate"): pb_estimate,
@@ -2260,29 +2266,64 @@ def _payment_gateway_routes():
 
 ROUTES.update(_payment_gateway_routes())
 
-# Basic per-IP rate limiter for public (unauthenticated) endpoints.
+# Basic per-IP rate limiters for public (unauthenticated) endpoints.  Assistant
+# traffic has its own bucket so exploratory chat cannot consume the booking or
+# registration submission allowance.
 _PUBLIC_HITS = {}
-_PUBLIC_RATE_MAX = int(os.environ.get("LIFTHAUL_PUBLIC_RATE_MAX", "20") or "20")      # requests per window per IP
-_PUBLIC_RATE_WINDOW = int(os.environ.get("LIFTHAUL_PUBLIC_RATE_WINDOW", "60") or "60")  # seconds
+_ASSISTANT_HITS = {}
+_PUBLIC_RATE_MAX = int(os.environ.get("LIFTHAUL_PUBLIC_RATE_MAX", "20") or "20")
+_PUBLIC_RATE_WINDOW = int(os.environ.get("LIFTHAUL_PUBLIC_RATE_WINDOW", "60") or "60")
+_ASSISTANT_RATE_MAX = int(os.environ.get("LIFTHAUL_ASSISTANT_RATE_MAX", "12") or "12")
+_ASSISTANT_RATE_WINDOW = int(os.environ.get("LIFTHAUL_ASSISTANT_RATE_WINDOW", "60") or "60")
 _PUBLIC_RATE_LOCK = threading.Lock()
+_ASSISTANT_RATE_LOCK = threading.Lock()
 
 
-def _public_rate_ok(ip):
+def _rate_ok(hits, lock, ip, limit, window):
     now = time.time()
-    cutoff = now - _PUBLIC_RATE_WINDOW
-    with _PUBLIC_RATE_LOCK:
-        q = _PUBLIC_HITS.setdefault(ip, [])
+    cutoff = now - window
+    with lock:
+        q = hits.setdefault(ip, [])
         while q and q[0] < cutoff:
             q.pop(0)
-        if len(q) >= _PUBLIC_RATE_MAX:
+        if len(q) >= limit:
             return False
         q.append(now)
         # Bound memory when a public endpoint is scanned from many one-off IPs.
-        if len(_PUBLIC_HITS) > 10000:
-            stale = [addr for addr, hits in _PUBLIC_HITS.items() if not hits or hits[-1] < cutoff]
+        if len(hits) > 10000:
+            stale = [addr for addr, requests in hits.items()
+                     if not requests or requests[-1] < cutoff]
             for addr in stale:
-                _PUBLIC_HITS.pop(addr, None)
+                hits.pop(addr, None)
         return True
+
+
+def _public_rate_ok(ip):
+    return _rate_ok(_PUBLIC_HITS, _PUBLIC_RATE_LOCK, ip,
+                    _PUBLIC_RATE_MAX, _PUBLIC_RATE_WINDOW)
+
+
+def _assistant_rate_ok(ip):
+    return _rate_ok(_ASSISTANT_HITS, _ASSISTANT_RATE_LOCK, ip,
+                    _ASSISTANT_RATE_MAX, _ASSISTANT_RATE_WINDOW)
+
+
+def _client_ip(handler):
+    """Resolve the rate-limit identity without blindly trusting spoofable headers.
+
+    Production proxies may be trusted explicitly with LIFTHAUL_TRUST_PROXY=1.
+    Invalid forwarded values fail closed to the direct peer address.
+    """
+    peer = handler.client_address[0] if handler.client_address else "?"
+    if os.environ.get("LIFTHAUL_TRUST_PROXY") != "1":
+        return peer
+    forwarded = handler.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+    if not forwarded:
+        return peer
+    try:
+        return str(ipaddress.ip_address(forwarded))
+    except ValueError:
+        return peer
 
 
 # Platform Control -> Integrations: B2B Developer Portal (admin) + /api/v1 gateway (API-key auth).
@@ -3164,12 +3205,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(503, {"status": "not-ready"})
         if method == "GET" and self._send_static(path):
             return
-        # public (unauthenticated) marketplace intake: payload cap + basic per-IP rate limit
+        # Public marketplace intake: bound payloads and keep assistant exploration
+        # isolated from the booking/registration submission rate-limit bucket.
         if path.startswith("/public/"):
             if int(self.headers.get("Content-Length", 0) or 0) > 32768:
                 return self._send(413, {"error": "payload too large"})
-            if method == "POST" and not _public_rate_ok(self.client_address[0] if self.client_address else "?"):
-                return self._send(429, {"error": "rate limit exceeded, try again shortly"})
+            if method == "POST":
+                client_ip = _client_ip(self)
+                allowed = (_assistant_rate_ok(client_ip)
+                           if path == "/public/assistant/message"
+                           else _public_rate_ok(client_ip))
+                if not allowed:
+                    return self._send(429, {"error": "rate limit exceeded, try again shortly"})
         if path.startswith("/webhooks/") and int(self.headers.get("Content-Length", 0) or 0) > 131072:
             return self._send(413, {"error": "payload too large"})
         if path.startswith("/api/v1/") and int(self.headers.get("Content-Length", 0) or 0) > 262144:
@@ -3187,6 +3234,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/webhooks/xendit/payments":
             # Passed in-memory only to the gateway verifier; never persisted or logged.
             body["_xendit_callback_token"] = self.headers.get("X-Callback-Token", "")
+        # External interpretation never holds a DB lock or pooled connection.
+        if path == "/public/assistant/message" and method == "POST":
+            try:
+                import public_assistant
+                body = public_assistant.prepare(body)
+            except core.AppError as e:
+                return self._send(e.http, {"error": str(e)})
         def _do_request():
             core.set_correlation_id(self._rid)   # tag every audited write in this request
             if path.startswith("/api/v1/"):

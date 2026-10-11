@@ -1,0 +1,170 @@
+#lh-assistant {
+  --lha-primary: var(--lh-lasalle, #006b3c);
+  --lha-primary-strong: var(--lh-lasalle-strong, #004f2d);
+  --lha-accent: var(--lh-apple, #70c247);
+  --lha-accent-strong: var(--lh-apple-strong, #56a82e);
+  --lha-ink: var(--lh-ink, #14261b);
+  --lha-muted: var(--lh-muted, #66756c);
+  --lha-line: #c9ded1;
+  --lha-soft: #edf6f0;
+  color: var(--lha-ink);
+  font-family: var(--lh-font, var(--font, "Segoe UI", system-ui, -apple-system, sans-serif));
+  font-size: 14px;
+  line-height: 1.5;
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 2000;
+}
+
+#lh-assistant *,
+#lh-assistant *::before,
+#lh-assistant *::after { box-sizing: border-box; }
+#lh-assistant [hidden] { display: none !important; }
+#lh-assistant button,
+#lh-assistant input,
+#lh-assistant select { font: inherit; }
+#lh-assistant button {
+  cursor: pointer;
+  border: 1px solid var(--lha-line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  color: var(--lha-ink);
+  background: #fff;
+}
+#lh-assistant button:disabled { opacity: .55; cursor: wait; }
+#lh-assistant button:focus-visible,
+#lh-assistant a:focus-visible,
+#lh-assistant input:focus-visible,
+#lh-assistant select:focus-visible {
+  outline: 3px solid var(--lha-accent);
+  outline-offset: 2px;
+}
+#lh-assistant .lha-launch {
+  min-height: 48px;
+  border: 1px solid var(--lha-accent-strong);
+  padding: 13px 19px;
+  background: var(--lha-accent);
+  color: #102019;
+  box-shadow: 0 8px 28px rgba(20, 38, 27, .24);
+  font-weight: 800;
+}
+#lh-assistant .lha-launch:hover { background: var(--lha-accent-strong); }
+
+.lha-panel {
+  position: absolute;
+  right: 0;
+  bottom: 60px;
+  display: flex;
+  flex-direction: column;
+  width: 390px;
+  max-height: min(740px, calc(100dvh - 110px));
+  overflow: hidden;
+  border: 1px solid #d2e5d8;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 16px 70px rgba(11, 36, 26, .25);
+}
+.lha-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 17px 20px;
+  background: var(--lha-primary);
+  color: #fff;
+}
+.lha-panel header strong { font-size: 17px; }
+.lha-panel header small { display: block; color: #d1e8da; font-size: 11px; }
+.lha-panel header button {
+  border: 0 !important;
+  padding: 0 8px !important;
+  background: transparent !important;
+  color: #fff !important;
+  font-size: 23px !important;
+}
+.lha-scroll { overflow-y: auto; padding: 15px; overscroll-behavior: contain; }
+.lha-note,
+.lha-panel form p { margin: 0 0 13px; color: var(--lha-muted); font-size: 11px; }
+.lha-bubble {
+  margin: 10px 0;
+  padding: 12px;
+  overflow-wrap: anywhere;
+  border-radius: 13px;
+  background: var(--lha-soft);
+  color: var(--lha-ink);
+  white-space: pre-wrap;
+}
+.lha-bubble.user { margin-left: 35px; background: #e5edda; }
+.lha-bubble a {
+  display: block;
+  margin-top: 10px;
+  color: var(--lha-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.lha-bubble small { display: block; margin-top: 10px; color: var(--lha-muted); font-size: 10px; }
+.lha-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; }
+.lha-shortcuts button { font-size: 11px !important; }
+.lha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lha-grid label:first-child { grid-column: 1 / -1; }
+.lha-panel label { display: block; color: var(--lha-ink); font-size: 11px; font-weight: 700; }
+.lha-panel input,
+.lha-panel select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+  padding: 9px;
+  border: 1px solid var(--lha-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--lha-ink);
+}
+.lha-form-actions { display: flex; gap: 8px; margin-top: 12px; }
+.lha-panel h3 { margin: 17px 0 5px; color: var(--lha-ink); font-size: 15px; }
+#lha-tracking { margin-top: 15px; }
+#lha-tracking button { margin-top: 8px; }
+#lha-chat { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #d2e5d8; }
+#lha-chat input { margin: 0; font-size: 12px; }
+#lha-chat button,
+.lha-form-actions button:first-child { background: var(--lha-primary); color: #fff; }
+#lha-chat button:hover,
+.lha-form-actions button:first-child:hover { background: var(--lha-primary-strong); }
+.lha-panel footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 12px 12px;
+  color: var(--lha-muted);
+  font-size: 9px;
+}
+.lha-panel footer button {
+  padding: 3px !important;
+  border: 0 !important;
+  color: var(--lha-primary) !important;
+  font-size: 10px !important;
+  white-space: nowrap;
+}
+.lha-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  #lh-assistant { right: 12px; bottom: 12px; }
+  .lha-panel { bottom: 58px; width: calc(100vw - 24px); max-height: calc(100dvh - 90px); }
+  .lha-launch { padding: 11px 16px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #lh-assistant *, #lh-assistant *::before, #lh-assistant *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

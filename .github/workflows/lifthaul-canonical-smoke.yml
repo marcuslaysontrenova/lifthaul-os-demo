@@ -110,6 +110,7 @@ jobs:
   synthetic-booking-journey:
     needs: canonical-production-smoke
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4

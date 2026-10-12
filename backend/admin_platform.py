@@ -497,6 +497,8 @@ OPERATIONAL_ROLE_META = {
     "admin":              ("Administrator",       1),
     "owner":              ("Owner",               1),
     "operations_manager": ("Operations Manager",  4),
+    "public_intake_qa": ("Public Intake QA (Read Only)", 4),
+    "public_intake_operator": ("Public Intake Operator", 4),
     "estimator":          ("Estimator",           4),
     "approver":           ("Approver",            4),
     "finance":            ("Finance Clerk",       4),
@@ -685,6 +687,7 @@ USER_ADMIN_ASSIGNABLE_ROLE_CODES = {
     "booking_quotation_administrator", "approver", "finance_admin", "finance",
     "operations_manager", "estimator", "dispatcher", "fleet_manager", "safety_officer",
     "mechanic", "driver", "operator", "operational_user", "customer",
+    "public_intake_qa", "public_intake_operator",
 }
 
 

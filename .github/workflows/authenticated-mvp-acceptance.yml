@@ -65,7 +65,7 @@ jobs:
         working-directory: backend
         env:
           APP_ENV: test
-        run: python -m unittest -v test_public_booking test_protected_payment_e2e
+        run: python -m unittest -v test_public_booking test_public_intake_qa_lifecycle test_protected_payment_e2e
 
   acceptance-summary:
     if: always()

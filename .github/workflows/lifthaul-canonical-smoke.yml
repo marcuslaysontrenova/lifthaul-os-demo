@@ -1,0 +1,95 @@
+name: LiftHaul canonical production read-only smoke
+
+on:
+  push:
+    branches:
+      - codex/railway-mvp-smoke-20261013
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Verify exact live release, location manifest and public access controls
+        env:
+          EXPECTED_SHA: 029d8da065c2845a8fac975b95dedc35c1ca4aa7
+          CANONICAL_URL: https://www.lifthaul.com.ph
+        run: |
+          mkdir -p evidence
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ["CANONICAL_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"]
+          evidence = {"expected_sha": expected, "canonical_url": base, "checks": {}}
+          def fetch(path):
+              request = urllib.request.Request(
+                  base + path,
+                  headers={"User-Agent": "LiftHaul-Canonical-Release-Smoke/1.0"}
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=12) as response:
+                      return response.status, response.read(256 * 1024), response.headers.get("Content-Type", "")
+              except urllib.error.HTTPError as error:
+                  return error.code, error.read(2048), error.headers.get("Content-Type", "")
+
+          try:
+              ready = None
+              for attempt in range(18):
+                  try:
+                      code, raw, _ = fetch("/readyz")
+                      data = json.loads(raw) if code == 200 else {}
+                      observed = data.get("release_sha")
+                      if code == 200 and observed == expected and data.get("status") == "ready" and data.get("schema_version") is not None:
+                          ready = data
+                          break
+                      print(f"Readiness attempt {attempt + 1}/18: HTTP {code}; SHA {observed}")
+                  except Exception as exc:
+                      print(f"Readiness attempt {attempt + 1}/18: {type(exc).__name__}")
+                  time.sleep(15)
+              assert ready is not None, "Canonical backend did not report the approved release SHA as ready"
+              evidence["checks"]["readiness"] = {"status": "PASS", "release_sha": ready["release_sha"], "schema_version": ready["schema_version"]}
+
+              code, raw, _ = fetch("/healthz")
+              health = json.loads(raw) if code == 200 else {}
+              assert code == 200 and health.get("status") == "ok", f"Health endpoint HTTP {code}"
+              evidence["checks"]["health"] = {"status": "PASS", "http_code": code}
+
+              code, raw, mime = fetch("/data/psgc/manifest.json")
+              assert code == 200, f"PSGC manifest HTTP {code}"
+              manifest = json.loads(raw)
+              assert isinstance(manifest, (dict, list)) and bool(manifest), "PSGC manifest is empty or invalid"
+              evidence["checks"]["geography_manifest"] = {"status": "PASS", "http_code": code, "json_type": type(manifest).__name__}
+
+              for path in ("/", "/book.html", "/client.html", "/driver-register.html", "/founder.html"):
+                  code, raw, mime = fetch(path)
+                  assert code == 200, f"{path} HTTP {code}"
+                  assert b"<html" in raw.lower() or b"<!doctype" in raw.lower(), f"{path} did not return HTML"
+                  evidence["checks"][path] = {"status": "PASS", "http_code": code}
+
+              code, raw, _ = fetch("/admin/marketplace/public-booking-queue")
+              assert code in (401, 403), f"Unauthenticated admin endpoint returned HTTP {code} (expected 401/403)"
+              evidence["checks"]["admin_access_denial"] = {"status": "PASS", "http_code": code}
+
+              code, raw, _ = fetch("/public/payments/channels")
+              assert code == 200, f"Payment-channel information returned HTTP {code}"
+              evidence["checks"]["payment_catalogue_read_only"] = {"status": "PASS", "http_code": code}
+              print("ALL READ-ONLY PRODUCTION SMOKE GATES PASSED")
+          finally:
+              with open("evidence/canonical-smoke.json", "w", encoding="utf-8") as file:
+                  json.dump(evidence, file, indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lifthaul-canonical-smoke
+          path: evidence/canonical-smoke.json
+          retention-days: 30

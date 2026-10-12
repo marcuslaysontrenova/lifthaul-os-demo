@@ -321,6 +321,9 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.dispute.manage", "marketplace.claim.manage", "marketplace.claim.view",
     # Increment 3: booking / pricing / matching / broadcast / offers / bidding / assignment
     "marketplace.booking.view", "marketplace.booking.create", "marketplace.booking.manage",
+    # Platform-owned guest intake is never inherited through home-tenant permissions.
+    # Grant these separately to authorized intake readers/reviewers only.
+    "marketplace.public_intake.view", "marketplace.public_intake.manage",
     "marketplace.booking.validate", "marketplace.booking.cancel",
     "marketplace.pricing.view", "marketplace.pricing.manage", "marketplace.pricing.simulate",
     "marketplace.pricing.override", "marketplace.pricing.approve",

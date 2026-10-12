@@ -1,0 +1,11 @@
+Defect ID,Severity,Area,Description,Status,Owner,Closure Evidence
+MVP-001,P1,Deployment,"Canonical Railway service fails /readyz for approved PR #18; live domain stays on 3919680",OPEN,Engineering/DevOps,"Successful canonical readyz with approved merged SHA and Railway deployment ID"
+MVP-002,P1,Booking,"Production PSGC manifest returns 404, so booking geography cannot be accepted as working",OPEN,Engineering/QA,"200 manifest plus synthetic booking at www.lifthaul.com.ph"
+MVP-003,P1,Founder Finance,"Dedicated Founder-only reconciled P&L/GBV/revenue/liability dashboard is absent",OPEN,Product/Finance/Engineering,"Founder authorization tests, reconciled fixtures, UI and export evidence"
+MVP-004,P1,UAT,"Twelve required personas lack accountable end-to-end sign-off",OPEN,QA/UAT/Founder,"Signed UAT pack with evidence and zero open P0/P1"
+MVP-005,P1,Recovery,"No current production-like PostgreSQL restore/restart/rollback evidence for the release",OPEN,DevOps/DB,"Timestamped restore artifact with measured RPO/RTO and rollback result"
+MVP-006,P1,Commercial,"Fare, tax, membership, cancellation, provider share and 10% administration fee lack approval",BLOCKED,Founder/Finance/Legal,"Versioned signed commercial policy with effective date"
+MVP-007,P1,Payments,"Live collection/payout lacks PSP contract, credentials, legal model, callback, reconciliation and DR certification",BLOCKED,Founder/Legal/Finance/PSP/Security,"Completed payment certification register and approved capped live pilot"
+MVP-008,P2,Authenticated UX,"Authenticated workspaces lack complete responsive/navigation/synthetic-data visual audit",OPEN,UX/QA,"Desktop/tablet/mobile screenshots and retest record for every role/state"
+MVP-009,P2,Operations,"Exception owner/SLA/communication matrix and UAT are incomplete",OPEN,Operations/Product/QA,"Approved matrix plus failure-path UAT evidence"
+MVP-010,P2,Performance,"Hosted concurrency, slow-network, geographic search and pool saturation evidence is incomplete",OPEN,Performance/Engineering,"Production-like synthetic report meeting approved SLOs"

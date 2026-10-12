@@ -91,7 +91,7 @@ jobs:
         run: python scripts/go_live/railway_deploy_exact.py
       - name: Wait for healthy deployment identity
         env:
-          API_URL: https://lifthaul-api-production.up.railway.app
+          API_URL: https://www.lifthaul.com.ph
           RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
         run: |
           set -euo pipefail
@@ -104,13 +104,13 @@ jobs:
           exit 1
       - name: Read-only production preflight
         env:
-          BASE_URL: https://lifthaul-api-production.up.railway.app
+          BASE_URL: https://www.lifthaul.com.ph
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
         run: python scripts/go_live/preflight.py
       - name: Synthetic production journey (no funds)
         env:
-          BASE_URL: https://lifthaul-api-production.up.railway.app
+          BASE_URL: https://www.lifthaul.com.ph
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
         run: python scripts/go_live/prod_e2e.py

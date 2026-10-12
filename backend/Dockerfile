@@ -7,4 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 EXPOSE 8787
 # migrate then start; PORT/DATABASE_URL/APP_SECRET/CORS_ORIGINS supplied at runtime
-CMD ["sh", "-c", "python migrate.py && python server.py"]
+# db.connect() in server.py applies the same idempotent schema before the listener
+# is created; do not execute the complete bootstrap twice on every container start.
+CMD ["python", "server.py"]

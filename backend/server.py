@@ -159,7 +159,10 @@ validate_config()
 import threading
 import db_pool
 _DATABASE_URL = os.environ.get("DATABASE_URL")
+log.info("database bootstrap starting driver=%s",
+         "postgres" if _DATABASE_URL and _DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite")
 _conn_single = db.connect(_DATABASE_URL)             # sqlite (dev) or postgres (prod)
+log.info("database bootstrap complete schema_version=%s", db.current_version(_conn_single))
 _DB_LOCK = threading.Lock()                          # serialize DB access (single-conn mode)
 # Concurrency mode: when pooling is enabled (auto for Postgres, or LIFTHAUL_DB_POOL=1)
 # each request checks out its own connection and runs WITHOUT the global lock, so

@@ -13,25 +13,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Frontend, API, readiness, and release identity
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Canonical production surface, readiness, and release identity
+        env:
+          PRODUCTION_URL: https://www.lifthaul.com.ph
         run: |
           set -euo pipefail
           mkdir -p evidence
           curl --fail --silent --show-error --max-time 20 \
-            https://marcuslaysontrenova.github.io/lifthaul-os-demo/ -o evidence/frontend.html
+            "$PRODUCTION_URL/" -o evidence/frontend.html
           curl --fail --silent --show-error --max-time 20 \
-            https://lifthaul-api-production.up.railway.app/healthz -o evidence/health.json
+            "$PRODUCTION_URL/healthz" -o evidence/health.json
           curl --fail --silent --show-error --max-time 20 \
-            https://lifthaul-api-production.up.railway.app/readyz -o evidence/ready.json
+            "$PRODUCTION_URL/readyz" -o evidence/ready.json
+          curl --fail --silent --show-error --max-time 20 \
+            "$PRODUCTION_URL/data/psgc/manifest.json" -o evidence/psgc-manifest.json
           python - <<'PY'
           import json
           health=json.load(open('evidence/health.json', encoding='utf-8'))
           ready=json.load(open('evidence/ready.json', encoding='utf-8'))
+          psgc=json.load(open('evidence/psgc-manifest.json', encoding='utf-8'))
+          frontend=open('evidence/frontend.html', encoding='utf-8').read().lower()
           assert health.get('status') == 'ok', health
           assert ready.get('status') == 'ready', ready
           assert ready.get('schema_version') is not None, ready
           assert ready.get('release_sha') not in (None, '', 'unknown'), ready
+          assert psgc, 'PSGC manifest is empty'
+          for prohibited in ('demo prototype', 'lifthaul (demo)', 'prototype · in-browser'):
+              assert prohibited not in frontend, prohibited
           PY
+          deployed_sha=$(python -c "import json; print(json.load(open('evidence/ready.json'))['release_sha'])")
+          git merge-base --is-ancestor "$deployed_sha" origin/main
       - uses: actions/upload-artifact@v4
         if: always()
         with:

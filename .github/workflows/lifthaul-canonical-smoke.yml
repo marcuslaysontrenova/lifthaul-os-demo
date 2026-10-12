@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Verify exact live release, location manifest and public access controls
         env:
-          EXPECTED_SHA: 41565f0be486d6be666214df99a47ae7dec207a5
+          EXPECTED_SHA: 301d002a7482cb51ebffa59b8733ad31fde7b3bc
           CANONICAL_URL: https://www.lifthaul.com.ph
         run: |
           mkdir -p evidence
@@ -126,7 +126,7 @@ jobs:
       - name: Read-only authenticated QA acceptance of existing synthetic booking
         env:
           BASE_URL: https://www.lifthaul.com.ph
-          EXPECTED_SHA: 41565f0be486d6be666214df99a47ae7dec207a5
+          EXPECTED_SHA: 301d002a7482cb51ebffa59b8733ad31fde7b3bc
           LH_TEST_BOOKING_REF: LH-XDMVQO
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}

@@ -11,6 +11,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 class TestProductionImageContract(unittest.TestCase):
+    def test_release_workflows_probe_the_canonical_public_domain(self):
+        release = (REPO_ROOT / ".github" / "workflows" / "production-release.yml").read_text(
+            encoding="utf-8"
+        )
+        monitor = (REPO_ROOT / ".github" / "workflows" / "production-health-monitor.yml").read_text(
+            encoding="utf-8"
+        )
+        canonical = "https://www.lifthaul.com.ph"
+        self.assertGreaterEqual(release.count(canonical), 3)
+        self.assertIn("PRODUCTION_URL: " + canonical, monitor)
+        self.assertIn('git merge-base --is-ancestor "$deployed_sha" origin/main', monitor)
+        self.assertIn("$PRODUCTION_URL/data/psgc/manifest.json", monitor)
+        self.assertNotIn("lifthaul-api-production.up.railway.app", release)
+        self.assertNotIn("marcuslaysontrenova.github.io/lifthaul-os-demo", monitor)
+
     def test_docker_image_includes_canonical_vehicle_catalogue(self):
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn(
@@ -19,6 +34,16 @@ class TestProductionImageContract(unittest.TestCase):
             "Production image must include the canonical catalogue loaded at API startup",
         )
         self.assertTrue((REPO_ROOT / "vehicle-catalogue.json").is_file())
+
+    def test_container_does_not_apply_the_complete_schema_twice_before_listening(self):
+        for dockerfile_path in (REPO_ROOT / "Dockerfile", REPO_ROOT / "backend" / "Dockerfile"):
+            dockerfile = dockerfile_path.read_text(encoding="utf-8")
+            self.assertIn('CMD ["python", "server.py"]', dockerfile)
+            self.assertNotIn("python migrate.py && python server.py", dockerfile)
+
+        server = (REPO_ROOT / "backend" / "server.py").read_text(encoding="utf-8")
+        self.assertIn('log.info("database bootstrap starting', server)
+        self.assertIn('log.info("database bootstrap complete schema_version=%s"', server)
 
     def test_production_image_packages_only_the_governed_public_surface(self):
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")

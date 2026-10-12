@@ -28,9 +28,11 @@ ENV APP_ENV=production \
 WORKDIR /app/backend
 
 EXPOSE 8787
-# Apply schema/migrations against DATABASE_URL, then start the server (fail-closed on
-# missing APP_SECRET / DATABASE_URL / CORS_ORIGINS via server.validate_config()).
-CMD ["sh", "-c", "python migrate.py && python server.py"]
+# server.py opens DATABASE_URL through db.connect(), which applies and verifies the
+# complete idempotent schema before binding the listener. Running migrate.py first
+# repeated that full bootstrap and could consume the entire Railway health window.
+# Startup still fails closed on schema or configuration errors.
+CMD ["python", "server.py"]
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
     CMD curl -fsS http://localhost:${PORT}/readyz || exit 1

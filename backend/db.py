@@ -69,6 +69,8 @@ def _seed_platform(conn):
     """Ensure Platform-1 tables + seed exist (tenants, roles, config, org hierarchy).
     Idempotent; additive to the operational schema. Keeps the running server/HTTP path
     governable."""
+    # Register exclusive Founder permissions before data-driven role seeding.
+    import founder_dashboard
     import admin_platform
     import org
     import backfill

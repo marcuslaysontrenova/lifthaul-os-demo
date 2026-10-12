@@ -37,7 +37,10 @@ jobs:
           actual=$(git rev-parse HEAD)
           [[ "$requested" =~ ^[0-9a-fA-F]{40}$ ]]
           [ "${requested,,}" = "$actual" ]
-          git fetch origin main --depth=1
+          # Keep the complete graph fetched by checkout. A depth-1 fetch of main
+          # hides a merge commit's second parent and incorrectly rejects the
+          # exact PR head even though it is already merged into main.
+          git fetch origin main --no-tags
           git merge-base --is-ancestor "$actual" origin/main
           echo "release_sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
@@ -88,7 +91,7 @@ jobs:
         run: python scripts/go_live/railway_deploy_exact.py
       - name: Wait for healthy deployment identity
         env:
-          API_URL: https://lifthaul-api-production.up.railway.app
+          API_URL: https://www.lifthaul.com.ph
           RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
         run: |
           set -euo pipefail
@@ -101,13 +104,13 @@ jobs:
           exit 1
       - name: Read-only production preflight
         env:
-          BASE_URL: https://lifthaul-api-production.up.railway.app
+          BASE_URL: https://www.lifthaul.com.ph
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
         run: python scripts/go_live/preflight.py
       - name: Synthetic production journey (no funds)
         env:
-          BASE_URL: https://lifthaul-api-production.up.railway.app
+          BASE_URL: https://www.lifthaul.com.ph
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
         run: python scripts/go_live/prod_e2e.py

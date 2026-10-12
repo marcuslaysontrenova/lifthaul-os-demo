@@ -22,6 +22,7 @@ Keep this current when adding/removing a page. Last organized: 2026-08-23.
 | `driver.html` | Driver app (assignments, PODs) | landing "Driver app" |
 | `console.html` | **Enterprise Operations Console** — CRM, booking, dispatch, fleet, maintenance, finance, users (the frozen "Enterprise Operations" plane) | landing/book/track "Staff login" |
 | `admin-console.html` | **Platform Administration Console** — the "Platform Control" plane: master data, workflow builder, form/document templates, configuration resolve, audit correlation, tenant backfill, reporting, SaaS subscriptions/licensing, tenant-health, marketplace-eligibility | `console.html` nav → "Platform Administration" |
+| `founder.html` | **Founder Command Center** — MFA-mandatory, Founder-role-only financial and liability read model; ordinary administrators are denied | private direct route issued only to the designated Founder account |
 
 > **The two consoles are NOT duplicates.** They are the two distinct control planes in
 > the frozen architecture: `console.html` = **Enterprise Operations**; `admin-console.html`

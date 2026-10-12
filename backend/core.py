@@ -290,6 +290,9 @@ PERMISSIONS = {
     "super_admin": {"*"},
     "admin": {"*"},
     "owner": {"*"},
+    # Exclusive Founder command-center role. Ordinary wildcard administrators are
+    # still rejected by founder_dashboard.require_founder().
+    "founder": {"founder.dashboard.view", "founder.dashboard.export"},
     "operations_manager": {"customer.*", "booking.*", "quotation.read", "job.*", "payment.read"},
     "estimator": {"customer.read", "booking.create", "booking.read", "booking.view",
                   "booking.review", "booking.ready", "booking.edit_draft",

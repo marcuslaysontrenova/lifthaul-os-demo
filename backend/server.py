@@ -159,7 +159,10 @@ validate_config()
 import threading
 import db_pool
 _DATABASE_URL = os.environ.get("DATABASE_URL")
+log.info("database bootstrap starting driver=%s",
+         "postgres" if _DATABASE_URL and _DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite")
 _conn_single = db.connect(_DATABASE_URL)             # sqlite (dev) or postgres (prod)
+log.info("database bootstrap complete schema_version=%s", db.current_version(_conn_single))
 _DB_LOCK = threading.Lock()                          # serialize DB access (single-conn mode)
 # Concurrency mode: when pooling is enabled (auto for Postgres, or LIFTHAUL_DB_POOL=1)
 # each request checks out its own connection and runs WITHOUT the global lock, so
@@ -3065,6 +3068,26 @@ def _revenue_dna_routes():
 
 
 ROUTES.update(_revenue_dna_routes())
+
+
+def _founder_routes():
+    import founder_dashboard
+
+    def summary(actor, body, _):
+        return founder_dashboard.financial_summary(
+            _conn, actor, period=body.get("period", "monthly"), anchor=body.get("anchor"))
+
+    def export(actor, body, _):
+        return founder_dashboard.export_csv(
+            _conn, actor, period=body.get("period", "monthly"), anchor=body.get("anchor"))
+
+    return {
+        ("POST", "/founder/dashboard/summary"): summary,
+        ("POST", "/founder/dashboard/export"): export,
+    }
+
+
+ROUTES.update(_founder_routes())
 
 
 def _match(method, path):

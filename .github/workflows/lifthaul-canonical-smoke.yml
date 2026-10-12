@@ -107,7 +107,7 @@ jobs:
 
   # Intentional single synthetic production booking only after release identity is verified.
   # This never initiates checkout, payment capture, transfers or provider payouts.
-  synthetic-booking-journey:
+  authenticated-qa-readonly:
     needs: canonical-production-smoke
     runs-on: ubuntu-latest
     environment: production
@@ -123,9 +123,11 @@ jobs:
             echo "::error::Authenticated production UAT blocked: configure the scoped test-account secrets."
             exit 1
           fi
-      - name: Synthetic non-financial booking and authenticated operator journey
+      - name: Read-only authenticated QA acceptance of existing synthetic booking
         env:
           BASE_URL: https://www.lifthaul.com.ph
+          EXPECTED_SHA: 41565f0be486d6be666214df99a47ae7dec207a5
+          LH_TEST_BOOKING_REF: LH-XDMVQO
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
-        run: python scripts/go_live/prod_e2e.py
+        run: python scripts/go_live/prod_auth_qa.py

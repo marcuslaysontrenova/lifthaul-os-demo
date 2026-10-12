@@ -52,7 +52,8 @@ def _postgres(url):
             "installs it. (fixable without owner cloud credentials)")
     import dbconn
     try:
-        raw = psycopg2.connect(url)                 # real connection to a real server
+        # Timeout stuck connections instead of consuming Railway's health window.
+        raw = psycopg2.connect(url, connect_timeout=10)
     except Exception as e:
         raise RuntimeError(
             f"could not connect to PostgreSQL ({e}). Run `docker compose up` (bundles "
@@ -60,9 +61,19 @@ def _postgres(url):
             f"(needs a running PostgreSQL — not owner cloud credentials)")
     raw.autocommit = False
     conn = dbconn.PgConnection(raw)
-    dbconn.apply_schema(conn)                       # idempotent DDL (dialect-translated)
-    ensure_version(conn)
-    return conn
+    try:
+        # Avoid indefinitely waiting behind idle-in-transaction readers on a
+        # previous app instance. PostgreSQL aborts the DDL on timeout, safely
+        # preserving the previously healthy production deployment.
+        conn.execute("SET lock_timeout = '12s'")
+        conn.execute("SET statement_timeout = '60s'")
+        dbconn.apply_schema(conn)                   # idempotent DDL (dialect-translated)
+        ensure_version(conn)
+        return conn
+    except Exception:
+        conn.rollback()
+        conn.close()
+        raise
 
 
 def _seed_platform(conn):

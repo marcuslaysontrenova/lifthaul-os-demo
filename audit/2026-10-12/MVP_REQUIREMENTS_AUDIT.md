@@ -3,7 +3,7 @@
 Audit date: 2026-10-12 (Asia/Manila)  
 Repository: `marcuslaysontrenova/lifthaul-os-demo`  
 Audited branch: `codex/fix-exact-release-gate`  
-Branch baseline: `eac8f3745be4812f3346dfd9825ba1ca17a1964f`  
+Release-hardening commit: `cf8e81bbb36cad1921a785f518f87d4d75ebc273`
 Approved UI candidate: `a076aedfd978b65999be04b494622e0dd80f1fbb`  
 Merged `main` commit: `ca467dd4919d1e5f5f60006875588ecd94f18c0a`  
 Public URL: <https://www.lifthaul.com.ph>  
@@ -43,6 +43,7 @@ itself is not treated as proof that a feature works.
 | Default branch and approved UI | VERIFIED WORKING in repository | PR #18 is merged at `ca467dd`; its tested candidate is `a076aed`. `audit/2026-10-11/MASTER_FINALIZATION_CYCLE_1.md` records 1,491/1,491 Python tests and 48/48 three-browser checks. |
 | Exact-release ancestry gate | VERIFIED WORKING in development | PR #19, `eac8f37`, preserves merge ancestry so the approved PR head is not falsely rejected after merge. Its SQLite and PostgreSQL checks are green. |
 | Canonical production deployment | DEFECTIVE (P1) | `www.lifthaul.com.ph/readyz` still reports `3919680...`; two deployments of PR #18 failed Railway health checking. The approved UI is therefore not live on the canonical domain. |
+| Exact-release workflow credential | BLOCKED (P1) | GitHub Actions run `38146334133` stopped before deployment because `RAILWAY_PROJECT_TOKEN` was empty. The service/environment identifiers exist, but a repository/environment secret must be added by an authorized Railway/GitHub owner. |
 | Booking geography in production | DEFECTIVE (P1) | The stale public release returns 404 for `/data/psgc/manifest.json`. PR #18 packages and serves the governed PSGC JSON, but the fix is not live. |
 | Production monitoring | PARTIAL → FIXED IN DEVELOPMENT | The prior monitor checked GitHub Pages and a different Railway hostname, allowing a false green state. This branch now checks the canonical domain, release ancestry, PSGC data, release copy, health and readiness. |
 | Local complete regression | IMPLEMENTED BUT ENVIRONMENT-BLOCKED | 1,491 tests executed locally: five `TemporaryDirectory` permission errors in `test_static_frontend`, no assertion failures. The authoritative Linux CI run for PR #18 passed 1,491/1,491. |
@@ -74,8 +75,8 @@ itself is not treated as proof that a feature works.
 | Customer/booker workspace | IMPLEMENTED BUT UNVERIFIED | `client.html`, `backend/client_portal.py`, `test_client_portal.py`; full persona UAT and every linked counter/filter remain unsigned. |
 | Driver mobile workspace | IMPLEMENTED BUT UNVERIFIED | `driver.html`, `backend/driver_app.py`, `test_driver_app.py`; field-operability UAT and production notification/tracking evidence remain open. |
 | Fleet-owner/dispatcher workspace | IMPLEMENTED BUT UNVERIFIED | `portal.html`, `backend/carrier_portal.py`, `backend/fleet_registration.py`, related tests; multi-vehicle business-owner UAT remains open. |
-| Founder-only authorization boundary | MISSING / P1 for directive acceptance | No dedicated Founder role/workspace or MFA-protected founder route was found in the public HTML or current UI evidence. Ordinary admin must not be treated as Founder. |
-| Founder P&L and financial command center | MISSING / P1 for directive acceptance | Reporting and revenue modules exist, but no dedicated screen evidences GBV-versus-revenue, liabilities, P&L, EBITDA, cash flow, budget/actual, drill-down and founder-only export as one reconciled dashboard. |
+| Founder-only authorization boundary | VERIFIED WORKING in development | `founder.html`, `founder-workspace.js` and `backend/founder_dashboard.py` add an exclusive Founder role and mandatory confirmed MFA. Provisioning tests prove a legacy wildcard administrator cannot create or assign Founder access; only an existing Founder, a database-assigned Super Platform Administrator, or trusted bootstrap path can do so. |
+| Founder P&L and financial command center | PARTIAL / P1 | The new read model separates GBV, recognized transaction/membership revenue, costs, approved operating expenses, receivables, provider earnings, protected funds and refundable deposits, with CSV export and reconciliation. EBITDA, net profit, enterprise/other-revenue mappings, customer segmentation and budget/actual remain visibly unavailable until governed accounting inputs exist. |
 
 ### 6–8. Booking, matching and pricing
 
@@ -144,7 +145,7 @@ itself is not treated as proof that a feature works.
 | UI/UX finalization evidence | PARTIAL | Candidate code and browser tests exist; live before/after evidence is blocked by failed deployment. |
 | Booking/dispatch architecture | VERIFIED WORKING in code/CI | Marketplace foundation, matching, protected-payment and trip execution records/tests. |
 | Commercial/pricing package | PARTIAL / BLOCKED | Benchmark and configurable engine exist; final tariffs, tax, membership, cancellation and provider-share approvals do not. |
-| Founder financial package | MISSING / P1 | No dedicated, reconciled Founder dashboard/P&L evidence. |
+| Founder financial package | PARTIAL / P1 | Founder-only MFA dashboard and guarded financial read model are implemented with deterministic tests; final accounting mappings and Finance validation remain open. |
 | Payments/compliance register | VERIFIED WORKING | Current certification and legal-payment documents explicitly retain open gates. |
 | Quality/production evidence | PARTIAL | CI evidence is strong; live deployment, business UAT, hosted restore/load and rollback drill remain open. |
 | Development handover | PARTIAL | Current branch/PR and audit identify changes and blockers. Final exact release/deployment manifest awaits a successful canonical deployment. |
@@ -172,7 +173,7 @@ payment and legal gates pass; the MVP must visibly remain in no-live-funds mode.
 |---|---|---|---|
 | MVP-001 | P1 | OPEN | Railway/Engineering: diagnose container startup/health failure and deploy the exact approved release to the custom-domain service. |
 | MVP-002 | P1 | OPEN | Engineering/QA: prove `www.lifthaul.com.ph/data/psgc/manifest.json` and the booking geography journey after deployment. |
-| MVP-003 | P1 | OPEN | Product/Finance/Engineering: implement and reconcile a Founder-only dashboard; add MFA/authorization tests. |
+| MVP-003 | P1 | PARTIAL | Finance/Founder: validate revenue-recognition, D&A, interest, tax, enterprise revenue, customer segment and budget mappings now that the exclusive MFA dashboard/read model and tests exist. |
 | MVP-004 | P1 | OPEN | QA/UAT/Founder: execute and sign the 12-persona acceptance pack. |
 | MVP-005 | P1 | OPEN | DevOps/DB owner: execute PostgreSQL backup/restore, restart persistence and rollback drill with RPO/RTO evidence. |
 | MVP-006 | P1 | OPEN for paid launch | Founder/Finance/Legal: approve tariffs, tax, membership, cancellation, provider share and 10% fee policy. |
@@ -180,6 +181,7 @@ payment and legal gates pass; the MVP must visibly remain in no-live-funds mode.
 | MVP-008 | P2 | OPEN | UX/QA: authenticated-workspace navigation, synthetic-data isolation and responsive state-by-state screenshot audit. |
 | MVP-009 | P2 | OPEN | Operations/Product: consolidate exception ownership, SLA and communication rules and UAT each path. |
 | MVP-010 | P2 | OPEN | Performance/Engineering: hosted concurrency, slow-network, retry, connection-pool and geographic-search evidence. |
+| MVP-011 | P1 | BLOCKED | Railway/GitHub owner: add `RAILWAY_PROJECT_TOKEN` as a protected production environment secret, then rerun the exact-release workflow without exposing the token. |
 
 ## Work completed in this audit cycle
 
@@ -200,13 +202,19 @@ payment and legal gates pass; the MVP must visibly remain in no-live-funds mode.
   idempotent schema before listening, so running `migrate.py` immediately beforehand repeated the same
   work inside Railway's health window. Added flushed migration logs plus server-side database bootstrap
   start/completion telemetry. The focused deployment/server/PostgreSQL compatibility pack passed 38/38.
+- Implemented the dedicated Founder Command Center with a non-administrator Founder role, mandatory
+  MFA, audit logging, period views, GBV/revenue/liability separation, reconciliation, data-quality
+  blockers and CSV export. Legacy wildcard administrators are explicitly blocked from provisioning
+  Founder access. Founder/admin/MFA/financial tests pass; unsupported P&L lines remain null.
+- Verified the exact-release workflow failure from GitHub Actions run `38146334133`: deployment never
+  began because the protected `RAILWAY_PROJECT_TOKEN` secret is absent. No credential value was exposed.
 
 ## Next three executable actions
 
 1. Push the tested startup/monitoring correction through PR review and obtain exact founder approval for
    its resulting release SHA; do not deploy the new SHA before that approval.
-2. Implement the minimum Founder-only financial read model and dashboard with GBV/revenue/liability
-   separation, MFA-sensitive authorization and deterministic tests.
+2. Obtain Finance/Founder approval for the accounting mappings that remain deliberately unavailable,
+   then add EBITDA, net profit, customer-segment and budget/actual lines with reconciliation tests.
 3. Run the automated persona pack plus a production-like PostgreSQL backup/restore/concurrency exercise,
    then issue the business UAT checklist for accountable sign-off.
 

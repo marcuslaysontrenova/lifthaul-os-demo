@@ -3070,6 +3070,26 @@ def _revenue_dna_routes():
 ROUTES.update(_revenue_dna_routes())
 
 
+def _founder_routes():
+    import founder_dashboard
+
+    def summary(actor, body, _):
+        return founder_dashboard.financial_summary(
+            _conn, actor, period=body.get("period", "monthly"), anchor=body.get("anchor"))
+
+    def export(actor, body, _):
+        return founder_dashboard.export_csv(
+            _conn, actor, period=body.get("period", "monthly"), anchor=body.get("anchor"))
+
+    return {
+        ("POST", "/founder/dashboard/summary"): summary,
+        ("POST", "/founder/dashboard/export"): export,
+    }
+
+
+ROUTES.update(_founder_routes())
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

@@ -398,6 +398,8 @@ for _code in MARKETPLACE_PERMISSIONS:
 # New administration roles introduced by Platform 1 (not present in core.PERMISSIONS).
 ADMIN_ROLES = [
     # code, display name, layer, grant patterns
+    ("founder", "Founder / Owner", 1,
+        {"founder.dashboard.view", "founder.dashboard.export"}),
     ("super_platform_admin", "Super Platform Administrator", 1, {"*"}),
     ("platform_admin",       "Platform Administrator",       1,
         {"tenant.*", "license.*", "integration.*", "system_config.*", "ai_admin.*",
@@ -674,7 +676,7 @@ HIGH_RISK = {"quotation.approve", "payment.verify", "expense.approve", "*",
              "tenant.manage", "role_admin.manage", "role_admin.assign_privileged",
              "user_admin.manage", "security.manage"}
 PRIVILEGED_ROLE_CODES = {
-    "super_platform_admin", "platform_admin", "super_admin", "executive",
+    "founder", "super_platform_admin", "platform_admin", "super_admin", "executive",
 }
 USER_ADMIN_ASSIGNABLE_ROLE_CODES = {
     "booking_quotation_administrator", "approver", "finance_admin", "finance",
@@ -787,6 +789,22 @@ def _covers(actor_perms, grant):
     return any(p.endswith(".*") and grant.startswith(p[:-1]) for p in actor_perms)
 
 
+def _actor_can_govern_founder(conn, actor) -> bool:
+    """Keep Founder access outside the legacy wildcard-admin trust boundary."""
+    if actor is None:  # trusted bootstrap/migration path
+        return True
+    if actor.get("role") == "founder":
+        return True
+    actor_id = actor.get("id")
+    if actor_id is None:
+        return False
+    return bool(conn.execute(
+        "SELECT 1 FROM admin_user_roles ur JOIN admin_roles r ON r.id=ur.role_id "
+        "WHERE ur.user_id=? AND r.code IN ('founder','super_platform_admin') LIMIT 1",
+        (actor_id,),
+    ).fetchone())
+
+
 def _guard_role_assignment(conn, actor, role_id):
     """Admin guardrails (Item 6): a non-platform admin may not assign platform-layer roles,
     nor grant any permission beyond their own authority (self-elevation prevention)."""
@@ -794,6 +812,10 @@ def _guard_role_assignment(conn, actor, role_id):
     role = conn.execute("SELECT * FROM admin_roles WHERE id=?", (role_id,)).fetchone()
     if not role:
         raise core.ConflictError("unknown role")
+    if role["code"] == "founder" and not _actor_can_govern_founder(conn, actor):
+        raise core.ForbiddenError(
+            "Founder access requires an existing Founder or database-assigned Super Platform Administrator"
+        )
     if role["code"] in PRIVILEGED_ROLE_CODES and not _perm_covers(perms, "role_admin.assign_privileged"):
         raise core.ForbiddenError("assigning Super Administrator, platform, or executive roles requires additional approval")
     if "*" in perms:
@@ -999,6 +1021,10 @@ def create_user(conn, actor, email, password, role, name=None, tenant_code="RGO"
     tenant = get_tenant(conn, tenant_code)
     if not tenant:
         raise core.ConflictError("unknown tenant")
+    if role == "founder" and not _actor_can_govern_founder(conn, actor):
+        raise core.ForbiddenError(
+            "Founder creation requires an existing Founder or database-assigned Super Platform Administrator"
+        )
     perms = (actor or {}).get("perms") or core.PERMISSIONS.get((actor or {}).get("role"), set())
     if actor and actor.get("tenant_id") is not None and actor.get("tenant_id") != tenant["id"] and "*" not in perms:
         raise core.ForbiddenError("user administrators may create users only in their own tenant")
@@ -1246,6 +1272,17 @@ def mfa_policy(conn, tenant=None) -> str:
 
 
 def mfa_required_for(conn, user_row, tenant=None) -> bool:
+    # Founder financial visibility is never available with password-only login,
+    # even if the tenant-wide MFA policy is optional or off.
+    try:
+        primary_role = user_row["role"]
+    except (KeyError, IndexError):
+        primary_role = None
+    if primary_role == "founder" or conn.execute(
+        "SELECT 1 FROM admin_user_roles ur JOIN admin_roles r ON r.id=ur.role_id "
+        "WHERE ur.user_id=? AND r.code='founder' LIMIT 1", (user_row["id"],)
+    ).fetchone():
+        return True
     pol = mfa_policy(conn, tenant)
     if pol == "required":
         return True

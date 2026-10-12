@@ -1,0 +1,85 @@
+name: LiftHaul authenticated MVP acceptance (isolated evidence)
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/authenticated-mvp-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  client-identity-and-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Booker login recovery, isolation and client dashboard
+        working-directory: backend
+        env:
+          APP_ENV: test
+        run: python -m unittest -v test_client_auth test_client_portal
+
+  carrier-and-driver-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fleet owner, driver, and cross-carrier denial
+        working-directory: backend
+        env:
+          APP_ENV: test
+        run: python -m unittest -v test_carrier_portal test_driver_app
+
+  staff-finance-founder-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Staff segregation, tenant isolation, founder-only MFA
+        working-directory: backend
+        env:
+          APP_ENV: test
+        run: python -m unittest -v test_booking_access_model test_tenant_isolation test_founder_dashboard
+
+  booking-tracking-and-live-funds-off:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic public booking, tracking, approvals and funds fail-closed
+        working-directory: backend
+        env:
+          APP_ENV: test
+        run: python -m unittest -v test_public_booking test_protected_payment_e2e
+
+  acceptance-summary:
+    if: always()
+    needs: [client-identity-and-workspace, carrier-and-driver-access, staff-finance-founder-authority, booking-tracking-and-live-funds-off]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject incomplete or failed acceptance evidence
+        env:
+          CLIENT: ${{ needs.client-identity-and-workspace.result }}
+          CARRIER: ${{ needs.carrier-and-driver-access.result }}
+          STAFF: ${{ needs.staff-finance-founder-authority.result }}
+          BOOKING: ${{ needs.booking-tracking-and-live-funds-off.result }}
+        run: |
+          printf 'Client=%s\nCarrier=%s\nStaff=%s\nBooking=%s\n' "$CLIENT" "$CARRIER" "$STAFF" "$BOOKING"
+          test "$CLIENT" = success && test "$CARRIER" = success && test "$STAFF" = success && test "$BOOKING" = success
+          echo 'All isolated role-based automated acceptance suites passed.'
+          echo 'IMPORTANT: Production authenticated UAT requires separately approved protected account credentials.'

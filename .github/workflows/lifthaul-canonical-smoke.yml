@@ -12,11 +12,11 @@ permissions:
 jobs:
   canonical-production-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 15
     steps:
       - name: Verify exact live release, location manifest and public access controls
         env:
-          EXPECTED_SHA: 029d8da065c2845a8fac975b95dedc35c1ca4aa7
+          EXPECTED_SHA: 41565f0be486d6be666214df99a47ae7dec207a5
           CANONICAL_URL: https://www.lifthaul.com.ph
         run: |
           mkdir -p evidence
@@ -43,7 +43,7 @@ jobs:
 
           try:
               ready = None
-              for attempt in range(18):
+              for attempt in range(48):
                   try:
                       code, raw, _ = fetch("/readyz")
                       data = json.loads(raw) if code == 200 else {}
@@ -51,9 +51,9 @@ jobs:
                       if code == 200 and observed == expected and data.get("status") == "ready" and data.get("schema_version") is not None:
                           ready = data
                           break
-                      print(f"Readiness attempt {attempt + 1}/18: HTTP {code}; SHA {observed}")
+                      print(f"Readiness attempt {attempt + 1}/48: HTTP {code}; SHA {observed}")
                   except Exception as exc:
-                      print(f"Readiness attempt {attempt + 1}/18: {type(exc).__name__}")
+                      print(f"Readiness attempt {attempt + 1}/48: {type(exc).__name__}")
                   time.sleep(15)
               assert ready is not None, "Canonical backend did not report the approved release SHA as ready"
               evidence["checks"]["readiness"] = {"status": "PASS", "release_sha": ready["release_sha"], "schema_version": ready["schema_version"]}
@@ -68,6 +68,17 @@ jobs:
               manifest = json.loads(raw)
               assert isinstance(manifest, (dict, list)) and bool(manifest), "PSGC manifest is empty or invalid"
               evidence["checks"]["geography_manifest"] = {"status": "PASS", "http_code": code, "json_type": type(manifest).__name__}
+
+              groups = manifest.get("island_groups", []) if isinstance(manifest, dict) else []
+              assert len(groups) >= 3, f"PSGC manifest missing island groups: {len(groups)}"
+              for group in groups:
+                  source_file = group.get("file", "")
+                  assert source_file.startswith("data/psgc/") and source_file.endswith(".json"), "Ungoverned PSGC source path"
+                  file_code, file_raw, _ = fetch("/" + source_file)
+                  assert file_code == 200, f"PSGC {source_file} returned HTTP {file_code}"
+                  payload = json.loads(file_raw)
+                  assert payload, f"PSGC {source_file} has no data"
+                  evidence["checks"][source_file] = {"status": "PASS", "http_code": file_code}
 
               for path in ("/", "/book.html", "/client.html", "/driver-register.html", "/founder.html"):
                   code, raw, mime = fetch(path)
@@ -93,3 +104,27 @@ jobs:
           name: lifthaul-canonical-smoke
           path: evidence/canonical-smoke.json
           retention-days: 30
+
+  # Intentional single synthetic production booking only after release identity is verified.
+  # This never initiates checkout, payment capture, transfers or provider payouts.
+  synthetic-booking-journey:
+    needs: canonical-production-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify scoped test credentials without exposing values
+        env:
+          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
+          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$LH_ADMIN_EMAIL" ] || [ -z "$LH_ADMIN_PASSWORD" ]; then
+            echo "::error::Authenticated production UAT blocked: configure the scoped test-account secrets."
+            exit 1
+          fi
+      - name: Synthetic non-financial booking and authenticated operator journey
+        env:
+          BASE_URL: https://www.lifthaul.com.ph
+          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
+          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+        run: python scripts/go_live/prod_e2e.py

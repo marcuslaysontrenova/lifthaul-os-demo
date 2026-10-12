@@ -1385,6 +1385,13 @@ def _track_stops(conn, booking_id):
 def admin_queue(conn, actor, limit=100):
     core.require(actor, "marketplace.booking.view")
     frag, params = tenant.predicate(actor)
+    # Public guest intake is platform-owned (tenant 0), not the staff user's
+    # home tenant. An explicit guest-intake grant reveals ONLY this queue;
+    # it does not activate broad cross-tenant browsing.
+    if (actor.get("tenant_id") not in (None, _platform_tenant())
+            and not tenant.can_cross(actor)
+            and core.can(actor, "marketplace.public_intake.view")):
+        frag, params = " AND tenant_id=?", (_platform_tenant(),)
     rows = conn.execute(
         "SELECT id,tracking_token,status,service_type,service_class,routing_candidate,inter_island,"
         "route_class,requested_vehicle_category,quote_amount,quote_status,contact_name,contact_phone,"
@@ -1424,6 +1431,12 @@ def review(conn, actor, booking_id, action, note=None, quote_amount=None):
     if action not in ACTION_STATUS:
         raise core.ValidationError(f"unknown review action '{action}'")
     frag, params = tenant.predicate(actor)
+    # Reviewing guest intake requires a separate WRITE grant. The view grant
+    # above never elevates an account into review, quotation or dispatch.
+    if (actor.get("tenant_id") not in (None, _platform_tenant())
+            and not tenant.can_cross(actor)
+            and core.can(actor, "marketplace.public_intake.manage")):
+        frag, params = " AND tenant_id=?", (_platform_tenant(),)
     row = conn.execute(
         "SELECT id,status,special_instructions,booking_mode,site_survey_required FROM mkt_bookings "
         "WHERE id=? AND source='PUBLIC_MARKETPLACE'"

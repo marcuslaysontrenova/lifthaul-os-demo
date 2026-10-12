@@ -37,7 +37,7 @@ jobs:
               )
               try:
                   with urllib.request.urlopen(request, timeout=12) as response:
-                      return response.status, response.read(256 * 1024), response.headers.get("Content-Type", "")
+                      return response.status, response.read(16 * 1024 * 1024), response.headers.get("Content-Type", "")
               except urllib.error.HTTPError as error:
                   return error.code, error.read(2048), error.headers.get("Content-Type", "")
 

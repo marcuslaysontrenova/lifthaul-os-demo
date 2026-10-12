@@ -1303,7 +1303,7 @@ window.RGO_API = (function(){
   function formUser(){
     if(!(canPerm('users.manage')||canPerm('user_admin.manage'))){toast('You are not authorized to create users');return;}
     var opts=(liveMode?LIVE_CREATE_ROLES.map(function(c){return '<option value="'+c+'">'+esc(c)+'</option>';}):assignableRoles().map(function(c){return '<option value="'+c+'">'+esc(ROLE_DEFS[c].label)+'</option>';})).join('');
-    var pwField=liveMode?'<label><span>Temporary password (min 10 · upper+lower+digit)</span><input name="password" type="text" value="Welcome123Xy" required></label>':'';
+    var pwField=liveMode?'<label><span>Temporary password (min 10 · upper+lower+digit)</span><input name="password" type="password" autocomplete="new-password" minlength="10" placeholder="Unique password; never reuse an admin password" required></label>':'';
     modal('<div class="modal"><div class="modal-h"><h3>Create user · Tenant Zero'+(liveMode?' · live':'')+'</h3><button class="x" data-close>×</button></div><form class="modal-b frm mf" id="uf"><label><span>Full name</span><input name="name" required></label><label><span>Email</span><input name="email" type="email" required></label><div class="two"><label><span>Department</span><input name="department"></label><label><span>Branch / unit</span><input name="branch"></label></div><label><span>Approved business role</span><select name="role">'+opts+'</select></label>'+pwField+'<div class="sod-card"><b>Scope:</b> This account is created only inside the Tenant Zero. '+(liveMode?'The backend rejects any attempt to grant authority above your own, platform roles, or self-elevation.':'User Administrators cannot grant Executive, Super Administrator, or User Administrator authority.')+'</div></form><div class="modal-f"><button class="btn line" data-close>Cancel</button><button class="btn" data-act="saveUser">Create account</button></div></div>');
   }
   function saveUser(){
@@ -1324,7 +1324,7 @@ window.RGO_API = (function(){
    * uses the local demo DB. No RBAC decisions are made in JS — gating comes from /me/permissions.  */
   var adminTab='people';
   var liveUsersById={};                       // populated from GET /admin/users for action handlers
-  var LIVE_CREATE_ROLES=['booking_quotation_administrator','approver','finance_admin','user_administrator','operational_user','executive'];
+  var LIVE_CREATE_ROLES=['public_intake_qa','public_intake_operator','booking_quotation_administrator','approver','finance_admin','user_administrator','operational_user','executive'];
   function apiErr(err){var host=$('#adminBody');if(host)host.innerHTML='<div class="sod-card" style="border-color:var(--crit)"><b>Backend error:</b> '+esc(err.message)+'</div>';toast('Backend: '+err.message);}
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
   function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}

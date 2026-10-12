@@ -321,6 +321,9 @@ MARKETPLACE_PERMISSIONS = [
     "marketplace.dispute.manage", "marketplace.claim.manage", "marketplace.claim.view",
     # Increment 3: booking / pricing / matching / broadcast / offers / bidding / assignment
     "marketplace.booking.view", "marketplace.booking.create", "marketplace.booking.manage",
+    # Platform-owned guest intake is never inherited through home-tenant permissions.
+    # Grant these separately to authorized intake readers/reviewers only.
+    "marketplace.public_intake.view", "marketplace.public_intake.manage",
     "marketplace.booking.validate", "marketplace.booking.cancel",
     "marketplace.pricing.view", "marketplace.pricing.manage", "marketplace.pricing.simulate",
     "marketplace.pricing.override", "marketplace.pricing.approve",
@@ -494,6 +497,8 @@ OPERATIONAL_ROLE_META = {
     "admin":              ("Administrator",       1),
     "owner":              ("Owner",               1),
     "operations_manager": ("Operations Manager",  4),
+    "public_intake_qa": ("Public Intake QA (Read Only)", 4),
+    "public_intake_operator": ("Public Intake Operator", 4),
     "estimator":          ("Estimator",           4),
     "approver":           ("Approver",            4),
     "finance":            ("Finance Clerk",       4),
@@ -682,6 +687,7 @@ USER_ADMIN_ASSIGNABLE_ROLE_CODES = {
     "booking_quotation_administrator", "approver", "finance_admin", "finance",
     "operations_manager", "estimator", "dispatcher", "fleet_manager", "safety_officer",
     "mechanic", "driver", "operator", "operational_user", "customer",
+    "public_intake_qa", "public_intake_operator",
 }
 
 

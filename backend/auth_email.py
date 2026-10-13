@@ -1,11 +1,13 @@
 """Direct auth-email transport. Secrets and one-time codes never enter the outbox.
 
-SMTP acceptance means accepted by the mail server, not proof of inbox delivery.
-Only encrypted, authenticated SMTP is supported; absent configuration fails closed.
+Provider acceptance is not proof of inbox delivery. Resend HTTPS works on Railway
+Hobby; authenticated TLS SMTP is available for hosts that permit it.
 """
+import json
 import os
 import smtplib
 import ssl
+import urllib.request
 from email.message import EmailMessage
 from email.utils import parseaddr
 
@@ -36,15 +38,56 @@ def _config():
 
 def configured():
     try:
-        _config()
+        provider = os.environ.get("LH_AUTH_EMAIL_PROVIDER", "smtp").strip().lower()
+        if provider == "resend":
+            _resend_config()
+        elif provider == "smtp":
+            _config()
+        else:
+            return False
         return True
     except (ValueError, TypeError):
         return False
 
 
+def _resend_config():
+    key = os.environ.get("LH_AUTH_RESEND_API_KEY", "").strip()
+    sender = _address(os.environ.get("LH_AUTH_EMAIL_FROM", ""))
+    if not key or "\r" in key or "\n" in key:
+        raise ValueError("Protected Resend API key missing")
+    return key, sender
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _send_resend(destination, subject, body):
+    key, sender = _resend_config()
+    recipient = _address(destination)
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps({"from": sender, "to": [recipient], "subject": subject, "text": body}).encode("utf-8"),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
+                 "Accept": "application/json", "User-Agent": "LiftHaul-Auth-Email/1.0"},
+        method="POST")
+    # Pin the HTTPS destination. Never forward the key or auth message on redirects.
+    with urllib.request.build_opener(_NoRedirect()).open(request, timeout=10) as response:
+        if response.status != 200:
+            return False
+        result = json.loads(response.read(8192))
+        return isinstance(result, dict) and isinstance(result.get("id"), str) and bool(result["id"].strip())
+
+
 def send(destination, subject, body):
     """Return True only after the recipient is accepted; never log exceptions/PII."""
     try:
+        provider = os.environ.get("LH_AUTH_EMAIL_PROVIDER", "smtp").strip().lower()
+        if provider == "resend":
+            return _send_resend(destination, subject, body)
+        if provider != "smtp":
+            return False
         host, port, username, password, sender, mode = _config()
         recipient = _address(destination)
         message = EmailMessage()

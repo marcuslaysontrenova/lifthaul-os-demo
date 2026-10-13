@@ -1,6 +1,8 @@
 """Exercise encrypted transport, honest failure and production secret boundaries offline."""
 import os
+import json
 import unittest
+import urllib.error
 from unittest import mock
 
 import auth_email
@@ -16,6 +18,48 @@ SMTP_ENV = {"APP_ENV": "production", "LH_AUTH_SMTP_HOST": "smtp.example.invalid"
 
 
 class AuthEmailTests(unittest.TestCase):
+    def test_resend_uses_pinned_https_and_requires_provider_message_id(self):
+        env = {"LH_AUTH_EMAIL_PROVIDER": "resend", "LH_AUTH_RESEND_API_KEY": "offline-api-key",
+               "LH_AUTH_EMAIL_FROM": "sender@example.invalid"}
+        for response_body, accepted in ((b'{"id":"test-message"}', True),
+                                         (b'{"error":"rejected"}', False), (b'{}', False),
+                                         (b'not-json', False)):
+            with self.subTest(response=response_body), mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch("urllib.request.build_opener") as opener, mock.patch("smtplib.SMTP") as smtp:
+                response = opener.return_value.open.return_value.__enter__.return_value
+                response.status = 200
+                response.read.return_value = response_body
+                self.assertEqual(auth_email.send_code("test@example.invalid", "123456"), accepted)
+                request = opener.return_value.open.call_args.args[0]
+                self.assertEqual(request.full_url, "https://api.resend.com/emails")
+                self.assertEqual(request.get_method(), "POST")
+                payload = json.loads(request.data)
+                self.assertEqual(payload["to"], ["test@example.invalid"])
+                self.assertIn("123456", payload["text"])
+                smtp.assert_not_called()
+
+    def test_resend_refusals_rate_limits_and_redirects_fail_honestly(self):
+        env = {"LH_AUTH_EMAIL_PROVIDER": "resend", "LH_AUTH_RESEND_API_KEY": "offline-api-key",
+               "LH_AUTH_EMAIL_FROM": "sender@example.invalid"}
+        for status in (401, 403, 429, 500, 307):
+            with self.subTest(status=status), mock.patch.dict(os.environ, env, clear=True), \
+                    mock.patch("urllib.request.build_opener") as opener:
+                opener.return_value.open.side_effect = urllib.error.HTTPError(
+                    "https://api.resend.com/emails", status, "sensitive provider response", {}, None)
+                self.assertFalse(auth_email.send_code("test@example.invalid", "123456"))
+                handler = opener.call_args.args[0]
+                self.assertIsNone(handler.redirect_request(None, None, 307, "", {}, "https://other.invalid"))
+
+    def test_resend_missing_key_or_unknown_provider_never_falls_back(self):
+        for env in ({"LH_AUTH_EMAIL_PROVIDER": "resend", "LH_AUTH_EMAIL_FROM": "sender@example.invalid"},
+                    {**SMTP_ENV, "LH_AUTH_EMAIL_PROVIDER": "unknown"}):
+            with mock.patch.dict(os.environ, env, clear=True), mock.patch("urllib.request.build_opener") as opener, \
+                    mock.patch("smtplib.SMTP") as smtp:
+                self.assertFalse(auth_email.configured())
+                self.assertFalse(auth_email.send_code("test@example.invalid", "123456"))
+                opener.assert_not_called()
+                smtp.assert_not_called()
+
     def test_missing_config_and_plaintext_transport_fail_without_network(self):
         for env in ({}, {**SMTP_ENV, "LH_AUTH_SMTP_SECURITY": "none"}):
             with mock.patch.dict(os.environ, env, clear=True), mock.patch("smtplib.SMTP") as smtp:

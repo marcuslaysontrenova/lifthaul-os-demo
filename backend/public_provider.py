@@ -279,7 +279,7 @@ def _deliver_code(conn, channel, destination, code):
     PENDING_VERIFICATION and the caller surfaces VERIFICATION DELIVERY UNAVAILABLE — it fails closed."""
     import auth_email
     if channel == "email" and auth_email.send_code(destination, code):
-        return True, "Your verification email was accepted by the mail server. Check your inbox and spam folder."
+        return True, "Your verification email was accepted by the email provider. Check your inbox and spam folder."
     if _dev_code_allowed():
         return False, "Development environment: no messaging provider connected; use the code shown for testing."
     return False, ("VERIFICATION DELIVERY UNAVAILABLE — the messaging provider did not accept the code, so it "

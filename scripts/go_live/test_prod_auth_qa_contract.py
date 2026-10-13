@@ -98,6 +98,12 @@ class ReadOnlyAuthenticatedQAContract(unittest.TestCase):
         self.permissions.append("marketplace.public_intake.manage")
         self.run_check(should_pass=False)
 
+    def test_unlisted_privileges_and_wildcard_are_rejected(self):
+        for permission in ("*", "role_admin.view", "new.unreviewed.permission"):
+            with self.subTest(permission=permission):
+                self.permissions = ["marketplace.booking.view", "marketplace.public_intake.view", permission]
+                self.run_check(should_pass=False)
+
     def test_rejects_authorized_review_or_admin_user_or_founder_access(self):
         self.privileged_status = 200
         self.run_check(should_pass=False)

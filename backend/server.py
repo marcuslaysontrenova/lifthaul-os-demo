@@ -3222,7 +3222,13 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if _POOL is None:
                     with _DB_LOCK:
-                        self._conn_ping(); ver = db.current_version(_conn_single)
+                        try:
+                            self._conn_ping(); ver = db.current_version(_conn_single)
+                        finally:
+                            # A successful read starts a psycopg2 transaction too.
+                            # Leave no idle-in-transaction AccessShare locks behind
+                            # for the next deployment's schema bootstrap.
+                            _conn_single.rollback()
                 else:
                     c = _POOL.checkout()
                     try:
@@ -3289,6 +3295,10 @@ class Handler(BaseHTTPRequestHandler):
                 with _DB_LOCK:                   # single shared connection: serialize
                     try:
                         result = _do_request()
+                        # All successful requests, including read-only GETs, must
+                        # end their DB transaction before another worker or a
+                        # replacement Railway instance runs migrations.
+                        _conn.commit()
                     except Exception:
                         # Postgres keeps a connection transaction-aborted after a statement
                         # error; roll back before releasing the lock so the next request

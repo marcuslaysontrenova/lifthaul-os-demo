@@ -101,6 +101,17 @@ class NavigationIntegrity(unittest.TestCase):
         self.assertIn("--font: var(--lh-font)", css)
         self.assertIn("font-family: var(--lh-font)", css)
 
+    def test_live_public_intake_qa_has_a_visible_read_only_staff_workspace(self):
+        html = (ROOT / "console.html").read_text(encoding="utf-8")
+        self.assertIn("'marketplace.public_intake.view'", html)
+        self.assertIn("var isIntakeReader=canPerm('marketplace.public_intake.view')", html)
+        self.assertIn("if(isIntakeReader)adminTab='intake';", html)
+        self.assertIn("var landing=isIntakeReader?'access'", html)
+        self.assertIn("tabs=tabs.filter(function(t){return t[0]==='intake'})", html)
+        self.assertIn("!canPerm('marketplace.public_intake.manage')", html)
+        self.assertIn('acts=\'<span class="chip c-info">Read Only</span>\'', html)
+        self.assertIn("RGO_API.publicBookingQueue().then(function(q)", html)
+
     def test_registration_media_stays_within_the_qa_budget(self):
         for asset in (
             "lifthaul-driver-partners-hero-v1.webp",

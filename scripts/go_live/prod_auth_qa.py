@@ -7,6 +7,7 @@ changes status, or prints credentials or bearer tokens.
 """
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -16,8 +17,17 @@ EXPECTED_BOOKING_REF = os.environ["LH_TEST_BOOKING_REF"]
 EMAIL = os.environ["LH_ADMIN_EMAIL"]
 PASSWORD = os.environ["LH_ADMIN_PASSWORD"]
 assert BASE == "https://www.lifthaul.com.ph", "Must use the canonical production domain"
-assert len(EXPECTED_SHA) == 40, "Expected a pinned 40-character merge commit SHA"
+assert re.fullmatch(r"[0-9a-f]{40}", EXPECTED_SHA), "Expected a pinned 40-character merge commit SHA"
 assert EXPECTED_BOOKING_REF.startswith("LH-"), "Expected an existing synthetic reference"
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward credentials or bearer headers to a redirected endpoint."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect())
 
 
 def call(method, path, payload=None, bearer=None):
@@ -29,7 +39,7 @@ def call(method, path, payload=None, bearer=None):
         headers["Authorization"] = "Bearer " + bearer
     req = urllib.request.Request(BASE + path, data=data, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=25) as response:
+        with OPENER.open(req, timeout=25) as response:
             code, body = response.status, response.read(512 * 1024)
     except urllib.error.HTTPError as err:
         code, body = err.code, err.read(4096)
@@ -50,7 +60,7 @@ def main():
     print("PASS: canonical deployment identity and database ready")
 
     code, login = call("POST", "/login", {"email": EMAIL, "password": PASSWORD})
-    assert code == 200 and isinstance(login.get("token"), str), "Test account login failed"
+    assert code == 200 and isinstance(login.get("token"), str) and login["token"].strip(), "Test account login failed"
     token = login["token"]  # Never write to logs or artifacts.
     try:
         code, me = call("GET", "/me/permissions", bearer=token)
@@ -60,7 +70,7 @@ def main():
         prohibited = {"marketplace.booking.manage", "marketplace.public_intake.manage",
                       "user_admin.manage", "role_admin.manage", "payment.read",
                       "payment.verify", "founder.dashboard.view", "marketplace.payout.manage"}
-        assert required <= perms, "Missing required read-only intake permissions"
+        assert perms == required, "QA account must have exactly the two approved read-only permissions"
         assert not prohibited.intersection(perms), "QA account has prohibited elevated authority"
         assert not me.get("is_super"), "QA account unexpectedly has wildcard access"
         assert not any((me.get("financial") or {}).values()), "QA account exposed financial permissions"

@@ -502,6 +502,33 @@ class AdminQueue(unittest.TestCase):
         with self.assertRaises(Exception):
             pb.admin_queue(self.c, weak)
 
+    def test_tenant_bound_staff_needs_explicit_guest_intake_view_grant(self):
+        public = pb.submit(self.c, _p())
+        base = {"id": 712, "role": "operational_user", "tenant_id": 71,
+                "perms": {"marketplace.booking.view"}}
+        self.assertEqual(pb.admin_queue(self.c, base)["count"], 0)
+        allowed = dict(base, perms={"marketplace.booking.view",
+                                   "marketplace.public_intake.view"})
+        queue = pb.admin_queue(self.c, allowed)
+        self.assertEqual(queue["count"], 1)
+        self.assertEqual(queue["requests"][0]["id"], public["booking_id"])
+
+    def test_guest_intake_view_cannot_review_or_approve(self):
+        public = pb.submit(self.c, _p())
+        viewer = {"id": 713, "role": "operational_user", "tenant_id": 71,
+                  "perms": {"marketplace.booking.view", "marketplace.public_intake.view"}}
+        with self.assertRaises(core.ForbiddenError):
+            pb.review(self.c, viewer, public["booking_id"], "REVIEW")
+        # Booking-management alone does not bypass home-tenant isolation.
+        normal_manager = dict(viewer, perms={"marketplace.booking.manage"})
+        with self.assertRaises(core.NotFoundError):
+            pb.review(self.c, normal_manager, public["booking_id"], "REVIEW")
+        # Dedicated guest-intake authority remains explicitly opt-in.
+        reviewer = dict(viewer, perms={"marketplace.booking.manage",
+                                      "marketplace.public_intake.manage"})
+        result = pb.review(self.c, reviewer, public["booking_id"], "REVIEW")
+        self.assertEqual(result["status"], "REVIEWED")
+
 
 class OperatorReview(unittest.TestCase):
     def setUp(self):

@@ -329,6 +329,12 @@ PERMISSIONS = {
     "user_administrator": {"user_admin.view", "user_admin.manage", "user_admin.assign_roles",
                            "role_admin.view", "security.view", "org.view"},
     "operational_user": {"booking.read", "booking.view", "job.read", "customer.read"},
+    # Production acceptance observer: read platform-owned PUBLIC_MARKETPLACE requests
+    # through the explicitly scoped guest-intake queue, no review or dispatch power.
+    "public_intake_qa": {"marketplace.booking.view", "marketplace.public_intake.view"},
+    # Actual intake reviewer: business operations only, no tenant-wide admin or finance.
+    "public_intake_operator": {"marketplace.booking.view", "marketplace.booking.manage",
+                                "marketplace.public_intake.view", "marketplace.public_intake.manage"},
     "dispatcher": {"job.read", "job.dispatch", "booking.read"},
     "customer": {"self.booking.create", "self.booking.read", "self.quotation.read",
                  "self.quotation.accept", "self.quotation.decline", "self.payment.read",

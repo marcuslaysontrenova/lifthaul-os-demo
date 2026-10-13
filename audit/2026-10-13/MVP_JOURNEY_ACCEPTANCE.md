@@ -39,6 +39,13 @@ This moves checklist item C10 to **Ready in review branch**. Formal MVP acceptan
 (33.3%) until the exact candidate is authorized, merged, deployed, smoke-tested, and the hosted
 acceptance gates are closed.
 
+The same branch also moves C11 to **Ready in review branch** for the controlled MVP: the previously
+inert receipt-download, delivery-confirmation, and problem-report buttons are now visibly disabled,
+carry an accessible limitation explanation, and cannot send a write. Three focused browser tests
+passed across Chromium, Firefox, and WebKit. These customer actions require a separately designed,
+authorized, persisted workflow before they can be enabled; no fake receipt, release, or dispute is
+claimed.
+
 ## Production evidence (read-only)
 
 - Canonical public URL: https://www.lifthaul.com.ph/

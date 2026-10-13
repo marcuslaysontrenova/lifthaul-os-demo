@@ -49,6 +49,53 @@ class ClientPortalTests(unittest.TestCase):
         self.assertEqual([b["cargo_description"] for b in mine], ["Machine parts"])
         self.assertEqual([b["cargo_description"] for b in other], ["Private cargo"])
 
+    def test_booking_detail_is_owned_and_excludes_internal_fields(self):
+        detail = cp.booking_detail(self.conn, self.actor, self.booking_id)
+        self.assertEqual(detail["cargo_description"], "Machine parts")
+        self.assertEqual(detail["trip_events"], [])
+        self.assertNotIn("created_by", detail)
+        self.assertNotIn("shipper_id", detail)
+        for booking_id in (self.booking_id, 999999):
+            with self.assertRaises(core.NotFoundError):
+                cp.booking_detail(self.conn, self.other_actor, booking_id)
+        with self.assertRaises(core.ForbiddenError):
+            cp.booking_detail(self.conn, dict(self.actor, perms=set()), self.booking_id)
+
+    def test_booking_detail_trip_timeline_is_safe_and_current(self):
+        assignment = self.conn.execute(
+            "INSERT INTO mkt_assignments(booking_id,shipper_id,status) VALUES(?,?,'CONFIRMED')",
+            (self.booking_id, self.shipper_id)).lastrowid
+        trip = self.conn.execute(
+            "INSERT INTO mkt_trips(booking_id,assignment_id,status,progress_pct,eta,last_ping_at,mock_label) "
+            "VALUES(?,?,'IN_TRANSIT',42,'2026-10-13T12:00:00Z',?,'MOCK_ONLY')",
+            (self.booking_id, assignment, core.now())).lastrowid
+        self.conn.execute(
+            "INSERT INTO mkt_trip_events(trip_id,from_status,to_status,actor,note,gps_lat,occurred_at) "
+            "VALUES(?,'DEPARTED','IN_TRANSIT',900,'Internal operator note',14.5,?)",
+            (trip, core.now()))
+        self.conn.commit()
+        detail = cp.booking_detail(self.conn, self.actor, self.booking_id)
+        self.assertEqual(detail["trip_status"], "IN_TRANSIT")
+        self.assertEqual(detail["progress_pct"], 42)
+        self.assertEqual(detail["tracking_label"], "MOCK_ONLY")
+        self.assertTrue(detail["last_ping_at"])
+        self.assertEqual(set(detail["trip_events"][0]), {"from_status", "to_status", "occurred_at"})
+        self.conn.execute("UPDATE mkt_trips SET status='ARRIVED_DESTINATION',progress_pct=100 WHERE id=?", (trip,))
+        self.assertEqual(cp.booking_detail(self.conn, self.actor, self.booking_id)["trip_status"], "ARRIVED_DESTINATION")
+
+    def test_booking_detail_rejects_cross_tenant_booking_and_trip(self):
+        actor = dict(self.actor, tenant_id=101)
+        self.conn.execute("UPDATE mkt_bookings SET tenant_id=202 WHERE id=?", (self.booking_id,))
+        with self.assertRaises(core.NotFoundError):
+            cp.booking_detail(self.conn, actor, self.booking_id)
+        self.conn.execute("UPDATE mkt_bookings SET tenant_id=101 WHERE id=?", (self.booking_id,))
+        assignment = self.conn.execute(
+            "INSERT INTO mkt_assignments(booking_id,shipper_id,status) VALUES(?,?,'CONFIRMED')",
+            (self.booking_id, self.shipper_id)).lastrowid
+        self.conn.execute("INSERT INTO mkt_trips(assignment_id,tenant_id) VALUES(?,202)", (assignment,))
+        with self.assertRaises(core.NotFoundError):
+            cp.booking_detail(self.conn, actor, self.booking_id)
+
     def test_unbound_user_cannot_open_workspace(self):
         uid = core.create_user(self.conn, "unbound@client.test", "pw", "customer", "Unbound")
         actor = core.actor_for(self.conn, core.login(self.conn, "unbound@client.test", "pw"))

@@ -242,6 +242,7 @@ def _booking_view(conn, row):
         "trip_status": trip["status"] if trip else None,
         "progress_pct": trip["progress_pct"] if trip else None,
         "eta": trip["eta"] if trip else None,
+        "last_ping_at": trip["last_ping_at"] if trip else None,
         "available_action": _booking_action(b.get("status"), payment_state, trip["status"] if trip else None),
     }
 
@@ -296,6 +297,30 @@ def bookings(conn, actor):
     core.require(actor, "client.portal.view")
     sid, rows = _bookings(conn, actor)
     return {"shipper_id": sid, "bookings": [_booking_view(conn, row) for row in rows]}
+
+
+def booking_detail(conn, actor, booking_id):
+    core.require(actor, "client.portal.view")
+    sid, _ = _shipper(conn, actor)
+    row = conn.execute(
+        "SELECT * FROM mkt_bookings WHERE id=? AND shipper_id=?", (booking_id, sid)
+    ).fetchone()
+    if not row:
+        raise core.NotFoundError("booking not found")
+    tenant.guard(actor, row)
+    view = _booking_view(conn, row)
+    view["trip_events"] = []
+    view["tracking_label"] = None
+    if view["trip_id"]:
+        trip = conn.execute("SELECT * FROM mkt_trips WHERE id=?", (view["trip_id"],)).fetchone()
+        tenant.guard(actor, trip)
+        view["tracking_label"] = trip["mock_label"] or ("MOCK_ONLY" if trip["gps_provider"] == "MOCK" else None)
+        # Customer milestones exclude operator notes, actor IDs and raw GPS evidence.
+        view["trip_events"] = [dict(event) for event in conn.execute(
+            "SELECT from_status,to_status,occurred_at FROM mkt_trip_events "
+            "WHERE trip_id=? ORDER BY id", (view["trip_id"],)
+        ).fetchall()]
+    return view
 
 
 def offers(conn, actor):

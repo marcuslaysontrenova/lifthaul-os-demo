@@ -69,6 +69,7 @@ input{width:100%;margin-top:5px;font-family:inherit;font-size:16px;padding:13px;
         <label>Email<input id="email" type="email" autocomplete="username" placeholder="you@carrier.com"></label>
         <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="••••••••"></label>
         <button class="btn" style="margin-top:12px" onclick="doLogin()">Sign in</button>
+        <a class="btn line" style="margin-top:8px;text-decoration:none" href="driver-register.html">Apply as a LiftHaul driver</a>
         <p id="msg" class="muted" style="margin-top:12px"></p>
       </div>
     </div>
@@ -138,9 +139,11 @@ function showTrip(id){
     var acts='';
     if(t.status==='CREATED') acts+='<button class="btn" onclick="act(\'start\')">Start trip</button>';
     if(nxt) acts+='<button class="btn" onclick="advance(\''+nxt+'\')">Mark: '+esc(nxt.replace(/_/g,' '))+'</button>';
+    var recipientState=(dvs&&dvs.recipient_verification)||'NOT_REQUIRED';
+    var canSubmitPod=t.status==='DELIVERED'&&recipientState==='VERIFIED';
     var rows='<div class="row">'
       +'<button class="btn line sm" onclick="ping()">📍 Send GPS</button>'
-      +'<button class="btn line sm" onclick="pod()">📷 Submit POD</button>'
+      +(canSubmitPod?'<button class="btn line sm" onclick="pod()">✓ Submit verified POD</button>':'')
       +'<button class="btn line sm" onclick="exc()">⚠️ Exception</button></div>';
     var otp=(t.status==='ARRIVED_DESTINATION'||t.status==='UNLOADING'||t.status==='DELIVERED')
       ? '<div class="card"><h3>Recipient verification</h3><div class="note"><span>🔐</span><div>Ask the recipient for their delivery code and enter it. You never receive this code yourself.</div></div><label>Delivery code<input id="otp" inputmode="numeric" placeholder="● ● ● ● ● ●"></label><button class="btn" onclick="verifyOtp()">Verify recipient</button></div>' : '';
@@ -148,7 +151,7 @@ function showTrip(id){
     host.innerHTML=
       '<div class="card"><div style="display:flex;align-items:center;gap:8px"><h2>Trip #'+esc(t.id)+'</h2><span class="sp"></span>'+stChip(t.status)+'</div>'
       +'<div class="muted" style="margin-top:6px">Booking #'+esc(t.booking_id)+' · '+esc(t.planned_distance_km||'—')+' km'+(t.progress_pct?(' · '+Math.round(t.progress_pct)+'% done'):'')+'</div>'
-      +'<div style="margin-top:8px">Recipient: '+(dvs&&dvs.status?stChip(dvs.status):'<span class="chip">pending</span>')+'</div>'
+      +'<div style="margin-top:8px">Recipient: '+stChip(recipientState)+'</div>'
       +'<div style="margin-top:12px">'+(acts||'<span class="muted">No further status step.</span>')+'</div>'+rows+'</div>'
       + otp
       +'<div class="card"><h3>Timeline</h3>'+tlhtml+'</div>';
@@ -159,9 +162,14 @@ function act(a){ RGO_API.post('/driver/trips/'+curTrip+'/'+a,{}).then(function()
 function advance(to){ RGO_API.post('/driver/trips/'+curTrip+'/advance',{to_status:to}).then(function(){toast('Updated: '+to.replace(/_/g,' '));refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
 function ping(){
   function send(lat,lng){ RGO_API.post('/driver/trips/'+curTrip+'/ping',{lat:lat,lng:lng}).then(function(){toast('GPS sent');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
-  if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(function(p){send(p.coords.latitude,p.coords.longitude);},function(){send(14.6,121.0);}); } else { send(14.6,121.0); }
+  if(!navigator.geolocation){toast('GPS is unavailable on this device. No location was submitted.');return;}
+  navigator.geolocation.getCurrentPosition(
+    function(p){send(p.coords.latitude,p.coords.longitude);},
+    function(){toast('Location access failed. Enable GPS permission and try again; no location was submitted.');},
+    {enableHighAccuracy:true,timeout:15000,maximumAge:30000}
+  );
 }
-function pod(){ RGO_API.post('/driver/trips/'+curTrip+'/pod',{kind:'POD',evidence_types:['photo','signature']}).then(function(){toast('POD submitted');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
+function pod(){ RGO_API.post('/driver/trips/'+curTrip+'/pod',{kind:'POD',evidence_types:['recipient_otp']}).then(function(){toast('Verified POD submitted');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
 function exc(){ var r=window.prompt('Describe the exception (e.g. breakdown, access blocked):',''); if(!r)return; RGO_API.post('/driver/trips/'+curTrip+'/exception',{exception_type:'FIELD',severity:'MEDIUM',description:r}).then(function(){toast('Exception reported');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
 function verifyOtp(){ var code=($('#otp')||{}).value; if(!code){toast('Enter the recipient code');return;} RGO_API.post('/driver/trips/'+curTrip+'/verify-otp',{code:code}).then(function(){toast('Recipient verified ✓');refresh();}).catch(function(e){toast('Rejected: '+e.message);}); }
 

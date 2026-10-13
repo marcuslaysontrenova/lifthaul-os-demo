@@ -65,6 +65,14 @@ class DriverRegistrationPage(unittest.TestCase):
         self.assertIn("from=driver", HTML)
         self.assertIn("← Back to LiftHaul Home", HTML)
 
+    def test_driver_workspace_never_fabricates_location_or_pod_evidence(self):
+        driver_app = (ROOT / "driver.html").read_text(encoding="utf-8")
+        self.assertIn("Apply as a LiftHaul driver", driver_app)
+        self.assertNotIn("send(14.6,121.0)", driver_app)
+        self.assertNotIn("evidence_types:['photo','signature']", driver_app)
+        self.assertIn("evidence_types:['recipient_otp']", driver_app)
+        self.assertIn("no location was submitted", driver_app)
+
     def test_catalogue_uses_optimized_media(self):
         self.assertEqual(len(CATALOGUE["vehicles"]), 34)
         for vehicle in CATALOGUE["vehicles"]:

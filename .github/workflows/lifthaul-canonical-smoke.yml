@@ -31,13 +31,13 @@ jobs:
   canonical-production-smoke:
     # Never block Railway's check-suite-gated deployment by waiting for that
     # very same deployment from a commit-triggered CI check.
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/codex/railway-mvp-smoke-20261013') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Verify exact live release, location manifest and public access controls
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || '695478d48513ecd4bbb5efe5f61d3f2994174311' }}
           CANONICAL_URL: https://www.lifthaul.com.ph
         run: |
           mkdir -p evidence
@@ -150,7 +150,7 @@ jobs:
       - name: Read-only authenticated QA acceptance of existing synthetic booking
         env:
           BASE_URL: https://www.lifthaul.com.ph
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || '695478d48513ecd4bbb5efe5f61d3f2994174311' }}
           LH_TEST_BOOKING_REF: LH-XDMVQO
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}

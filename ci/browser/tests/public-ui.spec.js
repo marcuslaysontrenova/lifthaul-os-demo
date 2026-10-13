@@ -323,8 +323,16 @@ test('scoped QA logs into the staff console, sees public intake but no privilege
   // Force every mocked authentication endpoint to be same-origin. Never contact
   // the real production backend, create a production account or use real secrets.
   await page.evaluate(() => { window.RGO_API.setBase(window.location.origin); });
-  await page.locator('[data-act="staffLogin"]').first().click();
-  await expect(page.locator('#loginForm')).toBeVisible();
+  // The configured console may land on Sign In immediately, in which case
+  // the Staff Login navigation button is correctly hidden. Use the visible
+  // screen rather than clicking a permanently hidden public-page control.
+  const loginForm = page.locator('#loginForm');
+  if (!(await loginForm.isVisible())) {
+    const staffLogin = page.locator('[data-act="staffLogin"]:visible').first();
+    await expect(staffLogin).toBeVisible();
+    await staffLogin.click();
+  }
+  await expect(loginForm).toBeVisible();
   await page.locator('#u').fill('readonly.qa@example.invalid');
   await page.locator('#p').fill('synthetic-only-password');
   await page.locator('#loginForm button[type="submit"]').click();

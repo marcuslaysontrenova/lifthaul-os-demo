@@ -283,3 +283,69 @@ for (const layout of [
     await expect(launcher).toBeFocused();
   });
 }
+
+test('scoped QA logs into the staff console, sees public intake but no privileged actions', async ({ page }) => {
+  const synthetic = {
+    id: 88213, tracking_token: 'pbk_syntheticABCDEF', contact_name: 'SYNTHETIC UAT - DO NOT DISPATCH',
+    contact_email: 'qa@example.invalid', route_class: 'DOMESTIC_LUZON',
+    requested_vehicle_category: 'moto', booking_mode: 'INSTANT_BOOK',
+    service_line: 'CARGO', status: 'REQUEST_RECEIVED'
+  };
+  let loginCount = 0;
+  let queueCount = 0;
+  await page.route('**/login', async route => {
+    loginCount += 1;
+    const payload = route.request().postDataJSON();
+    expect(payload.identifier).toBe('readonly.qa@example.invalid');
+    expect(payload.password).toBe('synthetic-only-password');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      data: { token: 'synthetic-dev-only-qa-token' }
+    }) });
+  });
+  await page.route('**/me/permissions', async route => {
+    expect(route.request().headers().authorization).toBe('Bearer synthetic-dev-only-qa-token');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      data: {
+        role: 'public_intake_qa', user: 'Synthetic QA',
+        permissions: ['marketplace.booking.view', 'marketplace.public_intake.view']
+      }
+    }) });
+  });
+  await page.route('**/admin/marketplace/public-booking-queue', async route => {
+    queueCount += 1;
+    expect(route.request().headers().authorization).toBe('Bearer synthetic-dev-only-qa-token');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      data: { source: 'PUBLIC_MARKETPLACE', count: 1, requests: [synthetic] }
+    }) });
+  });
+
+  await page.goto(APP + '/console.html?review=least-privilege-qa');
+  // Force every mocked authentication endpoint to be same-origin. Never contact
+  // the real production backend, create a production account or use real secrets.
+  await page.evaluate(() => { window.RGO_API.setBase(window.location.origin); });
+  // The configured console may land on Sign In immediately, in which case
+  // the Staff Login navigation button is correctly hidden. Use the visible
+  // screen rather than clicking a permanently hidden public-page control.
+  const loginForm = page.locator('#loginForm');
+  if (!(await loginForm.isVisible())) {
+    const staffLogin = page.locator('[data-act="staffLogin"]:visible').first();
+    await expect(staffLogin).toBeVisible();
+    await staffLogin.click();
+  }
+  await expect(loginForm).toBeVisible();
+  await page.locator('#u').fill('readonly.qa@example.invalid');
+  await page.locator('#p').fill('synthetic-only-password');
+  await page.locator('#loginForm button[type="submit"]').click();
+
+  await expect(page.locator('#dash')).toHaveClass(/on/);
+  await expect(page.locator('[data-mod="access"]')).toBeVisible();
+  await expect(page.locator('[data-mod="bookings"]')).toBeHidden();
+  await expect(page.locator('#adminBody')).toContainText('Public Booking Queue');
+  await expect(page.locator('#adminBody')).toContainText(synthetic.contact_name);
+  await expect(page.locator('#adminBody')).toContainText('Read Only');
+  await expect(page.locator('.atab')).toHaveCount(1);
+  await expect(page.locator('.atab')).toHaveText('Marketplace Intake');
+  await expect(page.locator('#adminBody [data-act="pbReview"]')).toHaveCount(0);
+  expect(loginCount).toBe(1);
+  expect(queueCount).toBeGreaterThanOrEqual(1);
+});

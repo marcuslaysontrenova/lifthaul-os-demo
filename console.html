@@ -690,7 +690,7 @@ window.RGO_API = (function(){
   // queue out of Finance's navigation while preserving her backend read access, per CTO direction.
   // Finance gates on codes Finance actually resolves (payment.read / finance_admin.manage), since the
   // backend finance_admin role expresses finance authority through those, not a bare finance.view.
-  var MODULE_PERMS={dashboard:['dashboard.view','booking.read','job.read','payment.read','user_admin.view'],bookings:['booking.audit.view'],quotes:['quotation.view'],jobs:['operations.view','job.read'],dispatch:['operations.view','job.read'],customers:['customer.view'],fleet:['assets.view','fleet.view'],maintenance:['assets.view','fleet.view'],fleetmap:['assets.view','fleet.view'],drivers:['operations.view','job.read'],permits:['permits.view','safety.view'],invoices:['invoice.view','invoice.read','finance.view'],finance:['finance.view','payment.verify','finance_admin.manage'],reports:['reports.view','reporting.view'],access:['users.view','user_admin.view','role_admin.view']};
+  var MODULE_PERMS={dashboard:['dashboard.view','booking.read','job.read','payment.read','user_admin.view'],bookings:['booking.audit.view'],quotes:['quotation.view'],jobs:['operations.view','job.read'],dispatch:['operations.view','job.read'],customers:['customer.view'],fleet:['assets.view','fleet.view'],maintenance:['assets.view','fleet.view'],fleetmap:['assets.view','fleet.view'],drivers:['operations.view','job.read'],permits:['permits.view','safety.view'],invoices:['invoice.view','invoice.read','finance.view'],finance:['finance.view','payment.verify','finance_admin.manage'],reports:['reports.view','reporting.view'],access:['users.view','user_admin.view','role_admin.view','marketplace.public_intake.view']};
   var roleCode='booking_admin',role=ROLE_DEFS.booking_admin.label,currentActor={id:ROLE_DEFS.booking_admin.actor,name:ROLE_DEFS.booking_admin.name};
   // Backend-authoritative permission payload (GET /me/permissions). When set, the UI gates on THIS —
   // never on a JS role engine. ROLE_DEFS is only the offline-demo fallback. livePerms==null => mock mode.
@@ -892,7 +892,9 @@ window.RGO_API = (function(){
   function applyRoleUI(){var d=ROLE_DEFS[roleCode];role=d.label;currentActor={id:d.actor,name:d.name};$('#roleBadge').textContent=d.label;$('#userName').textContent=d.name;$('#userAvatar').textContent=d.initials;applyNavigationAccess();var reset=$('[data-act="resetDemo"]');if(reset)reset.style.display=roleCode==='super_admin'?'inline-flex':'none';}
   function enterApp(){showScreen('dash');views._bf=roleCode==='approver'?'PENDING_INTERNAL_APPROVAL':'all';
     var isFinance=(canPerm('finance.view')||canPerm('payment.read')||canPerm('finance_admin.manage'))&&!canPerm('booking.audit.view');
-    var landing=(canPerm('users.view')||canPerm('user_admin.view'))?'access':canPerm('quotation.approve')?'bookings':isFinance?'finance':'dashboard';
+    var isIntakeReader=canPerm('marketplace.public_intake.view')&&!canAny(['users.view','user_admin.view','role_admin.view']);
+    if(isIntakeReader)adminTab='intake';
+    var landing=isIntakeReader?'access':(canPerm('users.view')||canPerm('user_admin.view'))?'access':canPerm('quotation.approve')?'bookings':isFinance?'finance':'dashboard';
     go(landing);badges();}
   $('#loginForm').addEventListener('submit',function(e){
     e.preventDefault();
@@ -1327,9 +1329,16 @@ window.RGO_API = (function(){
   var LIVE_CREATE_ROLES=['public_intake_qa','public_intake_operator','booking_quotation_administrator','approver','finance_admin','user_administrator','operational_user','executive'];
   function apiErr(err){var host=$('#adminBody');if(host)host.innerHTML='<div class="sod-card" style="border-color:var(--crit)"><b>Backend error:</b> '+esc(err.message)+'</div>';toast('Backend: '+err.message);}
   function refreshAdmin(){var host=$('#adminBody');if(host)host.innerHTML=renderAdminTab();}
-  function setAdminTab(t){adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
+  function setAdminTab(t){
+    if(liveMode&&canPerm('marketplace.public_intake.view')&&!canAny(['users.view','user_admin.view','role_admin.view'])&&t!=='intake'){
+      toast('Only marketplace intake is assigned to this account');return;
+    }
+    adminTab=t;refreshAdmin();document.querySelectorAll('.atab').forEach(function(x){var on=x.dataset.arg===t;x.classList.toggle('on',on);x.style.cssText=on?'background:var(--primary);color:#fff':'';});var h=$('.pagehead h2');}
   function adminTabsBar(){
     var tabs=[['org','Organization'],['people','People & Access'],['roles','Roles & Permissions'],['rates','Rate Cards'],['trust','Trust & Compliance'],['regulatory','Regulatory Compliance'],['intake','Marketplace Intake'],['insurance','Goods Protection'],['delivery','Delivery Verification'],['reassignment','Reassignment'],['rental','Rental'],['billing','Corporate Billing'],['preferred','Preferred Carriers'],['surcharge','Surcharges'],['fleetreg','Fleet Registration'],['notifications','Notifications'],['carrieraccess','Carrier Access'],['devportal','Developer Portal'],['cal','Calendars'],['config','Configuration'],['gov','Governance']];
+    if(liveMode&&canPerm('marketplace.public_intake.view')&&!canAny(['users.view','user_admin.view','role_admin.view'])){
+      tabs=tabs.filter(function(t){return t[0]==='intake'});
+    }
     return '<div class="atabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 16px;border-bottom:1px solid var(--surface-3);padding-bottom:10px">'+tabs.map(function(t){return '<button class="atab btn line sm'+(adminTab===t[0]?' on':'')+'" data-act="adminTab" data-arg="'+t[0]+'"'+(adminTab===t[0]?' style="background:var(--primary);color:#fff"':'')+'>'+t[1]+'</button>';}).join('')+'</div>';
   }
   function renderAdminTab(){
@@ -1578,6 +1587,9 @@ window.RGO_API = (function(){
                survey&&sv&&sv.status==='COMPLETED'?'<button class="btn line sm" data-act="pbSurveyApprove" data-arg="'+sv.id+'">Approve survey</button> ':
                '<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':QUOTE">Quote</button> <button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':MOVE_TO_MARKETPLACE">→ Marketplace</button> ')+
               '<button class="btn line sm" data-act="pbReview" data-arg="'+r.id+':DECLINE">Decline</button>';
+            if(!canPerm('marketplace.booking.manage')||!canPerm('marketplace.public_intake.manage')){
+              acts='<span class="chip c-info">Read Only</span>';
+            }
             var project=esc(r.booking_mode||'INSTANT_BOOK')+'<br><span class="es">'+esc(r.service_line||'CARGO')+' · '+esc(r.project_risk_level||'STANDARD')+'</span>'+(survey?'<br><span class="chip c-warn">'+esc(sv?('SURVEY '+sv.status):'SURVEY REQUIRED')+'</span>':'');
             return '<tr><td>#'+esc(r.id)+'</td><td>'+esc(r.contact_name||'')+'<br><span class="es">'+esc(r.contact_phone||r.contact_email||'')+'</span></td><td>'+esc(r.route_class||'')+(r.inter_island?' <span class="chip c-info">inter-island</span>':'')+'</td><td>'+project+'</td><td>'+esc(r.requested_vehicle_category||'')+'</td><td class="tnum">'+est+'</td><td>'+chip(r.status||'')+'</td><td style="white-space:nowrap">'+acts+'</td></tr>';
           }).join('')||'<tr><td colspan="8" class="empty">No public booking requests.</td></tr>')+

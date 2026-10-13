@@ -66,7 +66,7 @@ def request_password_reset(conn, identifier, requested_ip=None, reveal_token=Fal
     """Create a single-use reset request without revealing account existence."""
     email = resolve_identifier(conn, identifier)
     row = conn.execute("SELECT id,status FROM users WHERE email=?", (email,)).fetchone()
-    response = {"message": "If the account is eligible, password-reset instructions have been issued."}
+    response = {"message": "If the account is eligible and email delivery is available, password-reset instructions will be sent. If no email arrives, contact support."}
     if not row or str(row["status"] or "").upper() not in ("ACTIVE", "PENDING", "UNVERIFIED"):
         return response
     raw = secrets.token_urlsafe(32)
@@ -80,8 +80,11 @@ def request_password_reset(conn, identifier, requested_ip=None, reveal_token=Fal
         "VALUES(?,?,?,?,?)", (row["id"], digest, _iso(now), _iso(expires), requested_ip))
     conn.commit()
     # In development/test only, the UI may display the one-time value for QA.
-    # Production integrations must deliver it out-of-band through an approved provider.
-    if reveal_token:
+    # Keep responses identical for known/unknown accounts; mail acceptance is private.
+    import auth_email
+    if not development_token_allowed():
+        auth_email.send_reset(email, raw)
+    if reveal_token and development_token_allowed():
         response["development_reset_token"] = raw
         response["expires_in_minutes"] = 30
     return response
@@ -110,7 +113,7 @@ def reset_password(conn, token, new_password):
 
 
 def development_token_allowed():
-    return os.environ.get("APP_ENV", "development").strip().lower() in {
+    return os.environ.get("APP_ENV", "").strip().lower() in {
         "development", "dev", "local", "test", "testing"
     }
 

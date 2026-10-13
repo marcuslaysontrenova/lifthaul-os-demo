@@ -277,11 +277,12 @@ def _deliver_code(conn, channel, destination, code):
     """Honest delivery: only claims 'sent' if a messaging provider is actually connected. With none
     connected the code is NOT faked as delivered. In production with no provider the account stays
     PENDING_VERIFICATION and the caller surfaces VERIFICATION DELIVERY UNAVAILABLE — it fails closed."""
-    if _provider_active(conn, channel):
-        return True, f"A one-time code was sent to your {channel}."
+    import auth_email
+    if channel == "email" and auth_email.send_code(destination, code):
+        return True, "Your verification email was accepted by the mail server. Check your inbox and spam folder."
     if _dev_code_allowed():
         return False, "Development environment: no messaging provider connected; use the code shown for testing."
-    return False, ("VERIFICATION DELIVERY UNAVAILABLE — no messaging provider is connected, so the code "
+    return False, ("VERIFICATION DELIVERY UNAVAILABLE — the messaging provider did not accept the code, so it "
                    "could not be delivered. Your account stays pending; contact support to verify your contact.")
 
 

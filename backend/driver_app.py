@@ -212,14 +212,55 @@ def ping(conn, actor, trip_id, progress=None, lat=None, lng=None):
     core.require(actor, "driver.app.execute")
     did = resolve_driver(conn, actor)
     _own_trip(conn, did, trip_id)
+    # The driver channel must never fall back to a simulated provider position.
+    # A missing/denied browser location is an explicit failure, not evidence.
+    if lat is None or lng is None:
+        raise core.ValidationError("a verified device location is required for a driver GPS ping")
+    try:
+        lat, lng = float(lat), float(lng)
+    except (TypeError, ValueError):
+        raise core.ValidationError("driver GPS coordinates must be numeric")
+    if not -90 <= lat <= 90 or not -180 <= lng <= 180:
+        raise core.ValidationError("driver GPS coordinates are outside valid ranges")
     return tp.record_gps_ping(conn, _svc(actor, *_SELF_SERVICE["ping"]), trip_id, progress=progress, lat=lat, lng=lng)
 
 
 def submit_pod(conn, actor, trip_id, kind="POD", evidence_types=None, **attrs):
     core.require(actor, "driver.app.execute")
     did = resolve_driver(conn, actor)
-    _own_trip(conn, did, trip_id)
-    return tp.submit_proof(conn, _svc(actor, *_SELF_SERVICE["pod"]), trip_id, kind, evidence_types=evidence_types, **attrs)
+    trip = _own_trip(conn, did, trip_id)
+    if kind != "POD":
+        raise core.ValidationError("the driver app accepts delivery proof only")
+    if trip["status"] == "POD_SUBMITTED":
+        existing = conn.execute(
+            "SELECT id FROM mkt_pods WHERE trip_id=? AND kind='POD' AND status='SUBMITTED' "
+            "ORDER BY id DESC LIMIT 1", (trip_id,)
+        ).fetchone()
+        return {"pod_id": existing["id"] if existing else None, "kind": "POD",
+                "status": "POD_SUBMITTED", "idempotent": True}
+    if trip["status"] != "DELIVERED":
+        raise core.ValidationError("delivery proof can be submitted only after the trip is marked delivered")
+
+    # This UI currently has no governed binary-upload channel. Do not accept a
+    # client-supplied label claiming a photo or signature exists. The delivery
+    # code is real, server-verified evidence and is the only POD factor this
+    # driver channel may assert until an attachment service is available.
+    requested = set(evidence_types or [])
+    if requested != {"recipient_otp"}:
+        raise core.ValidationError("driver POD requires the verified recipient delivery code")
+    verification = dv.status(conn, trip["booking_id"])
+    if verification.get("recipient_verification") != "VERIFIED":
+        raise core.ValidationError("verify the recipient delivery code before submitting POD")
+
+    proof = tp.submit_proof(
+        conn, _svc(actor, *_SELF_SERVICE["pod"]), trip_id, "POD",
+        evidence_types=["recipient_otp"], **attrs
+    )
+    advanced = tp.advance_trip(
+        conn, _svc(actor, *_SELF_SERVICE["advance"]), trip_id, "POD_SUBMITTED",
+        note="recipient delivery code verified; POD submitted"
+    )
+    return {**proof, "status": advanced["to"]}
 
 
 def accept_delivery(conn, actor, trip_id):

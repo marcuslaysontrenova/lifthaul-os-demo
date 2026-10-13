@@ -128,7 +128,35 @@ class Execution(Base):
         self._activate(self.tid)
         self.assertEqual(da.advance(self.c, p, self.tid, "EN_ROUTE_PICKUP")["to"], "EN_ROUTE_PICKUP")
         da.ping(self.c, p, self.tid, progress=25, lat=14.6, lng=121.1)
-        self.assertEqual(da.submit_pod(self.c, p, self.tid, "POD", evidence_types=["photo"])["status"], "SUBMITTED")
+        for status in ("ARRIVED_PICKUP", "LOADING", "LOADED", "DEPARTED", "IN_TRANSIT",
+                       "ARRIVED_DESTINATION", "UNLOADING", "DELIVERED"):
+            da.advance(self.c, p, self.tid, status)
+        dv.set_recipient(self.c, self.op, self.bk, "Maria", mobile="09171234567")
+        code = dv.issue_otp(self.c, self.op, self.bk)["code"]
+        da.verify_recipient_otp(self.c, p, self.tid, code)
+        self.assertEqual(
+            da.submit_pod(self.c, p, self.tid, "POD", evidence_types=["recipient_otp"])["status"],
+            "POD_SUBMITTED"
+        )
+
+    def test_driver_gps_never_falls_back_to_simulated_location(self):
+        p = self._principal(90, self.drv)
+        self._activate(self.tid)
+        with self.assertRaises(core.ValidationError):
+            da.ping(self.c, p, self.tid)
+        with self.assertRaises(core.ValidationError):
+            da.ping(self.c, p, self.tid, lat=91, lng=121)
+        self.assertEqual(self.c.execute("SELECT COUNT(*) c FROM mkt_gps_pings").fetchone()["c"], 0)
+
+    def test_driver_cannot_claim_uncollected_pod_evidence(self):
+        p = self._principal(90, self.drv)
+        self._activate(self.tid)
+        for status in ("EN_ROUTE_PICKUP", "ARRIVED_PICKUP", "LOADING", "LOADED", "DEPARTED", "IN_TRANSIT",
+                       "ARRIVED_DESTINATION", "UNLOADING", "DELIVERED"):
+            da.advance(self.c, p, self.tid, status)
+        with self.assertRaises(core.ValidationError):
+            da.submit_pod(self.c, p, self.tid, "POD", evidence_types=["photo", "signature"])
+        self.assertEqual(self.c.execute("SELECT COUNT(*) c FROM mkt_pods").fetchone()["c"], 0)
 
     def test_detail_shape(self):
         p = self._principal(90, self.drv)

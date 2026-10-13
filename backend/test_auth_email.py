@@ -67,21 +67,26 @@ class AuthEmailTests(unittest.TestCase):
                 smtp.assert_not_called()
 
     def test_starttls_precedes_credentials_and_sends_code_only_in_message(self):
-        with mock.patch.dict(os.environ, SMTP_ENV, clear=True), mock.patch("smtplib.SMTP") as smtp:
+        with mock.patch.dict(os.environ, SMTP_ENV, clear=True), \
+                mock.patch("ssl.create_default_context", return_value=mock.sentinel.tls_context), \
+                mock.patch("smtplib.SMTP") as smtp:
             session = smtp.return_value.__enter__.return_value
             session.send_message.return_value = {}
             self.assertTrue(auth_email.send_code("test@example.invalid", "123456"))
             self.assertEqual([c[0] for c in session.method_calls],
                              ["ehlo", "starttls", "ehlo", "login", "send_message"])
+            self.assertIs(session.starttls.call_args.kwargs["context"], mock.sentinel.tls_context)
             self.assertIn("123456", session.send_message.call_args.args[0].get_content())
 
     def test_ssl_transport_and_recipient_refusal(self):
         with mock.patch.dict(os.environ, {**SMTP_ENV, "LH_AUTH_SMTP_SECURITY": "ssl"}, clear=True), \
+                mock.patch("ssl.create_default_context", return_value=mock.sentinel.tls_context), \
                 mock.patch("smtplib.SMTP_SSL") as smtp:
             session = smtp.return_value.__enter__.return_value
             session.send_message.return_value = {"test@example.invalid": (550, b"refused")}
             self.assertFalse(auth_email.send_code("test@example.invalid", "123456"))
             self.assertEqual(smtp.call_args.args[1], 465)
+            self.assertIs(smtp.call_args.kwargs["context"], mock.sentinel.tls_context)
             session.starttls.assert_not_called()
 
     def test_failure_and_header_injection_do_not_claim_delivery(self):

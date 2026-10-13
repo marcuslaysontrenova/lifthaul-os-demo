@@ -9,6 +9,36 @@ PR #28 (customer booking detail/tracking) requires a new, exact merge authorizat
 checkpoint's driver evidence remediation must pass its own pull-request gates and receive its own
 release decision.
 
+## Week-one MVP integration candidate
+
+Branch `codex/mvp-sprint-week1` integrates the independently tested customer-booking and
+driver-evidence changes from PRs #28 and #29, then closes the implementation gap for customer offer
+comparison and governed selection requests. It is a review candidate only: it has not been merged,
+deployed, or counted as hosted acceptance.
+
+The customer workspace now:
+
+- compares eligible offers using customer-safe provider, vehicle, amount, timing, validity,
+  inclusion, exclusion, toll, ferry, waiting-rate, and note fields;
+- excludes raw carrier, vehicle, driver, tenant, and internal-margin identifiers;
+- escapes provider-supplied notes before rendering;
+- records a persistent, owner-scoped, idempotent `PENDING_REVIEW` selection request;
+- rejects unrelated, invalid, expired, malformed-validity, or already-selected offers; and
+- does not directly assign a provider, create a trip, or move funds.
+
+Integration-candidate evidence:
+
+- 78/78 responsive browser tests passed across Chromium, Firefox, and WebKit;
+- 1,522/1,527 backend tests passed in the managed sandbox, with the remaining five blocked only
+  from creating temporary static-file fixtures;
+- those five static-router tests passed 5/5 outside that filesystem restriction;
+- the 31-step quote-to-job-to-invoice HTTP journey passed; and
+- the offline SMTP transport tests are now hermetic while still proving TLS precedes credentials.
+
+This moves checklist item C10 to **Ready in review branch**. Formal MVP acceptance remains 3/9
+(33.3%) until the exact candidate is authorized, merged, deployed, smoke-tested, and the hosted
+acceptance gates are closed.
+
 ## Production evidence (read-only)
 
 - Canonical public URL: https://www.lifthaul.com.ph/

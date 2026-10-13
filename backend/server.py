@@ -2984,6 +2984,8 @@ def _client_portal_routes():
         ("GET", "/portal/client/bookings"): lambda a, b, p: cp.bookings(_conn, a),
         ("GET", "/portal/client/bookings/:id"): lambda a, b, p: cp.booking_detail(_conn, a, int(p["id"])),
         ("GET", "/portal/client/offers"): lambda a, b, p: cp.offers(_conn, a),
+        ("POST", "/portal/client/offers/:id/request-selection"): lambda a, b, p: cp.request_offer_selection(
+            _conn, a, int(p["id"])),
         ("GET", "/portal/client/trips"): lambda a, b, p: cp.trips(_conn, a),
         ("GET", "/portal/client/payments"): lambda a, b, p: cp.payments(_conn, a),
         ("GET", "/portal/client/payments/:id"): lambda a, b, p: cp.payment_detail(_conn, a, int(p["id"])),

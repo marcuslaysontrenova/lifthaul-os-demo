@@ -180,6 +180,67 @@ class ClientPortalTests(unittest.TestCase):
         self.assertEqual(result["updated"], 1)
         self.assertEqual(cp.overview(self.conn, self.actor)["unread_notifications"], 0)
 
+    def _offer(self, status="VALID", valid_until="2099-01-01T00:00:00+00:00"):
+        carrier = self.conn.execute(
+            "INSERT INTO mkt_carriers(carrier_type,legal_name,trade_name,status,created_at) "
+            "VALUES('FLEET','Acme Carrier Legal','Acme Carrier','ACTIVE',?)", (core.now(),)
+        ).lastrowid
+        vehicle = self.conn.execute(
+            "INSERT INTO mkt_vehicles(carrier_id,category_code,plate_number,body_type,status,created_at) "
+            "VALUES(?, '6W_CLOSED_VAN','TEST-600','Closed van','ACTIVE',?)", (carrier, core.now())
+        ).lastrowid
+        offer = self.conn.execute(
+            "INSERT INTO mkt_offers(booking_id,carrier_id,vehicle_id,amount,currency,est_pickup,"
+            "est_delivery,valid_until,inclusions,exclusions,toll_treatment,ferry_treatment,waiting_rate,"
+            "notes,status,created_at) VALUES(?,?,?,12500,'PHP','08:00','14:00',?,"
+            "'Driver and fuel','Tolls','Direct by booker','Not applicable',500,'Verified unit',?,?)",
+            (self.booking_id, carrier, vehicle, valid_until, status, core.now()),
+        ).lastrowid
+        self.conn.commit()
+        return offer
+
+    def test_offer_comparison_is_owned_useful_and_excludes_internal_ids(self):
+        offer_id = self._offer()
+        result = cp.offers(self.conn, self.actor)["offers"]
+        self.assertEqual(len(result), 1)
+        offer = result[0]
+        self.assertEqual(offer["id"], offer_id)
+        self.assertEqual(offer["provider_name"], "Acme Carrier")
+        self.assertEqual(offer["vehicle_category"], "6W_CLOSED_VAN")
+        self.assertEqual(offer["vehicle_body_type"], "Closed van")
+        self.assertEqual(offer["amount"], 12500)
+        for private in ("carrier_id", "vehicle_id", "driver_id", "tenant_id", "invalid_reason"):
+            self.assertNotIn(private, offer)
+        self.assertEqual(cp.offers(self.conn, self.other_actor)["offers"], [])
+
+    def test_offer_selection_request_is_governed_owned_and_idempotent(self):
+        offer_id = self._offer()
+        first = cp.request_offer_selection(self.conn, self.actor, offer_id)
+        second = cp.request_offer_selection(self.conn, self.actor, offer_id)
+        self.assertEqual(first["status"], "PENDING_REVIEW")
+        self.assertFalse(first["idempotent"])
+        self.assertTrue(second["idempotent"])
+        self.assertEqual(first["request_id"], second["request_id"])
+        self.assertEqual(cp.offers(self.conn, self.actor)["offers"][0]["selection_request_status"],
+                         "PENDING_REVIEW")
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM client_offer_selection_requests").fetchone()[0], 1)
+        self.assertFalse(self.conn.execute(
+            "SELECT 1 FROM mkt_offers WHERE id=? AND status='SELECTED'", (offer_id,)).fetchone())
+        with self.assertRaises(core.NotFoundError):
+            cp.request_offer_selection(self.conn, self.other_actor, offer_id)
+
+    def test_offer_selection_rejects_ineligible_expired_and_unverified_validity(self):
+        invalid = self._offer(status="INVALID")
+        with self.assertRaises(core.ValidationError):
+            cp.request_offer_selection(self.conn, self.actor, invalid)
+        expired = self._offer(valid_until="2020-01-01T00:00:00+00:00")
+        with self.assertRaises(core.ValidationError):
+            cp.request_offer_selection(self.conn, self.actor, expired)
+        malformed = self._offer(valid_until="not-a-date")
+        with self.assertRaises(core.ValidationError):
+            cp.request_offer_selection(self.conn, self.actor, malformed)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,7 @@ on:
       - 'ci/browser/playwright.public-ui.config.js'
       - 'ci/browser/tests/public-ui.spec.js'
       - 'ci/browser/tests/client-booking.spec.js'
+      - 'ci/browser/tests/client-offers.spec.js'
       - '.github/workflows/public-ui-release-gate.yml'
   push:
     branches: [main]
@@ -38,6 +39,7 @@ on:
       - 'ci/browser/playwright.public-ui.config.js'
       - 'ci/browser/tests/public-ui.spec.js'
       - 'ci/browser/tests/client-booking.spec.js'
+      - 'ci/browser/tests/client-offers.spec.js'
       - '.github/workflows/public-ui-release-gate.yml'
 
 permissions:

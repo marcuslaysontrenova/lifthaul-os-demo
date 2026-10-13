@@ -4,7 +4,17 @@ on:
   push:
     branches:
       - codex/railway-mvp-smoke-20261013
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Approved 40-character SHA already deployed to canonical Railway'
+        required: true
+        type: string
+      run_authenticated:
+        description: 'Run authorized QA login after protected test-account secrets are configured'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -19,12 +29,15 @@ jobs:
         run: python -m unittest discover -s scripts/go_live -p 'test_prod_auth_qa_contract.py' -v
 
   canonical-production-smoke:
+    # Never block Railway's check-suite-gated deployment by waiting for that
+    # very same deployment from a commit-triggered CI check.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Verify exact live release, location manifest and public access controls
         env:
-          EXPECTED_SHA: 301d002a7482cb51ebffa59b8733ad31fde7b3bc
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
           CANONICAL_URL: https://www.lifthaul.com.ph
         run: |
           mkdir -p evidence
@@ -117,6 +130,9 @@ jobs:
   # This never initiates checkout, payment capture, transfers or provider payouts.
   authenticated-qa-readonly:
     needs: canonical-production-smoke
+    # A read-only smoke PASS must never be presented as authenticated UAT PASS.
+    # Explicit opt-in is required after credential provisioning.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_authenticated == true }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 6
@@ -134,7 +150,7 @@ jobs:
       - name: Read-only authenticated QA acceptance of existing synthetic booking
         env:
           BASE_URL: https://www.lifthaul.com.ph
-          EXPECTED_SHA: 301d002a7482cb51ebffa59b8733ad31fde7b3bc
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
           LH_TEST_BOOKING_REF: LH-XDMVQO
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}

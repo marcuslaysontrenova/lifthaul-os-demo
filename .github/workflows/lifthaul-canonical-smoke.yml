@@ -10,6 +10,14 @@ permissions:
   contents: read
 
 jobs:
+  offline-auth-qa-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no-write and fail-closed production QA harness without credentials
+        run: python -m unittest discover -s scripts/go_live -p 'test_prod_auth_qa_contract.py' -v
+
   canonical-production-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15

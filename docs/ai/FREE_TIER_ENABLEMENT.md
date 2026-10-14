@@ -25,3 +25,10 @@ ChatGPT Codex/Work session limits do NOT translate into unattended Codex API ent
 - owner explicitly enables the runner after review.
 
 Until then, switching is manual, documented, and safe. Keep MVP issue #20 authoritative.
+
+## Grok / Kimi (planned; not connected)
+- Grok (xAI) and Kimi (Moonshot AI) are now represented in the OFFLINE policy only. Neither model's free chat access is proof of API credits, automated runner access, or safe unattended coding permissions.
+- Verify each provider's official API terms, accessible endpoints, supported structured outputs, tool execution requirements, regions, data processing policy, account eligibility, quotas, and charges at the time of provisioning.
+- Create separate, least-privilege provider credentials only after owner approval; store in protected nonproduction GitHub Actions secrets, not in source files or chat.
+- Keep runtime invocations disabled until sandbox authentication, budgets, per-task spending ceilings, offline and limited live test evidence, a manual kill switch, and PR-review protections pass.
+- **ChatGPT/Codex quota cannot be directly observed by a GitHub workflow without an independently supported API or runner-specific quota signal.** Do not claim a cross-chat automatic handover; GitHub's issue/PR evidence is the transferable context, not an active model session.

@@ -40,6 +40,28 @@ class IsolatedEvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.evidence_for({**SUCCESS, "fake": "success"}, SHA)
 
+    def test_pr_merge_identity_is_not_mislabeled_as_source_head(self):
+        record = module.evidence_for(
+            SUCCESS, "a" * 40, checkout_sha="b" * 40,
+            base_sha="c" * 40, event_name="pull_request")
+        self.assertEqual(record["candidate_sha"], "a" * 40)
+        self.assertEqual(record["tested_checkout_sha"], "b" * 40)
+        self.assertEqual(record["base_sha"], "c" * 40)
+        self.assertTrue(record["is_pr_merge_checkout"])
+        self.assertFalse(record["production_go"])
+
+    def test_pr_missing_merge_or_base_is_rejected(self):
+        with self.assertRaises(ValueError):
+            module.evidence_for(SUCCESS, SHA, event_name="pull_request")
+        with self.assertRaises(ValueError):
+            module.evidence_for(SUCCESS, SHA, checkout_sha=SHA,
+                                base_sha="b" * 40, event_name="pull_request")
+
+    def test_manual_dispatch_must_test_same_commit(self):
+        with self.assertRaises(ValueError):
+            module.evidence_for(SUCCESS, SHA, checkout_sha="b" * 40,
+                                event_name="workflow_dispatch")
+
     def test_unpinned_candidate_rejected(self):
         for candidate in ("main", "a" * 39, "z" * 40, ""):
             with self.subTest(candidate=candidate):

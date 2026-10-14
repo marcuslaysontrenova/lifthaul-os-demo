@@ -193,6 +193,7 @@ jobs:
           EXPECTED_DEPLOYMENT_ID: ${{ steps.identity.outputs.deployment_id }}
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+          LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED: ${{ inputs.authorize_synthetic_bookings }}
           LH_MVP_EVIDENCE_PATH: evidence/regional-booking-acceptance.json
         run: python scripts/go_live/prod_e2e.py
       - name: Enforce complete acceptance (public, admin, regional)

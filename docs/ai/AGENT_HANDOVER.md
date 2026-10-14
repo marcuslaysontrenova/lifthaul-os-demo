@@ -1,6 +1,6 @@
 # LiftHaul AI agent handover protocol
 
-Status: SETUP PHASE; no automatic agent execution until credentials and provider runners are verified.
+Status: SETUP PHASE; policy supports five labels (Codex, Claude, Gemini, Grok, Kimi) but NO live automatic transfer or provider invocation exists until credentials, budgets and runners are verified.
 
 ## Shared source of truth
 - GitHub issues and PRs are the task ledger; main is the integration baseline.
@@ -13,7 +13,9 @@ Status: SETUP PHASE; no automatic agent execution until credentials and provider
 1. Codex primary (when available).
 2. Claude Code fallback for verified quota or runner unavailability.
 3. Gemini CLI fallback for verified Claude quota or runner unavailability.
-4. If provider status is ambiguous, stop and request human review; never treat a failed test as a quota problem.
+4. Grok fallback ONLY after independent runner authentication, availability, and budget controls are verified.
+5. Kimi fallback ONLY after independent runner authentication, availability, and budget controls are verified.
+6. If provider status is ambiguous, stop and request human review; never treat a failed test as a quota problem.
 
 The quota detection mechanism must distinguish provider-specific rate/quota errors from: auth denial, broken code, failing tests, unsafe content, CI outages, and billing errors. Cross-platform usage allowance is not transferable.
 
@@ -43,6 +45,8 @@ Next actionable task:
 ## Enablement checklist
 - [ ] Provision Claude Code provider credentials and confirm entitlements.
 - [ ] Provision Gemini provider credentials and confirm entitlements.
+- [ ] Verify Grok provider API/runner authentication, terms, quota and approved budget.
+- [ ] Verify Kimi provider API/runner authentication, terms, quota and approved budget.
 - [ ] Confirm Codex unattended runner method (ChatGPT Work/Codex subscription limits do not automatically supply API credits).
 - [ ] Decide per-provider monthly budget, timeout, and permitted scopes.
 - [ ] Install and pin supported provider runners/actions with reviewed permissions.

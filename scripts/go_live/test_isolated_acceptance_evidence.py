@@ -22,6 +22,16 @@ class IsolatedEvidenceTests(unittest.TestCase):
         self.assertFalse(result["hosted_database_recovery_verified"])
         self.assertFalse(result["external_payment_certification"])
 
+    def test_missing_browser_suite_rejected(self):
+        incomplete = {k: v for k, v in SUCCESS.items() if k != "public_browser_responsive_journeys"}
+        with self.assertRaises(ValueError):
+            module.evidence_for(incomplete, SHA)
+
+    def test_browser_failure_blocks_isolated_pass(self):
+        result = module.evidence_for({**SUCCESS, "public_browser_responsive_journeys": "failure"}, SHA)
+        self.assertEqual(result["result"], "FAILED_OR_INCOMPLETE")
+        self.assertFalse(result["production_go"])
+
     def test_single_skipped_suite_fails_closed(self):
         for suite in module.SUITES:
             with self.subTest(suite=suite):

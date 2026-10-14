@@ -11,10 +11,10 @@ hosted acceptance; refresh the PR head and required checks immediately before au
 ## Progress measurement
 
 - **Formal MVP acceptance: 33.3% complete, 66.7% remaining.** Three of nine hard gates are closed.
-- **Engineering maturity: 59.8% complete, 40.2% remaining.** Across 61 detailed items: 22 Done,
-  4 Ready in tested PR, 23 Partial, 7 Open, 4 Blocked, and 1 Deferred. Score: `(22 + 4×0.75 +
-  23×0.5) / 61 = 59.8%`.
-- **Deployment delta ready for authorization:** A08, C09, C10, and C11, plus safety improvements
+- **Engineering maturity: 61.1% complete, 38.9% remaining.** Across 61 detailed items: 22 Done,
+  5 Ready in tested PR, 23 Partial, 6 Open, 4 Blocked, and 1 Deferred. Score: `(22 + 5×0.75 +
+  23×0.5) / 61 = 61.1%`.
+- **Deployment delta ready for authorization:** A08, B12, C09, C10, and C11, plus safety improvements
   contributing to D04, D09, and D10.
 - **Release decision:** NO-GO for unrestricted MVP; CONDITIONAL GO remains limited to the existing
   no-live-funds public runtime.
@@ -54,6 +54,19 @@ Integration-candidate evidence:
 - those five static-router tests passed 5/5 outside that filesystem restriction;
 - the 31-step quote-to-job-to-invoice HTTP journey passed; and
 - the offline SMTP transport tests are now hermetic while still proving TLS precedes credentials.
+
+Gate 4 now also has a tested release-bound acceptance harness. It fails before its first write unless
+the hosted backend reports the exact expected 40-character release SHA, then creates one explicitly
+synthetic no-live-funds booking in each of Luzon, Visayas and Mindanao. For each exact record it proves
+idempotent retry, public tracking, canonical authenticated intake-queue visibility and persistence
+across independent HTTP requests. It stores only booking references and token fingerprints in the
+evidence artifact, never opaque tracking tokens or credentials, and never calls a payment, assignment
+or payout endpoint. The release workflow retains the artifact for 30 days. Offline contract, booking,
+server and deploy coverage passed **114/114 tests**; all three edited workflow files parsed successfully.
+
+This advances B12 from **Open** to **Ready in tested PR** and raises engineering maturity to 61.1%.
+It does not close Gate 4: the exact candidate must still be authorized, merged, deployed and run
+against the canonical hosted environment. Process-restart and database-restore evidence remain Gate 6.
 
 This moves checklist item C10 to **Ready in review branch**. Formal MVP acceptance remains 3/9
 (33.3%) until the exact candidate is authorized, merged, deployed, smoke-tested, and the hosted

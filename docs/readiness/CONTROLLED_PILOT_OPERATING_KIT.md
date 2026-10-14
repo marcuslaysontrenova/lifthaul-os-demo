@@ -29,7 +29,7 @@ CPC enforcement, it is **out of pilot scope** — record it and move on.
 ## 1. Pilot readiness gate (must be TRUE before inviting the first customer)
 
 - [ ] **Application deployed** (Gate 1–2): hosted PostgreSQL + TLS domain; `GET /healthz` and `/readyz` green over HTTPS.
-- [ ] **`prod_e2e.py` passes 8/8** against the hosted URL.
+- [ ] **`prod_e2e.py` passes every regional booking acceptance step** against the exact hosted release.
 - [ ] **`preflight.py` = LAUNCH-SAFE** and confirms all four flags OFF.
 - [ ] **Two-tenant isolation** re-verified on prod.
 - [ ] **One backup taken** + restore drill run (`backup_restore.py --postgres`); RTO/RPO recorded.

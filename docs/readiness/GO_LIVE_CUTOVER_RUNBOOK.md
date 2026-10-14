@@ -55,7 +55,7 @@ Put the backend behind TLS (reverse proxy / platform TLS).
 ```bash
 BASE_URL=https://<backend-origin> \
 LH_ADMIN_EMAIL=<real-admin> LH_ADMIN_PASSWORD=<real-pw> \
-python scripts/go_live/prod_e2e.py           # expect: 8 passed, 0 failed
+python scripts/go_live/prod_e2e.py           # expect: REGIONAL ACCEPTANCE: PASS
 ```
 Then walk the full transaction in a real browser (customer books → operator review → quote → payment
 state → assignment → carrier portal → trip → secure delivery OTP → POD → settlement). **Zero Critical/High.**

@@ -96,6 +96,14 @@ def _identity_checks(evidence, ready_status, ready):
     evidence["observed_release_sha"] = ready.get("release_sha")
     evidence["observed_deployment_id"] = ready.get("deployment_id")
     evidence["schema_version"] = ready.get("schema_version")
+    isolated_local_ci = (
+        BASE in ("http://localhost:8787", "http://127.0.0.1:8787")
+        and os.environ.get("LIFTHAUL_CI", "").lower() == "true"
+    )
+    valid = _check(
+        evidence, "hosted release SHA and deployment ID pinned",
+        isolated_local_ci or bool(EXPECTED_SHA and EXPECTED_DEPLOYMENT_ID),
+    ) and valid
     if EXPECTED_SHA:
         valid = _check(evidence, "exact release SHA", ready.get("release_sha") == EXPECTED_SHA) and valid
     if EXPECTED_DEPLOYMENT_ID:
@@ -120,19 +128,27 @@ def _public(evidence):
     status, _, _ = _req("GET", "/admin/marketplace/public-booking-queue")
     _check(evidence, "anonymous intake-queue access denied", status in (401, 403))
 
-    _, _, headers = _req("GET", "/healthz", origin=UNTRUSTED_ORIGIN)
+    cors_status, _, headers = _req("GET", "/healthz", origin=UNTRUSTED_ORIGIN)
     acao = next((str(v) for k, v in headers.items()
                  if k.lower() == "access-control-allow-origin"), "")
     _check(evidence, "CORS does not trust arbitrary origins",
-           acao not in ("*", UNTRUSTED_ORIGIN))
+           cors_status == 200 and acao not in ("*", UNTRUSTED_ORIGIN))
 
 
-def _platform_flag_is_off(rows, key):
-    values = [row.get("value") for row in rows
-              if isinstance(row, dict) and row.get("key") == key
-              and row.get("scope") == "platform" and row.get("scope_ref", "") == ""]
-    return len(values) == 1 and (values[0] is False or
-                                 isinstance(values[0], str) and values[0].strip().lower() == "false")
+def _config_flag_is_off(rows, key):
+    """Every scope must be explicitly OFF; platform default must exist once.
+
+    Even expired activated overrides require review before a release is accepted.
+    An absent value must never be mistaken for a disabled regulated capability.
+    """
+    matching = [row for row in rows
+                if isinstance(row, dict) and row.get("key") == key]
+    defaults = [row for row in matching
+                if row.get("scope") == "platform" and row.get("scope_ref", "") == ""]
+    def explicitly_off(row):
+        value = row.get("value")
+        return value is False or (isinstance(value, str) and value.strip().lower() == "false")
+    return len(defaults) == 1 and all(explicitly_off(row) for row in matching)
 
 
 def _admin(evidence):
@@ -161,7 +177,7 @@ def _admin(evidence):
                       status == 200 and isinstance(rows, list)):
             return
         for key in CONTROLLED_FLAGS:
-            _check(evidence, f"platform flag OFF: {key}", _platform_flag_is_off(rows, key))
+            _check(evidence, f"regulated flag OFF across scopes: {key}", _config_flag_is_off(rows, key))
     finally:
         # Revoke the short-lived audit session; no operational mutation is allowed.
         _req("POST", "/logout", {}, token=token)

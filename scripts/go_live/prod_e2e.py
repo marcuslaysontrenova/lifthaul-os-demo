@@ -128,7 +128,7 @@ def main():
         and (not EXPECTED_DEPLOYMENT_ID
              or ready.get("deployment_id") == EXPECTED_DEPLOYMENT_ID)
     )
-    step("exact deployed release is ready", identity_ok, f"got HTTP {code} {ready}")
+    step("exact deployed release is ready", identity_ok, f"got HTTP {code}")
     evidence["observed_release_sha"] = ready.get("release_sha") if isinstance(ready, dict) else None
     evidence["schema_version"] = ready.get("schema_version") if isinstance(ready, dict) else None
     if not identity_ok:
@@ -233,7 +233,7 @@ def main():
             and result.get("protected_payment", {}).get("live_funds_enabled") is False
             and result.get("payment_preference", {}).get("charged") is False
         )
-        step(f"{island} synthetic booking accepted with live funds off", accepted, f"got HTTP {code} {result}")
+        step(f"{island} synthetic booking accepted with live funds off", accepted, f"got HTTP {code}")
         if not accepted:
             continue
 
@@ -241,7 +241,7 @@ def main():
         step(
             f"{island} retry is idempotent",
             replay_code == 200 and replay.get("ref") == ref,
-            f"got HTTP {replay_code} {replay}",
+            f"got HTTP {replay_code}",
         )
 
         track_code, tracked = _req("GET", f"/public/bookings/track/{token}")
@@ -250,7 +250,7 @@ def main():
             track_code == 200 and tracked.get("ref") == ref
             and tracked.get("customer_status") == "Request Received"
             and tracked.get("protected_payment", {}).get("live_funds_enabled") is False,
-            f"got HTTP {track_code} {tracked}",
+            f"got HTTP {track_code}",
         )
         created.append({"island": island, "ref": ref, "token": token})
         evidence["regions"].append({

@@ -34,7 +34,7 @@ jobs:
         working-directory: backend
         run: python -m pytest -q
       - name: Production acceptance harness contracts (offline, no funds)
-        run: python -m unittest discover -s scripts/go_live -p 'test_prod_*_contract.py' -v
+        run: python -m unittest discover -s scripts/go_live -p 'test_*contract.py' -v
 
   postgres-runtime:
     name: PostgreSQL runtime + production E2E

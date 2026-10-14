@@ -185,6 +185,7 @@ jobs:
         env:
           BASE_URL: https://www.lifthaul.com.ph
           EXPECTED_SHA: ${{ needs.verify.outputs.release_sha }}
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.identity.outputs.deployment_id }}
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
           LH_MVP_EVIDENCE_PATH: evidence/regional-booking-acceptance.json

@@ -1,0 +1,28 @@
+name: LiftHaul Synthetic Recovery Isolation Contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/go_live/validate_synthetic_restore_isolation.py'
+      - 'scripts/go_live/test_synthetic_restore_isolation.py'
+      - '.github/workflows/synthetic-recovery-isolation.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  offline-isolation-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Verify prohibited restore destinations fail closed (NO database connections)
+        run: python -m unittest discover -s scripts/go_live -p 'test_synthetic_restore_isolation.py' -v
+      - name: Verify synthetically distinct localhost endpoints (metadata ONLY)
+        run: |
+          python scripts/go_live/validate_synthetic_restore_isolation.py --ci-context --synthetic-opt-in \
+            --source-url postgresql://lifthaul:synthetic@localhost:5432/lifthaul_ci_source \
+            --target-url postgresql://lifthaul:synthetic@localhost:5432/lifthaul_ci_restore

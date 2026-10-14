@@ -21,6 +21,7 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             "LH_ADMIN_EMAIL": "regional-qa@example.invalid",
             "LH_ADMIN_PASSWORD": "offline-only-password",
             "EXPECTED_DEPLOYMENT_ID": "offline-deploy-123",
+            "LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": "true",
             "LH_MVP_EVIDENCE_PATH": str(self.evidence_path),
         }
         with mock.patch.dict(os.environ, env, clear=False):
@@ -83,6 +84,17 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
         evidence = self.evidence_path.read_text(encoding="utf-8")
         self.assertIn('"result": "PASS"', evidence)
         self.assertNotIn("pbk_offline", evidence)
+
+    def test_missing_hosted_approval_blocks_all_bookings(self):
+        with mock.patch.dict(self.module["main"].__globals__, {}):
+            with mock.patch.dict(os.environ, {"LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": ""}):
+                self.assertEqual(self.run_main(), 2)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
+
+    def test_missing_hosted_deployment_pin_blocks_all_bookings(self):
+        with mock.patch.dict(self.module["main"].__globals__, {"EXPECTED_DEPLOYMENT_ID": ""}):
+            self.assertEqual(self.run_main(), 2)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
 
     def test_wrong_role_never_creates_a_booking(self):
         original = self.fake_request

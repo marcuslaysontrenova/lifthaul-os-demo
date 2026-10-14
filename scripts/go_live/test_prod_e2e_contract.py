@@ -69,11 +69,14 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             ]}
         self.fail(f"unexpected request: {method} {path}")
 
-    def run_main(self):
-        with mock.patch.dict(self.module["main"].__globals__, {"_req": self.fake_request}):
-            with mock.patch.object(self.module["time"], "time", return_value=1791943200):
-                with redirect_stdout(io.StringIO()):
-                    return self.module["main"]()
+    def run_main(self, approved=True):
+        with mock.patch.dict(os.environ, {
+            "LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": "true" if approved else ""
+        }):
+            with mock.patch.dict(self.module["main"].__globals__, {"_req": self.fake_request}):
+                with mock.patch.object(self.module["time"], "time", return_value=1791943200):
+                    with redirect_stdout(io.StringIO()):
+                        return self.module["main"]()
 
     def test_three_regions_exact_queue_and_no_payment_endpoint(self):
         self.assertEqual(self.run_main(), 0)
@@ -86,9 +89,7 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
         self.assertNotIn("pbk_offline", evidence)
 
     def test_missing_hosted_approval_blocks_all_bookings(self):
-        with mock.patch.dict(self.module["main"].__globals__, {}):
-            with mock.patch.dict(os.environ, {"LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": ""}):
-                self.assertEqual(self.run_main(), 2)
+        self.assertEqual(self.run_main(approved=False), 2)
         self.assertNotIn(("POST", "/public/bookings"), self.calls)
 
     def test_missing_hosted_deployment_pin_blocks_all_bookings(self):

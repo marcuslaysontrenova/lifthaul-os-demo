@@ -74,7 +74,7 @@ def _table_columns(conn, table):
     information_schema.columns. This also keeps a missing column/table from
     rolling back an unrelated transaction just to detect its existence.
     """
-    if not isinstance(table, str) or not re.fullmatch(r"[A-Za-z_]\\w*", table):
+    if not isinstance(table, str) or not re.fullmatch(r"[A-Za-z_]\w*", table):
         raise ValueError("invalid table identifier for backfill schema probe")
     try:
         return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}

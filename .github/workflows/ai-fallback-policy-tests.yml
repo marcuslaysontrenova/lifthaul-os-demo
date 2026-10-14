@@ -18,3 +18,13 @@ jobs:
           python-version: '3.12'
       - name: Offline no-credential fallback simulation
         run: python -m unittest discover -s scripts/ai -p 'test_*.py' -v
+      - name: Persistent synthetic handover artifact (no provider calls)
+        run: |
+          python scripts/ai/handover_runner.py --handover docs/ai/fixtures/issue20-handover-synthetic.json --output evidence/ai/issue20-handover-decision.json
+      - name: Preserve sanitized offline handover evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-handover-offline-${{ github.sha }}
+          path: evidence/ai/issue20-handover-decision.json
+          retention-days: 30
+          if-no-files-found: error

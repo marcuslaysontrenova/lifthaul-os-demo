@@ -27,6 +27,7 @@ except Exception:
 
 BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8787").rstrip("/")
 EXPECTED_SHA = os.environ.get("EXPECTED_SHA") or os.environ.get("RELEASE_SHA")
+EXPECTED_DEPLOYMENT_ID = os.environ.get("EXPECTED_DEPLOYMENT_ID", "").strip()
 ADMIN_EMAIL = os.environ.get("LH_ADMIN_EMAIL")
 ADMIN_PW = os.environ.get("LH_ADMIN_PASSWORD")
 EVIDENCE_PATH = Path(os.environ.get(
@@ -48,6 +49,16 @@ _ok = 0
 _fail = 0
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward login payloads or authorization headers to a redirect."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect())
+
+
 def _req(method, path, body=None, token=None):
     url = BASE + path
     data = json.dumps(body).encode() if body is not None else None
@@ -57,7 +68,7 @@ def _req(method, path, body=None, token=None):
     if token:
         request.add_header("Authorization", "Bearer " + token)
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with OPENER.open(request, timeout=20) as response:
             code, payload = response.status, response.read().decode()
     except urllib.error.HTTPError as error:
         code, payload = error.code, error.read().decode()
@@ -99,6 +110,7 @@ def main():
         "acceptance": "regional_public_booking",
         "base_url": BASE,
         "expected_release_sha": EXPECTED_SHA,
+        "expected_deployment_id": EXPECTED_DEPLOYMENT_ID or None,
         "live_funds_exercised": False,
         "regions": [],
         "result": "INCOMPLETE",
@@ -113,6 +125,8 @@ def main():
         and ready.get("status") == "ready"
         and ready.get("schema_version") is not None
         and ready.get("release_sha") == EXPECTED_SHA
+        and (not EXPECTED_DEPLOYMENT_ID
+             or ready.get("deployment_id") == EXPECTED_DEPLOYMENT_ID)
     )
     step("exact deployed release is ready", identity_ok, f"got HTTP {code} {ready}")
     evidence["observed_release_sha"] = ready.get("release_sha") if isinstance(ready, dict) else None
@@ -129,6 +143,62 @@ def main():
 
     code, _ = _req("GET", "/admin/marketplace/public-booking-queue")
     step("public user cannot read the intake queue", code in (401, 403), f"got HTTP {code}")
+
+    # Nothing that creates a booking may run before both environment identity
+    # and the *separate* least-privilege production QA principal are verified.
+    # Local PostgreSQL CI uses a throwaway admin in an isolated localhost database.
+    # That exception is prohibited on all hosted environments.
+    if _fail:
+        evidence["result"] = "BLOCKED_PUBLIC_SAFETY_CHECKS"
+        evidence.update(passed=_ok, failed=_fail)
+        _write_evidence(evidence)
+        return 1
+
+    code, login = _req("POST", "/login", {"email": ADMIN_EMAIL, "password": ADMIN_PW})
+    bearer = login.get("token")
+    login_ok = code == 200 and isinstance(bearer, str) and bool(bearer.strip())
+    step("dedicated acceptance identity can sign in", login_ok, f"got HTTP {code}")
+    if not login_ok:
+        evidence["result"] = "BLOCKED_QA_AUTHENTICATION"
+        evidence.update(passed=_ok, failed=_fail)
+        _write_evidence(evidence)
+        return 1
+
+    code, principal = _req("GET", "/me/permissions", token=bearer)
+    required = {"marketplace.booking.view", "marketplace.public_intake.view"}
+    perms = set(principal.get("permissions") or [])
+    isolated_ci_admin = (
+        BASE in ("http://localhost:8787", "http://127.0.0.1:8787")
+        and os.environ.get("LIFTHAUL_CI", "").lower() == "true"
+        and principal.get("role") == "admin"
+    )
+    least_privilege_qa = (
+        principal.get("role") == "public_intake_qa"
+        and perms == required
+        and not principal.get("is_super")
+        and not any((principal.get("financial") or {}).values())
+    )
+    authorized = code == 200 and (least_privilege_qa or isolated_ci_admin)
+    step("QA is least privilege (or isolated localhost CI admin)", authorized,
+         f"permissions HTTP {code}")
+    if not authorized:
+        evidence["result"] = "BLOCKED_QA_AUTHORIZATION"
+        evidence.update(passed=_ok, failed=_fail)
+        _write_evidence(evidence)
+        return 1
+
+    code, queue = _req("GET", "/admin/marketplace/public-booking-queue", token=bearer)
+    queue_ready = (
+        code == 200 and isinstance(queue, dict)
+        and queue.get("source") == "PUBLIC_MARKETPLACE"
+        and isinstance(queue.get("requests"), list)
+    )
+    step("QA has read-only access to governed intake", queue_ready, f"got HTTP {code}")
+    if not queue_ready:
+        evidence["result"] = "BLOCKED_QA_QUEUE_ACCESS"
+        evidence.update(passed=_ok, failed=_fail)
+        _write_evidence(evidence)
+        return 1
 
     stamp = int(time.time())
     created = []
@@ -192,11 +262,7 @@ def main():
 
     step("all three island-group bookings were created", len(created) == 3, f"created {len(created)}")
 
-    code, login = _req("POST", "/login", {"email": ADMIN_EMAIL, "password": ADMIN_PW})
-    bearer = login.get("token")
-    step("authorized QA operator can authenticate", code == 200 and bool(bearer), f"got HTTP {code}")
-
-    if bearer and created:
+    if created:
         code, queue = _req("GET", "/admin/marketplace/public-booking-queue", token=bearer)
         requests = queue.get("requests", []) if isinstance(queue, dict) else []
         queue_tokens = {item.get("tracking_token") for item in requests if isinstance(item, dict)}

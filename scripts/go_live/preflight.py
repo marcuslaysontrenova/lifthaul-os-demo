@@ -1,121 +1,213 @@
 #!/usr/bin/env python3
-"""LiftHaul — Production preflight (Gates 2/6/7/8/9 config surface). Audits a HOSTED backend URL for the
-launch-critical posture: probes up, auth enforced, and every revenue/regulated capability fail-closed.
-Stdlib only.
+"""LiftHaul production preflight: independent public and privileged audits.
 
-Usage:
-    BASE_URL=https://api.lifthaul.example \
-    LH_ADMIN_EMAIL=admin@yourco.com LH_ADMIN_PASSWORD=****** \
-    python scripts/go_live/preflight.py
+Only GET requests, an unauthenticated access probe, and session login/logout are
+made. Never books, dispatches, changes configuration, or touches funds.
 
-Exit 0 = launch-safe posture. Non-zero = a check failed. Read-only (no writes, no money).
+  python scripts/go_live/preflight.py --scope public
+  LH_ADMIN_EMAIL=... LH_ADMIN_PASSWORD=... python scripts/go_live/preflight.py --scope admin
+  python scripts/go_live/preflight.py                  # both (fail closed)
+
+Each scope writes non-secret JSON evidence when LH_PREFLIGHT_EVIDENCE_PATH is set.
+A scope-specific exit 0 is NOT complete MVP or full-preflight acceptance.
 """
+import argparse
 import json
 import os
+from pathlib import Path
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
+
 try:
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
     pass
 
 BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8787").rstrip("/")
-ADMIN_EMAIL = os.environ.get("LH_ADMIN_EMAIL")
-ADMIN_PW = os.environ.get("LH_ADMIN_PASSWORD")
-if not ADMIN_EMAIL or not ADMIN_PW:
-    raise SystemExit("LH_ADMIN_EMAIL and LH_ADMIN_PASSWORD are required; production preflight has no demo defaults")
-_ok = _fail = _warn = 0
+EXPECTED_SHA = os.environ.get("EXPECTED_SHA", "").strip()
+EXPECTED_DEPLOYMENT_ID = os.environ.get("EXPECTED_DEPLOYMENT_ID", "").strip()
+ADMIN_EMAIL = os.environ.get("LH_ADMIN_EMAIL", "").strip()
+ADMIN_PW = os.environ.get("LH_ADMIN_PASSWORD", "")
+EVIDENCE_PATH = os.environ.get("LH_PREFLIGHT_EVIDENCE_PATH", "").strip()
+UNTRUSTED_ORIGIN = "https://untrusted-preflight.invalid"
+CONTROLLED_FLAGS = (
+    "marketplace.ltfrb_enforcement_enabled",
+    "payments.live_protected_funds_enabled",
+    "payments.licensed_provider_active",
+    "insurance.provider_active",
+    "delivery.messaging_provider_active",
+)
 
 
-def _req(method, path, body=None, token=None):
-    url = BASE + path
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method)
-    req.add_header("Content-Type", "application/json")
-    if token:
-        req.add_header("Authorization", "Bearer " + token)
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not forward credentials or bearer headers to any redirect destination."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect())
+
+
+def _req(method, path, body=None, token=None, origin=None):
+    headers = {"Accept": "application/json", "User-Agent": "LiftHaul-Preflight/2.0"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    if token is not None:
+        headers["Authorization"] = "Bearer " + token
+    if origin is not None:
+        headers["Origin"] = origin
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(BASE + path, data=data, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            _p = json.loads(r.read().decode() or "{}")
-            if isinstance(_p, dict) and "data" in _p:
-                _p = _p["data"]
-            return r.status, _p, dict(r.headers)
-    except urllib.error.HTTPError as e:
-        try:
-            b = json.loads(e.read().decode() or "{}")
-        except Exception:
-            b = {}
-        return e.code, b, dict(e.headers)
-    except Exception as e:
-        return 0, {"error": str(e)}, {}
+        with OPENER.open(req, timeout=20) as response:
+            status = response.status
+            raw = response.read(512 * 1024)
+            response_headers = dict(response.headers)
+    except urllib.error.HTTPError as error:
+        status = error.code
+        raw = error.read(4096)
+        response_headers = dict(error.headers)
+    except Exception:
+        return 0, {}, {}
+    try:
+        payload = json.loads(raw) if raw else {}
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            payload = payload["data"]
+    except (ValueError, UnicodeDecodeError):
+        payload = {}
+    return status, payload if isinstance(payload, dict) else {}, response_headers
 
 
-def ok(name, cond, detail=""):
-    global _ok, _fail
-    (globals().__setitem__("_ok", _ok + 1) if cond else globals().__setitem__("_fail", _fail + 1))
-    print(f"  {'[PASS]' if cond else '[FAIL]'} {name}" + ("" if cond else f"  {detail}"))
-    return cond
+def _check(evidence, name, passed):
+    outcome = "PASS" if passed else "FAIL"
+    evidence["checks"].append({"name": name, "result": outcome})
+    print(f"  [{outcome}] {name}")
+    return passed
 
 
-def warn(name, cond, detail=""):
-    global _warn
-    if not cond:
-        _warn += 1
-        print(f"  [WARN] {name}  {detail}")
+def _identity_checks(evidence, ready_status, ready):
+    valid = _check(
+        evidence, "readyz reports ready and schema",
+        ready_status == 200 and ready.get("status") == "ready"
+        and ready.get("schema_version") is not None,
+    )
+    evidence["observed_release_sha"] = ready.get("release_sha")
+    evidence["observed_deployment_id"] = ready.get("deployment_id")
+    evidence["schema_version"] = ready.get("schema_version")
+    if EXPECTED_SHA:
+        valid = _check(evidence, "exact release SHA", ready.get("release_sha") == EXPECTED_SHA) and valid
+    if EXPECTED_DEPLOYMENT_ID:
+        valid = _check(
+            evidence, "exact deployment ID", ready.get("deployment_id") == EXPECTED_DEPLOYMENT_ID
+        ) and valid
+    return valid
+
+
+def _public(evidence):
+    status, health, _ = _req("GET", "/healthz")
+    _check(evidence, "healthz reports ok", status == 200 and health.get("status") == "ok")
+
+    status, ready, _ = _req("GET", "/readyz")
+    _identity_checks(evidence, status, ready)
+
+    local_ci = os.environ.get("LIFTHAUL_CI", "").lower() == "true" and BASE in (
+        "http://localhost:8787", "http://127.0.0.1:8787",
+    )
+    _check(evidence, "HTTPS endpoint (local CI exception only)", BASE.startswith("https://") or local_ci)
+
+    status, _, _ = _req("GET", "/admin/marketplace/public-booking-queue")
+    _check(evidence, "anonymous intake-queue access denied", status in (401, 403))
+
+    _, _, headers = _req("GET", "/healthz", origin=UNTRUSTED_ORIGIN)
+    acao = next((str(v) for k, v in headers.items()
+                 if k.lower() == "access-control-allow-origin"), "")
+    _check(evidence, "CORS does not trust arbitrary origins",
+           acao not in ("*", UNTRUSTED_ORIGIN))
+
+
+def _platform_flag_is_off(rows, key):
+    values = [row.get("value") for row in rows
+              if isinstance(row, dict) and row.get("key") == key
+              and row.get("scope") == "platform" and row.get("scope_ref", "") == ""]
+    return len(values) == 1 and (values[0] is False or
+                                 isinstance(values[0], str) and values[0].strip().lower() == "false")
+
+
+def _admin(evidence):
+    # Re-check the deployment before ever transmitting privileged credentials.
+    status, ready, _ = _req("GET", "/readyz")
+    if not _identity_checks(evidence, status, ready):
+        evidence["blocker"] = "ADMIN_IDENTITY_NOT_VERIFIED"
+        return
+    if not ADMIN_EMAIL or not ADMIN_PW:
+        evidence["blocker"] = "ADMIN_CREDENTIALS_MISSING"
+        print("  [BLOCKED] administrator credentials not configured")
+        return
+    status, login, _ = _req("POST", "/login", {"email": ADMIN_EMAIL, "password": ADMIN_PW})
+    token = login.get("token")
+    if not _check(evidence, "privileged login succeeded",
+                  status == 200 and isinstance(token, str) and bool(token.strip())):
+        return
+    try:
+        status, me, _ = _req("GET", "/me/permissions", token=token)
+        if not _check(evidence, "administrator identity (never QA)",
+                      status == 200 and me.get("role") in ("admin", "founder", "super_admin")):
+            return
+        status, config, _ = _req("GET", "/admin/config", token=token)
+        rows = config.get("config")
+        if not _check(evidence, "governed configuration readable",
+                      status == 200 and isinstance(rows, list)):
+            return
+        for key in CONTROLLED_FLAGS:
+            _check(evidence, f"platform flag OFF: {key}", _platform_flag_is_off(rows, key))
+    finally:
+        # Revoke the short-lived audit session; no operational mutation is allowed.
+        _req("POST", "/logout", {}, token=token)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scope", choices=("public", "admin", "all"), default="all")
+    args = parser.parse_args(argv)
+    evidence = {
+        "audit": "production_preflight",
+        "scope": args.scope,
+        "base_url": BASE,
+        "expected_release_sha": EXPECTED_SHA or None,
+        "expected_deployment_id": EXPECTED_DEPLOYMENT_ID or None,
+        "identity_bound": bool(EXPECTED_SHA and EXPECTED_DEPLOYMENT_ID),
+        "checks": [],
+        "acceptance_complete": False,
+    }
+    print(f"LiftHaul production preflight [{args.scope}] -> {BASE}")
+    if args.scope in ("public", "all"):
+        _public(evidence)
+    if args.scope in ("admin", "all"):
+        _admin(evidence)
+
+    failed = sum(item["result"] == "FAIL" for item in evidence["checks"])
+    blocker = evidence.get("blocker")
+    if failed:
+        status, exit_code = "FAILED", 1
+    elif blocker:
+        status, exit_code = blocker, 2
+    elif args.scope == "public":
+        status, exit_code = "PUBLIC_PASS_ADMIN_UNVERIFIED", 0
+    elif args.scope == "admin":
+        status, exit_code = "ADMIN_PASS_PUBLIC_UNVERIFIED", 0
     else:
-        print(f"  [PASS] {name}")
-
-
-def main():
-    print(f"LiftHaul Production preflight  ->  {BASE}")
-    print("-" * 60)
-
-    # Probes
-    code, body, _ = _req("GET", "/healthz")
-    ok("healthz up", code == 200 and body.get("status") == "ok", f"got {code}")
-    code, body, _ = _req("GET", "/readyz")
-    ok("readyz up (DB reachable + schema stamped)",
-       code == 200 and body.get("schema_version") is not None, f"got {code} {body}")
-
-    # TLS
-    warn("backend served over HTTPS", BASE.startswith("https://"), "prod MUST be https:// (found http://)")
-
-    # Auth enforced
-    code, _, _ = _req("GET", "/admin/marketplace/public-booking-queue")
-    ok("unauthenticated admin call rejected (401)", code == 401, f"got {code}")
-
-    # CORS not wildcard (best-effort: a preflight from a random origin should not be echoed '*')
-    code, _, hdrs = _req("GET", "/healthz")
-    acao = (hdrs.get("Access-Control-Allow-Origin") or hdrs.get("access-control-allow-origin") or "")
-    warn("CORS is not wildcard '*'", acao != "*", "Access-Control-Allow-Origin is '*' — set explicit CORS_ORIGINS")
-
-    # Fail-closed posture (needs an operator token; the healthz build-info may also expose flags)
-    code, body, _ = _req("POST", "/login", {"email": ADMIN_EMAIL, "password": ADMIN_PW})
-    tok = body.get("token")
-    if tok:
-        # LTFRB enforcement + provider/funds flags via config read (if exposed)
-        code, cfg, _ = _req("GET", "/admin/config", token=tok)
-        flat = json.dumps(cfg).lower() if code == 200 else ""
-        def flag_off(key):
-            # crude: find "<key>": "false" style; if key absent, treat as unknown->warn
-            k = key.lower()
-            return (f'"{k}"' not in flat) or ('"false"' in flat.split(k, 1)[-1][:40] if k in flat else True)
-        if code == 200:
-            for key in ("marketplace.ltfrb_enforcement_enabled", "payments.live_protected_funds_enabled",
-                        "insurance.provider_active", "delivery.messaging_provider_active"):
-                warn(f"{key} is OFF (or activate deliberately)", flag_off(key), "verify this flag before launch")
-        else:
-            warn("config flags readable for audit", False, f"/admin/config returned {code}; audit flags manually")
-    else:
-        warn("operator login for flag audit", False, "could not log in to read config flags — audit manually")
-
-    print("-" * 60)
-    status = "LAUNCH-SAFE" if _fail == 0 else "BLOCKED"
-    print(f"PREFLIGHT: {status} — {_ok} passed, {_fail} failed, {_warn} warnings")
-    if _warn:
-        print("  (warnings are launch-judgement items — review each before go-live)")
-    return 0 if _fail == 0 else 1
+        status, exit_code = "PREFLIGHT_COMPLETE", 0
+        evidence["acceptance_complete"] = True
+    evidence.update(result=status, passed=len(evidence["checks"]) - failed, failed=failed)
+    if EVIDENCE_PATH:
+        path = Path(EVIDENCE_PATH)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    print(f"PREFLIGHT: {status} -- {evidence['passed']} passed, {failed} failed. "
+          "Not an MVP GO decision.")
+    return exit_code
 
 
 if __name__ == "__main__":

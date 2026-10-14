@@ -18,6 +18,7 @@ NOT touch any financial calculation.
 from __future__ import annotations
 
 import datetime
+import re
 
 import core
 
@@ -66,24 +67,31 @@ def _tenant_id(conn, code="RGO"):
     return t["id"] if t else None
 
 
-def _has_table(conn, table):
+def _table_columns(conn, table):
+    """Inspect schema without intentionally triggering PostgreSQL errors.
+
+    PgConnection translates the SQLite PRAGMA table_info contract to
+    information_schema.columns. This also keeps a missing column/table from
+    rolling back an unrelated transaction just to detect its existence.
+    """
+    if not isinstance(table, str) or not re.fullmatch(r"[A-Za-z_]\\w*", table):
+        raise ValueError("invalid table identifier for backfill schema probe")
     try:
-        conn.execute(f"SELECT 1 FROM {table} LIMIT 1")
-        return True
+        return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     except Exception:
-        try: conn.rollback()
-        except Exception: pass
-        return False
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return set()
+
+
+def _has_table(conn, table):
+    return bool(_table_columns(conn, table))
 
 
 def _has_tenant_col(conn, table):
-    try:
-        conn.execute(f"SELECT tenant_id FROM {table} LIMIT 1")
-        return True
-    except Exception:
-        try: conn.rollback()
-        except Exception: pass
-        return False
+    return "tenant_id" in _table_columns(conn, table)
 
 
 def add_tenant_columns(conn):

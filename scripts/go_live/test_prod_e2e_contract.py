@@ -126,8 +126,9 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             return 200, {"status": "ready", "release_sha": "0" * 40, "schema_version": 27}
 
         with mock.patch.dict(self.module["main"].__globals__, {"_req": mismatch}):
-            with redirect_stdout(io.StringIO()):
-                self.assertEqual(self.module["main"](), 1)
+            with mock.patch.dict(os.environ, {"LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": "true"}):
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(self.module["main"](), 1)
         self.assertEqual(self.calls, [("GET", "/readyz")])
 
 

@@ -149,13 +149,39 @@ jobs:
               "mode": os.environ["DEPLOYMENT_MODE"],
           }))
           PY
-      - name: Read-only production preflight
+      - id: public_preflight
+        name: Independent public read-only preflight (no secrets)
+        continue-on-error: true
         env:
           BASE_URL: https://www.lifthaul.com.ph
-          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
-          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
-        run: python scripts/go_live/preflight.py
-      - name: Synthetic production journey (no funds)
+          EXPECTED_SHA: ${{ needs.verify.outputs.release_sha }}
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.identity.outputs.deployment_id }}
+          LH_PREFLIGHT_EVIDENCE_PATH: evidence/public-preflight.json
+        run: python scripts/go_live/preflight.py --scope public
+      - id: admin_preflight
+        name: Privileged configuration audit (separate admin identity)
+        continue-on-error: true
+        env:
+          BASE_URL: https://www.lifthaul.com.ph
+          EXPECTED_SHA: ${{ needs.verify.outputs.release_sha }}
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.identity.outputs.deployment_id }}
+          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_AUDIT_ADMIN_EMAIL }}
+          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_AUDIT_ADMIN_PASSWORD }}
+          LH_PREFLIGHT_EVIDENCE_PATH: evidence/admin-preflight.json
+        run: python scripts/go_live/preflight.py --scope admin
+      - name: Preserve independent redacted preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-preflight-${{ needs.verify.outputs.release_sha }}
+          path: |
+            evidence/public-preflight.json
+            evidence/admin-preflight.json
+          retention-days: 30
+          if-no-files-found: warn
+      - id: regional_qa
+        name: Synthetic production journey (no funds)
+        if: ${{ steps.public_preflight.outcome == 'success' && steps.admin_preflight.outcome == 'success' && steps.identity.outcome == 'success' }}
         env:
           BASE_URL: https://www.lifthaul.com.ph
           EXPECTED_SHA: ${{ needs.verify.outputs.release_sha }}
@@ -163,6 +189,24 @@ jobs:
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
           LH_MVP_EVIDENCE_PATH: evidence/regional-booking-acceptance.json
         run: python scripts/go_live/prod_e2e.py
+      - name: Enforce complete acceptance (public, admin, regional)
+        if: always()
+        env:
+          IDENTITY: ${{ steps.identity.outcome }}
+          PUBLIC_PREFLIGHT: ${{ steps.public_preflight.outcome }}
+          ADMIN_PREFLIGHT: ${{ steps.admin_preflight.outcome }}
+          REGIONAL_QA: ${{ steps.regional_qa.outcome }}
+        run: |
+          python - <<'PY'
+          import os
+          checks = {name: os.environ[name] for name in (
+              "IDENTITY", "PUBLIC_PREFLIGHT", "ADMIN_PREFLIGHT", "REGIONAL_QA"
+          )}
+          print("Production acceptance outcomes:", checks)
+          assert all(value == "success" for value in checks.values()), (
+              "INCOMPLETE production acceptance: missing, failed or skipped required evidence"
+          )
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:

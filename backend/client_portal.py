@@ -71,6 +71,17 @@ CREATE TABLE IF NOT EXISTS client_notification_reads(
   notification_id INTEGER NOT NULL,
   read_at TEXT NOT NULL,
   UNIQUE(user_id, notification_id));
+
+CREATE TABLE IF NOT EXISTS client_offer_selection_requests(
+  id INTEGER PRIMARY KEY,
+  tenant_id INTEGER,
+  shipper_id INTEGER NOT NULL,
+  booking_id INTEGER NOT NULL,
+  offer_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING_REVIEW',
+  requested_by INTEGER NOT NULL,
+  requested_at TEXT NOT NULL,
+  reviewed_by INTEGER, reviewed_at TEXT, decision_note TEXT);
 """
 
 
@@ -242,6 +253,7 @@ def _booking_view(conn, row):
         "trip_status": trip["status"] if trip else None,
         "progress_pct": trip["progress_pct"] if trip else None,
         "eta": trip["eta"] if trip else None,
+        "last_ping_at": trip["last_ping_at"] if trip else None,
         "available_action": _booking_action(b.get("status"), payment_state, trip["status"] if trip else None),
     }
 
@@ -298,17 +310,99 @@ def bookings(conn, actor):
     return {"shipper_id": sid, "bookings": [_booking_view(conn, row) for row in rows]}
 
 
+def booking_detail(conn, actor, booking_id):
+    core.require(actor, "client.portal.view")
+    sid, _ = _shipper(conn, actor)
+    row = conn.execute(
+        "SELECT * FROM mkt_bookings WHERE id=? AND shipper_id=?", (booking_id, sid)
+    ).fetchone()
+    if not row:
+        raise core.NotFoundError("booking not found")
+    tenant.guard(actor, row)
+    view = _booking_view(conn, row)
+    view["trip_events"] = []
+    view["tracking_label"] = None
+    if view["trip_id"]:
+        trip = conn.execute("SELECT * FROM mkt_trips WHERE id=?", (view["trip_id"],)).fetchone()
+        tenant.guard(actor, trip)
+        view["tracking_label"] = trip["mock_label"] or ("MOCK_ONLY" if trip["gps_provider"] == "MOCK" else None)
+        # Customer milestones exclude operator notes, actor IDs and raw GPS evidence.
+        view["trip_events"] = [dict(event) for event in conn.execute(
+            "SELECT from_status,to_status,occurred_at FROM mkt_trip_events "
+            "WHERE trip_id=? ORDER BY id", (view["trip_id"],)
+        ).fetchall()]
+    return view
+
+
 def offers(conn, actor):
     core.require(actor, "client.portal.view")
     sid = resolve_shipper(conn, actor)
     rows = conn.execute(
-        "SELECT o.* FROM mkt_offers o JOIN mkt_bookings b ON b.id=o.booking_id "
-        "WHERE b.shipper_id=? ORDER BY o.id DESC", (sid,)
+        "SELECT o.id,o.booking_id,o.amount,o.currency,o.status,o.created_at AS submitted_at,"
+        "o.valid_until,o.est_pickup,o.est_delivery,o.inclusions,o.exclusions,o.toll_treatment,"
+        "o.ferry_treatment,o.waiting_rate,o.helper_required,o.loading_required,o.notes,"
+        "COALESCE(c.trade_name,c.legal_name) AS provider_name,v.category_code AS vehicle_category,"
+        "v.body_type AS vehicle_body_type,"
+        "(SELECT r.status FROM client_offer_selection_requests r WHERE r.offer_id=o.id "
+        "AND r.shipper_id=? ORDER BY r.id DESC LIMIT 1) AS selection_request_status "
+        "FROM mkt_offers o JOIN mkt_bookings b ON b.id=o.booking_id "
+        "JOIN mkt_carriers c ON c.id=o.carrier_id "
+        "LEFT JOIN mkt_vehicles v ON v.id=o.vehicle_id "
+        "WHERE b.shipper_id=? ORDER BY o.booking_id DESC,o.amount ASC,o.id DESC", (sid, sid)
     ).fetchall()
-    # Client comparison never exposes internal platform margin or unrelated carrier data.
-    allowed = ("id", "booking_id", "carrier_id", "amount", "currency", "status", "submitted_at",
-               "valid_until", "vehicle_id", "driver_id", "transit_hours", "notes")
-    return {"shipper_id": sid, "offers": [{k: dict(r).get(k) for k in allowed if k in r.keys()} for r in rows]}
+    # Client comparison never exposes internal margin, driver identity, tenant data, or raw carrier
+    # and vehicle identifiers.  Selection remains a governed staff action; the client only records a
+    # review request against an eligible canonical offer.
+    return {"shipper_id": sid, "offers": [dict(r) for r in rows]}
+
+
+def request_offer_selection(conn, actor, offer_id):
+    core.require(actor, "client.portal.booking.manage")
+    sid = resolve_shipper(conn, actor)
+    row = conn.execute(
+        "SELECT o.*,b.shipper_id,b.tenant_id AS booking_tenant_id FROM mkt_offers o "
+        "JOIN mkt_bookings b ON b.id=o.booking_id WHERE o.id=? AND b.shipper_id=?",
+        (offer_id, sid),
+    ).fetchone()
+    if not row:
+        raise core.NotFoundError("offer not found")
+    tenant.guard(actor, row)
+    if row["status"] not in ("VALID", "SHORTLISTED"):
+        raise core.ValidationError("only a valid offer can be requested for selection")
+    if row["valid_until"]:
+        try:
+            expires = datetime.datetime.fromisoformat(str(row["valid_until"]).replace("Z", "+00:00"))
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=datetime.timezone.utc)
+            if expires <= datetime.datetime.now(datetime.timezone.utc):
+                raise core.ValidationError("offer has expired")
+        except core.ValidationError:
+            raise
+        except (TypeError, ValueError):
+            raise core.ValidationError("offer validity could not be verified")
+    selected = conn.execute(
+        "SELECT 1 FROM mkt_offers WHERE booking_id=? AND status='SELECTED'", (row["booking_id"],)
+    ).fetchone()
+    if selected:
+        raise core.ValidationError("a provider offer has already been selected for this booking")
+    existing = conn.execute(
+        "SELECT id,status FROM client_offer_selection_requests WHERE shipper_id=? AND booking_id=? "
+        "AND offer_id=? AND status IN('PENDING_REVIEW','APPROVED') ORDER BY id DESC LIMIT 1",
+        (sid, row["booking_id"], offer_id),
+    ).fetchone()
+    if existing:
+        return {"request_id": existing["id"], "status": existing["status"], "idempotent": True}
+    cur = conn.execute(
+        "INSERT INTO client_offer_selection_requests(tenant_id,shipper_id,booking_id,offer_id,status,"
+        "requested_by,requested_at) VALUES(?,?,?,?, 'PENDING_REVIEW',?,?)",
+        (row["booking_tenant_id"], sid, row["booking_id"], offer_id, actor["id"], _now()),
+    )
+    request_id = cur.lastrowid
+    tenant.stamp(conn, actor, "client_offer_selection_requests", request_id)
+    core.audit(conn, actor, "CLIENT_OFFER_SELECTION_REQUESTED", "client_offer_selection_requests",
+               request_id, new={"booking_id": row["booking_id"], "offer_id": offer_id})
+    conn.commit()
+    return {"request_id": request_id, "status": "PENDING_REVIEW", "idempotent": False}
 
 
 def trips(conn, actor):

@@ -111,9 +111,17 @@ jobs:
       - name: Synthetic production journey (no funds)
         env:
           BASE_URL: https://www.lifthaul.com.ph
+          EXPECTED_SHA: ${{ needs.verify.outputs.release_sha }}
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+          LH_MVP_EVIDENCE_PATH: evidence/regional-booking-acceptance.json
         run: python scripts/go_live/prod_e2e.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regional-booking-acceptance-${{ needs.verify.outputs.release_sha }}
+          path: evidence/regional-booking-acceptance.json
+          retention-days: 30
 
   deploy-frontend:
     name: Deploy exact static frontend to GitHub Pages

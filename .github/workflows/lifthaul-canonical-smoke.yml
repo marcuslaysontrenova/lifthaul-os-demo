@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify no-write and fail-closed production QA harness without credentials
-        run: python -m unittest discover -s scripts/go_live -p 'test_prod_auth_qa_contract.py' -v
+        run: python -m unittest discover -s scripts/go_live -p 'test_prod_*_contract.py' -v
 
   canonical-production-smoke:
     # Never block Railway's check-suite-gated deployment by waiting for that

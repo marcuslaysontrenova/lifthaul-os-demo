@@ -5,7 +5,8 @@ const repoRoot = path.resolve(__dirname, '../..');
 
 module.exports = defineConfig({
   testDir: './tests',
-  testMatch: 'public-ui.spec.js',
+  testMatch: ['public-ui.spec.js', 'client-booking.spec.js', 'client-offers.spec.js',
+    'client-payment-controls.spec.js'],
   timeout: 60000,
   retries: 0,
   reporter: [['list'], ['html', { outputFolder: '../artifacts/public-ui-report', open: 'never' }]],

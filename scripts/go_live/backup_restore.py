@@ -86,24 +86,36 @@ def sqlite_drill():
 
 
 def postgres_playbook():
-    db = os.environ.get("DATABASE_URL", "postgresql://USER:PASS@HOST:5432/lifthaul")
-    print("LiftHaul backup/restore drill (PostgreSQL) — production playbook")
+    """Print a non-executing, secret-free, isolated restore procedure.
+
+    The real PostgreSQL backup/restore requires an approved operator, verified
+    source/target isolation, secure libpq services and a timed reconciliation.
+    This command intentionally NEVER contacts PostgreSQL.
+    """
+    print("LiftHaul PostgreSQL backup/restore — OPERATOR RUNBOOK ONLY")
     print("-" * 60)
-    print("Run these against your managed PostgreSQL and record the timings:\n")
-    print("  # 1. Fingerprint BEFORE (RPO reference)")
-    print(f'  psql "{db}" -c "SELECT (SELECT count(*) FROM customers) c, (SELECT count(*) FROM mkt_bookings) b, (SELECT max(version) FROM schema_version) v;"\n')
-    print("  # 2. BACKUP  (note the timestamp = RPO point)")
-    print(f'  pg_dump "{db}" -Fc -f lifthaul_$(date +%Y%m%dT%H%M%S).dump\n')
-    print("  # 3. Destructive synthetic test on a RESTORE TARGET db (never prod):")
-    print('  #    createdb lifthaul_restore; drop a table / row on the target; note the incident time.\n')
-    print("  # 4. RESTORE  (start the RTO clock)")
-    print('  pg_restore -d "postgresql://USER:PASS@HOST:5432/lifthaul_restore" --clean --if-exists lifthaul_*.dump\n')
-    print("  # 5. Reconcile AFTER  (must match step 1)")
-    print('  psql "postgresql://USER:PASS@HOST:5432/lifthaul_restore" -c "SELECT (SELECT count(*) FROM customers) c, (SELECT count(*) FROM mkt_bookings) b, (SELECT max(version) FROM schema_version) v;"\n')
-    print("  # 6. Record: RTO = restore duration; RPO = now - backup timestamp. Attach as launch evidence.")
+    print("STOP: never execute a restore against the live production database.")
+    print("Prepare separate libpq service entries 'lifthaul_source' (production READ)")
+    print("and 'lifthaul_restore' (isolated recovery DB) in a protected service file.")
+    print("Keep passwords in a separate protected PGPASSFILE; do not print secrets.")
+    print("Check that source and restore target have different hosts/DB names.")
+    print("Obtain owner approval and record preflight identities, backup timestamp,")
+    print("target isolation, checksum, and recovery owner before any write.")
+    print()
+    print("# 1. Source fingerprint and backup; password never appears in argv/logs")
+    print('psql "service=lifthaul_source" -c "SELECT (SELECT count(*) FROM customers) c, (SELECT count(*) FROM mkt_bookings) b, (SELECT max(version) FROM schema_version) v;"')
+    print('pg_dump "service=lifthaul_source" -Fc -f lifthaul_YYYYMMDDTHHMMSS.dump')
+    print()
+    print("# 2. Explicitly attest isolated target; never reuse production service.")
+    print("echo 'STOP unless isolated recovery target has been independently verified'")
+    print("# 3. Destructive restore ONLY to an independently isolated target")
+    print('pg_restore --dbname="service=lifthaul_restore" --clean --if-exists lifthaul_YYYYMMDDTHHMMSS.dump')
+    print()
+    print("# 4. Reconcile counts, schema and application integrity on restore target")
+    print('psql "service=lifthaul_restore" -c "SELECT (SELECT count(*) FROM customers) c, (SELECT count(*) FROM mkt_bookings) b, (SELECT max(version) FROM schema_version) v;"')
+    print("# 5. Record RTO = timed isolated restore; RPO = backup timestamp age.")
     print("-" * 60)
-    print("This is a runbook (no managed PostgreSQL is contacted from here). The SQLite mode above proves")
-    print("the same backup->destroy->restore->reconcile logic end to end.")
+    print("NO BACKUP OR RESTORE EXECUTED. No verified RTO/RPO evidence collected.")
     return 0
 
 

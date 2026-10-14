@@ -3,24 +3,33 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'GEMINI.md'
       - 'docs/ai/**'
       - '.github/workflows/ai-handover-readiness.yml'
 permissions:
   contents: read
 jobs:
   readiness:
-    name: Validate non-production handover contract
+    name: Validate cross-agent MVP contract (no provider calls)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Check handover document and safety rails
+      - name: Check aligned instructions and safety rails
         shell: bash
         run: |
           set -euo pipefail
-          test -s docs/ai/AGENT_HANDOVER.md
+          for file in AGENTS.md CLAUDE.md GEMINI.md docs/ai/AGENT_HANDOVER.md docs/ai/MVP_EVIDENCE_MATRIX.md docs/ai/FREE_TIER_ENABLEMENT.md; do
+            test -s "$file" || { echo "Missing: $file"; exit 1; }
+          done
+          grep -Fq 'issues/20' AGENTS.md
+          grep -Fq 'AGENTS.md' CLAUDE.md
+          grep -Fq 'AGENTS.md' GEMINI.md
           grep -Fq 'Codex primary' docs/ai/AGENT_HANDOVER.md
           grep -Fq 'Claude Code fallback' docs/ai/AGENT_HANDOVER.md
           grep -Fq 'Gemini CLI fallback' docs/ai/AGENT_HANDOVER.md
           grep -Fq 'must not merge' docs/ai/AGENT_HANDOVER.md
-          echo 'Documentation readiness checks passed; no AI agent has been launched.'
+          grep -Fq 'NO-GO' docs/ai/MVP_EVIDENCE_MATRIX.md
+          echo 'Cross-agent MVP instructions valid; no AI provider invoked.'

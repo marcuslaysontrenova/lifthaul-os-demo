@@ -29,3 +29,10 @@
 - Do not fabricate verification credentials, customer records, location data, or certifications.
 - No automatic merge, deployment, production writes, DNS/email provider changes or live-money activity.
 - Fail closed on unknown quota/CI/authentication errors and prevent circular retries.
+
+## Production observation — 2026-10-14 (read-only Railway connector)
+- Railway project `independent-exploration`, production `lifthaul-api` reported latest SUCCESS deployment `0ac737cf-5b1f-4709-8450-ba3e5631182b`, commit `dfea0b9df01824a73bb1a39a0f611f5e3f6c0ba1` (PR #31).
+- PostgreSQL service likewise reports SUCCESS; Railway environment has no staged changes or pending work at inspection.
+- This is **deployment-status evidence only**. It does not establish current HTTP response, correct exact SHA response, hosted seven-role UAT, synthetic booking-to-operator acceptance, restored backup, or approval. Issue #20 body cites an older deployment and requires reconciliation.
+- On handover: first compare issue #20 release identity with the current Railway deployment and record fresh immutable probe evidence before updating the issue's canonical release section. Do not mark issue #20 gates complete on Railway status alone.
+- AI readiness CI run `38586351308` and offline fallback CI run `38586350370` both reported SUCCESS for head `eee4eb60f0a1f2c2643d8e16eff8f1509c7e93fa`; actual provider routing remains NOT enabled.

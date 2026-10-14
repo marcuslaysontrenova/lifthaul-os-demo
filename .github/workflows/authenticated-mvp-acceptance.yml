@@ -85,6 +85,33 @@ jobs:
       - name: Offline production QA contract forbids privileged actions
         run: python -m unittest discover -s scripts/go_live -p 'test_prod_auth_qa_contract.py' -v
 
+  public-browser-responsive-journeys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Serve isolated exact checkout UI (no live API)
+        run: |
+          python -m http.server 8080 > /tmp/lifthaul-ui-ci.log 2>&1 &
+          for i in $(seq 1 25); do curl -sf http://127.0.0.1:8080/index.html >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/index.html >/dev/null
+      - name: Install deterministic browser tests
+        working-directory: ci/browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Exercise responsive public booking and QA workspace (isolated/mocked)
+        working-directory: ci/browser
+        env:
+          APP_BASE: http://127.0.0.1:8080
+        run: npx playwright test --config playwright.public-ui.config.js
+
   acceptance-summary:
     if: always()
     needs:
@@ -93,6 +120,7 @@ jobs:
       - staff-finance-founder-authority
       - booking-tracking-and-live-funds-off
       - qa-permission-and-email-contract
+      - public-browser-responsive-journeys
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -111,6 +139,7 @@ jobs:
           LH_SUITE_STAFF_FINANCE_FOUNDER_AUTHORITY: ${{ needs.staff-finance-founder-authority.result }}
           LH_SUITE_BOOKING_TRACKING_AND_LIVE_FUNDS_OFF: ${{ needs.booking-tracking-and-live-funds-off.result }}
           LH_SUITE_QA_PERMISSION_AND_EMAIL_CONTRACT: ${{ needs.qa-permission-and-email-contract.result }}
+          LH_SUITE_PUBLIC_BROWSER_RESPONSIVE_JOURNEYS: ${{ needs.public-browser-responsive-journeys.result }}
           LH_ISOLATED_EVIDENCE_PATH: evidence/isolated-mvp-acceptance.json
         run: python scripts/go_live/isolated_acceptance_evidence.py
       - name: Preserve sanitized evidence, including failures; never secrets

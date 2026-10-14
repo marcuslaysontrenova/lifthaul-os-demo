@@ -99,21 +99,55 @@ jobs:
           start_restore="$SECONDS"
           pg_restore --exit-on-error --no-owner --no-acl --dbname=lifthaul_ci_restore "$scratch/synthetic.dump"
           restore_seconds="$((SECONDS - start_restore))"
-          queries=(
-            "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname='public'"
-            "SELECT COALESCE(MAX(version),0) FROM public.schema_version"
-            "SELECT COUNT(*) FROM public.lh_ci_restore_sentinel WHERE value='SYNTHETIC_ONLY_NO_PRODUCTION_DATA'"
-          )
-          for query in "${queries[@]}"; do
-            before="$(psql -X -At -d lifthaul_ci_source -c "$query")"
-            after="$(psql -X -At -d lifthaul_ci_restore -c "$query")"
-            test "$before" = "$after"
-          done
-          test "$(psql -X -At -d lifthaul_ci_restore -c 'SELECT COUNT(*) FROM public.lh_ci_restore_sentinel')" = 1
           mkdir -p evidence
           BACKUP_SECONDS="$backup_seconds" RESTORE_SECONDS="$restore_seconds" python - <<'PY'
-          import json, os
+          import json
+          import os
           from pathlib import Path
+          import psycopg2
+          from psycopg2 import sql
+
+          if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("LH_CI_ISOLATED_RESTORE") != "true":
+              raise SystemExit("BLOCKED_ENVIRONMENT_ISOLATION")
+          if os.environ.get("PGHOST") != "127.0.0.1" or os.environ.get("PGPORT") != "5432":
+              raise SystemExit("BLOCKED_ENVIRONMENT_ISOLATION")
+
+          def snapshot(dbname):
+              with psycopg2.connect(
+                  host="127.0.0.1", port=5432, user="lifthaul",
+                  password=os.environ["PGPASSWORD"], dbname=dbname,
+                  connect_timeout=5
+              ) as connection:
+                  with connection.cursor() as cursor:
+                      cursor.execute(
+                          "SELECT tablename FROM pg_catalog.pg_tables "
+                          "WHERE schemaname='public' ORDER BY tablename"
+                      )
+                      names = [row[0] for row in cursor.fetchall()]
+                      if "schema_version" not in names or "lh_ci_restore_sentinel" not in names:
+                          raise RuntimeError("synthetic source or restore schema incomplete")
+                      counts = {}
+                      for name in names:
+                          cursor.execute(
+                              sql.SQL("SELECT COUNT(*) FROM {}.{}").format(
+                                  sql.Identifier("public"), sql.Identifier(name)
+                              )
+                          )
+                          counts[name] = int(cursor.fetchone()[0])
+                      cursor.execute("SELECT COALESCE(MAX(version),0) FROM public.schema_version")
+                      version = str(cursor.fetchone()[0])
+                      cursor.execute(
+                          "SELECT COUNT(*) FROM public.lh_ci_restore_sentinel "
+                          "WHERE value = 'SYNTHETIC_ONLY_NO_PRODUCTION_DATA'"
+                      )
+                      sentinel_count = int(cursor.fetchone()[0])
+              return names, counts, version, sentinel_count
+
+          before = snapshot("lifthaul_ci_source")
+          after = snapshot("lifthaul_ci_restore")
+          if before != after or before[3] != 1 or before[1]["lh_ci_restore_sentinel"] != 1:
+              raise SystemExit("FAILED_SYNTHETIC_RECOVERY_RECONCILIATION")
+
           evidence = {
               "result": "PASS_SYNTHETIC_POSTGRES_16_RESTORE_CI_ONLY",
               "source": "ephemeral-postgres-16-service",
@@ -121,7 +155,8 @@ jobs:
               "restore_database": "lifthaul_ci_restore",
               "source_distinct_from_restore": True,
               "current_schema_migrated": True,
-              "schema_and_table_counts_reconciled": True,
+              "schema_version_reconciled": before[2],
+              "public_table_counts_reconciled": len(before[0]),
               "synthetic_sentinel_reconciled": True,
               "backup_seconds_ci_only": int(os.environ["BACKUP_SECONDS"]),
               "restore_seconds_ci_only": int(os.environ["RESTORE_SECONDS"]),

@@ -17,7 +17,7 @@ Status: SETUP PHASE; policy supports five labels (Codex, Claude, Gemini, Grok, K
 5. Kimi fallback ONLY after independent runner authentication, availability, and budget controls are verified.
 6. If provider status is ambiguous, stop and request human review; never treat a failed test as a quota problem.
 
-The quota detection mechanism must distinguish provider-specific rate/quota errors from: auth denial, broken code, failing tests, unsafe content, CI outages, and billing errors. Cross-platform usage allowance is not transferable.
+An OFFLINE routing decision is not an authenticated execution, a transfer of an active chat/Codex session, or evidence of available provider tokens. Only explicit provider health/entitlement validation can enable a provider.\n\nThe quota detection mechanism must distinguish provider-specific rate/quota errors from: auth denial, broken code, failing tests, unsafe content, CI outages, and billing errors. Cross-platform usage allowance is not transferable.
 
 ## Security and coordination
 - One active agent per issue; dedicated issue-named branch and concurrency lock.

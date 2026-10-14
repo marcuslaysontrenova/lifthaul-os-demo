@@ -102,7 +102,10 @@ jobs:
           python-version: '3.12'
       - name: Persist exact SHA, CI-only role evidence and explicit missing hosted gates
         env:
-          LH_CANDIDATE_SHA: ${{ github.sha }}
+          LH_CANDIDATE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          LH_TESTED_CHECKOUT_SHA: ${{ github.sha }}
+          LH_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+          LH_EVENT_NAME: ${{ github.event_name }}
           LH_SUITE_CLIENT_IDENTITY_AND_WORKSPACE: ${{ needs.client-identity-and-workspace.result }}
           LH_SUITE_CARRIER_AND_DRIVER_ACCESS: ${{ needs.carrier-and-driver-access.result }}
           LH_SUITE_STAFF_FINANCE_FOUNDER_AUTHORITY: ${{ needs.staff-finance-founder-authority.result }}

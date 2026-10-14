@@ -16,6 +16,7 @@ SUITES = (
     "carrier_and_driver_access",
     "staff_finance_founder_authority",
     "booking_tracking_and_live_funds_off",
+    "public_browser_responsive_journeys",
     "qa_permission_and_email_contract",
 )
 STATUS = {"success", "failure", "cancelled", "skipped", "timed_out", "neutral"}

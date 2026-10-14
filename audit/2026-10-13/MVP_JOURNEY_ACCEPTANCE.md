@@ -4,17 +4,37 @@
 
 **CONDITIONAL GO for the controlled no-live-funds MVP. NO-GO for live payment collection or payout.**
 
-The currently deployed production version is healthy, but two independent changes remain undeployed:
-PR #28 (customer booking detail/tracking) requires a new, exact merge authorization, and this
-checkpoint's driver evidence remediation must pass its own pull-request gates and receive its own
-release decision.
+The currently deployed production version is healthy. One consolidated candidate, PR #30, remains
+undeployed and requires a new authorization naming its exact current head. CI readiness is not
+hosted acceptance; refresh the PR head and required checks immediately before authorization.
+
+## Progress measurement
+
+- **Formal MVP acceptance: 33.3% complete, 66.7% remaining.** Three of nine hard gates are closed.
+- **Engineering maturity: 59.8% complete, 40.2% remaining.** Across 61 detailed items: 22 Done,
+  4 Ready in tested PR, 23 Partial, 7 Open, 4 Blocked, and 1 Deferred. Score: `(22 + 4×0.75 +
+  23×0.5) / 61 = 59.8%`.
+- **Deployment delta ready for authorization:** A08, C09, C10, and C11, plus safety improvements
+  contributing to D04, D09, and D10.
+- **Release decision:** NO-GO for unrestricted MVP; CONDITIONAL GO remains limited to the existing
+  no-live-funds public runtime.
 
 ## Week-one MVP integration candidate
 
-Branch `codex/mvp-sprint-week1` integrates the independently tested customer-booking and
-driver-evidence changes from PRs #28 and #29, then closes the implementation gap for customer offer
-comparison and governed selection requests. It is a review candidate only: it has not been merged,
-deployed, or counted as hosted acceptance.
+PR #30 from branch `codex/mvp-sprint-week1` integrates the independently tested customer-booking
+and driver-evidence changes from PRs #28 and #29, then closes implementation gaps for customer
+offer comparison, governed selection requests, and misleading inert payment-detail actions. It is a
+review candidate only: it has not been merged, deployed, or counted as hosted acceptance.
+
+Verified 14 October 2026 (Philippine time) before this audit-only update:
+
+- URL: https://github.com/marcuslaysontrenova/lifthaul-os-demo/pull/30
+- tested implementation head: `91e991a9869d9fbee561b109ed4f20afe9a3c8c0`
+- exact base: `647f6e5d50e1ec26955778f264e210cf3c14d3d9`
+- merge state: `CLEAN`
+- GitHub checks: **54/54 successful**, zero failed, zero pending
+- production remains on base SHA `647f6e5d50e1ec26955778f264e210cf3c14d3d9`, deployment
+  `798eaded-7b98-42b0-b720-9a8c957b234a`, schema 27; `/healthz` and `/readyz` both return 200.
 
 The customer workspace now:
 
@@ -92,24 +112,24 @@ The isolated branch now:
 - One transient Chromium navigation failure was reproduced as a local server connection interruption;
   the focused rerun passed, followed by a clean complete 51/51 cross-browser rerun.
 
-## Existing PR #28
+## Consolidated PR #30
 
-- URL: https://github.com/marcuslaysontrenova/lifthaul-os-demo/pull/28
+- URL: https://github.com/marcuslaysontrenova/lifthaul-os-demo/pull/30
 - State: OPEN
 - Merge state: CLEAN
-- Head: `0b7a24722f22733d1c21446f5662ee82ed3c973e`
+- Head: resolve from GitHub immediately before authorization; never rely on a head embedded in the PR itself
 - Base: `647f6e5d50e1ec26955778f264e210cf3c14d3d9`
-- All reported checks: SUCCESS
+- All reported checks: **54/54 SUCCESS**
 - Reviews: none
-- Gate: **not authorized for merge in this checkpoint**. The handover expressly requires a new,
-  PR-specific authorization; earlier release approvals do not transfer.
+- Scope: integrates PR #28 and PR #29 plus C10/C11 controlled-MVP remediation.
+- Gate: **not authorized for merge or deployment in this checkpoint**. Earlier approvals do not
+  transfer to this new PR and exact head.
 
 ## Remaining release gates
 
 | Severity | Gate | Owner / required evidence |
 |---|---|---|
-| High | PR #28 exact merge/deploy authorization | Founder; authorize that PR/head explicitly |
-| High | Driver-evidence remediation PR CI and release authorization | Engineering + founder after PR checks |
+| High | PR #30 exact merge/deploy authorization | Founder; authorize PR #30 and its freshly verified current head explicitly |
 | High | Authenticated production UAT | Dedicated least-privilege synthetic accounts for booker, driver, fleet owner, staff/ops, finance, admin, and founder; no shared or real-customer credentials |
 | High | Current recovery evidence | Named owner plus dated backup, isolated restore, rollback, monitor, and incident-response evidence for the exact release |
 | High | Commercial/legal controls | Founder-approved fare/tax/admin-fee policy and trial limits; approved support, privacy, and DPO contacts |
@@ -126,10 +146,19 @@ compliance without verified documentation.
 
 ## Next controlled sequence
 
-1. Publish this driver-evidence branch and require clean PR checks.
-2. Obtain explicit PR-specific authorization before merging PR #28.
-3. Obtain a separate exact authorization for the driver-evidence PR after its checks pass.
-4. Deploy only the resulting tested merge SHA and record deployment identity.
-5. Execute synthetic authenticated production UAT and recovery evidence collection.
-6. Keep live funds off until the independent PSP/legal/finance gate is complete.
+1. Refresh PR #30 and obtain explicit authorization naming its exact current head.
+2. Merge only that tested head, deploy only the resulting merge SHA, and record SHA, deployment ID,
+   schema, health, readiness, PSGC and rollback version.
+3. Close Gate 4 with synthetic Luzon, Visayas and Mindanao bookings that persist through intake queue,
+   refresh/restart and public tracking.
+4. Provision approved least-privilege synthetic identities and close Gate 5 through successful and
+   denied persona UAT on desktop, tablet and mobile.
+5. Close Gate 6 with dated PostgreSQL backup/restore, application rollback, alert-delivery and
+   incident-owner evidence, plus approved hosted performance targets.
+6. Obtain and test approved support, privacy and DPO contacts to close Gate 7.
+7. Obtain Founder/Finance approval for fare, tax, 10% administration fee, provider share and trial
+   limitations to close Gate 8; do not invent or activate unapproved money rules.
+8. Approve and publish the controlled no-live-funds boundary and separate payment certification gate
+   to close Gate 9. Keep live collections, custody, refunds and payouts off until PSP/legal/finance
+   certification is independently complete.
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import time
@@ -34,7 +35,7 @@ EVIDENCE_PATH = Path(os.environ.get(
     "LH_MVP_EVIDENCE_PATH", "evidence/regional-booking-acceptance.json"
 ))
 
-if not EXPECTED_SHA or len(EXPECTED_SHA) != 40:
+if not EXPECTED_SHA or not re.fullmatch(r"[0-9a-fA-F]{40}", EXPECTED_SHA):
     raise SystemExit("EXPECTED_SHA (or RELEASE_SHA) must be the exact 40-character deployed commit")
 if not ADMIN_EMAIL or not ADMIN_PW:
     raise SystemExit("LH_ADMIN_EMAIL and LH_ADMIN_PASSWORD are required; production validation has no demo defaults")
@@ -117,6 +118,22 @@ def main():
     }
     print(f"LiftHaul regional booking acceptance  ->  {BASE}")
     print("-" * 72)
+
+    # Standalone invocations must observe the same explicit production-write
+    # approval and exact deployment pin as the protected GitHub workflow.
+    # Only an isolated local CI database is excepted from production-only inputs.
+    isolated_local_ci = (
+        BASE in ("http://localhost:8787", "http://127.0.0.1:8787")
+        and os.environ.get("LIFTHAUL_CI", "").lower() == "true"
+    )
+    approved = os.environ.get("LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED", "").lower() == "true"
+    if not isolated_local_ci and (not approved or not EXPECTED_DEPLOYMENT_ID):
+        evidence["result"] = "BLOCKED_PRODUCTION_APPROVAL_OR_DEPLOYMENT_PIN"
+        evidence["passed"] = _ok
+        evidence["failed"] = _fail
+        _write_evidence(evidence)
+        print("  [BLOCKED] hosted synthetic booking requires explicit approval and exact deployment ID")
+        return 2
 
     # Fail closed before any write. A healthy but different release is not evidence.
     code, ready = _req("GET", "/readyz")

@@ -98,6 +98,33 @@ class PreflightSeparationContract(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertFalse(evidence["acceptance_complete"])
 
+    def test_cors_network_failure_is_not_a_pass(self):
+        original = self.request
+        def broken(method, path, body=None, token=None, origin=None):
+            if origin:
+                self.calls.append((method, path))
+                return 0, {}, {}
+            return original(method, path, body, token, origin)
+        self.request = broken
+        code, evidence = self.run_scope("public")
+        self.assertEqual(code, 1)
+        self.assertTrue(any(c["name"] == "CORS does not trust arbitrary origins"
+                            and c["result"] == "FAIL" for c in evidence["checks"]))
+
+    def test_enabled_tenant_override_denies_full_preflight(self):
+        self.config_rows.append({"key": FLAGS[0], "scope": "tenant",
+                                 "scope_ref": "RGO", "value": "true"})
+        code, evidence = self.run_scope("all", admin=True)
+        self.assertEqual(code, 1)
+        self.assertFalse(evidence["acceptance_complete"])
+
+    def test_unpinned_hosted_identity_fails_closed(self):
+        with mock.patch.dict(self.module["main"].__globals__,
+                             {"EXPECTED_DEPLOYMENT_ID": ""}):
+            code, evidence = self.run_scope("public")
+        self.assertEqual(code, 1)
+        self.assertFalse(evidence["identity_bound"])
+
     def test_elevated_qa_cannot_replace_admin(self):
         original = self.request
         def qa(method, path, body=None, token=None, origin=None):

@@ -26,6 +26,17 @@ class TestProductionImageContract(unittest.TestCase):
         self.assertNotIn("lifthaul-api-production.up.railway.app", release)
         self.assertNotIn("marcuslaysontrenova.github.io/lifthaul-os-demo", monitor)
 
+    def test_exact_release_can_accept_an_already_deployed_authorized_sha(self):
+        release = (REPO_ROOT / ".github" / "workflows" / "production-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("verify_existing", release)
+        self.assertIn("Bind acceptance to the exact live deployment identity", release)
+        self.assertIn('assert observed_sha == expected_sha', release)
+        self.assertIn('assert deployment_id == requested_id', release)
+        self.assertIn('deployment_id: ${{ steps.identity.outputs.deployment_id }}', release)
+        self.assertNotIn('deployment_id: ${{ steps.deploy.outputs.deployment_id }}', release)
+
     def test_docker_image_includes_canonical_vehicle_catalogue(self):
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn(

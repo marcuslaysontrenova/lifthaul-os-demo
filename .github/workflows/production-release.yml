@@ -7,6 +7,14 @@ on:
         description: Full 40-character SHA already merged to main
         required: true
         type: string
+      deployment_mode:
+        description: Deploy through Railway, or accept an exact SHA already deployed by an authorized operator
+        required: true
+        default: deploy
+        type: choice
+        options:
+          - deploy
+          - verify_existing
 
 permissions:
   contents: read
@@ -71,17 +79,18 @@ jobs:
           APP_BASE=http://127.0.0.1:8080 npx playwright test --config playwright.public-ui.config.js
 
   deploy-backend:
-    name: Deploy exact backend SHA and run synthetic smoke
+    name: Verify exact backend SHA and run synthetic smoke
     needs: verify
     runs-on: ubuntu-latest
     environment: production
     outputs:
-      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
+      deployment_id: ${{ steps.identity.outputs.deployment_id }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.verify.outputs.release_sha }}
       - id: deploy
+        if: ${{ inputs.deployment_mode == 'deploy' }}
         name: Request exact-commit Railway deployment
         env:
           RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
@@ -90,6 +99,7 @@ jobs:
           RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
         run: python scripts/go_live/railway_deploy_exact.py
       - name: Wait for healthy deployment identity
+        if: ${{ inputs.deployment_mode == 'deploy' }}
         env:
           API_URL: https://www.lifthaul.com.ph
           RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
@@ -102,6 +112,43 @@ jobs:
           done
           echo "production never reported the exact tested SHA" >&2
           exit 1
+      - id: identity
+        name: Bind acceptance to the exact live deployment identity
+        env:
+          API_URL: https://www.lifthaul.com.ph
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
+          REQUESTED_DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
+          DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 \
+            "$API_URL/readyz" -o ready.json
+          python - <<'PY'
+          import json
+          import os
+          import re
+
+          ready = json.load(open("ready.json", encoding="utf-8"))
+          expected_sha = os.environ["RELEASE_SHA"]
+          requested_id = os.environ.get("REQUESTED_DEPLOYMENT_ID", "").strip()
+          observed_sha = str(ready.get("release_sha", ""))
+          deployment_id = str(ready.get("deployment_id", "")).strip()
+          assert ready.get("status") == "ready", ready
+          assert ready.get("schema_version") is not None, ready
+          assert observed_sha == expected_sha, (observed_sha, expected_sha)
+          assert re.fullmatch(r"[0-9a-fA-F-]{20,}", deployment_id), deployment_id
+          if os.environ["DEPLOYMENT_MODE"] == "deploy":
+              assert requested_id, "Railway deploy step returned no deployment id"
+              assert deployment_id == requested_id, (deployment_id, requested_id)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"deployment_id={deployment_id}\n")
+          print(json.dumps({
+              "release_sha": observed_sha,
+              "deployment_id": deployment_id,
+              "schema_version": ready["schema_version"],
+              "mode": os.environ["DEPLOYMENT_MODE"],
+          }))
+          PY
       - name: Read-only production preflight
         env:
           BASE_URL: https://www.lifthaul.com.ph

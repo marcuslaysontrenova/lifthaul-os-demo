@@ -20,6 +20,7 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             "EXPECTED_SHA": SHA,
             "LH_ADMIN_EMAIL": "regional-qa@example.invalid",
             "LH_ADMIN_PASSWORD": "offline-only-password",
+            "EXPECTED_DEPLOYMENT_ID": "offline-deploy-123",
             "LH_MVP_EVIDENCE_PATH": str(self.evidence_path),
         }
         with mock.patch.dict(os.environ, env, clear=False):
@@ -33,13 +34,15 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
     def fake_request(self, method, path, body=None, token=None):
         self.calls.append((method, path))
         if path == "/readyz":
-            return 200, {"status": "ready", "release_sha": SHA, "schema_version": 27}
+            return 200, {"status": "ready", "release_sha": SHA, "schema_version": 27, "deployment_id": "offline-deploy-123"}
         if path == "/healthz":
             return 200, {"status": "ok", "release_sha": SHA}
         if path == "/admin/marketplace/public-booking-queue" and not token:
             return 401, {}
         if path == "/login":
             return 200, {"token": "offline-admin-token"}
+        if path == "/me/permissions":
+            return 200, {"role": "public_intake_qa", "permissions": ["marketplace.booking.view", "marketplace.public_intake.view"], "is_super": False, "financial": {}}
         if path == "/public/bookings" and method == "POST":
             island = body["origin_island"]
             token_value = self.created.setdefault(island, f"pbk_offline_{island.lower()}_token")
@@ -80,6 +83,28 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
         evidence = self.evidence_path.read_text(encoding="utf-8")
         self.assertIn('"result": "PASS"', evidence)
         self.assertNotIn("pbk_offline", evidence)
+
+    def test_wrong_role_never_creates_a_booking(self):
+        original = self.fake_request
+        def wrong_role(method, path, body=None, token=None):
+            if path == "/me/permissions":
+                self.calls.append((method, path))
+                return 200, {"role": "admin", "permissions": ["*"], "is_super": True}
+            return original(method, path, body, token)
+        self.fake_request = wrong_role
+        self.assertEqual(self.run_main(), 1)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
+
+    def test_failed_queue_access_never_creates_a_booking(self):
+        original = self.fake_request
+        def denied(method, path, body=None, token=None):
+            if path == "/admin/marketplace/public-booking-queue" and token:
+                self.calls.append((method, path))
+                return 403, {}
+            return original(method, path, body, token)
+        self.fake_request = denied
+        self.assertEqual(self.run_main(), 1)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
 
     def test_release_identity_mismatch_fails_before_first_write(self):
         def mismatch(method, path, body=None, token=None):

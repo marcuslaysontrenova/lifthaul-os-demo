@@ -179,8 +179,24 @@ def _admin(evidence):
         for key in CONTROLLED_FLAGS:
             _check(evidence, f"regulated flag OFF across scopes: {key}", _config_flag_is_off(rows, key))
     finally:
-        # Revoke the short-lived audit session; no operational mutation is allowed.
-        _req("POST", "/logout", {}, token=token)
+        # A logout response alone is not revocation evidence. If a stale
+        # administrator bearer still authorizes requests, fail the release gate.
+        try:
+            logout_status, _, _ = _req("POST", "/logout", {}, token=token)
+        except Exception:
+            logout_status = 0
+        revoked_status = 0
+        if logout_status in (200, 204):
+            try:
+                revoked_status, _, _ = _req("GET", "/me/permissions", token=token)
+            except Exception:
+                revoked_status = 0
+        evidence["admin_logout_http_status"] = logout_status
+        evidence["admin_post_logout_http_status"] = revoked_status
+        _check(
+            evidence, "administrator audit session revoked server-side",
+            logout_status in (200, 204) and revoked_status in (401, 403)
+        )
 
 
 def main(argv=None):

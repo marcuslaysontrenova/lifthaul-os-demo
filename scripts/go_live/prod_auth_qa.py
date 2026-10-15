@@ -99,12 +99,23 @@ def main():
             status, _ = call(method, path, body, bearer=token)
             assert status == 403, "QA account was not rejected for prohibited privileged action"
         print("PASS: review, user administration and Founder permissions denied")
-        print("AUTHENTICATED PRODUCTION QA ACCEPTANCE PASSED: read-only, no funds moved")
     finally:
+        # A 2xx logout reply alone does not prove the bearer has been revoked.
+        # A privileged production QA acceptance must fail closed if either
+        # logout or the stale-token authorization probe does not succeed.
         try:
-            call("POST", "/logout", {}, bearer=token)
+            logout_status, _ = call("POST", "/logout", {}, bearer=token)
+            stale_token_status = 0
+            if logout_status in (200, 204):
+                stale_token_status, _ = call("GET", "/me/permissions", bearer=token)
         except Exception:
-            pass
+            raise AssertionError("QA logout or revoked-session probe failed") from None
+        assert logout_status in (200, 204) and stale_token_status in (401, 403), (
+            "QA logout did not invalidate the bearer session server-side"
+        )
+    # Only a fully verified sign-out may precede a positive acceptance claim.
+    print("PASS: QA session revoked server-side")
+    print("AUTHENTICATED PRODUCTION QA ACCEPTANCE PASSED: read-only, no funds moved")
 
 
 if __name__ == "__main__":

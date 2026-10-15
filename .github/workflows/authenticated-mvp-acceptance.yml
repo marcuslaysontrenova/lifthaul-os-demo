@@ -8,6 +8,8 @@ on:
       - '.github/workflows/authenticated-mvp-acceptance.yml'
       - 'scripts/go_live/isolated_acceptance_evidence.py'
       - 'scripts/go_live/test_isolated_acceptance_evidence.py'
+      - 'scripts/go_live/prod_auth_qa.py'
+      - 'scripts/go_live/test_prod_auth_qa_contract.py'
 
 permissions:
   contents: read

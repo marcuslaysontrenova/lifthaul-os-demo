@@ -42,6 +42,10 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             return 401, {}
         if path == "/login":
             return 200, {"token": "offline-admin-token"}
+        if path == "/logout":
+            return 200, {"ok": True}
+        if path == "/me/permissions" and ("POST", "/logout") in self.calls:
+            return 401, {}
         if path == "/me/permissions":
             return 200, {"role": "public_intake_qa", "permissions": ["marketplace.booking.view", "marketplace.public_intake.view"], "is_super": False, "financial": {}}
         if path == "/public/bookings" and method == "POST":
@@ -87,6 +91,53 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
         evidence = self.evidence_path.read_text(encoding="utf-8")
         self.assertIn('"result": "PASS"', evidence)
         self.assertNotIn("pbk_offline", evidence)
+
+    def test_qa_logout_runs_and_invalidates_token_on_success(self):
+        self.assertEqual(self.run_main(), 0)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+        record = self.evidence_path.read_text(encoding="utf-8")
+        self.assertIn('"qa_session_revocation_verified": true', record)
+        self.assertIn('"post_logout_authorization_http_status": 401', record)
+
+    def test_qa_logout_failure_blocks_positive_acceptance(self):
+        original = self.fake_request
+        def denied(method, path, body=None, token=None):
+            if path == "/logout":
+                self.calls.append((method, path))
+                return 503, {}
+            return original(method, path, body, token)
+        self.fake_request = denied
+        with self.assertRaisesRegex(RuntimeError, "revocation not verified"):
+            self.run_main()
+        report = self.evidence_path.read_text(encoding="utf-8")
+        self.assertIn('"result": "FAIL_QA_SESSION_REVOCATION"', report)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+
+    def test_qa_logout_200_but_token_still_valid_fails_closed(self):
+        original = self.fake_request
+        def ineffective(method, path, body=None, token=None):
+            if path == "/me/permissions" and ("POST", "/logout") in self.calls:
+                self.calls.append((method, path))
+                return 200, {"role": "public_intake_qa", "permissions": []}
+            return original(method, path, body, token)
+        self.fake_request = ineffective
+        with self.assertRaisesRegex(RuntimeError, "revocation not verified"):
+            self.run_main()
+        report = self.evidence_path.read_text(encoding="utf-8")
+        self.assertIn('"qa_session_revocation_verified": false', report)
+        self.assertIn('"post_logout_authorization_http_status": 200', report)
+
+    def test_qa_logout_occurs_after_early_permission_denial(self):
+        original = self.fake_request
+        def wrong_role(method, path, body=None, token=None):
+            if path == "/me/permissions" and ("POST", "/logout") not in self.calls:
+                self.calls.append((method, path))
+                return 200, {"role": "admin", "permissions": ["*"], "is_super": True}
+            return original(method, path, body, token)
+        self.fake_request = wrong_role
+        self.assertEqual(self.run_main(), 1)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
 
     def test_missing_hosted_approval_blocks_all_bookings(self):
         self.assertEqual(self.run_main(approved=False), 2)

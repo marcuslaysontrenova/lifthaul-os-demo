@@ -31,6 +31,8 @@ class ReadOnlyAuthenticatedQAContract(unittest.TestCase):
         self.permissions = ["marketplace.booking.view", "marketplace.public_intake.view"]
         self.queue_token = "pbk_offline-synthetic-XDMVQO"
         self.privileged_status = 403
+        self.logout_status = 200
+        self.stale_token_status = 401
         self.queue_requests = [
             {"id": 99, "tracking_token": self.queue_token, "inter_island": False}
         ]
@@ -43,6 +45,8 @@ class ReadOnlyAuthenticatedQAContract(unittest.TestCase):
             self.assertEqual(payload["email"], "unprivileged-uat@example.invalid")
             return 200, {"token": "only-an-offline-test-token"}
         self.assertEqual(bearer, "only-an-offline-test-token")
+        if path == "/me/permissions" and ("POST", "/logout") in self.calls:
+            return self.stale_token_status, {}
         if path == "/me/permissions":
             return 200, {
                 "role": self.expected_role,
@@ -56,7 +60,7 @@ class ReadOnlyAuthenticatedQAContract(unittest.TestCase):
                 "requests": self.queue_requests,
             }
         if path == "/logout":
-            return 200, {"ok": True}
+            return self.logout_status, {"ok": self.logout_status == 200}
         if path in (
             "/admin/marketplace/public-bookings/0/review",
             "/admin/users",
@@ -79,6 +83,23 @@ class ReadOnlyAuthenticatedQAContract(unittest.TestCase):
         self.assertIn(("POST", "/logout"), self.calls)
 
     def test_valid_read_only_qa_session_passes_without_booking_creation(self):
+        self.run_check(should_pass=True)
+
+    def test_expired_bearer_after_logout_is_required(self):
+        self.run_check(should_pass=True)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+        self.assertEqual(self.calls.count(("GET", "/me/permissions")), 2)
+
+    def test_logout_server_failure_fails_closed(self):
+        self.logout_status = 503
+        self.run_check(should_pass=False)
+
+    def test_logout_success_but_stale_bearer_still_valid_fails_closed(self):
+        self.stale_token_status = 200
+        self.run_check(should_pass=False)
+
+    def test_logout_revocation_403_is_accepted(self):
+        self.stale_token_status = 403
         self.run_check(should_pass=True)
 
     def test_nonqa_role_is_rejected(self):

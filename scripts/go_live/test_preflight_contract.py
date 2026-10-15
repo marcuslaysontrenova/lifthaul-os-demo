@@ -35,6 +35,8 @@ class PreflightSeparationContract(unittest.TestCase):
             self.module = runpy.run_path(str(SCRIPT), run_name="offline_contract")
         self.calls = []
         self.admin_email = "authorized-admin@example.invalid"
+        self.logout_status = 200
+        self.stale_token_status = 401
         self.config_rows = [{"key": key, "scope": "platform", "scope_ref": "",
                              "value": "false"} for key in FLAGS]
 
@@ -52,12 +54,14 @@ class PreflightSeparationContract(unittest.TestCase):
             return 401, {}, {}
         if path == "/login":
             return 200, {"token": "offline-token"}, {}
+        if path == "/me/permissions" and ("POST", "/logout") in self.calls:
+            return self.stale_token_status, {}, {}
         if path == "/me/permissions":
             return 200, {"role": "admin"}, {}
         if path == "/admin/config":
             return 200, {"config": self.config_rows}, {}
         if path == "/logout":
-            return 200, {"ok": True}, {}
+            return self.logout_status, {"ok": self.logout_status == 200}, {}
         self.fail("Unexpected endpoint or mutating request: " + method + " " + path)
 
     def run_scope(self, scope, admin=False):
@@ -91,6 +95,33 @@ class PreflightSeparationContract(unittest.TestCase):
         self.assertIn(("GET", "/admin/config"), self.calls)
         self.assertIn(("POST", "/logout"), self.calls)
         self.assertNotIn(("POST", "/public/bookings"), self.calls)
+
+    def test_admin_logout_must_revoke_server_session(self):
+        code, evidence = self.run_scope("admin", admin=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(evidence["admin_logout_http_status"], 200)
+        self.assertEqual(evidence["admin_post_logout_http_status"], 401)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+        self.assertEqual(self.calls.count(("GET", "/me/permissions")), 2)
+
+    def test_admin_logout_503_blocks_acceptance(self):
+        self.logout_status = 503
+        code, evidence = self.run_scope("all", admin=True)
+        self.assertEqual(code, 1)
+        self.assertFalse(evidence["acceptance_complete"])
+        self.assertEqual(evidence["admin_post_logout_http_status"], 0)
+
+    def test_admin_logout_200_but_stale_token_200_blocks_acceptance(self):
+        self.stale_token_status = 200
+        code, evidence = self.run_scope("admin", admin=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(evidence["admin_post_logout_http_status"], 200)
+
+    def test_admin_logout_revoked_token_403_accepted(self):
+        self.stale_token_status = 403
+        code, evidence = self.run_scope("admin", admin=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(evidence["admin_post_logout_http_status"], 403)
 
     def test_missing_flag_cannot_be_treated_as_off(self):
         self.config_rows.pop()

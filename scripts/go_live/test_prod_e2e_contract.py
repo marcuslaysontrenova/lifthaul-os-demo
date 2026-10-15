@@ -151,13 +151,18 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
     def test_wrong_role_never_creates_a_booking(self):
         original = self.fake_request
         def wrong_role(method, path, body=None, token=None):
-            if path == "/me/permissions":
+            # Simulate an elevated principal before logout; after logout the
+            # existing synthetic responder must reject the revoked token.
+            if path == "/me/permissions" and ("POST", "/logout") not in self.calls:
                 self.calls.append((method, path))
                 return 200, {"role": "admin", "permissions": ["*"], "is_super": True}
             return original(method, path, body, token)
         self.fake_request = wrong_role
         self.assertEqual(self.run_main(), 1)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
         self.assertNotIn(("POST", "/public/bookings"), self.calls)
+        self.assertIn('"result": "BLOCKED_QA_AUTHORIZATION"',
+                      self.evidence_path.read_text(encoding="utf-8"))
 
     def test_failed_queue_access_never_creates_a_booking(self):
         original = self.fake_request

@@ -26,6 +26,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  reliability:
+    name: Verify recovery and concurrency controls
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Backup, destructive incident, restore and reconcile
+        run: python scripts/go_live/backup_restore.py
+      - name: Concurrent registration isolation and backpressure
+        run: python scripts/go_live/concurrency_loadtest.py --clients 40
+
   verify:
     name: Verify the exact release candidate
     runs-on: ubuntu-latest
@@ -80,7 +94,7 @@ jobs:
 
   deploy-backend:
     name: Verify exact backend SHA and run synthetic smoke
-    needs: verify
+    needs: [verify, reliability]
     runs-on: ubuntu-latest
     environment: production
     outputs:
@@ -149,20 +163,53 @@ jobs:
               "mode": os.environ["DEPLOYMENT_MODE"],
           }))
           PY
+      - name: Verify protected production QA credentials are configured
+        env:
+          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
+          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$LH_ADMIN_EMAIL" ] || [ -z "$LH_ADMIN_PASSWORD" ]; then
+            echo "::error::Production acceptance is blocked: configure LH_PROD_TEST_ADMIN_EMAIL and LH_PROD_TEST_ADMIN_PASSWORD for the dedicated public_intake_qa account in the protected production environment."
+            exit 1
+          fi
       - name: Read-only production preflight
         env:
           BASE_URL: https://www.lifthaul.com.ph
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
         run: python scripts/go_live/preflight.py
-      - name: Synthetic production journey (no funds)
+      - id: regional
+        name: Synthetic production journey (no funds)
         env:
           BASE_URL: https://www.lifthaul.com.ph
           EXPECTED_SHA: ${{ needs.verify.outputs.release_sha }}
           LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
           LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
           LH_MVP_EVIDENCE_PATH: evidence/regional-booking-acceptance.json
-        run: python scripts/go_live/prod_e2e.py
+        run: |
+          set -euo pipefail
+          python scripts/go_live/prod_e2e.py
+          python - <<'PY'
+          import json
+          import os
+
+          evidence = json.load(open("evidence/regional-booking-acceptance.json", encoding="utf-8"))
+          assert evidence.get("result") == "PASS", evidence
+          regions = evidence.get("regions") or []
+          assert len(regions) == 3, regions
+          reference = regions[0].get("reference")
+          assert isinstance(reference, str) and reference.startswith("LH-"), reference
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"booking_ref={reference}\n")
+          PY
+      - name: Least-privilege authenticated QA reads the exact persisted booking
+        env:
+          BASE_URL: https://www.lifthaul.com.ph
+          EXPECTED_SHA: ${{ needs.verify.outputs.release_sha }}
+          LH_TEST_BOOKING_REF: ${{ steps.regional.outputs.booking_ref }}
+          LH_ADMIN_EMAIL: ${{ secrets.LH_PROD_TEST_ADMIN_EMAIL }}
+          LH_ADMIN_PASSWORD: ${{ secrets.LH_PROD_TEST_ADMIN_PASSWORD }}
+        run: python scripts/go_live/prod_auth_qa.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -197,7 +244,7 @@ jobs:
 
   evidence:
     name: Record immutable release evidence
-    needs: [verify, deploy-backend, deploy-frontend]
+    needs: [verify, reliability, deploy-backend, deploy-frontend]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -207,6 +254,7 @@ jobs:
           DEPLOYMENT_ID: ${{ needs.deploy-backend.outputs.deployment_id }}
           FRONTEND_RESULT: ${{ needs.deploy-frontend.result }}
           BACKEND_RESULT: ${{ needs.deploy-backend.result }}
+          RELIABILITY_RESULT: ${{ needs.reliability.result }}
         run: |
           mkdir -p evidence
           python - <<'PY'
@@ -216,6 +264,7 @@ jobs:
                   'release_sha': os.environ.get('RELEASE_SHA'),
                   'backend_deployment_id': os.environ.get('DEPLOYMENT_ID'),
                   'backend_result': os.environ.get('BACKEND_RESULT'),
+                  'reliability_result': os.environ.get('RELIABILITY_RESULT'),
                   'frontend_result': os.environ.get('FRONTEND_RESULT'),
                   'github_run_id': os.environ.get('GITHUB_RUN_ID'),
                   'rollback_target': 'previous successful Railway deployment and previous successful Pages artifact',

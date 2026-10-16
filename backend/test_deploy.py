@@ -37,6 +37,20 @@ class TestProductionImageContract(unittest.TestCase):
         self.assertIn('deployment_id: ${{ steps.identity.outputs.deployment_id }}', release)
         self.assertNotIn('deployment_id: ${{ steps.deploy.outputs.deployment_id }}', release)
 
+    def test_release_proves_recovery_concurrency_and_least_privilege_production_qa(self):
+        release = (REPO_ROOT / ".github" / "workflows" / "production-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("python scripts/go_live/backup_restore.py", release)
+        self.assertIn("python scripts/go_live/concurrency_loadtest.py --clients 40", release)
+        self.assertIn("needs: [verify, reliability]", release)
+        self.assertIn("configure LH_PROD_TEST_ADMIN_EMAIL and LH_PROD_TEST_ADMIN_PASSWORD", release)
+        self.assertIn("python scripts/go_live/prod_e2e.py", release)
+        self.assertIn('reference = regions[0].get("reference")', release)
+        self.assertIn("LH_TEST_BOOKING_REF: ${{ steps.regional.outputs.booking_ref }}", release)
+        self.assertIn("python scripts/go_live/prod_auth_qa.py", release)
+        self.assertIn("'reliability_result': os.environ.get('RELIABILITY_RESULT')", release)
+
     def test_docker_image_includes_canonical_vehicle_catalogue(self):
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn(

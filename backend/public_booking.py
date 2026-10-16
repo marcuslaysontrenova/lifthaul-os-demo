@@ -411,7 +411,7 @@ def _with_administration_fee(conn, transport_amount, status, **extra):
         transport = round(float(transport_policy["taxable_base"]), 2)
         fee = round(transport * ADMINISTRATION_FEE_RATE, 2)
         # Administration-fee tax is calculated independently. This prevents a transport provider's
-        # tax from being conflated with Haulift's own tax obligation in the ledger.
+        # tax from being conflated with LiftHaul's own tax obligation in the ledger.
         fee_policy = policy.evaluate_tax(conn, fee, ctx)
         transport_tax = round(float(transport_policy["tax"]), 2)
         fee_tax = round(float(fee_policy["tax"]), 2)
@@ -879,7 +879,7 @@ def quote(conn, vehicle, km, inter_island, service_level=None, pricing_inputs=No
     except Exception:
         pass
     # Ferry/RoRo, ports, tolls, permits and other pass-through/incidental costs are explicitly
-    # outside the Haulift booking and Protected Payment amount.
+    # outside the LiftHaul booking and Protected Payment amount.
     base_transport = round((base + perkm * km) * mult, 2)
     components = [
         {"code": "base_transport", "label": "Base transportation charge", "quantity": 1,
@@ -1121,7 +1121,7 @@ def submit(conn, payload):
             "components": q.get("components") or [],
             "rate_version": q.get("rate_version"),
             "rate_effective_date": q.get("rate_effective_date"),
-            "included": ["Transport-service charge", "Haulift administration fee (10%)", "Applicable tax"],
+            "included": ["Transport-service charge", "LiftHaul administration fee (10%)", "Applicable tax"],
             "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },
         "service_level": level, "schedule_type": sched["schedule_type"],
@@ -1335,7 +1335,7 @@ def track(conn, token):
             "components": ([] if eng else json.loads(d.get("fare_components") or "[]")),
             "rate_version": d.get("fare_rate_version"),
             "rate_effective_date": d.get("fare_effective_date"),
-            "included": ["Transport-service charge", "Haulift administration fee (10%)", "Applicable tax"],
+            "included": ["Transport-service charge", "LiftHaul administration fee (10%)", "Applicable tax"],
             "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },
         "payment_status": _PAY_PROJ.get(raw, "Payment Required"),

@@ -6,6 +6,8 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/authenticated-mvp-acceptance.yml'
+      - 'scripts/go_live/isolated_acceptance_evidence.py'
+      - 'scripts/go_live/test_isolated_acceptance_evidence.py'
 
 permissions:
   contents: read
@@ -67,19 +69,84 @@ jobs:
           APP_ENV: test
         run: python -m unittest -v test_public_booking test_public_intake_qa_lifecycle test_protected_payment_e2e
 
+  qa-permission-and-email-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: QA permissions, read-only account and fail-closed email delivery
+        working-directory: backend
+        env:
+          APP_ENV: test
+        run: python -m unittest -v test_public_intake_qa_lifecycle test_auth_email
+      - name: Offline production QA contract forbids privileged actions
+        run: python -m unittest discover -s scripts/go_live -p 'test_prod_auth_qa_contract.py' -v
+
+  public-browser-responsive-journeys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Serve isolated exact checkout UI (no live API)
+        run: |
+          python -m http.server 8080 > /tmp/lifthaul-ui-ci.log 2>&1 &
+          for i in $(seq 1 25); do curl -sf http://127.0.0.1:8080/index.html >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/index.html >/dev/null
+      - name: Install deterministic browser tests
+        working-directory: ci/browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Exercise responsive public booking and QA workspace (isolated/mocked)
+        working-directory: ci/browser
+        env:
+          APP_BASE: http://127.0.0.1:8080
+        run: npx playwright test --config playwright.public-ui.config.js
+
   acceptance-summary:
     if: always()
-    needs: [client-identity-and-workspace, carrier-and-driver-access, staff-finance-founder-authority, booking-tracking-and-live-funds-off]
+    needs:
+      - client-identity-and-workspace
+      - carrier-and-driver-access
+      - staff-finance-founder-authority
+      - booking-tracking-and-live-funds-off
+      - qa-permission-and-email-contract
+      - public-browser-responsive-journeys
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Reject incomplete or failed acceptance evidence
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Persist exact SHA, CI-only role evidence and explicit missing hosted gates
         env:
-          CLIENT: ${{ needs.client-identity-and-workspace.result }}
-          CARRIER: ${{ needs.carrier-and-driver-access.result }}
-          STAFF: ${{ needs.staff-finance-founder-authority.result }}
-          BOOKING: ${{ needs.booking-tracking-and-live-funds-off.result }}
-        run: |
-          printf 'Client=%s\nCarrier=%s\nStaff=%s\nBooking=%s\n' "$CLIENT" "$CARRIER" "$STAFF" "$BOOKING"
-          test "$CLIENT" = success && test "$CARRIER" = success && test "$STAFF" = success && test "$BOOKING" = success
-          echo 'All isolated role-based automated acceptance suites passed.'
-          echo 'IMPORTANT: Production authenticated UAT requires separately approved protected account credentials.'
+          LH_CANDIDATE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          LH_TESTED_CHECKOUT_SHA: ${{ github.sha }}
+          LH_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+          LH_EVENT_NAME: ${{ github.event_name }}
+          LH_SUITE_CLIENT_IDENTITY_AND_WORKSPACE: ${{ needs.client-identity-and-workspace.result }}
+          LH_SUITE_CARRIER_AND_DRIVER_ACCESS: ${{ needs.carrier-and-driver-access.result }}
+          LH_SUITE_STAFF_FINANCE_FOUNDER_AUTHORITY: ${{ needs.staff-finance-founder-authority.result }}
+          LH_SUITE_BOOKING_TRACKING_AND_LIVE_FUNDS_OFF: ${{ needs.booking-tracking-and-live-funds-off.result }}
+          LH_SUITE_QA_PERMISSION_AND_EMAIL_CONTRACT: ${{ needs.qa-permission-and-email-contract.result }}
+          LH_SUITE_PUBLIC_BROWSER_RESPONSIVE_JOURNEYS: ${{ needs.public-browser-responsive-journeys.result }}
+          LH_ISOLATED_EVIDENCE_PATH: evidence/isolated-mvp-acceptance.json
+        run: python scripts/go_live/isolated_acceptance_evidence.py
+      - name: Preserve sanitized evidence, including failures; never secrets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-mvp-role-acceptance-${{ github.run_id }}
+          path: evidence/isolated-mvp-acceptance.json
+          retention-days: 21
+          if-no-files-found: warn

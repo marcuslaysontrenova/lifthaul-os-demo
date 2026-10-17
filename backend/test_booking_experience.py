@@ -87,7 +87,7 @@ class BookingMarkup(unittest.TestCase):
         self.assertEqual(parser.tags.get("vehicleStage"), "section")
         self.assertIn('id="km" class="auto-distance"', html)
         self.assertIn("required readonly", html)
-        self.assertIn("Haulift 10% administration fee", html)
+        self.assertIn("LiftHaul 10% administration fee", html)
         self.assertIn("expenses excluded from the booking total will be shouldered separately", html)
         self.assertIn("Vehicle matching is unavailable", html)  # approved module fails closed
         self.assertNotIn('name="pm"', html)

@@ -95,6 +95,20 @@ class NavigationIntegrity(unittest.TestCase):
                 failures.append(page.name)
         self.assertEqual([], failures, f"placeholder links remain: {failures}")
 
+    def test_every_deployable_page_loads_the_trenovatech_attribution(self):
+        pages = sorted(ROOT.glob("*.html"))
+        self.assertTrue(pages, "no deployable root HTML pages found")
+        missing = [
+            page.name for page in pages
+            if 'src="trenovatech-attribution.js?v=1"' not in page.read_text(encoding="utf-8")
+        ]
+        self.assertEqual([], missing, f"TrenovaTech.ai attribution missing from: {missing}")
+
+        script = (ROOT / "trenovatech-attribution.js").read_text(encoding="utf-8")
+        self.assertIn('var URL = "https://trenovatech.ai/"', script)
+        self.assertIn('rel = "noopener noreferrer"', script)
+        self.assertIn('Visit TrenovaTech.ai (opens in a new tab)', script)
+
     def test_shared_theme_defines_one_font_stack(self):
         css = (ROOT / "theme.css").read_text(encoding="utf-8")
         self.assertIn("--lh-font:", css)

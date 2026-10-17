@@ -1,6 +1,6 @@
 # LiftHaul Philippine Fare Benchmark and Rate-Control Record
 
-Evidence review date: **9 October 2026 (Asia/Manila)**
+Evidence review date: **16 October 2026 (Asia/Manila)**
 Candidate rate version: `LH-PH-2026-10-09-BENCHMARK-01`
 
 ## Scope and evidence rule
@@ -14,8 +14,10 @@ booking details can change the final price.
 Official evidence:
 
 - Lalamove Philippines delivery pricing: https://www.lalamove.com/en-ph/all-delivery-pricing-detail
-- Transportify local-delivery vehicle and base-price table (updated 12 May 2026):
-  https://www.transportify.com.ph/delivery/business/local-delivery-service-philippines/
+- Transportify public rate table (retrieved 16 October 2026):
+  https://www.transportify.com.ph/check-transportify-rates/
+- Transportify vehicle-specific van-rate page (retrieved 16 October 2026):
+  https://www.transportify.com.ph/trucking/small/cargo-delivery-van-for-rent/
 - Transportify driver requirements and payout destinations (updated 15 May 2026):
   https://www.transportify.com.ph/transportify-rates/driver/requirements-private-car-delivery-jobs/
 - Lalamove onboarding, deposit and payout controls:
@@ -35,6 +37,43 @@ Official evidence:
 | L300 / cargo van | ₱280 base plus ₱20/km; 1,000 kg | Base ₱415/₱374/₱335; 1,000 kg | Enclosed-body dimensions and verified unit rating govern eligibility |
 | 6-wheel class | Public variants range from 3,000 kg to 7,000 kg with different bases and per-km rates | 6W forward base ₱4,850; 7,000 kg | Never price all 6-wheel bodies as one vehicle; body and payload must be explicit |
 | Wing van | ₱7,200 base plus ₱85/km; published 12,000 kg category | Base ₱7,000 Metro Manila or ₱6,500 elsewhere; published 12,000–28,000 kg range | Use verified body length and GVW/payload; no generic heavy-truck substitution |
+
+### 16 October 2026 re-verification
+
+The official Lalamove pricing page still publishes the motorcycle, sedan, small-SUV and
+MPV/minivan figures above and states that app pricing may vary with traffic, demand, partner
+availability, tolls, surcharges and changed booking details. It also publishes loading/unloading
+allowances, excess waiting rates and a possible high-demand surcharge. Those variable items remain
+disclosures and governed inputs; they are not a basis for pretending that a competitor price is
+permanent.
+
+Transportify's general public rate table still publishes Metro Manila starting bases of ₱220 for
+sedan, ₱240 for MPV/SUV, ₱375 for Light Van, ₱418 for pickup, ₱415 for L300/Van, ₱1,600 for
+Closed Van, ₱4,850 for 6-wheel Forward and ₱7,000 for Wing Van. A separate 2026
+vehicle-specific page instead advertises an L300/Van starting point of ₱430 plus ₱27/km and a
+four-wheel closed van starting point of ₱1,800 plus ₱45/km. This internal inconsistency is itself
+evidence that LiftHaul must retain a dated, approved matrix and show an estimate timestamp rather
+than claim to reproduce Transportify's live app quote.
+
+## Current LiftHaul candidate versus the refreshed public evidence
+
+The table below records the production candidate currently implemented by
+`backend/public_booking.py`. It is not a commercial approval.
+
+| LiftHaul public class | Current LiftHaul base + distance | Public benchmark signal | Decision risk |
+|---|---:|---|---|
+| Motorcycle | ₱60 + ₱8/km | Lalamove ₱49 + published distance bands | Within an explainable planning range; margin and provider-share approval still required |
+| Sedan | ₱120 + ₱14/km | Lalamove ₱100 + distance bands; Transportify ₱220 Metro Manila base | Needs regional/minimum-charge approval |
+| MPV | ₱180 + ₱18/km | Lalamove ₱200 + distance bands; Transportify ₱240 Metro Manila base | Needs regional/minimum-charge approval |
+| Pickup | ₱220 + ₱22/km | Lalamove ₱240 + ₱20/km; Transportify ₱418 Metro Manila base | Needs regional/minimum-charge approval |
+| L300 / van | ₱300 + ₱28/km | Lalamove ₱280 + ₱20/km; Transportify public pages show ₱415 or ₱430 starting points | Conflicting competitor pages require a governed LiftHaul decision, not automatic copying |
+| 6-wheel | ₱1,200 + ₱55/km | Transportify publishes ₱4,850 for 6W Forward; Lalamove separates multiple payload/body variants | **High underpricing risk for short trips**; commercial approval or manual-quote treatment required |
+| 10-wheel / wing | ₱2,500 + ₱80/km | Lalamove publishes a ₱7,200 wing-van base; Transportify publishes ₱7,000 Metro Manila base | **High underpricing risk for short trips**; commercial approval or manual-quote treatment required |
+
+The disclosed 10% LiftHaul administration fee is applied after the transport-service subtotal and
+before the configured tax calculation. It must not be described as a competitor commission, a
+provider payout deduction, or an approved tax treatment until Finance and Tax owners approve those
+separate decisions.
 
 Lalamove also publishes add-stop amounts, waiting charges, rental rates and a possible high-demand
 surcharge. Those items are not silently copied. LiftHaul represents each approved add-on as a

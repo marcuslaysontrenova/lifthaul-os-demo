@@ -7,15 +7,35 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   probes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: production
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Validate monitored production ownership
+        env:
+          OPERATIONS_OWNER: ${{ vars.LH_PROD_OPERATIONS_OWNER }}
+          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          [ -n "$OPERATIONS_OWNER" ] || { echo "::error::Set production variable LH_PROD_OPERATIONS_OWNER"; exit 1; }
+          [ -n "$INCIDENT_OWNER" ] || { echo "::error::Set production variable LH_PROD_INCIDENT_OWNER"; exit 1; }
+          python - <<'PY'
+          import json, os
+          with open('evidence/ownership.json', 'w', encoding='utf-8') as handle:
+              json.dump({
+                  'operations_owner': os.environ['OPERATIONS_OWNER'],
+                  'incident_owner': os.environ['INCIDENT_OWNER'],
+                  'configured': True,
+              }, handle, indent=2)
+          PY
       - name: Canonical production surface, readiness, and release identity
         env:
           PRODUCTION_URL: https://www.lifthaul.com.ph
@@ -46,6 +66,25 @@ jobs:
           PY
           deployed_sha=$(python -c "import json; print(json.load(open('evidence/ready.json'))['release_sha'])")
           git merge-base --is-ancestor "$deployed_sha" origin/main
+      - name: Open or update the production-health incident
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title='Production health monitor is failing'
+          number=$(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -1)
+          body="Production monitoring failed at ${RUN_URL}. The incident owner must acknowledge, diagnose, and record recovery evidence. No live-funds control should be changed as part of this response."
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          elif [ -n "$INCIDENT_OWNER" ]; then
+            gh issue create --title "$title" --body "$body" --assignee "$INCIDENT_OWNER"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

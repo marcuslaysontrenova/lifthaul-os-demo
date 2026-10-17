@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "currency": "PHP",
+  "public_estimate_version": "LH-PH-2026-10-09-BENCHMARK-01",
+  "matrices": [
+    {
+      "version": "LH-PH-2026-10-09-BENCHMARK-01",
+      "status": "AWAITING_APPROVAL",
+      "runtime_use": "INDICATIVE_ESTIMATE_ONLY",
+      "benchmark_effective_date": "2026-10-09",
+      "approval": {
+        "commercial_owner": null,
+        "finance_owner": null,
+        "tax_owner": null,
+        "decision_date": null,
+        "effective_at": null,
+        "provider_share_basis": null,
+        "tax_treatment_reference": null,
+        "approval_artifact": null
+      },
+      "administration_fee": {
+        "version": "PUBLIC_ADMIN_FEE_V1",
+        "rate": "0.10",
+        "basis": "tax_exclusive_transport_subtotal",
+        "rounding": "ROUND_HALF_UP",
+        "status": "AWAITING_APPROVAL"
+      },
+      "commercial_rules": {
+        "regional_adjustments": null,
+        "after_hours_or_peak_pricing": null,
+        "cancellation_fee": null,
+        "provider_share_basis": null,
+        "discount_floor_rule": "never_below_approved_minimum",
+        "toll_and_parking_treatment": "excluded_until_verified",
+        "approval_status": "AWAITING_APPROVAL"
+      },
+      "pass_through_charges": [
+        "Expressway tolls",
+        "Parking",
+        "Ferry or RoRo",
+        "Port and terminal fees",
+        "Government and special permits",
+        "Weighbridge and cargo-clearance fees",
+        "Escort expenses",
+        "Loading/unloading, helpers or waiting time not included in the agreed rate",
+        "Accommodation, meals and other route or incidental expenses"
+      ],
+      "vehicles": {
+        "moto": {
+          "category": "MOTORCYCLE",
+          "service_class": "STANDARD",
+          "base": 60,
+          "per_km": 8,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 250,
+          "additional_stop": 40,
+          "waiting_per_hour": 60,
+          "helper": 0
+        },
+        "sedan": {
+          "category": "SEDAN",
+          "service_class": "STANDARD",
+          "base": 120,
+          "per_km": 14,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 900,
+          "additional_stop": 45,
+          "waiting_per_hour": 100,
+          "helper": 200
+        },
+        "mpv": {
+          "category": "MPV_SUV",
+          "service_class": "STANDARD",
+          "base": 180,
+          "per_km": 18,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 1400,
+          "additional_stop": 50,
+          "waiting_per_hour": 150,
+          "helper": 200
+        },
+        "pickup": {
+          "category": "PICKUP",
+          "service_class": "STANDARD",
+          "base": 220,
+          "per_km": 22,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 1800,
+          "additional_stop": 50,
+          "waiting_per_hour": 150,
+          "helper": 250
+        },
+        "van": {
+          "category": "VAN_L300",
+          "service_class": "STANDARD",
+          "base": 300,
+          "per_km": 28,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 2600,
+          "additional_stop": 70,
+          "waiting_per_hour": 150,
+          "helper": 250
+        },
+        "refvan": {
+          "category": "REFRIGERATED_VAN",
+          "service_class": "STANDARD",
+          "base": 420,
+          "per_km": 32,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 3200,
+          "additional_stop": 70,
+          "waiting_per_hour": 200,
+          "helper": 300
+        },
+        "6w": {
+          "category": "TRUCK_6W",
+          "service_class": "STANDARD",
+          "base": 1200,
+          "per_km": 55,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 7500,
+          "additional_stop": 100,
+          "waiting_per_hour": 250,
+          "helper": 400,
+          "commercial_risk": "HIGH_UNDERPRICING_RISK"
+        },
+        "6wref": {
+          "category": "REFRIGERATED_TRUCK_6W",
+          "service_class": "STANDARD",
+          "base": 1550,
+          "per_km": 64,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 9000,
+          "additional_stop": 100,
+          "waiting_per_hour": 250,
+          "helper": 400,
+          "commercial_risk": "HIGH_UNDERPRICING_RISK"
+        },
+        "10w": {
+          "category": "WING_VAN_10W",
+          "service_class": "STANDARD",
+          "base": 2500,
+          "per_km": 80,
+          "included_distance_km": 0,
+          "minimum_charge": null,
+          "inter_island_sea": 14000,
+          "additional_stop": 150,
+          "waiting_per_hour": 250,
+          "helper": 500,
+          "commercial_risk": "HIGH_UNDERPRICING_RISK"
+        },
+        "lowbed": {
+          "category": "LOWBED",
+          "service_class": "ENGINEERED",
+          "base": null,
+          "per_km": null,
+          "inter_island_sea": null
+        },
+        "crane": {
+          "category": "CRANE_RIGGING",
+          "service_class": "ENGINEERED",
+          "base": null,
+          "per_km": null,
+          "inter_island_sea": null
+        },
+        "manual": {
+          "category": "CUSTOM_ASSESSMENT",
+          "service_class": "ENGINEERED",
+          "base": null,
+          "per_km": null,
+          "inter_island_sea": null
+        }
+      }
+    }
+  ]
+}

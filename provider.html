@@ -125,6 +125,7 @@ html.light-registration body{background:#f4f7f3!important;background-image:none!
 </style>
 <link rel="stylesheet" href="lifthaul-assistant.css">
 <script src="lifthaul-assistant.js" defer></script>
+<script src="trenovatech-attribution.js?v=1" defer></script>
 </head>
 <body>
 <nav data-lh-public-nav data-active="partner"></nav>
@@ -351,6 +352,9 @@ function verifyProvider(){
 function resendCode(){
   if(!_challenge){toast('Create your account first.');return}$('#otpMsg').textContent='Requesting a new code…';API.post('/public/providers/resend',{challenge_id:_challenge.challenge_id,username:_challenge.username}).then(function(r){_challenge.challenge_id=r.challenge_id;$('#otpMsg').textContent=r.delivered?'A new code was sent to '+r.destination:(r.delivery_note||'A new code was issued.');if(r.dev_code){$('#otpDev').classList.remove('hide');$('#otpDev').innerHTML='<span>🔑</span><div><strong>Test environment</strong>New code: <code>'+esc(r.dev_code)+'</code></div>'}}).catch(function(e){$('#otpMsg').textContent=e.message});
 }
-</script>
+ </script>
+<footer class="lh-trenovatech-attribution" aria-label="Technology attribution">
+  <span>Developed by <a class="lh-trenovatech-link" href="https://trenovatech.ai/" target="_blank" rel="noopener noreferrer" aria-label="Visit TrenovaTech.ai (opens in a new tab)">TrenovaTech.ai ↗</a></span>
+</footer>
 </body>
 </html>

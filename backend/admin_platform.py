@@ -485,7 +485,13 @@ ADMIN_ROLES = [
          "quotation.platform_fee.view", "quotation.margin.view", "quotation.audit.view",
          "tax.policy.*", "payment.downpayment.policy.*", "quotation.policy.approval.view",
          "admin.configuration.financial.manage", "admin.configuration.view", "admin.configuration.simulate",
-         "crm.admin.credit_policy.*", "crm.admin.pricing.*"}),
+         "crm.admin.credit_policy.*", "crm.admin.pricing.*",
+         # Read-only access to the marketplace protected-payment queues. Mutation,
+         # verification, approval, release and payout permissions stay separately assigned.
+         "marketplace.payment.view", "marketplace.reconciliation.view",
+         "marketplace.finance.integrity.view", "marketplace.release.view",
+         "marketplace.payout.view", "marketplace.refund.view",
+         "marketplace.dispute.view", "marketplace.freeze.view"}),
     ("dispatch_admin",       "Dispatch Administrator",       3, {"dispatch_admin.*", "job.read", "job.dispatch", "job.transition", "reservation.*"}),
     ("safety_admin",         "Safety Administrator",         3, {"safety.*", "incident.*"}),
 ]

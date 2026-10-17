@@ -1,0 +1,28 @@
+{
+  "artifact_type": "LIFTHAUL_FARE_MATRIX_APPROVAL_DECISION",
+  "candidate_version": "LH-PH-2026-10-09-BENCHMARK-01",
+  "decision_status": "AWAITING_APPROVAL",
+  "commercial_owner": null,
+  "finance_owner": null,
+  "tax_owner": null,
+  "decision_date": null,
+  "effective_at": null,
+  "provider_share_basis": null,
+  "tax_treatment_reference": null,
+  "instant_price_scope": null,
+  "manual_quote_exclusions": [
+    "low-bed and heavy hauling",
+    "crane and rigging",
+    "hazardous or regulated cargo",
+    "cargo with incomplete weight or dimensions"
+  ],
+  "owner_decisions_required": [
+    "Approve or replace motorcycle, sedan, MPV, pickup and L300 rates and regional minimums",
+    "Approve revised 6-wheel and 10-wheel minimums or keep those classes on manual quotation",
+    "Approve the 10% administration-fee basis",
+    "Approve tax treatment with a Finance/Tax reference",
+    "Approve provider share and payment-provider cost treatment",
+    "Approve waiting, stops, helper, cancellation, toll and parking rules"
+  ],
+  "control": "This artifact must not be changed to APPROVED until every named owner and decision field is supported by recorded evidence. A code commit, test result or competitor page is not approval."
+}

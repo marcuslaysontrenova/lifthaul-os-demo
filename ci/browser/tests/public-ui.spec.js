@@ -93,6 +93,21 @@ test('public journey uses one complete top navigation with a visible fare calcul
   }
 });
 
+test('every deployable LiftHaul page exposes the accessible TrenovaTech.ai link', async ({ page }) => {
+  for (const name of [
+    'index.html', 'book.html', 'track.html', 'fare-calculator.html',
+    'driver-register.html', 'provider.html', 'support.html', 'policies.html',
+    'client.html', 'driver.html', 'portal.html', 'console.html', 'founder.html',
+    'admin-console.html', 'admin_commercial.html', 'admin_referral.html', 'samantha.html',
+  ]) {
+    await page.goto(`${APP}/${name}?review=trenovatech-attribution`);
+    const link = page.getByRole('link', { name: 'Visit TrenovaTech.ai (opens in a new tab)' }).first();
+    await expect(link, `${name} must expose the TrenovaTech.ai attribution`).toHaveAttribute('href', 'https://trenovatech.ai/');
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  }
+});
+
 test('booking geography loads from the packaged PSGC manifest without console errors', async ({ page }) => {
   const errors = [];
   page.on('console', message => {

@@ -1,0 +1,68 @@
+{
+  "schema": "lifthaul.mvp.persona-uat.v1",
+  "generated_at": "2026-10-16T12:37:32+00:00",
+  "scope": "isolated synthetic acceptance; no production writes, messages, dispatches or funds",
+  "production_gate_closed": false,
+  "production_gate_note": "A pass proves deployable workflow behavior only. Gate 5 closes after dedicated production persona sign-ins are witnessed and recorded on the exact deployed commit.",
+  "tests_run": 11,
+  "passed": 11,
+  "failed": 0,
+  "skipped": 0,
+  "results": [
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_01_booker_authenticated_workspace_is_owned_and_trackable",
+      "status": "PASS",
+      "duration_seconds": 0.452
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_02_driver_applicant_verifies_contact_but_cannot_self_activate",
+      "status": "PASS",
+      "duration_seconds": 0.415
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_03_accredited_driver_is_sponsored_then_independently_activated",
+      "status": "PASS",
+      "duration_seconds": 0.493
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_04_motorcycle_owner_registers_canonical_unit_without_self_approval",
+      "status": "PASS",
+      "duration_seconds": 0.39
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_05_light_vehicle_owner_registers_mini_van_as_distinct_category",
+      "status": "PASS",
+      "duration_seconds": 0.374
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_06_truck_owner_registers_specification_classified_unit",
+      "status": "PASS",
+      "duration_seconds": 0.389
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_07_fleet_owner_adds_multiple_units_and_drivers_with_owned_scope",
+      "status": "PASS",
+      "duration_seconds": 0.398
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_08_specialized_provider_captures_crane_capability_and_engineering_specs",
+      "status": "PASS",
+      "duration_seconds": 0.397
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_09_operations_reviews_public_intake_but_finance_cannot",
+      "status": "PASS",
+      "duration_seconds": 0.41
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_10_finance_reads_protected_payment_queue_while_live_funds_remain_off",
+      "status": "PASS",
+      "duration_seconds": 0.304
+    },
+    {
+      "test": "test_mvp_persona_uat.MvpPersonaUat.test_11_administrator_creates_scoped_user_and_revokes_session_on_suspend",
+      "status": "PASS",
+      "duration_seconds": 0.447
+    }
+  ]
+}

@@ -18,25 +18,17 @@ import math
 import secrets
 
 import core
+import fare_matrix
 import tenant
 
 ISLAND_GROUPS = ("LUZON", "VISAYAS", "MINDANAO")
 
-# Public vehicle class -> (governed requested_vehicle_category, service_class, indicative base ₱, per-km ₱, inter-island sea ₱)
-VEHICLE_MAP = {
-    "moto":   ("MOTORCYCLE",  "STANDARD",   60,   8,   250),
-    "sedan":  ("SEDAN",       "STANDARD",   120,  14,  900),
-    "mpv":    ("MPV_SUV",     "STANDARD",   180,  18,  1400),
-    "pickup": ("PICKUP",      "STANDARD",   220,  22,  1800),
-    "van":    ("VAN_L300",    "STANDARD",   300,  28,  2600),
-    "6w":     ("TRUCK_6W",    "STANDARD",   1200, 55,  7500),
-    "10w":    ("WING_VAN_10W","STANDARD",   2500, 80,  14000),
-    "lowbed": ("LOWBED",      "ENGINEERED", None, None, None),
-    "crane":  ("CRANE_RIGGING","ENGINEERED",None, None, None),
-    "refvan": ("REFRIGERATED_VAN", "STANDARD", 420, 32, 3200),
-    "6wref":  ("REFRIGERATED_TRUCK_6W", "STANDARD", 1550, 64, 9000),
-    "manual": ("CUSTOM_ASSESSMENT", "ENGINEERED", None, None, None),
-}
+# Public vehicle class -> (canonical category, service class, base, per-km, sea planning rate).
+# The candidate is loaded from the versioned registry; no code edit is needed to publish a future
+# matrix after the independent approval artifact and tests are complete.
+PUBLIC_FARE_MATRIX = fare_matrix.public_estimate_matrix()
+VEHICLE_MAP, PUBLIC_OPERATIONAL_RATES = fare_matrix.public_booking_constants(PUBLIC_FARE_MATRIX)
+PUBLIC_VEHICLE_RATE_RULES = PUBLIC_FARE_MATRIX["vehicles"]
 VEHICLE_CAPACITY_KG = {
     "moto": 20, "sedan": 200, "mpv": 600, "pickup": 800, "van": 1000,
     "6w": 7000, "10w": 12000, "lowbed": 40000, "crane": 350000,
@@ -88,30 +80,12 @@ REASON_LABELS = {
     "tail_lift_unverified": "No tail-lift capability is verified for this category.",
     "forklift_support_unverified": "Forklift support requires operations confirmation.",
 }
-ADMINISTRATION_FEE_RATE = 0.10
-ADMINISTRATION_FEE_VERSION = "PUBLIC_ADMIN_FEE_V1"
-PUBLIC_FARE_MATRIX_VERSION = "LH-PH-2026-10-09-BENCHMARK-01"
-PUBLIC_FARE_MATRIX_EFFECTIVE_DATE = "2026-10-09"
-# Customer-visible operational add-ons.  These are LiftHaul planning rates, not copied competitor
-# algorithms.  Every estimate records the version so historical bookings remain reproducible.
-PUBLIC_OPERATIONAL_RATES = {
-    "moto": {"additional_stop": 40, "waiting_per_hour": 60, "helper": 0},
-    "sedan": {"additional_stop": 45, "waiting_per_hour": 100, "helper": 200},
-    "mpv": {"additional_stop": 50, "waiting_per_hour": 150, "helper": 200},
-    "pickup": {"additional_stop": 50, "waiting_per_hour": 150, "helper": 250},
-    "van": {"additional_stop": 70, "waiting_per_hour": 150, "helper": 250},
-    "refvan": {"additional_stop": 70, "waiting_per_hour": 200, "helper": 300},
-    "6w": {"additional_stop": 100, "waiting_per_hour": 250, "helper": 400},
-    "6wref": {"additional_stop": 100, "waiting_per_hour": 250, "helper": 400},
-    "10w": {"additional_stop": 150, "waiting_per_hour": 250, "helper": 500},
-}
+ADMINISTRATION_FEE_RATE = float(PUBLIC_FARE_MATRIX["administration_fee"]["rate"])
+ADMINISTRATION_FEE_VERSION = PUBLIC_FARE_MATRIX["administration_fee"]["version"]
+PUBLIC_FARE_MATRIX_VERSION = PUBLIC_FARE_MATRIX["version"]
+PUBLIC_FARE_MATRIX_EFFECTIVE_DATE = PUBLIC_FARE_MATRIX["benchmark_effective_date"]
 ENGINEERED_NOTE = "Engineering estimate required — load charts, permits, route survey and ground-bearing checks price this, not a distance formula."
-EXCLUDED_CHARGES = (
-    "Expressway tolls", "Parking", "Ferry or RoRo", "Port and terminal fees",
-    "Government and special permits", "Weighbridge and cargo-clearance fees",
-    "Escort expenses", "Loading/unloading, helpers or waiting time not included in the agreed rate",
-    "Accommodation, meals and other route or incidental expenses",
-)
+EXCLUDED_CHARGES = tuple(PUBLIC_FARE_MATRIX["pass_through_charges"])
 
 
 def _now():
@@ -134,6 +108,7 @@ SCHEMA_COLUMNS = [
     # Immutable public-pricing snapshot. Historical bookings must never silently inherit a newer
     # matrix after an administrator publishes one.
     ("fare_rate_version", "TEXT"), ("fare_effective_date", "TEXT"), ("fare_components", "TEXT"),
+    ("fare_approval_status", "TEXT"), ("fare_runtime_use", "TEXT"),
     # Structured cargo/package details used for vehicle-capacity validation and operations.
     ("cargo_category", "TEXT"), ("package_count", "INTEGER"),
     ("package_length_cm", "REAL"), ("package_width_cm", "REAL"), ("package_height_cm", "REAL"),
@@ -388,6 +363,7 @@ def _with_administration_fee(conn, transport_amount, status, **extra):
     9.09% of the final customer total; both values are retained so finance never confuses markup
     with gross-margin percentage.
     """
+    fare_readiness = fare_matrix.approval_readiness(PUBLIC_FARE_MATRIX)
     if transport_amount is None:
         result = {
             "amount": None, "transport_subtotal": None,
@@ -399,6 +375,9 @@ def _with_administration_fee(conn, transport_amount, status, **extra):
             "tax_code": None, "tax_type": None, "tax_mode": None,
             "withholding_amount": None, "rate_version": PUBLIC_FARE_MATRIX_VERSION,
             "rate_effective_date": PUBLIC_FARE_MATRIX_EFFECTIVE_DATE,
+            "fare_approval_status": fare_readiness["status"],
+            "fare_runtime_use": fare_readiness["runtime_use"],
+            "fare_collection_enabled": fare_readiness["approved"],
             "status": status,
         }
     else:
@@ -409,7 +388,7 @@ def _with_administration_fee(conn, transport_amount, status, **extra):
         ctx = {"tenant": _platform_tenant()}
         transport_policy = policy.evaluate_tax(conn, float(transport_amount), ctx)
         transport = round(float(transport_policy["taxable_base"]), 2)
-        fee = round(transport * ADMINISTRATION_FEE_RATE, 2)
+        fee = fare_matrix.administration_fee(transport, PUBLIC_FARE_MATRIX)
         # Administration-fee tax is calculated independently. This prevents a transport provider's
         # tax from being conflated with LiftHaul's own tax obligation in the ledger.
         fee_policy = policy.evaluate_tax(conn, fee, ctx)
@@ -435,6 +414,9 @@ def _with_administration_fee(conn, transport_amount, status, **extra):
             "fee_version": ADMINISTRATION_FEE_VERSION,
             "rate_version": PUBLIC_FARE_MATRIX_VERSION,
             "rate_effective_date": PUBLIC_FARE_MATRIX_EFFECTIVE_DATE,
+            "fare_approval_status": fare_readiness["status"],
+            "fare_runtime_use": fare_readiness["runtime_use"],
+            "fare_collection_enabled": fare_readiness["approved"],
             "status": status,
         }
     result.update(extra)
@@ -880,16 +862,29 @@ def quote(conn, vehicle, km, inter_island, service_level=None, pricing_inputs=No
         pass
     # Ferry/RoRo, ports, tolls, permits and other pass-through/incidental costs are explicitly
     # outside the LiftHaul booking and Protected Payment amount.
-    base_transport = round((base + perkm * km) * mult, 2)
+    vehicle_rules = PUBLIC_VEHICLE_RATE_RULES[vehicle]
+    included_km = float(vehicle_rules.get("included_distance_km") or 0)
+    chargeable_km = max(0.0, km - included_km)
+    calculated_transport = round((base + perkm * chargeable_km) * mult, 2)
+    minimum_charge = vehicle_rules.get("minimum_charge")
+    base_transport = max(calculated_transport, float(minimum_charge or 0))
     components = [
         {"code": "base_transport", "label": "Base transportation charge", "quantity": 1,
          "unit": "booking", "rate": base, "amount": round(base * mult, 2)},
-        {"code": "distance", "label": "Distance charge", "quantity": km,
+        {"code": "distance", "label": "Distance charge", "quantity": chargeable_km,
          "unit": "km", "rate": round(perkm * mult, 2),
-         "amount": round(perkm * km * mult, 2)},
+         "amount": round(perkm * chargeable_km * mult, 2)},
     ]
+    if minimum_charge is not None and base_transport > calculated_transport:
+        components.append({
+            "code": "minimum_charge_adjustment", "label": "Minimum charge adjustment",
+            "quantity": 1, "unit": "booking", "rate": round(base_transport - calculated_transport, 2),
+            "amount": round(base_transport - calculated_transport, 2),
+        })
     components.extend(_quote_operational_components(vehicle, pricing_inputs))
-    transport = round(base_transport + sum(item["amount"] for item in components[2:]), 2)
+    # Base + distance already equals calculated_transport; add only the minimum adjustment and
+    # itemized operational options to reach the governed transport subtotal.
+    transport = round(calculated_transport + sum(item["amount"] for item in components[2:]), 2)
     return _with_administration_fee(
         conn, transport, "QUOTED_INDICATIVE", source="server_tariff", service_level=service_level,
         components=components,
@@ -1054,13 +1049,15 @@ def submit(conn, payload):
         "UPDATE mkt_bookings SET cargo_volume_cbm=?,stackable=?,fragile=?,splittable=?,vehicle_count=?,"
         "safety_allowance_pct=?,matching_version=?,matching_decision=?,tax_amount=?,transport_tax_amount=?,"
         "administration_fee_tax_amount=?,tax_rate=?,tax_code=?,tax_type=?,tax_mode=?,withholding_amount=?,"
-        "fare_rate_version=?,fare_effective_date=?,fare_components=?,excluded_charges_ack=1 WHERE id=?",
+        "fare_rate_version=?,fare_effective_date=?,fare_components=?,fare_approval_status=?,"
+        "fare_runtime_use=?,excluded_charges_ack=1 WHERE id=?",
         (cargo.get("volume_cbm"), int(cargo["stackable"]), int(cargo["fragile"]), int(cargo["splittable"]),
          match["vehicle_count"], match["safety_allowance_pct"], match["matching_version"], match["decision"],
          q.get("tax_amount"), q.get("transport_tax_amount"), q.get("administration_fee_tax_amount"),
          q.get("tax_rate"), q.get("tax_code"), q.get("tax_type"), q.get("tax_mode"),
          q.get("withholding_amount"), q.get("rate_version"), q.get("rate_effective_date"),
-         json.dumps(q.get("components") or [], ensure_ascii=False), bid))
+         json.dumps(q.get("components") or [], ensure_ascii=False), q.get("fare_approval_status"),
+         q.get("fare_runtime_use"), bid))
     conn.execute(
         "UPDATE mkt_bookings SET booking_mode=?,service_line=?,project_stage=?,assessment_status=?,"
         "site_survey_required=?,human_approval_required=?,project_risk_level=?,risk_factors=?,"
@@ -1087,6 +1084,10 @@ def submit(conn, payload):
                 "transport_subtotal": q.get("transport_subtotal"),
                 "administration_fee": q.get("administration_fee"), "tax_amount": q.get("tax_amount"),
                 "customer_total": q.get("amount"), "fee_version": q.get("fee_version"),
+                "fare_rate_version": q.get("rate_version"),
+                "fare_approval_status": q.get("fare_approval_status"),
+                "fare_runtime_use": q.get("fare_runtime_use"),
+                "fare_collection_enabled": q.get("fare_collection_enabled"),
                 "matching_version": match["matching_version"], "matching_decision": match["decision"],
                 "booking_mode": project["booking_mode"], "service_line": project["service_line"],
                 "project_stage": project["project_stage"], "site_survey_required": project["site_survey_required"],
@@ -1121,12 +1122,17 @@ def submit(conn, payload):
             "components": q.get("components") or [],
             "rate_version": q.get("rate_version"),
             "rate_effective_date": q.get("rate_effective_date"),
+            "fare_approval_status": q.get("fare_approval_status"),
+            "fare_runtime_use": q.get("fare_runtime_use"),
+            "fare_collection_enabled": q.get("fare_collection_enabled"),
             "included": ["Transport-service charge", "LiftHaul administration fee (10%)", "Applicable tax"],
             "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },
         "service_level": level, "schedule_type": sched["schedule_type"],
         "scheduled_at": sched["scheduled_at"], "stops": len(stops),
-        "protected_payment": {"eligible": True, "live_funds_enabled": live, "intended_method": intended},
+        "protected_payment": {"eligible": True, "live_funds_enabled": live,
+                              "commercial_collection_enabled": q.get("fare_collection_enabled"),
+                              "intended_method": intended},
         "payment_preference": {"method": payment_method, "provider": payment_provider,
                                "channel": payment_channel, "charged": False},
         "next_step": ("Engineering estimate — our team returns a priced lift plan"
@@ -1236,7 +1242,7 @@ def track(conn, token):
         "service_level,schedule_type,scheduled_at,distance_km,distance_source,transport_amount,"
         "administration_fee_rate,administration_fee,tax_amount,transport_tax_amount,"
         "administration_fee_tax_amount,tax_rate,tax_code,tax_type,tax_mode,withholding_amount,"
-        "fare_rate_version,fare_effective_date,fare_components,"
+        "fare_rate_version,fare_effective_date,fare_components,fare_approval_status,fare_runtime_use,"
         "cargo_category,package_count,weight_kg,cargo_description,booking_mode,service_line,project_stage,"
         "assessment_status,site_survey_required,human_approval_required,project_risk_level,risk_factors,"
         "requested_resources,cargo_photo_count "
@@ -1335,13 +1341,20 @@ def track(conn, token):
             "components": ([] if eng else json.loads(d.get("fare_components") or "[]")),
             "rate_version": d.get("fare_rate_version"),
             "rate_effective_date": d.get("fare_effective_date"),
+            "fare_approval_status": d.get("fare_approval_status"),
+            "fare_runtime_use": d.get("fare_runtime_use"),
+            "fare_collection_enabled": d.get("fare_approval_status") == "APPROVED"
+                                       and d.get("fare_runtime_use") == "BOOKING_AND_COLLECTION",
             "included": ["Transport-service charge", "LiftHaul administration fee (10%)", "Applicable tax"],
             "excluded_client_responsibility": list(EXCLUDED_CHARGES),
         },
         "payment_status": _PAY_PROJ.get(raw, "Payment Required"),
         "protected_payment": {"label": _PAY_PROJ.get(raw, "Payment Required"),
                               "terminology": "Protected Payment",
-                              "live_funds_enabled": pay.live_funds_enabled(conn)},
+                              "live_funds_enabled": pay.live_funds_enabled(conn),
+                              "commercial_collection_enabled":
+                                  d.get("fare_approval_status") == "APPROVED"
+                                  and d.get("fare_runtime_use") == "BOOKING_AND_COLLECTION"},
         "payment_preference": {"method": d.get("payment_method"), "provider": d.get("payment_provider"),
                                "channel": d.get("payment_channel")},
         "provider": provider,               # None until legitimately assigned

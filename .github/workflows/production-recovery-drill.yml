@@ -1,0 +1,82 @@
+name: LiftHaul Managed PostgreSQL Recovery Drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider_backup_reference:
+        description: Non-secret Railway backup/PITR reference
+        required: true
+        type: string
+      restore_target_reference:
+        description: Non-secret isolated restore database reference
+        required: true
+        type: string
+      recovery_point_at:
+        description: Provider-confirmed recovery point (ISO-8601)
+        required: true
+        type: string
+      incident_at:
+        description: Synthetic incident time (ISO-8601)
+        required: true
+        type: string
+      restore_started_at:
+        description: Restore start time (ISO-8601)
+        required: true
+        type: string
+      restore_finished_at:
+        description: Restore completion time (ISO-8601)
+        required: true
+        type: string
+      backup_retention_days:
+        description: Provider-confirmed retention period
+        required: true
+        type: string
+      pitr_enabled:
+        description: Confirm Railway shows PITR enabled for production PostgreSQL
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  recovery:
+    name: Reconcile isolated managed restore
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Fail closed unless recovery ownership and isolated credentials exist
+        env:
+          RECOVERY_OWNER: ${{ vars.LH_PROD_RECOVERY_OWNER }}
+          SOURCE_DATABASE_URL: ${{ secrets.LH_PROD_DATABASE_URL }}
+          RESTORE_DATABASE_URL: ${{ secrets.LH_RECOVERY_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "$RECOVERY_OWNER" ] || { echo "::error::Set production variable LH_PROD_RECOVERY_OWNER"; exit 1; }
+          [ -n "$SOURCE_DATABASE_URL" ] || { echo "::error::Set production secret LH_PROD_DATABASE_URL"; exit 1; }
+          [ -n "$RESTORE_DATABASE_URL" ] || { echo "::error::Set production secret LH_RECOVERY_DATABASE_URL for an isolated target"; exit 1; }
+      - name: Verify PITR policy, reconcile restore and measure RTO/RPO
+        env:
+          SOURCE_DATABASE_URL: ${{ secrets.LH_PROD_DATABASE_URL }}
+          RESTORE_DATABASE_URL: ${{ secrets.LH_RECOVERY_DATABASE_URL }}
+          RECOVERY_OWNER: ${{ vars.LH_PROD_RECOVERY_OWNER }}
+          PROVIDER_BACKUP_REFERENCE: ${{ inputs.provider_backup_reference }}
+          RESTORE_TARGET_REFERENCE: ${{ inputs.restore_target_reference }}
+          RECOVERY_POINT_AT: ${{ inputs.recovery_point_at }}
+          INCIDENT_AT: ${{ inputs.incident_at }}
+          RESTORE_STARTED_AT: ${{ inputs.restore_started_at }}
+          RESTORE_FINISHED_AT: ${{ inputs.restore_finished_at }}
+          BACKUP_RETENTION_DAYS: ${{ inputs.backup_retention_days }}
+          PITR_ENABLED: ${{ inputs.pitr_enabled }}
+          EVIDENCE_PATH: evidence/managed-postgres-recovery.json
+        run: python scripts/go_live/managed_postgres_recovery.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: managed-postgres-recovery-${{ github.run_id }}
+          retention-days: 90
+          path: evidence/**

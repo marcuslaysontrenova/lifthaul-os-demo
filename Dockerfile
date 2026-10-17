@@ -9,6 +9,9 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
+# Package the same governed, versioned fare registry exercised by calculator and booking tests.
+# Runtime must fail at import if this file is missing or malformed; no hidden code fallback exists.
+COPY data/fare_matrix_registry.json ./data/fare_matrix_registry.json
 # The API seeds and validates vehicle categories from the same canonical catalogue
 # used by registration, booking, pricing, and the public UI.
 COPY vehicle-catalogue.json ./vehicle-catalogue.json

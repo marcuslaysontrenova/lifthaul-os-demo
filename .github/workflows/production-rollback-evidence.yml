@@ -1,0 +1,47 @@
+name: LiftHaul Production Rollback Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      evidence_phase:
+        description: Capture the rolled-back release or the approved forward restore
+        required: true
+        type: choice
+        options:
+          - rollback
+          - forward_restore
+      expected_sha:
+        description: Exact 40-character SHA expected on /readyz
+        required: true
+        type: string
+      expected_deployment_id:
+        description: Exact Railway deployment ID expected on /readyz
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify live rollback identity and health
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Capture immutable read-only evidence
+        env:
+          BASE_URL: https://www.lifthaul.com.ph
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_DEPLOYMENT_ID: ${{ inputs.expected_deployment_id }}
+          EVIDENCE_PHASE: ${{ inputs.evidence_phase }}
+          EVIDENCE_PATH: evidence/${{ inputs.evidence_phase }}.json
+        run: python scripts/go_live/rollback_probe.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-${{ inputs.evidence_phase }}-${{ github.run_id }}
+          retention-days: 90
+          path: evidence/**

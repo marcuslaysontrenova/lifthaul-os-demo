@@ -1,0 +1,486 @@
+{
+  "schema": "lifthaul.client-confidence-ledger.v1",
+  "record_date": "2026-10-17",
+  "canonical_issue_url": "https://github.com/marcuslaysontrenova/lifthaul-os-demo/issues/20",
+  "is_derived_from_canonical_issue": true,
+  "confidence_levels_are_target_tiers_not_measured_percentages": true,
+  "source": {
+    "repo": "marcuslaysontrenova/lifthaul-os-demo",
+    "pr_number": 41,
+    "candidate_sha": "901bdacc6f3afdf864d30f278746c8518dc6dc62",
+    "source_environment": "nonproduction_integration",
+    "ci_result": "SIX_WORKFLOWS_SUCCESS",
+    "ci_run_urls": [
+      "https://github.com/marcuslaysontrenova/lifthaul-os-demo/actions/runs/39043590840",
+      "https://github.com/marcuslaysontrenova/lifthaul-os-demo/actions/runs/39043590835",
+      "https://github.com/marcuslaysontrenova/lifthaul-os-demo/actions/runs/39043590894",
+      "https://github.com/marcuslaysontrenova/lifthaul-os-demo/actions/runs/39043590858",
+      "https://github.com/marcuslaysontrenova/lifthaul-os-demo/actions/runs/39043590809",
+      "https://github.com/marcuslaysontrenova/lifthaul-os-demo/actions/runs/39043590861"
+    ],
+    "production_merge_approved": false
+  },
+  "production": {
+    "observed_deployed_sha": "216eeb26d0738b6dbeb36e59797b4c293bba681e",
+    "observed_deployment_id": "d1358f4a-183d-4ca7-a58e-1b7256da360f",
+    "source": "Railway read-only deployment metadata",
+    "current_candidate_deployed": false
+  },
+  "money": {
+    "status": "UNAUTHORIZED_NO_LIVE_FUNDS",
+    "current_candidate_off_verified": false,
+    "scope_exclusion_status": "PENDING_HUMAN_SIGNOFF",
+    "signed_by": null,
+    "signed_at": null,
+    "evidence_url": null
+  },
+  "review": {
+    "independent_reviewer": null,
+    "approved_candidate_sha": null,
+    "review_evidence_url": null
+  },
+  "release": {
+    "decision": "NO_GO",
+    "authorized_candidate_sha": null,
+    "approved_by": null,
+    "approval_evidence_url": null
+  },
+  "recorded_historical_gate_count": 3,
+  "gates": [
+    {
+      "id": 1,
+      "title": "Production platform and persistent database foundation",
+      "status": "RECORDED_HISTORICAL_PASS",
+      "evidence_urls": [
+        "https://github.com/marcuslaysontrenova/lifthaul-os-demo/issues/20"
+      ],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 2,
+      "title": "Authentication and role-based access controls (historical release)",
+      "status": "RECORDED_HISTORICAL_PASS",
+      "evidence_urls": [
+        "https://github.com/marcuslaysontrenova/lifthaul-os-demo/issues/20"
+      ],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 3,
+      "title": "Core public discovery, booking and tracking journey (historical release)",
+      "status": "RECORDED_HISTORICAL_PASS",
+      "evidence_urls": [
+        "https://github.com/marcuslaysontrenova/lifthaul-os-demo/issues/20"
+      ],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 4,
+      "title": "Hosted booking persistence, queue and tracking",
+      "status": "OPEN",
+      "evidence_urls": [],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 5,
+      "title": "Authenticated production UAT for required personas",
+      "status": "OPEN",
+      "evidence_urls": [],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 6,
+      "title": "Production recovery, rollback, monitoring and ownership",
+      "status": "OPEN",
+      "evidence_urls": [],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 7,
+      "title": "Public support, privacy, complaint and navigation readiness",
+      "status": "OPEN",
+      "evidence_urls": [],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 8,
+      "title": "Commercial fare rules and calculator approval",
+      "status": "OPEN",
+      "evidence_urls": [],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    {
+      "id": 9,
+      "title": "Protected-payment boundary and production certification or signed no-live-funds scope",
+      "status": "OPEN",
+      "evidence_urls": [],
+      "verified_candidate_sha": null,
+      "verified_deployment_id": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T01",
+      "title": "Maintain one Codex/PMO release baseline and conflict-free GitHub integration",
+      "owner_role": "Codex and PMO",
+      "tier": "PILOT_95_TARGET",
+      "status": "IN_PROGRESS",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T02",
+      "title": "Independent human review on exact candidate SHA",
+      "owner_role": "Independent reviewer",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T03",
+      "title": "Owner approval of staffed production release window and rollback authority",
+      "owner_role": "Founder/release owner",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T04",
+      "title": "Protect production main with required CI/review controls",
+      "owner_role": "Repository administrator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T05",
+      "title": "Dedicated authorized admin audit identity and negative permission checks",
+      "owner_role": "Security operator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T06",
+      "title": "Separate least-privilege public_intake_qa account and tenant denial",
+      "owner_role": "Security operator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T07",
+      "title": "Protected GitHub environment secrets/review protection, values never exposed",
+      "owner_role": "Production administrator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T08",
+      "title": "Actual verified auth-email provider/inbox/recovery delivery evidence",
+      "owner_role": "Email/security operator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T09",
+      "title": "Authorized exact-release deployment, health, identity and rollback readiness",
+      "owner_role": "Release owner",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T10",
+      "title": "Consented no-funds hosted booking persistence in all three PH island groups",
+      "owner_role": "QA/operator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T11",
+      "title": "Witnessed 11-persona authenticated production UAT and signed results",
+      "owner_role": "UAT lead",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T12",
+      "title": "Browser and mobile booking/tracking negative journeys and recovery states",
+      "owner_role": "QA lead",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T13",
+      "title": "Approved isolated hosted backup/restore target, no production data leakage",
+      "owner_role": "Infra operator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T14",
+      "title": "Actual managed PITR/restore integrity and measured RPO/RTO",
+      "owner_role": "DB operator",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T15",
+      "title": "Independent rollback and migration compatibility rehearsal",
+      "owner_role": "Infra/release operators",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T16",
+      "title": "Monitored health alerts, accountable on-call and acknowledgement drill",
+      "owner_role": "SRE/support owner",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T17",
+      "title": "Commercial approval of fare matrix and heavy-vehicle manual-quote restrictions",
+      "owner_role": "Founder/commercial",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T18",
+      "title": "Finance/tax signoff for 10% admin fee, VAT, toll and provider share",
+      "owner_role": "Finance/tax",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T19",
+      "title": "Approved support, complaint, privacy/DPO and customer-facing policies",
+      "owner_role": "Support/privacy owner",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T20",
+      "title": "First-client onboarding, carrier vetting and handoff with accountable scope",
+      "owner_role": "Client success",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T21",
+      "title": "Current release proves all live-funds features fail closed and remain off",
+      "owner_role": "Codex security",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T22",
+      "title": "Signed no-live-funds pilot exclusion or externally certified PSP model",
+      "owner_role": "Founder/compliance",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T23",
+      "title": "Hosted no-funds idempotency, duplicate/tenant-denial and dispatch controls",
+      "owner_role": "QA/operations",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T24",
+      "title": "Immutable accepted evidence bundle and signed controlled pilot decision",
+      "owner_role": "Release owner",
+      "tier": "PILOT_95_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T25",
+      "title": "Realistic peak load and failure-retry SLO validation",
+      "owner_role": "Performance/SRE",
+      "tier": "CONFIDENCE_99_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T26",
+      "title": "Independent authenticated API and tenant security assessment",
+      "owner_role": "Independent security",
+      "tier": "CONFIDENCE_99_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T27",
+      "title": "Observed monitored 48-72-hour pilot stability with incident exercise",
+      "owner_role": "SRE/client owner",
+      "tier": "CONFIDENCE_99_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T28",
+      "title": "Representative customer/fleet/driver usability and accessibility signoff",
+      "owner_role": "Product/UAT",
+      "tier": "CONFIDENCE_99_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T29",
+      "title": "Verified notifications/outage retry, escalation and operator handoff",
+      "owner_role": "Codex/support",
+      "tier": "CONFIDENCE_99_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    },
+    {
+      "id": "T30",
+      "title": "Client confidence dossier, support SLA, accurate claims and known limitations",
+      "owner_role": "PMO/client success",
+      "tier": "CONFIDENCE_99_TARGET",
+      "status": "OPEN",
+      "evidence_url": null,
+      "evidence_sha": null,
+      "accepted_by": null,
+      "accepted_at": null
+    }
+  ],
+  "constraints": [
+    "NO_LIVE_FUNDS",
+    "NO_UNAUTHORIZED_PRODUCTION_DEPLOYMENT",
+    "NO_UNAPPROVED_BOOKINGS_OR_DISPATCH",
+    "NO_CLAIM_OF_HUMAN_REVIEW_FROM_CI",
+    "NO_CERTIFIED_PSP_OR_ESCROW_CLAIM"
+  ]
+}

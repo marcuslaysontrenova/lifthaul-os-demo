@@ -24,6 +24,20 @@ class Base(unittest.TestCase):
 
 
 class TestBackfill(Base):
+    def test_missing_schema_probe_preserves_transaction(self):
+        self.c.execute("CREATE TABLE schema_probe_keep (id INTEGER PRIMARY KEY)")
+        self.c.execute("INSERT INTO schema_probe_keep(id) VALUES (7)")
+        self.assertFalse(backfill._has_table(self.c, "schema_probe_absent"))
+        self.assertFalse(backfill._has_tenant_col(self.c, "schema_probe_keep"))
+        self.assertTrue(backfill._has_table(self.c, "schema_probe_keep"))
+        self.assertEqual(self.c.execute("SELECT COUNT(*) c FROM schema_probe_keep").fetchone()["c"], 1)
+
+    def test_invalid_schema_identifier_rejected(self):
+        with self.assertRaises(ValueError):
+            backfill._has_table(self.c, "customers; DELETE FROM customers")
+        with self.assertRaises(ValueError):
+            backfill._has_tenant_col(self.c, "customers --")
+
     def test_add_columns_idempotent(self):
         backfill.add_tenant_columns(self.c)
         backfill.add_tenant_columns(self.c)               # second run must not error

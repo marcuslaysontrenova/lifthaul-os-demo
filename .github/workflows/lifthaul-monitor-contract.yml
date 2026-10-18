@@ -1,0 +1,21 @@
+name: LiftHaul monitor fail-closed contract
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/production-health-monitor.yml'
+      - '.github/workflows/lifthaul-monitor-contract.yml'
+      - 'scripts/go_live/monitor_gate.py'
+      - 'scripts/go_live/test_monitor_gate.py'
+permissions:
+  contents: read
+jobs:
+  offline-monitor-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify monitor gate rejects missing ownership and failed probes
+        run: python -m unittest scripts.go_live.test_monitor_gate -v

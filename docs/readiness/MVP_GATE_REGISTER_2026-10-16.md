@@ -6,12 +6,12 @@ page alone does not close a production gate.
 
 ## Current measured position
 
-- Completed gates: **3 of 9 (33.3%)**
-- Remaining gates: **6 of 9 (66.7%)**
+- Completed gates: **4 of 9 (44.4%)**
+- Remaining gates: **5 of 9 (55.6%)**
 - Production application: `https://www.lifthaul.com.ph`
-- Exact deployed commit: `dfea0b9df01824a73bb1a39a0f611f5e3f6c0ba1`
-- Railway deployment: `0ac737cf-5b1f-4709-8450-ba3e5631182b`
-- Rollback target: `a4f1cf95-bb5b-4bda-9ec2-38f270cd5794`
+- Exact deployed commit: `653e9ca2da67f52f41a26206450ae9d746c3c4f5`
+- Railway deployment: `0c799269-22a2-4915-b920-63731e17e750`
+- Rollback target: `d1358f4a-183d-4ca7-a58e-1b7256da360f`
 - Public-money posture: **live collection, custody, transfer and payouts remain disabled**
 
 ## Gate checklist
@@ -20,13 +20,31 @@ page alone does not close a production gate.
 |---|---|---|---|---|
 | 1 | Production platform and persistent database foundation | COMPLETE | Canonical `/readyz` reports `ready`, schema 27, exact SHA and deployment ID; Railway PostgreSQL is online | Continue health monitoring; do not change the recorded identity without a new release |
 | 2 | Authentication and role-based access controls | COMPLETE | Full regression and release checks pass; unauthenticated admin access is denied; scoped `public_intake_qa` role and contract tests exist | Production persona acceptance remains Gate 5 and does not reopen this code-control gate |
-| 3 | Core public discovery, booking and tracking journey | COMPLETE | Public pages, PSGC data, booking API, vehicle matching, tracking and browser UAT passed on the exact release candidate | Gate 4 must still prove newly written records persist on the hosted production database |
-| 4 | Hosted booking persistence, queue and tracking | OPEN | Exact-release regional test harness is implemented; prior production run stopped before the first write because protected QA credentials were absent | Configure a dedicated `public_intake_qa` account and protected secrets; run the exact-release workflow; require all three island-group bookings to be created, idempotent, trackable, persisted and present in the canonical queue |
+| 3 | Core public discovery, booking and tracking journey | COMPLETE | Public pages, PSGC data, booking API, vehicle matching, tracking and browser UAT passed on the exact release candidate | Preserve the same journey in every subsequent exact-release regression |
+| 4 | Hosted booking persistence, queue and tracking | COMPLETE | Production release run `39112796929` passed exact-SHA binding, protected QA credential check, public preflight, no-funds synthetic production journey and least-privilege persisted-record read. Artifact `regional-booking-acceptance-653e9ca2da67f52f41a26206450ae9d746c3c4f5` reports 20 passed, 0 failed for Luzon, Visayas and Mindanao, schema 27, with no live funds | Keep synthetic records identifiable and retain the immutable artifact; repeat this gate for any new production SHA |
 | 5 | Authenticated production UAT for required personas | OPEN | Least-privilege QA harness and offline contract tests pass | Execute production sign-in and journey evidence for booker, driver applicant, vehicle owner, fleet owner, specialized provider, operations, finance and administrator; record pass/fail without shared credentials or real funds |
 | 6 | Production recovery, rollback, monitoring and ownership | OPEN | Exact rollback deployment is recorded; local backup/restore reconciled with 0.47 s restore; 40-client concurrency test passed with zero hard failures; health monitor workflow exists | Prove managed PostgreSQL backup/PITR policy, restore into an isolated database, reconciliation and measured RTO/RPO; execute or evidence rollback; assign alert and incident owners |
 | 7 | Public support, privacy, complaint and navigation readiness | OPEN | `support.html` and `policies.html` exist; link/browser checks cover public navigation | Publish approved support channel and hours, complaint SLA/escalation, DPO/privacy contact, reviewed Terms/Privacy/Refund texts and valid routes; remove launch-gated placeholder language only after approval |
 | 8 | Commercial fare rules and calculator approval | OPEN | One pricing engine, public fare calculator, versioned rate metadata, deterministic 10% fee tests and booking integration exist | Commercial owner must approve effective rate matrix, minimums, VAT treatment, waiting/stops/cancellation/toll rules and provider share; re-benchmark dated public Lalamove/Transportify scenarios and approve the version |
 | 9 | Protected-payment boundary and production certification | OPEN | State machine, ledger, reconciliation, dispute, payout and fail-closed tests exist; customer copy does not claim escrow; live-funds flags are off | Contract a licensed payment provider, approve legal/fund-flow model, obtain production credentials, certify webhooks/reconciliation/refunds/payout controls and complete independent security/DR evidence before enabling any live-money flag |
+
+## Gate 4 closure — 2026-10-18
+
+- Deployed exact merged commit `653e9ca2da67f52f41a26206450ae9d746c3c4f5`
+  to Railway as deployment `0c799269-22a2-4915-b920-63731e17e750`.
+- Verified canonical `/readyz` reports schema 27 and those exact release and
+  deployment identities.
+- Completed GitHub Actions production release run `39112796929` successfully.
+- Passed complete Python regression, static security/dependency audit and
+  cross-browser UAT for the exact production commit.
+- Passed backup/restore reconciliation and 40-client concurrency controls.
+- Created and independently re-read three synthetic, no-funds production bookings:
+  Luzon `LH-JJNFGO`, Visayas `LH-DJQVIA`, and Mindanao `LH-QADVK4`.
+- Verified idempotency, public tracking, canonical queue presence, hosted persistence
+  and least-privilege authenticated access. The evidence artifact records **20 passed,
+  0 failed** and `live_funds_exercised: false`.
+- Published the exact static frontend and stored immutable release manifest artifact
+  `production-release-653e9ca2da67f52f41a26206450ae9d746c3c4f5`.
 
 ## Work completed on 2026-10-16
 
@@ -45,24 +63,20 @@ page alone does not close a production gate.
 - Re-ran local controls: backup/restore PASS, concurrency PASS, nine production-QA
   contract tests PASS, targeted deployment-workflow test PASS.
 
-These changes remain **unreleased** until committed, reviewed, merged and deployed.
-They do not change the 3/9 production percentage by themselves.
+At the time of this 2026-10-16 entry these changes were **unreleased** and did not
+change the then-current 3/9 production percentage. The 2026-10-18 evidence above
+supersedes that historical status and closes Gate 4.
 
 ## Critical path to controlled MVP
 
-1. Create a dedicated `public_intake_qa` production principal and place its email
-   and password only in GitHub's protected production secrets.
-2. Commit and review the release-workflow improvements, then run all required CI.
-3. Deploy the exact merged commit and run the production release workflow in
-   `verify_existing` or authorized `deploy` mode.
-4. Close Gate 4 from the regional-booking artifact and Gate 5 only after every
-   required persona has production evidence.
-5. Execute managed PostgreSQL backup/PITR restore, rollback evidence and monitoring
+1. Close Gate 5 only after every required persona has production sign-in and
+   end-to-end evidence with separate, least-privilege identities.
+2. Execute managed PostgreSQL backup/PITR restore, rollback evidence and monitoring
    ownership to close Gate 6.
-6. Obtain approved public support/privacy/legal contacts and policy versions to
+3. Obtain approved public support/privacy/legal contacts and policy versions to
    close Gate 7.
-7. Obtain dated commercial approval of the rate matrix to close Gate 8.
-8. Keep Gate 9 fail-closed until external legal/provider/security conditions are
+4. Obtain dated commercial approval of the rate matrix to close Gate 8.
+5. Keep Gate 9 fail-closed until external legal/provider/security conditions are
    evidenced. The application can be approved as **MVP GO — no live funds** only
    if the agreed MVP scope explicitly excludes live-money activation.
 
@@ -70,6 +84,6 @@ They do not change the 3/9 production percentage by themselves.
 
 No percentage increase is allowed for partial work. A gate moves only from `OPEN`
 to `COMPLETE` when its exact acceptance condition is attached to a commit, workflow
-run, deployment or signed external decision. Until Gates 4–8 are closed and Gate 9
+run, deployment or signed external decision. Until Gates 5–8 are closed and Gate 9
 is either closed or formally excluded from the no-live-funds MVP scope, the overall
 decision remains **NO-GO for a 100% MVP claim**.

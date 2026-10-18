@@ -103,6 +103,19 @@ class ProductionPersonaContract(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "restricted finance status"):
             MOD.execute(data, SHA, call=LeakyApi(data))
 
+    def test_cross_persona_fixture_leak_blocks_gate_five(self):
+        data = manifest()
+        class LeakyDataApi(FakeApi):
+            def __call__(self, method, path, payload=None, bearer=None):
+                if path == "/portal/client/bookings" and bearer == "tok-booker":
+                    return 200, {"bookings": [
+                        self.data["booker"]["marker"],
+                        self.data["fleet_owner"]["marker"],
+                    ]}
+                return super().__call__(method, path, payload, bearer)
+        with self.assertRaisesRegex(AssertionError, "unrelated persona fixture visible"):
+            MOD.execute(data, SHA, call=LeakyDataApi(data))
+
     def test_wrong_live_sha_fails_closed(self):
         data = manifest()
         with self.assertRaisesRegex(AssertionError, "differs"):

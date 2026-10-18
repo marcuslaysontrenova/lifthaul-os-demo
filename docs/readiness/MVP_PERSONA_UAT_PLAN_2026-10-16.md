@@ -51,6 +51,22 @@ Expected result: **11/11 PASS**, `failed: 0`, and
 - MVP Gate 5 remains **OPEN** pending witnessed production sign-ins and journeys
   for every persona on the exact deployed commit.
 
+## Hosted execution control added — 2026-10-18
+
+- Workflow: `.github/workflows/production-persona-uat.yml`.
+- Runner: `scripts/go_live/prod_persona_uat.py`.
+- The workflow binds acceptance to the exact 40-character production SHA and the
+  canonical domain, then requires all eleven dedicated accounts and synthetic
+  fixture markers in the protected `LH_PROD_PERSONA_CREDENTIALS_JSON` secret.
+- It verifies expected role, role-specific journey data, denial of user
+  administration to non-administrators, pending-driver login denial, governed
+  driver-application visibility, and the fail-closed live-funds boundary.
+- Evidence contains only account hash prefixes and persona results. Email addresses,
+  passwords, session tokens and production response bodies are never written.
+- Current protected configuration contains only the Gate 4 `public_intake_qa`
+  account. Therefore this hosted Gate 5 workflow must remain fail-closed until the
+  eleven distinct persona accounts and their synthetic fixtures are provisioned.
+
 ## Production evidence schema
 
 For each persona, record:

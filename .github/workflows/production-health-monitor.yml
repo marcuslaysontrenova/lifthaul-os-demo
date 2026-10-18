@@ -18,7 +18,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate monitored production ownership
+      - id: ownership
+        name: Validate monitored production ownership
+        continue-on-error: true
         env:
           OPERATIONS_OWNER: ${{ vars.LH_PROD_OPERATIONS_OWNER }}
           INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
@@ -36,7 +38,10 @@ jobs:
                   'configured': True,
               }, handle, indent=2)
           PY
-      - name: Canonical production surface, readiness, and release identity
+      - id: surface
+        name: Canonical production surface, readiness, and release identity
+        if: always()
+        continue-on-error: true
         env:
           PRODUCTION_URL: https://www.lifthaul.com.ph
         run: |
@@ -66,6 +71,14 @@ jobs:
           PY
           deployed_sha=$(python -c "import json; print(json.load(open('evidence/ready.json'))['release_sha'])")
           git merge-base --is-ancestor "$deployed_sha" origin/main
+      # Probe results remain available even if owner variables are absent.
+      # The final gate still fails closed on either owner or site errors.
+      - name: Enforce monitoring ownership and live surface result
+        if: always()
+        env:
+          OWNERSHIP_OUTCOME: ${{ steps.ownership.outcome }}
+          SURFACE_OUTCOME: ${{ steps.surface.outcome }}
+        run: python scripts/go_live/monitor_gate.py
       - name: Open or update the production-health incident
         if: failure()
         env:

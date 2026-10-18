@@ -175,11 +175,28 @@ def execute(manifest, expected_sha, call=http_call):
             "results": results,
         }
     finally:
-        for token in tokens.values():
+        # An apparent logout success must not count as proof of revocation.
+        # Verify every authenticated test session is unusable before allowing
+        # the Gate 5 PASS return to escape this finally block.
+        unrevoked = []
+        for persona, token in tokens.items():
             try:
-                call("POST", "/logout", {}, bearer=token)
+                logout_status, _ = call("POST", "/logout", {}, bearer=token)
+                if logout_status not in (200, 204):
+                    unrevoked.append(persona)
+                    continue
+                stale_status, _ = call("GET", "/me/permissions", bearer=token)
+                if stale_status not in (401, 403):
+                    unrevoked.append(persona)
             except Exception:
-                pass
+                unrevoked.append(persona)
+        if unrevoked:
+            # Persona labels are fixed non-secret identifiers; never print
+            # bearer tokens, email addresses or raw provider responses.
+            raise AssertionError(
+                "Gate 5 authenticated session revocation failed for: "
+                + ", ".join(sorted(unrevoked))
+            )
 
 
 def main():

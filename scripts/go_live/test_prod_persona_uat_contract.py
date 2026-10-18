@@ -66,6 +66,8 @@ class ProductionPersonaContract(unittest.TestCase):
         result = MOD.execute(data, SHA, call=FakeApi(data))
         self.assertEqual(result["result"], "PASS")
         self.assertEqual(result["personas_passed"], 11)
+        self.assertEqual(result["sessions_revoked"], 10)
+        self.assertEqual(result["revocation_control"], "logout_http_200_or_204_and_stale_bearer_401_or_403")
         self.assertFalse(result["live_funds_enabled"])
         serialized = json.dumps(result)
         self.assertNotIn("Gate5Password", serialized)

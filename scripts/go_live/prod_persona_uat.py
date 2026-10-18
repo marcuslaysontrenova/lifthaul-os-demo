@@ -124,6 +124,7 @@ def execute(manifest, expected_sha, call=http_call):
     assert ready.get("deployment_id") and ready.get("schema_version"), "deployment identity is incomplete"
 
     tokens, results = {}, []
+    acceptance = None
     try:
         for persona in PERSONAS:
             row = manifest[persona]
@@ -169,7 +170,7 @@ def execute(manifest, expected_sha, call=http_call):
         assert code == 200, "finance: protected-payment status unavailable"
         assert live.get("LIVE_PROTECTED_FUNDS_ENABLED") is False, "live protected funds unexpectedly enabled"
         assert live.get("live_protected_payment") == "BLOCKED", "live-funds boundary is not fail-closed"
-        return {
+        acceptance = {
             "schema": "lifthaul.production-persona-uat.v1",
             "result": "PASS",
             "expected_release_sha": expected_sha,
@@ -182,6 +183,7 @@ def execute(manifest, expected_sha, call=http_call):
             "accounts": [{"persona": p, "account_fingerprint": _fingerprint(manifest[p]["email"])} for p in PERSONAS],
             "results": results,
         }
+        return acceptance
     finally:
         # An apparent logout success must not count as proof of revocation.
         # Verify every authenticated test session is unusable before allowing
@@ -204,6 +206,17 @@ def execute(manifest, expected_sha, call=http_call):
             raise AssertionError(
                 "Gate 5 authenticated session revocation failed for: "
                 + ", ".join(sorted(unrevoked))
+            )
+        if acceptance is not None:
+            # This record is written only after all ten authenticated test
+            # sessions demonstrably reject their prior bearer token. The
+            # driver_applicant is deliberately denied authentication.
+            assert len(tokens) == len(PERSONAS) - 1, (
+                "Gate 5 session count does not match authenticated personas"
+            )
+            acceptance["sessions_revoked"] = len(tokens)
+            acceptance["revocation_control"] = (
+                "logout_http_200_or_204_and_stale_bearer_401_or_403"
             )
 
 

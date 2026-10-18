@@ -44,6 +44,8 @@ class FakeApi:
         if path == "/admin/users" and persona != "administrator":
             return 403, {"error": "forbidden"}
         if path == "/admin/marketplace/protected-payment-live-status":
+            if persona not in ("finance", "administrator"):
+                return 403, {"error": "forbidden"}
             return 200, {"LIVE_PROTECTED_FUNDS_ENABLED": False, "live_protected_payment": "BLOCKED"}
         if path == "/admin/marketplace/public-driver-applications":
             return 200, {"applications": [self.data["driver_applicant"]["marker"],
@@ -88,6 +90,16 @@ class ProductionPersonaContract(unittest.TestCase):
         api.keep_token_active = True
         with self.assertRaisesRegex(AssertionError, "session revocation failed"):
             MOD.execute(data, SHA, call=api)
+
+    def test_external_persona_cannot_read_finance_status(self):
+        data = manifest()
+        class LeakyApi(FakeApi):
+            def __call__(self, method, path, payload=None, bearer=None):
+                if path == "/admin/marketplace/protected-payment-live-status" and bearer == "tok-booker":
+                    return 200, {"LIVE_PROTECTED_FUNDS_ENABLED": False}
+                return super().__call__(method, path, payload, bearer)
+        with self.assertRaisesRegex(AssertionError, "restricted finance status"):
+            MOD.execute(data, SHA, call=LeakyApi(data))
 
     def test_wrong_live_sha_fails_closed(self):
         data = manifest()

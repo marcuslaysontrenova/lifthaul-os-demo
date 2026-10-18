@@ -20,6 +20,9 @@ class FakeApi:
     def __init__(self, data):
         self.data = data
         self.tokens = {f"tok-{p}": p for p in MOD.PERSONAS if p != "driver_applicant"}
+        self.revoked = set()
+        self.logout_status = 200
+        self.keep_token_active = False
 
     def __call__(self, method, path, payload=None, bearer=None):
         if path == "/readyz":
@@ -30,7 +33,11 @@ class FakeApi:
                 return 403, {"error": "pending"}
             return 200, {"token": f"tok-{persona}"}
         if path == "/logout":
-            return 200, {"ok": True}
+            if self.logout_status == 200 and not self.keep_token_active:
+                self.revoked.add(bearer)
+            return self.logout_status, {"ok": self.logout_status == 200}
+        if path == "/me/permissions" and bearer in self.revoked:
+            return 401, {"error": "session_revoked"}
         persona = self.tokens[bearer]
         if path == "/me/permissions":
             return 200, {"role": sorted(MOD.ROLE_RULES[persona])[0], "permissions": []}
@@ -61,6 +68,26 @@ class ProductionPersonaContract(unittest.TestCase):
         serialized = json.dumps(result)
         self.assertNotIn("Gate5Password", serialized)
         self.assertNotIn("@uat.invalid", serialized)
+
+    def test_revocation_required_after_every_authenticated_persona(self):
+        data = manifest()
+        api = FakeApi(data)
+        self.assertEqual(MOD.execute(data, SHA, call=api)["personas_passed"], 11)
+        self.assertEqual(len(api.revoked), 10)
+
+    def test_logout_error_blocks_gate_five(self):
+        data = manifest()
+        api = FakeApi(data)
+        api.logout_status = 503
+        with self.assertRaisesRegex(AssertionError, "session revocation failed"):
+            MOD.execute(data, SHA, call=api)
+
+    def test_valid_stale_token_blocks_gate_five(self):
+        data = manifest()
+        api = FakeApi(data)
+        api.keep_token_active = True
+        with self.assertRaisesRegex(AssertionError, "session revocation failed"):
+            MOD.execute(data, SHA, call=api)
 
     def test_wrong_live_sha_fails_closed(self):
         data = manifest()

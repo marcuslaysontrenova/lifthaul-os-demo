@@ -1,0 +1,72 @@
+import importlib.util
+import json
+import pathlib
+import unittest
+
+
+PATH = pathlib.Path(__file__).with_name("prod_persona_uat.py")
+SPEC = importlib.util.spec_from_file_location("prod_persona_uat", PATH)
+MOD = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MOD)
+SHA = "a" * 40
+
+
+def manifest():
+    return {p: {"email": f"{p}@uat.invalid", "password": "Gate5Password!", "marker": f"UAT-{p}-fixture"}
+            for p in MOD.PERSONAS}
+
+
+class FakeApi:
+    def __init__(self, data):
+        self.data = data
+        self.tokens = {f"tok-{p}": p for p in MOD.PERSONAS if p != "driver_applicant"}
+
+    def __call__(self, method, path, payload=None, bearer=None):
+        if path == "/readyz":
+            return 200, {"status": "ready", "release_sha": SHA, "deployment_id": "dep-1", "schema_version": 27}
+        if path == "/login":
+            persona = next(p for p, row in self.data.items() if row["email"] == payload["email"])
+            if persona == "driver_applicant":
+                return 403, {"error": "pending"}
+            return 200, {"token": f"tok-{persona}"}
+        if path == "/logout":
+            return 200, {"ok": True}
+        persona = self.tokens[bearer]
+        if path == "/me/permissions":
+            return 200, {"role": sorted(MOD.ROLE_RULES[persona])[0], "permissions": []}
+        if path == "/admin/users" and persona != "administrator":
+            return 403, {"error": "forbidden"}
+        if path == "/admin/marketplace/protected-payment-live-status":
+            return 200, {"LIVE_PROTECTED_FUNDS_ENABLED": False, "live_protected_payment": "BLOCKED"}
+        if path == "/admin/marketplace/public-driver-applications":
+            return 200, {"applications": [self.data["driver_applicant"]["marker"],
+                                            self.data[persona]["marker"]]}
+        return 200, {"fixture": self.data[persona]["marker"]}
+
+
+class ProductionPersonaContract(unittest.TestCase):
+    def test_manifest_requires_exact_unique_personas(self):
+        data = manifest()
+        self.assertEqual(set(MOD.load_manifest(json.dumps(data))), set(MOD.PERSONAS))
+        data["finance"]["email"] = data["operations"]["email"]
+        with self.assertRaisesRegex(AssertionError, "distinct"):
+            MOD.load_manifest(json.dumps(data))
+
+    def test_all_personas_role_scope_fixture_and_funds_off(self):
+        data = manifest()
+        result = MOD.execute(data, SHA, call=FakeApi(data))
+        self.assertEqual(result["result"], "PASS")
+        self.assertEqual(result["personas_passed"], 11)
+        self.assertFalse(result["live_funds_enabled"])
+        serialized = json.dumps(result)
+        self.assertNotIn("Gate5Password", serialized)
+        self.assertNotIn("@uat.invalid", serialized)
+
+    def test_wrong_live_sha_fails_closed(self):
+        data = manifest()
+        with self.assertRaisesRegex(AssertionError, "differs"):
+            MOD.execute(data, "b" * 40, call=FakeApi(data))
+
+
+if __name__ == "__main__":
+    unittest.main()

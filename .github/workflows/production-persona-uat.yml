@@ -1,0 +1,48 @@
+name: LiftHaul Gate 5 production persona UAT
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character commit currently reported by production /readyz
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lifthaul-production-persona-uat
+  cancel-in-progress: false
+
+jobs:
+  exact-production-personas:
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reject non-exact or unmerged commit
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          test "${#RELEASE_SHA}" -eq 40
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+      - name: Run exact-release hosted persona evidence
+        env:
+          EXPECTED_SHA: ${{ inputs.release_sha }}
+          LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
+          OUTPUT_PATH: evidence/production-persona-uat.json
+        run: python scripts/go_live/prod_persona_uat.py
+      - name: Upload redacted Gate 5 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-persona-uat-${{ inputs.release_sha }}
+          path: evidence/production-persona-uat.json
+          if-no-files-found: error
+          retention-days: 90

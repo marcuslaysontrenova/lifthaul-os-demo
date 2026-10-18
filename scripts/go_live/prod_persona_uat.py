@@ -32,6 +32,13 @@ PERSONAS = (
     "finance",
     "administrator",
 )
+# Only externally scoped personas must see their own synthetic records.
+# Administrators and operations have intentionally broader queue access.
+PRIVATE_PERSONAS = (
+    "booker", "accredited_driver", "motorcycle_owner",
+    "light_vehicle_owner", "truck_owner", "fleet_owner",
+    "specialized_provider",
+)
 ROLE_RULES = {
     "booker": {"customer"},
     "accredited_driver": {"driver_principal"},
@@ -142,9 +149,7 @@ def execute(manifest, expected_sha, call=http_call):
             if persona != "administrator":
                 denied, _ = call("GET", "/admin/users", bearer=token)
                 assert denied == 403, f"{persona}: user administration was not denied"
-            if persona in ("booker", "accredited_driver", "motorcycle_owner",
-                           "light_vehicle_owner", "truck_owner", "fleet_owner",
-                           "specialized_provider"):
+            if persona in PRIVATE_PERSONAS or persona == "operations":
                 denied, _ = call(
                     "GET", "/admin/marketplace/protected-payment-live-status",
                     bearer=token,
@@ -157,6 +162,12 @@ def execute(manifest, expected_sha, call=http_call):
                 assert code == 200, f"{persona}: journey endpoint failed"
                 journey_payloads.append(payload)
             assert _contains(journey_payloads, row["marker"]), f"{persona}: dedicated synthetic fixture missing"
+            if persona in PRIVATE_PERSONAS:
+                for other in PRIVATE_PERSONAS:
+                    if other != persona:
+                        assert not _contains(journey_payloads, manifest[other]["marker"]), (
+                            f"{persona}: unrelated persona fixture visible"
+                        )
             results.append({"persona": persona, "result": "PASS", "control": "login_role_scope_fixture"})
 
         admin_token = tokens["administrator"]
@@ -180,6 +191,7 @@ def execute(manifest, expected_sha, call=http_call):
             "personas_required": len(PERSONAS),
             "personas_passed": len(results),
             "live_funds_enabled": False,
+            "external_persona_fixture_isolation": "PASS",
             "accounts": [{"persona": p, "account_fingerprint": _fingerprint(manifest[p]["email"])} for p in PERSONAS],
             "results": results,
         }

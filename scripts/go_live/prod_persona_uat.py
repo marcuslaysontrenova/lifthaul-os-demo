@@ -141,6 +141,14 @@ def execute(manifest, expected_sha, call=http_call):
             if persona != "administrator":
                 denied, _ = call("GET", "/admin/users", bearer=token)
                 assert denied == 403, f"{persona}: user administration was not denied"
+            if persona in ("booker", "accredited_driver", "motorcycle_owner",
+                           "light_vehicle_owner", "truck_owner", "fleet_owner",
+                           "specialized_provider"):
+                denied, _ = call(
+                    "GET", "/admin/marketplace/protected-payment-live-status",
+                    bearer=token,
+                )
+                assert denied == 403, f"{persona}: restricted finance status was not denied"
 
             journey_payloads = []
             for path in JOURNEYS[persona]:

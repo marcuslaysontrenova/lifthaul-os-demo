@@ -99,6 +99,21 @@ class OperationsWorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(required, text)
 
+    def test_monitor_probes_are_independent_and_fail_closed(self):
+        workflow = (ROOT / ".github" / "workflows" / "production-health-monitor.yml").read_text()
+        self.assertIn("id: ownership", workflow)
+        self.assertIn("id: surface", workflow)
+        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("if: always()", workflow)
+        self.assertIn("python scripts/go_live/monitor_gate.py", workflow)
+        self.assertIn("steps.alert_drill.outcome == 'failure'", workflow)
+        gate = load_script("monitor_gate.py")
+        self.assertEqual(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"}),
+                         {"ownership_passed": True, "surface_passed": True, "monitor_passed": True})
+        self.assertFalse(gate.evaluate({"OWNERSHIP_OUTCOME": "failure", "SURFACE_OUTCOME": "success"})["monitor_passed"])
+        self.assertFalse(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "failure"})["monitor_passed"])
+        self.assertFalse(gate.evaluate({})["monitor_passed"])
+
     def test_rollback_workflow_binds_sha_and_deployment_identity(self):
         text = (ROOT / ".github" / "workflows" / "production-rollback-evidence.yml").read_text()
         for required in (

@@ -1,0 +1,28 @@
+name: LiftHaul Gate 5 Interactive Hosted UAT Contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/go_live/interactive_persona_uat.py'
+      - 'scripts/go_live/test_interactive_persona_uat.py'
+      - 'scripts/go_live/prod_persona_uat.py'
+      - 'scripts/go_live/validate_persona_acceptance.py'
+      - 'scripts/go_live/test_validate_persona_acceptance.py'
+      - '.github/workflows/production-persona-uat.yml'
+      - '.github/workflows/gate5-interactive-uat-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-operator-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Assert offline, fail-closed, and credential-safe operator UAT
+        run: |
+          python -m unittest discover -s scripts/go_live -p 'test_interactive_persona_uat.py' -v
+          python -m unittest discover -s scripts/go_live -p 'test_validate_persona_acceptance.py' -v
+          python -m unittest discover -s scripts/go_live -p 'test_prod_persona_uat_contract.py' -v

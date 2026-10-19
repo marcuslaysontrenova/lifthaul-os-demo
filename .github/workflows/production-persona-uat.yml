@@ -36,95 +36,34 @@ jobs:
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           git fetch origin main --no-tags
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
-      - name: Verify protected provisioning controls
+      # Production accounts must be provisioned and approved separately.
+      # Never rotate a bootstrap administrator or mutate Railway from UAT.
+      - name: Verify protected read-only persona manifest
         env:
-          PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
-          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
         run: |
           set -euo pipefail
-          test -n "$PROVISION_SEED"
-          test -n "$RAILWAY_PROJECT_TOKEN"
-          test -n "$RAILWAY_PROJECT_ID"
-          test -n "$RAILWAY_SERVICE_ID"
-          test -n "$RAILWAY_ENVIRONMENT_ID"
-      - name: Derive private synthetic credentials
-        env:
-          LH_PROD_PERSONA_PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
-        run: |
-          set -euo pipefail
-          python scripts/go_live/prod_persona_credentials.py \
-            --manifest-out "$RUNNER_TEMP/gate5-personas.json" \
-            --admin-email-out "$RUNNER_TEMP/gate5-admin-email" \
-            --admin-password-out "$RUNNER_TEMP/gate5-admin-password"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install pinned Railway CLI
-        run: npm install --global @railway/cli@4.58.0
-      - name: Seed controlled provisioning identity and redeploy exact release
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
-        run: |
-          set -euo pipefail
-          railway variable set LH_ADMIN_EMAIL --stdin --skip-deploys \
-            --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" < "$RUNNER_TEMP/gate5-admin-email" >/dev/null
-          railway variable set LH_ADMIN_PASSWORD --stdin --skip-deploys \
-            --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" < "$RUNNER_TEMP/gate5-admin-password" >/dev/null
-          railway redeploy --yes --json \
-            --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" > "$RUNNER_TEMP/gate5-redeploy.json"
-      - name: Wait for the exact release to become ready
-        env:
-          EXPECTED_SHA: ${{ inputs.release_sha }}
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 90); do
-            actual=$(curl -fsS https://www.lifthaul.com.ph/readyz | \
-              python -c 'import json,sys; print(json.load(sys.stdin).get("release_sha", ""))' || true)
-            [ "$actual" = "$EXPECTED_SHA" ] && exit 0
-            sleep 10
-          done
-          echo "production never reported the exact Gate 5 release" >&2
-          exit 1
-      - name: Provision governed synthetic personas and fixtures
-        env:
-          EXPECTED_SHA: ${{ inputs.release_sha }}
-        run: |
-          set -euo pipefail
-          python scripts/go_live/prod_persona_provision.py \
-            --manifest "$RUNNER_TEMP/gate5-personas.json" \
-            --admin-email "$RUNNER_TEMP/gate5-admin-email" \
-            --admin-password "$RUNNER_TEMP/gate5-admin-password" \
-            --output evidence/production-persona-provision.json
+          test -n "$LH_PROD_PERSONA_CREDENTIALS_JSON"
+          python -c 'import json,os; from scripts.go_live.prod_persona_uat import load_manifest; load_manifest(os.environ["LH_PROD_PERSONA_CREDENTIALS_JSON"])'
       - name: Run exact-release hosted persona evidence
         env:
           EXPECTED_SHA: ${{ inputs.release_sha }}
           OUTPUT_PATH: evidence/production-persona-uat.json
+          LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
         run: |
           set -euo pipefail
-          export LH_PROD_PERSONA_CREDENTIALS_JSON="$(cat "$RUNNER_TEMP/gate5-personas.json")"
           python scripts/go_live/prod_persona_uat.py
-          unset LH_PROD_PERSONA_CREDENTIALS_JSON
-      - name: Remove private runner files
-        if: always()
+      - name: Require hardened exact-release acceptance evidence
+        env:
+          EXPECTED_SHA: ${{ inputs.release_sha }}
         run: |
-          rm -f "$RUNNER_TEMP/gate5-personas.json" \
-            "$RUNNER_TEMP/gate5-admin-email" "$RUNNER_TEMP/gate5-admin-password"
+          set -euo pipefail
+          python scripts/go_live/validate_persona_acceptance.py --evidence evidence/production-persona-uat.json --release-sha "$EXPECTED_SHA"
       - name: Upload redacted Gate 5 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-persona-uat-${{ inputs.release_sha }}
-          path: |
-            evidence/production-persona-provision.json
-            evidence/production-persona-uat.json
+          path: evidence/production-persona-uat.json
           if-no-files-found: error
           retention-days: 90

@@ -89,6 +89,10 @@ class OperationsWorkflowContractTests(unittest.TestCase):
         for required in (
             "LH_PROD_OPERATIONS_OWNER",
             "LH_PROD_INCIDENT_OWNER",
+            "alert_drill:",
+            "Controlled alert-delivery drill",
+            '"production_mutated": false',
+            "production and live-funds controls were not changed",
             "if: failure()",
             "gh issue create",
             "issues: write",

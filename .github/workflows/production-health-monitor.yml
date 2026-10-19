@@ -1,7 +1,13 @@
 name: LiftHaul Production Health Monitor
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      alert_drill:
+        description: Exercise incident routing after healthy production probes (no production mutation)
+        required: true
+        default: false
+        type: boolean
   schedule:
     - cron: '*/15 * * * *'
 
@@ -66,18 +72,38 @@ jobs:
           PY
           deployed_sha=$(python -c "import json; print(json.load(open('evidence/ready.json'))['release_sha'])")
           git merge-base --is-ancestor "$deployed_sha" origin/main
+      - name: Controlled alert-delivery drill
+        if: ${{ inputs.alert_drill == true }}
+        run: |
+          set -euo pipefail
+          cat > evidence/alert-drill.json <<'JSON'
+          {
+            "requested": true,
+            "production_mutated": false,
+            "live_funds_changed": false,
+            "result": "EXPECTED_MONITOR_FAILURE"
+          }
+          JSON
+          echo "::error::Controlled alert-delivery drill requested after healthy production probes"
+          exit 1
       - name: Open or update the production-health incident
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ALERT_DRILL: ${{ inputs.alert_drill || false }}
         run: |
           set -euo pipefail
-          title='Production health monitor is failing'
+          if [ "$ALERT_DRILL" = "true" ]; then
+            title='[DRILL] Production health alert delivery test'
+            body="Controlled alert-delivery drill reached incident routing at ${RUN_URL}. Production probes passed first; production and live-funds controls were not changed. The incident owner must acknowledge this drill before Gate 6 closeout."
+          else
+            title='Production health monitor is failing'
+            body="Production monitoring failed at ${RUN_URL}. The incident owner must acknowledge, diagnose, and record recovery evidence. No live-funds control should be changed as part of this response."
+          fi
           number=$(gh issue list --state open --search "$title in:title" --json number,title \
             --jq ".[] | select(.title == \"$title\") | .number" | head -1)
-          body="Production monitoring failed at ${RUN_URL}. The incident owner must acknowledge, diagnose, and record recovery evidence. No live-funds control should be changed as part of this response."
           if [ -n "$number" ]; then
             gh issue comment "$number" --body "$body"
           elif [ -n "$INCIDENT_OWNER" ]; then

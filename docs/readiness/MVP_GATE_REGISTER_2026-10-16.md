@@ -9,9 +9,9 @@ page alone does not close a production gate.
 - Completed gates: **4 of 9 (44.4%)**
 - Remaining gates: **5 of 9 (55.6%)**
 - Production application: `https://www.lifthaul.com.ph`
-- Exact deployed commit: `653e9ca2da67f52f41a26206450ae9d746c3c4f5`
-- Railway deployment: `0c799269-22a2-4915-b920-63731e17e750`
-- Rollback target: `d1358f4a-183d-4ca7-a58e-1b7256da360f`
+- Exact deployed commit: `1489a8f1451249fc11798595e640e052a9e8b5d7`
+- Railway deployment: `00dd0d3b-28bf-488d-a9d9-7b19ed7708ff`
+- Rollback target: `0c799269-22a2-4915-b920-63731e17e750`
 - Public-money posture: **live collection, custody, transfer and payouts remain disabled**
 
 ## Gate checklist
@@ -21,20 +21,20 @@ page alone does not close a production gate.
 | 1 | Production platform and persistent database foundation | COMPLETE | Canonical `/readyz` reports `ready`, schema 27, exact SHA and deployment ID; Railway PostgreSQL is online | Continue health monitoring; do not change the recorded identity without a new release |
 | 2 | Authentication and role-based access controls | COMPLETE | Full regression and release checks pass; unauthenticated admin access is denied; scoped `public_intake_qa` role and contract tests exist | Production persona acceptance remains Gate 5 and does not reopen this code-control gate |
 | 3 | Core public discovery, booking and tracking journey | COMPLETE | Public pages, PSGC data, booking API, vehicle matching, tracking and browser UAT passed on the exact release candidate | Preserve the same journey in every subsequent exact-release regression |
-| 4 | Hosted booking persistence, queue and tracking | COMPLETE | Production release run `39112796929` passed exact-SHA binding, protected QA credential check, public preflight, no-funds synthetic production journey and least-privilege persisted-record read. Artifact `regional-booking-acceptance-653e9ca2da67f52f41a26206450ae9d746c3c4f5` reports 20 passed, 0 failed for Luzon, Visayas and Mindanao, schema 27, with no live funds | Keep synthetic records identifiable and retain the immutable artifact; repeat this gate for any new production SHA |
-| 5 | Authenticated production UAT for required personas | OPEN | Isolated persona workflow run `39115074502` passed all four role groups; controlled matrix remains 11/11; exact-release hosted workflow and redacted artifact contract are implemented | Provision eleven distinct synthetic persona accounts and fixture markers in protected secret `LH_PROD_PERSONA_CREDENTIALS_JSON`; run `.github/workflows/production-persona-uat.yml` against exact live SHA and require 11/11, negative RBAC and funds-off evidence |
+| 4 | Hosted booking persistence, queue and tracking | COMPLETE | Production release run `39115836213` passed exact-SHA binding, protected QA credential check, public preflight, no-funds synthetic production journey and least-privilege persisted-record read. Artifact `regional-booking-acceptance-1489a8f1451249fc11798595e640e052a9e8b5d7` reports 20 passed, 0 failed for Luzon, Visayas and Mindanao, schema 27, with no live funds | Keep synthetic records identifiable and retain the immutable artifact; repeat this gate for any new production SHA |
+| 5 | Authenticated production UAT for required personas | OPEN | Isolated persona workflow run `39115074502` passed all four role groups and the controlled matrix remains 11/11. Exact-release hosted run `39115781853` proved commit binding, fail-closed manifest handling and redacted evidence upload on live SHA `1489a8f1451249fc11798595e640e052a9e8b5d7`, but correctly failed before authentication because the protected persona manifest is absent | Provision eleven distinct synthetic persona accounts and fixture markers in protected secret `LH_PROD_PERSONA_CREDENTIALS_JSON`; rerun `.github/workflows/production-persona-uat.yml` against the exact live SHA and require 11/11, negative RBAC, fixture ownership and funds-off evidence |
 | 6 | Production recovery, rollback, monitoring and ownership | OPEN | Exact rollback deployment is recorded; local backup/restore reconciled with 0.47 s restore; 40-client concurrency test passed with zero hard failures; health monitor workflow exists | Prove managed PostgreSQL backup/PITR policy, restore into an isolated database, reconciliation and measured RTO/RPO; execute or evidence rollback; assign alert and incident owners |
 | 7 | Public support, privacy, complaint and navigation readiness | OPEN | `support.html` and `policies.html` exist; link/browser checks cover public navigation | Publish approved support channel and hours, complaint SLA/escalation, DPO/privacy contact, reviewed Terms/Privacy/Refund texts and valid routes; remove launch-gated placeholder language only after approval |
 | 8 | Commercial fare rules and calculator approval | OPEN | One pricing engine, public fare calculator, versioned rate metadata, deterministic 10% fee tests and booking integration exist | Commercial owner must approve effective rate matrix, minimums, VAT treatment, waiting/stops/cancellation/toll rules and provider share; re-benchmark dated public Lalamove/Transportify scenarios and approve the version |
 | 9 | Protected-payment boundary and production certification | OPEN | State machine, ledger, reconciliation, dispute, payout and fail-closed tests exist; customer copy does not claim escrow; live-funds flags are off | Contract a licensed payment provider, approve legal/fund-flow model, obtain production credentials, certify webhooks/reconciliation/refunds/payout controls and complete independent security/DR evidence before enabling any live-money flag |
 
-## Gate 4 closure — 2026-10-18
+## Gate 4 revalidation — 2026-10-18
 
-- Deployed exact merged commit `653e9ca2da67f52f41a26206450ae9d746c3c4f5`
-  to Railway as deployment `0c799269-22a2-4915-b920-63731e17e750`.
+- Deployed exact merged commit `1489a8f1451249fc11798595e640e052a9e8b5d7`
+  to Railway as deployment `00dd0d3b-28bf-488d-a9d9-7b19ed7708ff`.
 - Verified canonical `/readyz` reports schema 27 and those exact release and
   deployment identities.
-- Completed GitHub Actions production release run `39112796929` successfully.
+- Completed GitHub Actions production release run `39115836213` successfully.
 - Passed complete Python regression, static security/dependency audit and
   cross-browser UAT for the exact production commit.
 - Passed backup/restore reconciliation and 40-client concurrency controls.
@@ -44,7 +44,32 @@ page alone does not close a production gate.
   and least-privilege authenticated access. The evidence artifact records **20 passed,
   0 failed** and `live_funds_exercised: false`.
 - Published the exact static frontend and stored immutable release manifest artifact
-  `production-release-653e9ca2da67f52f41a26206450ae9d746c3c4f5`.
+  `production-release-1489a8f1451249fc11798595e640e052a9e8b5d7`.
+
+## Gate 5 movement — 2026-10-19
+
+- Added and deployed the exact-release hosted persona workflow and its redacted
+  evidence contract in PR #56.
+- Revalidated the deployed commit through complete regression, static security,
+  browser UAT, recovery/concurrency and no-funds production booking checks in run
+  `39115836213`.
+- Retained the isolated persona result from run `39115074502`, in which the four
+  role groups and the controlled 11-persona matrix passed.
+- Executed hosted Gate 5 run `39115781853` against the exact deployed SHA. It
+  failed closed before authentication because `LH_PROD_PERSONA_CREDENTIALS_JSON`
+  is absent. Artifact
+  `production-persona-uat-1489a8f1451249fc11798595e640e052a9e8b5d7`
+  records only `BLOCKED_OR_FAILED`, the non-secret reason, and
+  `live_funds_enabled: false`.
+- Verified on 2026-10-19 that the protected `production` environment still does
+  not contain the persona-manifest secret. Existing shared QA credentials cannot
+  substitute for eleven distinct least-privilege identities.
+
+Gate 5 therefore remains **OPEN** and the measured MVP position remains **4/9
+(44.4%)**. The next valid movement is provisioning and approving the eleven
+synthetic accounts and unique fixture markers through a secure administrator path,
+storing the manifest as the protected secret, and obtaining a successful exact-SHA
+hosted rerun plus accountable UAT sign-off.
 
 ## Work completed on 2026-10-16
 

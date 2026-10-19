@@ -369,7 +369,7 @@ def finance_queues(conn, actor):
     core.require(actor, "marketplace.payment.view") if core.can(actor, "marketplace.payment.view") else core.require(actor, "marketplace.trust.view")
     frag, params = tenant.predicate(actor)
     rows = [dict(r) for r in conn.execute(
-        "SELECT id,booking_id,carrier_id,contract_amount,protected_amount,state,provider,currency"
+        "SELECT id,booking_id,carrier_id,client_ref,contract_amount,protected_amount,state,provider,currency"
         " FROM mkt_protected_tx WHERE 1=1" + frag + " ORDER BY id DESC", params).fetchall()]
     by = {}
     for r in rows:

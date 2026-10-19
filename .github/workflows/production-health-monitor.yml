@@ -24,7 +24,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate monitored production ownership
+      - id: ownership
+        name: Validate monitored production ownership
+        continue-on-error: true
         env:
           OPERATIONS_OWNER: ${{ vars.LH_PROD_OPERATIONS_OWNER }}
           INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
@@ -42,7 +44,10 @@ jobs:
                   'configured': True,
               }, handle, indent=2)
           PY
-      - name: Canonical production surface, readiness, and release identity
+      - id: surface
+        name: Canonical production surface, readiness, and release identity
+        if: always()
+        continue-on-error: true
         env:
           PRODUCTION_URL: https://www.lifthaul.com.ph
         run: |
@@ -72,7 +77,15 @@ jobs:
           PY
           deployed_sha=$(python -c "import json; print(json.load(open('evidence/ready.json'))['release_sha'])")
           git merge-base --is-ancestor "$deployed_sha" origin/main
-      - name: Controlled alert-delivery drill
+      - name: Enforce independent, fail-closed monitoring verdict
+        if: always()
+        env:
+          OWNERSHIP_OUTCOME: ${{ steps.ownership.outcome }}
+          SURFACE_OUTCOME: ${{ steps.surface.outcome }}
+          MONITOR_EVIDENCE_PATH: evidence/monitor-gate.json
+        run: python scripts/go_live/monitor_gate.py
+      - id: alert_drill
+        name: Controlled alert-delivery drill
         if: ${{ inputs.alert_drill == true }}
         run: |
           set -euo pipefail
@@ -92,7 +105,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          ALERT_DRILL: ${{ inputs.alert_drill || false }}
+          ALERT_DRILL: ${{ steps.alert_drill.outcome == 'failure' }}
         run: |
           set -euo pipefail
           if [ "$ALERT_DRILL" = "true" ]; then

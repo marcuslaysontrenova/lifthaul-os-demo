@@ -53,6 +53,12 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/go_live/prod_persona_uat.py
+      - name: Require hardened exact-release acceptance evidence
+        env:
+          EXPECTED_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          python scripts/go_live/validate_persona_acceptance.py --evidence evidence/production-persona-uat.json --release-sha "$EXPECTED_SHA"
       - name: Upload redacted Gate 5 evidence
         if: always()
         uses: actions/upload-artifact@v4

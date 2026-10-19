@@ -1,7 +1,13 @@
 name: LiftHaul Production Health Monitor
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      alert_drill:
+        description: Exercise incident routing after healthy production probes (no production mutation)
+        required: true
+        default: false
+        type: boolean
   schedule:
     - cron: '*/15 * * * *'
 
@@ -18,10 +24,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate monitored production ownership
+      - id: ownership
+        name: Validate monitored production ownership
+        continue-on-error: true
         env:
-          OPERATIONS_OWNER: ${{ vars.LH_PROD_OPERATIONS_OWNER }}
-          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
+          OPERATIONS_OWNER: ${{ vars.LH_PROD_OPERATIONS_OWNER || github.repository_owner }}
+          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER || github.repository_owner }}
+          FALLBACK_OWNER: ${{ github.repository_owner }}
+          OPS_CONFIGURED: ${{ vars.LH_PROD_OPERATIONS_OWNER != '' }}
+          INCIDENT_CONFIGURED: ${{ vars.LH_PROD_INCIDENT_OWNER != '' }}
         run: |
           set -euo pipefail
           mkdir -p evidence
@@ -33,10 +44,17 @@ jobs:
               json.dump({
                   'operations_owner': os.environ['OPERATIONS_OWNER'],
                   'incident_owner': os.environ['INCIDENT_OWNER'],
-                  'configured': True,
+                  'configured': os.environ['OPS_CONFIGURED'] == 'true' and os.environ['INCIDENT_CONFIGURED'] == 'true',
+                  'operations_source': 'explicit' if os.environ['OPS_CONFIGURED'] == 'true' else 'repository_owner_fallback',
+                  'incident_source': 'explicit' if os.environ['INCIDENT_CONFIGURED'] == 'true' else 'repository_owner_fallback',
+                  'fallback_owner': os.environ['FALLBACK_OWNER'],
+                  'requires_human_alert_acknowledgment': True,
               }, handle, indent=2)
           PY
-      - name: Canonical production surface, readiness, and release identity
+      - id: surface
+        name: Canonical production surface, readiness, and release identity
+        if: always()
+        continue-on-error: true
         env:
           PRODUCTION_URL: https://www.lifthaul.com.ph
         run: |
@@ -66,18 +84,46 @@ jobs:
           PY
           deployed_sha=$(python -c "import json; print(json.load(open('evidence/ready.json'))['release_sha'])")
           git merge-base --is-ancestor "$deployed_sha" origin/main
+      - name: Enforce independent, fail-closed monitoring verdict
+        if: always()
+        env:
+          OWNERSHIP_OUTCOME: ${{ steps.ownership.outcome }}
+          SURFACE_OUTCOME: ${{ steps.surface.outcome }}
+          MONITOR_EVIDENCE_PATH: evidence/monitor-gate.json
+        run: python scripts/go_live/monitor_gate.py
+      - id: alert_drill
+        name: Controlled alert-delivery drill
+        if: ${{ inputs.alert_drill == true }}
+        run: |
+          set -euo pipefail
+          cat > evidence/alert-drill.json <<'JSON'
+          {
+            "requested": true,
+            "production_mutated": false,
+            "live_funds_changed": false,
+            "result": "EXPECTED_MONITOR_FAILURE"
+          }
+          JSON
+          echo "::error::Controlled alert-delivery drill requested after healthy production probes"
+          exit 1
       - name: Open or update the production-health incident
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
+          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER || github.repository_owner }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ALERT_DRILL: ${{ steps.alert_drill.outcome == 'failure' }}
         run: |
           set -euo pipefail
-          title='Production health monitor is failing'
+          if [ "$ALERT_DRILL" = "true" ]; then
+            title='[DRILL] Production health alert delivery test'
+            body="Controlled alert-delivery drill reached incident routing at ${RUN_URL}. Production probes passed first; production and live-funds controls were not changed. The incident owner must acknowledge this drill before Gate 6 closeout."
+          else
+            title='Production health monitor is failing'
+            body="Production monitoring failed at ${RUN_URL}. The incident owner must acknowledge, diagnose, and record recovery evidence. No live-funds control should be changed as part of this response."
+          fi
           number=$(gh issue list --state open --search "$title in:title" --json number,title \
             --jq ".[] | select(.title == \"$title\") | .number" | head -1)
-          body="Production monitoring failed at ${RUN_URL}. The incident owner must acknowledge, diagnose, and record recovery evidence. No live-funds control should be changed as part of this response."
           if [ -n "$number" ]; then
             gh issue comment "$number" --body "$body"
           elif [ -n "$INCIDENT_OWNER" ]; then

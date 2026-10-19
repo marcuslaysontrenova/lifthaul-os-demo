@@ -107,6 +107,9 @@ class OperationsWorkflowContractTests(unittest.TestCase):
         self.assertIn("if: always()", workflow)
         self.assertIn("python scripts/go_live/monitor_gate.py", workflow)
         self.assertIn("steps.alert_drill.outcome == 'failure'", workflow)
+        self.assertIn("vars.LH_PROD_INCIDENT_OWNER || github.repository_owner", workflow)
+        self.assertIn("repository_owner_fallback", workflow)
+        self.assertIn("requires_human_alert_acknowledgment", workflow)
         gate = load_script("monitor_gate.py")
         self.assertEqual(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"}),
                          {"ownership_passed": True, "surface_passed": True, "monitor_passed": True})

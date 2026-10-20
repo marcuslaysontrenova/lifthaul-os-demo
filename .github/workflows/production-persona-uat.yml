@@ -43,18 +43,29 @@ jobs:
       - name: Verify protected synthetic provisioning seed
         env:
           PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
+          PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
+          PROVISION_ADMIN_PASSWORD: ${{ secrets.LH_PROD_PERSONA_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$PROVISION_SEED"
+          test -n "$PROVISION_ADMIN_EMAIL"
+          test -n "$PROVISION_ADMIN_PASSWORD"
       - name: Derive private synthetic credentials
         env:
           LH_PROD_PERSONA_PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
         run: |
           set -euo pipefail
           python scripts/go_live/prod_persona_credentials.py \
-            --manifest-out "$RUNNER_TEMP/gate5-personas.json" \
-            --admin-email-out "$RUNNER_TEMP/gate5-admin-email" \
-            --admin-password-out "$RUNNER_TEMP/gate5-admin-password"
+            --manifest-out "$RUNNER_TEMP/gate5-personas.json"
+      - name: Materialize protected provisioning identity
+        env:
+          PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
+          PROVISION_ADMIN_PASSWORD: ${{ secrets.LH_PROD_PERSONA_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$PROVISION_ADMIN_EMAIL" > "$RUNNER_TEMP/gate5-admin-email"
+          printf '%s' "$PROVISION_ADMIN_PASSWORD" > "$RUNNER_TEMP/gate5-admin-password"
       - name: Wait for the exact release to become ready
         env:
           EXPECTED_SHA: ${{ inputs.release_sha }}

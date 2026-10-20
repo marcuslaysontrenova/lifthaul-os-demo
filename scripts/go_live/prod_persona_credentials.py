@@ -59,14 +59,17 @@ def _private_write(path: Path, value: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest-out", required=True, type=Path)
-    parser.add_argument("--admin-email-out", required=True, type=Path)
-    parser.add_argument("--admin-password-out", required=True, type=Path)
+    parser.add_argument("--admin-email-out", type=Path)
+    parser.add_argument("--admin-password-out", type=Path)
     args = parser.parse_args()
     manifest, admin_email, admin_password = derive(os.environ.get("LH_PROD_PERSONA_PROVISION_SEED", ""))
     _private_write(args.manifest_out, json.dumps(manifest, separators=(",", ":")))
-    _private_write(args.admin_email_out, admin_email)
-    _private_write(args.admin_password_out, admin_password)
-    print("Derived private Gate 5 credential files for 11 synthetic personas and one provisioning identity.")
+    if bool(args.admin_email_out) != bool(args.admin_password_out):
+        parser.error("admin email and password outputs must be supplied together")
+    if args.admin_email_out:
+        _private_write(args.admin_email_out, admin_email)
+        _private_write(args.admin_password_out, admin_password)
+    print("Derived private Gate 5 credential files for 11 synthetic personas.")
     return 0
 
 

@@ -101,6 +101,8 @@ class Gate5ProvisionContract(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("LH_PROD_PERSONA_PROVISION_SEED", workflow)
+        self.assertIn("LH_PROD_PERSONA_ADMIN_EMAIL", workflow)
+        self.assertIn("LH_PROD_PERSONA_ADMIN_PASSWORD", workflow)
         self.assertIn("Wait for the exact release to become ready", workflow)
         self.assertNotIn("RAILWAY_PROJECT_TOKEN", workflow)
         self.assertNotIn("railway variable set", workflow)

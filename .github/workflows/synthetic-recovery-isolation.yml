@@ -1,0 +1,183 @@
+name: LiftHaul Synthetic Recovery Isolation Contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/go_live/validate_synthetic_restore_isolation.py'
+      - 'scripts/go_live/test_synthetic_restore_isolation.py'
+      - '.github/workflows/synthetic-recovery-isolation.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  offline-isolation-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Verify prohibited restore destinations fail closed (NO database connections)
+        run: python -m unittest discover -s scripts/go_live -p 'test_synthetic_restore_isolation.py' -v
+      - name: Verify synthetically distinct localhost endpoints (metadata ONLY)
+        run: |
+          python scripts/go_live/validate_synthetic_restore_isolation.py --ci-context --synthetic-opt-in \
+            --source-url postgresql://lifthaul:synthetic@localhost:5432/lifthaul_ci_source \
+            --target-url postgresql://lifthaul:synthetic@localhost:5432/lifthaul_ci_restore
+
+  postgres-synthetic-restore:
+    name: PostgreSQL 16 synthetic backup and isolated restore (CI only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lifthaul
+          POSTGRES_PASSWORD: ci_ephemeral_only
+          POSTGRES_DB: lifthaul_ci_source
+        ports: [ "5432:5432" ]
+        options: >-
+          --health-cmd "pg_isready -U lifthaul -d lifthaul_ci_source"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: lifthaul
+      PGPASSWORD: ci_ephemeral_only
+      APP_ENV: test
+      LH_CI_ISOLATED_RESTORE: "true"
+      DATABASE_URL: postgresql://lifthaul:ci_ephemeral_only@127.0.0.1:5432/lifthaul_ci_source
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Install ephemeral database validation clients
+        run: |
+          python -m pip install psycopg2-binary
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Prove local-only CI target identity before any database work
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$LH_CI_ISOLATED_RESTORE" = true
+          test "$PGHOST" = 127.0.0.1
+          test "$PGPORT" = 5432
+          test "$PGUSER" = lifthaul
+          python scripts/go_live/validate_synthetic_restore_isolation.py --ci-context --synthetic-opt-in \
+            --source-url postgresql://lifthaul@localhost:5432/lifthaul_ci_source \
+            --target-url postgresql://lifthaul@localhost:5432/lifthaul_ci_restore
+          pg_isready -d lifthaul_ci_source
+      - name: Migrate synthetic source to current PostgreSQL schema
+        working-directory: backend
+        run: python migrate.py
+      - name: Restore only synthetic CI data into newly created CI database
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_ACTIONS" = true
+          test "$LH_CI_ISOLATED_RESTORE" = true
+          test "$PGHOST" = 127.0.0.1
+          test "$(psql -X -At -d lifthaul_ci_source -c 'SELECT current_database()')" = lifthaul_ci_source
+          if psql -X -At -d postgres -c "SELECT 1 FROM pg_database WHERE datname='lifthaul_ci_restore'" | grep -q 1; then
+            echo "Refusing to overwrite pre-existing recovery database"
+            exit 2
+          fi
+          psql -X -v ON_ERROR_STOP=1 -d lifthaul_ci_source -c "CREATE TABLE lh_ci_restore_sentinel (value TEXT PRIMARY KEY)"
+          psql -X -v ON_ERROR_STOP=1 -d lifthaul_ci_source -c "INSERT INTO lh_ci_restore_sentinel(value) VALUES ('SYNTHETIC_ONLY_NO_PRODUCTION_DATA')"
+          scratch="$(mktemp -d)"
+          trap 'rm -rf "$scratch"' EXIT
+          start_backup="$SECONDS"
+          pg_dump --format=custom --no-owner --no-acl --dbname=lifthaul_ci_source --file="$scratch/synthetic.dump"
+          test -s "$scratch/synthetic.dump"
+          backup_seconds="$((SECONDS - start_backup))"
+          createdb lifthaul_ci_restore
+          test "$(psql -X -At -d lifthaul_ci_restore -c 'SELECT current_database()')" = lifthaul_ci_restore
+          start_restore="$SECONDS"
+          pg_restore --exit-on-error --no-owner --no-acl --dbname=lifthaul_ci_restore "$scratch/synthetic.dump"
+          restore_seconds="$((SECONDS - start_restore))"
+          mkdir -p evidence
+          BACKUP_SECONDS="$backup_seconds" RESTORE_SECONDS="$restore_seconds" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import psycopg2
+          from psycopg2 import sql
+
+          if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("LH_CI_ISOLATED_RESTORE") != "true":
+              raise SystemExit("BLOCKED_ENVIRONMENT_ISOLATION")
+          if os.environ.get("PGHOST") != "127.0.0.1" or os.environ.get("PGPORT") != "5432":
+              raise SystemExit("BLOCKED_ENVIRONMENT_ISOLATION")
+
+          def snapshot(dbname):
+              with psycopg2.connect(
+                  host="127.0.0.1", port=5432, user="lifthaul",
+                  password=os.environ["PGPASSWORD"], dbname=dbname,
+                  connect_timeout=5
+              ) as connection:
+                  with connection.cursor() as cursor:
+                      cursor.execute(
+                          "SELECT tablename FROM pg_catalog.pg_tables "
+                          "WHERE schemaname='public' ORDER BY tablename"
+                      )
+                      names = [row[0] for row in cursor.fetchall()]
+                      if "schema_version" not in names or "lh_ci_restore_sentinel" not in names:
+                          raise RuntimeError("synthetic source or restore schema incomplete")
+                      counts = {}
+                      for name in names:
+                          cursor.execute(
+                              sql.SQL("SELECT COUNT(*) FROM {}.{}").format(
+                                  sql.Identifier("public"), sql.Identifier(name)
+                              )
+                          )
+                          counts[name] = int(cursor.fetchone()[0])
+                      cursor.execute("SELECT COALESCE(MAX(version),0) FROM public.schema_version")
+                      version = str(cursor.fetchone()[0])
+                      cursor.execute(
+                          "SELECT COUNT(*) FROM public.lh_ci_restore_sentinel "
+                          "WHERE value = 'SYNTHETIC_ONLY_NO_PRODUCTION_DATA'"
+                      )
+                      sentinel_count = int(cursor.fetchone()[0])
+              return names, counts, version, sentinel_count
+
+          before = snapshot("lifthaul_ci_source")
+          after = snapshot("lifthaul_ci_restore")
+          if before != after or before[3] != 1 or before[1]["lh_ci_restore_sentinel"] != 1:
+              raise SystemExit("FAILED_SYNTHETIC_RECOVERY_RECONCILIATION")
+
+          evidence = {
+              "result": "PASS_SYNTHETIC_POSTGRES_16_RESTORE_CI_ONLY",
+              "source": "ephemeral-postgres-16-service",
+              "source_database": "lifthaul_ci_source",
+              "restore_database": "lifthaul_ci_restore",
+              "source_distinct_from_restore": True,
+              "current_schema_migrated": True,
+              "schema_version_reconciled": before[2],
+              "public_table_counts_reconciled": len(before[0]),
+              "synthetic_sentinel_reconciled": True,
+              "backup_seconds_ci_only": int(os.environ["BACKUP_SECONDS"]),
+              "restore_seconds_ci_only": int(os.environ["RESTORE_SECONDS"]),
+              "production_data_used": False,
+              "production_backup_verified": False,
+              "hosted_recovery_verified": False,
+              "production_rto_verified": False,
+              "production_rpo_verified": False,
+              "mvp_recovery_gate_complete": False,
+              "database_dump_uploaded": False,
+          }
+          Path("evidence/synthetic-postgres-recovery.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+      - name: Upload sanitized recovery evidence only (never SQL dumps)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-postgres-recovery-ci
+          path: evidence/synthetic-postgres-recovery.json
+          retention-days: 14
+          if-no-files-found: warn

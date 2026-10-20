@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+# This workflow deliberately provisions its synthetic test fixtures only through
+# governed production APIs. It must never mutate Railway variables or redeploy
+# production as part of acceptance testing.
+
 concurrency:
   group: lifthaul-production-persona-uat
   cancel-in-progress: false
@@ -36,20 +40,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           git fetch origin main --no-tags
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
-      - name: Verify protected provisioning controls
+      - name: Verify protected synthetic provisioning seed
         env:
           PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
-          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
         run: |
           set -euo pipefail
           test -n "$PROVISION_SEED"
-          test -n "$RAILWAY_PROJECT_TOKEN"
-          test -n "$RAILWAY_PROJECT_ID"
-          test -n "$RAILWAY_SERVICE_ID"
-          test -n "$RAILWAY_ENVIRONMENT_ID"
       - name: Derive private synthetic credentials
         env:
           LH_PROD_PERSONA_PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
@@ -59,28 +55,6 @@ jobs:
             --manifest-out "$RUNNER_TEMP/gate5-personas.json" \
             --admin-email-out "$RUNNER_TEMP/gate5-admin-email" \
             --admin-password-out "$RUNNER_TEMP/gate5-admin-password"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install pinned Railway CLI
-        run: npm install --global @railway/cli@4.58.0
-      - name: Seed controlled provisioning identity and redeploy exact release
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
-        run: |
-          set -euo pipefail
-          railway variable set LH_ADMIN_EMAIL --stdin --skip-deploys \
-            --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" < "$RUNNER_TEMP/gate5-admin-email" >/dev/null
-          railway variable set LH_ADMIN_PASSWORD --stdin --skip-deploys \
-            --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" < "$RUNNER_TEMP/gate5-admin-password" >/dev/null
-          railway redeploy --yes --json \
-            --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" > "$RUNNER_TEMP/gate5-redeploy.json"
       - name: Wait for the exact release to become ready
         env:
           EXPECTED_SHA: ${{ inputs.release_sha }}

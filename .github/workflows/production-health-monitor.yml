@@ -51,6 +51,12 @@ jobs:
                   'requires_human_alert_acknowledgment': True,
               }, handle, indent=2)
           PY
+          # A repository-owner fallback preserves alert routing, but it is not
+          # proof that dedicated operations and incident coverage is staffed.
+          if [ "$OPS_CONFIGURED" != "true" ] || [ "$INCIDENT_CONFIGURED" != "true" ]; then
+            echo "::error::Named production operations and incident owners are required for Gate 6"
+            exit 1
+          fi
       - id: surface
         name: Canonical production surface, readiness, and release identity
         if: always()

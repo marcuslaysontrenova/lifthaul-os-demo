@@ -20,6 +20,8 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             "EXPECTED_SHA": SHA,
             "LH_ADMIN_EMAIL": "regional-qa@example.invalid",
             "LH_ADMIN_PASSWORD": "offline-only-password",
+            "EXPECTED_DEPLOYMENT_ID": "offline-deploy-123",
+            "LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": "true",
             "LH_MVP_EVIDENCE_PATH": str(self.evidence_path),
         }
         with mock.patch.dict(os.environ, env, clear=False):
@@ -33,13 +35,19 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
     def fake_request(self, method, path, body=None, token=None):
         self.calls.append((method, path))
         if path == "/readyz":
-            return 200, {"status": "ready", "release_sha": SHA, "schema_version": 27}
+            return 200, {"status": "ready", "release_sha": SHA, "schema_version": 27, "deployment_id": "offline-deploy-123"}
         if path == "/healthz":
             return 200, {"status": "ok", "release_sha": SHA}
         if path == "/admin/marketplace/public-booking-queue" and not token:
             return 401, {}
         if path == "/login":
             return 200, {"token": "offline-admin-token"}
+        if path == "/logout":
+            return 200, {"ok": True}
+        if path == "/me/permissions" and ("POST", "/logout") in self.calls:
+            return 401, {}
+        if path == "/me/permissions":
+            return 200, {"role": "public_intake_qa", "permissions": ["marketplace.booking.view", "marketplace.public_intake.view"], "is_super": False, "financial": {}}
         if path == "/public/bookings" and method == "POST":
             island = body["origin_island"]
             token_value = self.created.setdefault(island, f"pbk_offline_{island.lower()}_token")
@@ -65,11 +73,14 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             ]}
         self.fail(f"unexpected request: {method} {path}")
 
-    def run_main(self):
-        with mock.patch.dict(self.module["main"].__globals__, {"_req": self.fake_request}):
-            with mock.patch.object(self.module["time"], "time", return_value=1791943200):
-                with redirect_stdout(io.StringIO()):
-                    return self.module["main"]()
+    def run_main(self, approved=True):
+        with mock.patch.dict(os.environ, {
+            "LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": "true" if approved else ""
+        }):
+            with mock.patch.dict(self.module["main"].__globals__, {"_req": self.fake_request}):
+                with mock.patch.object(self.module["time"], "time", return_value=1791943200):
+                    with redirect_stdout(io.StringIO()):
+                        return self.module["main"]()
 
     def test_three_regions_exact_queue_and_no_payment_endpoint(self):
         self.assertEqual(self.run_main(), 0)
@@ -81,6 +92,89 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
         self.assertIn('"result": "PASS"', evidence)
         self.assertNotIn("pbk_offline", evidence)
 
+    def test_qa_logout_runs_and_invalidates_token_on_success(self):
+        self.assertEqual(self.run_main(), 0)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+        record = self.evidence_path.read_text(encoding="utf-8")
+        self.assertIn('"qa_session_revocation_verified": true', record)
+        self.assertIn('"post_logout_authorization_http_status": 401', record)
+
+    def test_qa_logout_failure_blocks_positive_acceptance(self):
+        original = self.fake_request
+        def denied(method, path, body=None, token=None):
+            if path == "/logout":
+                self.calls.append((method, path))
+                return 503, {}
+            return original(method, path, body, token)
+        self.fake_request = denied
+        with self.assertRaisesRegex(RuntimeError, "revocation not verified"):
+            self.run_main()
+        report = self.evidence_path.read_text(encoding="utf-8")
+        self.assertIn('"result": "FAIL_QA_SESSION_REVOCATION"', report)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+
+    def test_qa_logout_200_but_token_still_valid_fails_closed(self):
+        original = self.fake_request
+        def ineffective(method, path, body=None, token=None):
+            if path == "/me/permissions" and ("POST", "/logout") in self.calls:
+                self.calls.append((method, path))
+                return 200, {"role": "public_intake_qa", "permissions": []}
+            return original(method, path, body, token)
+        self.fake_request = ineffective
+        with self.assertRaisesRegex(RuntimeError, "revocation not verified"):
+            self.run_main()
+        report = self.evidence_path.read_text(encoding="utf-8")
+        self.assertIn('"qa_session_revocation_verified": false', report)
+        self.assertIn('"post_logout_authorization_http_status": 200', report)
+
+    def test_qa_logout_occurs_after_early_permission_denial(self):
+        original = self.fake_request
+        def wrong_role(method, path, body=None, token=None):
+            if path == "/me/permissions" and ("POST", "/logout") not in self.calls:
+                self.calls.append((method, path))
+                return 200, {"role": "admin", "permissions": ["*"], "is_super": True}
+            return original(method, path, body, token)
+        self.fake_request = wrong_role
+        self.assertEqual(self.run_main(), 1)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
+
+    def test_missing_hosted_approval_blocks_all_bookings(self):
+        self.assertEqual(self.run_main(approved=False), 2)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
+
+    def test_missing_hosted_deployment_pin_blocks_all_bookings(self):
+        with mock.patch.dict(self.module["main"].__globals__, {"EXPECTED_DEPLOYMENT_ID": ""}):
+            self.assertEqual(self.run_main(), 2)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
+
+    def test_wrong_role_never_creates_a_booking(self):
+        original = self.fake_request
+        def wrong_role(method, path, body=None, token=None):
+            # Simulate an elevated principal before logout; after logout the
+            # existing synthetic responder must reject the revoked token.
+            if path == "/me/permissions" and ("POST", "/logout") not in self.calls:
+                self.calls.append((method, path))
+                return 200, {"role": "admin", "permissions": ["*"], "is_super": True}
+            return original(method, path, body, token)
+        self.fake_request = wrong_role
+        self.assertEqual(self.run_main(), 1)
+        self.assertEqual(self.calls.count(("POST", "/logout")), 1)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
+        self.assertIn('"result": "BLOCKED_QA_AUTHORIZATION"',
+                      self.evidence_path.read_text(encoding="utf-8"))
+
+    def test_failed_queue_access_never_creates_a_booking(self):
+        original = self.fake_request
+        def denied(method, path, body=None, token=None):
+            if path == "/admin/marketplace/public-booking-queue" and token:
+                self.calls.append((method, path))
+                return 403, {}
+            return original(method, path, body, token)
+        self.fake_request = denied
+        self.assertEqual(self.run_main(), 1)
+        self.assertNotIn(("POST", "/public/bookings"), self.calls)
+
     def test_release_identity_mismatch_fails_before_first_write(self):
         def mismatch(method, path, body=None, token=None):
             self.calls.append((method, path))
@@ -88,8 +182,9 @@ class RegionalBookingAcceptanceContract(unittest.TestCase):
             return 200, {"status": "ready", "release_sha": "0" * 40, "schema_version": 27}
 
         with mock.patch.dict(self.module["main"].__globals__, {"_req": mismatch}):
-            with redirect_stdout(io.StringIO()):
-                self.assertEqual(self.module["main"](), 1)
+            with mock.patch.dict(os.environ, {"LH_PRODUCTION_SYNTHETIC_BOOKINGS_APPROVED": "true"}):
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(self.module["main"](), 1)
         self.assertEqual(self.calls, [("GET", "/readyz")])
 
 

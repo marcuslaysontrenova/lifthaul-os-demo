@@ -1,0 +1,24 @@
+name: LiftHaul Codex MVP Client-Confidence Contracts
+on:
+  pull_request:
+    paths:
+      - 'docs/readiness/MVP_CODEX_CLIENT_CONFIDENCE_LEDGER.json'
+      - 'scripts/go_live/codex_mvp_readiness.py'
+      - 'scripts/go_live/test_codex_mvp_readiness.py'
+      - '.github/workflows/lifthaul-codex-mvp-evidence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fail-closed-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run offline completeness contract tests
+        run: python -m unittest discover -s scripts/go_live -p 'test_codex_mvp_readiness.py' -v
+      - name: Produce honest candidate evidence inventory (no secrets or external calls)
+        run: python scripts/go_live/codex_mvp_readiness.py

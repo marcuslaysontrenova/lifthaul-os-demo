@@ -56,7 +56,9 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/go_live/prod_persona_credentials.py \
-            --manifest-out "$RUNNER_TEMP/gate5-personas.json"
+            --manifest-out "$RUNNER_TEMP/gate5-personas.json" \
+            --admin-email-out "$RUNNER_TEMP/gate5-admin-email" \
+            --admin-password-out "$RUNNER_TEMP/gate5-admin-password"
       - name: Materialize protected provisioning identity
         env:
           PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}

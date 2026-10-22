@@ -91,11 +91,6 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$PROVISION_ADMIN_EMAIL"
           echo "::add-mask::$PROVISION_ADMIN_PASSWORD"
-          railway link \
-            --project "$RAILWAY_PROJECT_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" \
-            --service "$RAILWAY_SERVICE_ID" \
-            --json > "$RUNNER_TEMP/railway-link.json"
           railway variable set \
             "LH_ADMIN_EMAIL=$PROVISION_ADMIN_EMAIL" \
             "LH_ADMIN_PASSWORD=$PROVISION_ADMIN_PASSWORD" \

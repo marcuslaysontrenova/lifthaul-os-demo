@@ -1,0 +1,153 @@
+name: LiftHaul Gate 5 production bootstrap identity sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character commit currently reported by production /readyz
+        required: true
+        type: string
+      change_reference:
+        description: Approved change reference for the audited identity rotation
+        required: true
+        default: GATE5-UAT-BOOTSTRAP
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lifthaul-production
+  cancel-in-progress: false
+
+env:
+  RAILWAY_PROJECT_ID: 76f8ba71-2e56-4af4-95e9-000dd57ba275
+
+jobs:
+  sync:
+    name: Synchronize the protected Gate 5 provisioning identity
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Reject non-exact, unmerged, or non-live commits
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [ "$(git rev-parse HEAD)" = "${RELEASE_SHA,,}" ]
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          curl --fail --silent --show-error --max-time 20 \
+            https://www.lifthaul.com.ph/readyz -o "$RUNNER_TEMP/ready-before.json"
+          python - <<'PY'
+          import json, os
+          ready = json.load(open(os.environ["RUNNER_TEMP"] + "/ready-before.json", encoding="utf-8"))
+          assert ready.get("status") == "ready", ready
+          assert ready.get("release_sha") == os.environ["RELEASE_SHA"].lower(), ready
+          assert ready.get("deployment_id"), ready
+          PY
+
+      - name: Validate protected synchronization inputs
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
+          PROVISION_ADMIN_PASSWORD: ${{ secrets.LH_PROD_PERSONA_ADMIN_PASSWORD }}
+          CHANGE_REFERENCE: ${{ inputs.change_reference }}
+        run: |
+          set -euo pipefail
+          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_PROJECT_ID"
+          test -n "$RAILWAY_SERVICE_ID"
+          test -n "$RAILWAY_ENVIRONMENT_ID"
+          test -n "$PROVISION_ADMIN_EMAIL"
+          test -n "$PROVISION_ADMIN_PASSWORD"
+          test -n "$CHANGE_REFERENCE"
+          [[ "$PROVISION_ADMIN_EMAIL" == *@qa.lifthaul.com.ph ]]
+          [ "${#PROVISION_ADMIN_PASSWORD}" -ge 24 ]
+          [[ "$PROVISION_ADMIN_PASSWORD" =~ [A-Z] ]]
+          [[ "$PROVISION_ADMIN_PASSWORD" =~ [a-z] ]]
+          [[ "$PROVISION_ADMIN_PASSWORD" =~ [0-9] ]]
+
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.71.0
+
+      - name: Apply the protected identity and trigger a new deployment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
+          PROVISION_ADMIN_PASSWORD: ${{ secrets.LH_PROD_PERSONA_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$PROVISION_ADMIN_EMAIL"
+          echo "::add-mask::$PROVISION_ADMIN_PASSWORD"
+          railway link \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "$RAILWAY_ENVIRONMENT_ID" \
+            --service "$RAILWAY_SERVICE_ID" \
+            --json > "$RUNNER_TEMP/railway-link.json"
+          railway variable set \
+            "LH_ADMIN_EMAIL=$PROVISION_ADMIN_EMAIL" \
+            "LH_ADMIN_PASSWORD=$PROVISION_ADMIN_PASSWORD" \
+            --service "$RAILWAY_SERVICE_ID" \
+            --environment "$RAILWAY_ENVIRONMENT_ID" \
+            --json > "$RUNNER_TEMP/railway-variable-set.json"
+
+      - name: Prove that a new exact-SHA deployment became ready
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CHANGE_REFERENCE: ${{ inputs.change_reference }}
+        run: |
+          set -euo pipefail
+          before=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"] + "/ready-before.json"))["deployment_id"])')
+          for i in $(seq 1 90); do
+            if curl --fail --silent --show-error --max-time 20 \
+              https://www.lifthaul.com.ph/readyz -o "$RUNNER_TEMP/ready-after.json"; then
+              read -r actual_sha after status < <(python - <<'PY'
+          import json, os
+          ready = json.load(open(os.environ["RUNNER_TEMP"] + "/ready-after.json", encoding="utf-8"))
+          print(ready.get("release_sha", ""), ready.get("deployment_id", ""), ready.get("status", ""))
+          PY
+              )
+              if [ "$status" = ready ] && [ "$actual_sha" = "${RELEASE_SHA,,}" ] && [ -n "$after" ] && [ "$after" != "$before" ]; then
+                mkdir -p evidence
+                BEFORE_DEPLOYMENT_ID="$before" AFTER_DEPLOYMENT_ID="$after" \
+                  python - <<'PY'
+          import json, os
+          with open("evidence/production-bootstrap-identity-sync.json", "w", encoding="utf-8") as handle:
+              json.dump({
+                  "result": "PASS",
+                  "change_reference": os.environ["CHANGE_REFERENCE"],
+                  "release_sha": os.environ["RELEASE_SHA"].lower(),
+                  "previous_deployment_id": os.environ["BEFORE_DEPLOYMENT_ID"],
+                  "deployment_id": os.environ["AFTER_DEPLOYMENT_ID"],
+                  "variable_names": ["LH_ADMIN_EMAIL", "LH_ADMIN_PASSWORD"],
+                  "secret_values_recorded": False,
+              }, handle, indent=2)
+          PY
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "::error::A new healthy deployment with the exact release SHA was not observed" >&2
+          exit 1
+
+      - name: Upload redacted synchronization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-bootstrap-identity-sync-${{ inputs.release_sha }}
+          path: evidence/production-bootstrap-identity-sync.json
+          if-no-files-found: error
+          retention-days: 90

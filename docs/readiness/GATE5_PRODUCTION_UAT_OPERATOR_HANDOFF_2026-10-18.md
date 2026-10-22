@@ -1,0 +1,15 @@
+# Gate 5 — exact-production persona acceptance: operator-only closing steps (2026-10-18)
+
+**OPEN, NOT VERIFIED, NO-GO.** Source PR #58 is a development-only proposal. Latest successful Railway deployed source known here: `1489a8f1451249fc11798595e640e052a9e8b5d7`, deployment `00dd0d3b-28bf-488d-a9d9-7b19ed7708ff`. Historical hosted UAT [run 39115781853](https://github.com/marcuslaysontrenova/lifthaul-os-demo/actions/runs/39115781853) was FAILED because `LH_PROD_PERSONA_CREDENTIALS_JSON` was empty. It **did not execute 11 personas**.
+
+## Non-secret operator checklist
+
+1. A named **security administrator** provisions eleven distinct, approved synthetic accounts: booker; pending driver applicant; accredited driver; motorcycle owner; light vehicle owner; truck owner; fleet owner; specialized provider; operations; finance; administrator. Role assignment must be least privilege, with pending driver denied login. Verify role assignments independently; do not invent account identities or reuse real customer data.
+2. A named **QA operator** prepares eleven distinct approved synthetic fixture markers on the authorized deployed environment using only permitted test records, verifying each persona's documented read-only journey and the pending driver's queue marker. Get separate authorization before creating any production synthetic records. No money or live dispatch.
+3. The authorized GitHub production-environment **secret administrator** enters the eleven-object JSON value for `LH_PROD_PERSONA_CREDENTIALS_JSON` through the protected secret interface, never GitHub files/issues, logs, or chat. Exact keys per persona are `email`, `password`, `marker`. No sample credentials should ever be mistaken for actual accounts.
+4. Independent reviewer signs the nonproduction Gate 5 patch and exact CI results; owner separately authorizes any production-connected merge and deployment. Do not infer permission from a generic request to proceed.
+5. Only after authorized deployment: verify live `/readyz` release SHA, deployment ID and schema; dispatch `production-persona-uat.yml` for the **deployed, merged, full 40-character SHA**, using approved GitHub production environment and stored credentials. Never run against an unmerged PR SHA.
+6. Require redacted artifact `production-persona-uat-<SHA>` showing `result=PASS`, `personas_required=11`, `personas_passed=11`, ten authenticated `sessions_revoked`, no pending-driver token, negative admin/finance access, role-scoped synthetic fixtures and `live_funds_enabled=false`. Validate artifact against workflow/deployment identity and independently obtain QA witness sign-off. No secret values or raw payloads permitted in artifacts.
+7. Only then update the canonical `docs/readiness/MVP_GATE_REGISTER_2026-10-16.md`, issue #20 and T11 acceptance to COMPLETE, preserving evidence references. If anything fails, leave Gate 5 OPEN and assign remediation.
+
+**Current direct blocker:** secure approved synthetic account provisioning and protected manifest. This cannot be replaced by mocked tests. No hosted pass, independent production review, or released fix is claimed by this document.

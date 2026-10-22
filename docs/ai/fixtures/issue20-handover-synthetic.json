@@ -1,0 +1,11 @@
+{
+  "issue": "#20",
+  "base_sha": "dfea0b9df01824a73bb1a39a0f611f5e3f6c0ba1",
+  "branch": "ai/issue-20-dry-run",
+  "last_provider": "codex",
+  "failure": "quota_exhausted",
+  "completed": ["Exact deployed release identity independently checked in run 38582354600"],
+  "remaining": ["Review open PRs and missing authenticated production acceptance evidence"],
+  "evidence_urls": ["https://github.com/marcuslaysontrenova/lifthaul-os-demo/issues/20"],
+  "no_production_writes": true
+}

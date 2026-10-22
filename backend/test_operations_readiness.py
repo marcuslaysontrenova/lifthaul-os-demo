@@ -110,6 +110,9 @@ class OperationsWorkflowContractTests(unittest.TestCase):
         self.assertIn("vars.LH_PROD_INCIDENT_OWNER || github.repository_owner", workflow)
         self.assertIn("repository_owner_fallback", workflow)
         self.assertIn("requires_human_alert_acknowledgment", workflow)
+        # Fallback is a delivery path, never sufficient evidence for staffed Gate 6.
+        self.assertIn('if [ "$OPS_CONFIGURED" != "true" ] || [ "$INCIDENT_CONFIGURED" != "true" ]; then', workflow)
+        self.assertIn('Named production operations and incident owners are required for Gate 6', workflow)
         gate = load_script("monitor_gate.py")
         self.assertEqual(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"}),
                          {"ownership_passed": True, "surface_passed": True, "monitor_passed": True})

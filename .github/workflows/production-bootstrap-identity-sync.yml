@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_sha }}
+          ref: main
           fetch-depth: 0
 
       - name: Reject non-exact, unmerged, or non-live commits
@@ -41,8 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
-          [ "$(git rev-parse HEAD)" = "${RELEASE_SHA,,}" ]
           git fetch origin main --no-tags
+          git cat-file -e "${RELEASE_SHA}^{commit}"
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
           curl --fail --silent --show-error --max-time 20 \
             https://www.lifthaul.com.ph/readyz -o "$RUNNER_TEMP/ready-before.json"

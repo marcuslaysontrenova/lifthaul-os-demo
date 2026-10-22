@@ -114,11 +114,14 @@ class OperationsWorkflowContractTests(unittest.TestCase):
         self.assertIn('if [ "$OPS_CONFIGURED" != "true" ] || [ "$INCIDENT_CONFIGURED" != "true" ]; then', workflow)
         self.assertIn('Named production operations and incident owners are required for Gate 6', workflow)
         gate = load_script("monitor_gate.py")
-        self.assertEqual(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"}),
+        configured = {"OPS_CONFIGURED": "true", "INCIDENT_CONFIGURED": "true"}
+        self.assertEqual(gate.evaluate({**configured, "OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"}),
                          {"ownership_passed": True, "surface_passed": True, "monitor_passed": True})
-        self.assertFalse(gate.evaluate({"OWNERSHIP_OUTCOME": "failure", "SURFACE_OUTCOME": "success"})["monitor_passed"])
-        self.assertFalse(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "failure"})["monitor_passed"])
+        self.assertFalse(gate.evaluate({**configured, "OWNERSHIP_OUTCOME": "failure", "SURFACE_OUTCOME": "success"})["monitor_passed"])
+        self.assertFalse(gate.evaluate({**configured, "OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "failure"})["monitor_passed"])
         self.assertFalse(gate.evaluate({})["monitor_passed"])
+        self.assertFalse(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"})["monitor_passed"])
+        self.assertFalse(gate.evaluate({**configured, "INCIDENT_CONFIGURED": "false", "OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"})["monitor_passed"])
 
     def test_rollback_workflow_binds_sha_and_deployment_identity(self):
         text = (ROOT / ".github" / "workflows" / "production-rollback-evidence.yml").read_text()

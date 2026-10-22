@@ -56,7 +56,7 @@ jobs:
 
       - name: Validate protected synchronization inputs
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
           PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
@@ -64,7 +64,7 @@ jobs:
           CHANGE_REFERENCE: ${{ inputs.change_reference }}
         run: |
           set -euo pipefail
-          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_PROJECT_TOKEN"
           test -n "$RAILWAY_PROJECT_ID"
           test -n "$RAILWAY_SERVICE_ID"
           test -n "$RAILWAY_ENVIRONMENT_ID"
@@ -77,12 +77,9 @@ jobs:
           [[ "$PROVISION_ADMIN_PASSWORD" =~ [a-z] ]]
           [[ "$PROVISION_ADMIN_PASSWORD" =~ [0-9] ]]
 
-      - name: Install pinned Railway CLI
-        run: npm install --global @railway/cli@5.71.0
-
       - name: Apply the protected identity and trigger a new deployment
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
           PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
@@ -91,12 +88,8 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$PROVISION_ADMIN_EMAIL"
           echo "::add-mask::$PROVISION_ADMIN_PASSWORD"
-          railway variable set \
-            "LH_ADMIN_EMAIL=$PROVISION_ADMIN_EMAIL" \
-            "LH_ADMIN_PASSWORD=$PROVISION_ADMIN_PASSWORD" \
-            --service "$RAILWAY_SERVICE_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" \
-            --json > "$RUNNER_TEMP/railway-variable-set.json"
+          python scripts/go_live/railway_set_bootstrap_identity.py \
+            > "$RUNNER_TEMP/railway-variable-set.json"
 
       - name: Prove that a new exact-SHA deployment became ready
         env:

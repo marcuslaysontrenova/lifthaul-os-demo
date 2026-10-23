@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "mode": "readiness_only",
+  "automatic_handover_enabled": false,
+  "desired_order": ["codex", "gemini", "ollama", "grok"],
+  "shared_contract": "AGENTS.md",
+  "work_order_issue": 73,
+  "mvp_ledger_issue": 20,
+  "providers": {
+    "codex": {"kind": "primary_cli", "automatic_enabled": false},
+    "gemini": {
+      "kind": "google_gemini_cli",
+      "automatic_enabled": false,
+      "authentication": "local_google_sign_in",
+      "probe_mode": "plan",
+      "budget_policy": "free_quota_only_no_automatic_overage",
+      "remaining": ["local_installation", "local_login", "alignment", "bounded_task", "quota_handoff_adapter"]
+    },
+    "ollama": {
+      "kind": "local_model_via_codex_cli",
+      "automatic_enabled": false,
+      "remaining": ["alignment", "active_context_capacity", "bounded_task", "genuine_quota_handoff"]
+    },
+    "grok": {
+      "kind": "xai_api",
+      "automatic_enabled": false,
+      "base_url": "https://api.x.ai/v1",
+      "key_env_name": "XAI_API_KEY",
+      "model": null,
+      "paid_calls_allowed": false,
+      "remaining": ["scoped_budget_approval", "local_credentials", "supported_model_selection", "execution_adapter", "alignment", "bounded_task", "genuine_quota_handoff"]
+    }
+  }
+}

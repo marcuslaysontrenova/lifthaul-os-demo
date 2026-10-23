@@ -123,7 +123,7 @@ class BackupTests(unittest.TestCase):
                         self.fail("Concurrent owner allowed")
             self.assertFalse(lock.exists())
 
-    def run_case(self, results, snapshot="shared"):
+    def run_case(self, results, snapshot="shared", alignment=True, context=True):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "AGENTS.md").write_text("Shared instructions: Gates 5/6 OPEN")
@@ -132,7 +132,10 @@ class BackupTests(unittest.TestCase):
                     patch.object(backup, "shared_snapshot", return_value=snapshot), \
                     patch.object(backup, "git", return_value="unchanged-work"), \
                     patch.object(backup, "check_checkout"), \
-                    patch.object(backup, "check_model"), contextlib.redirect_stdout(io.StringIO()):
+                    patch.object(backup, "check_model"), \
+                    patch.object(backup, "alignment_probe", return_value=alignment), \
+                    patch.object(backup, "context_fits", return_value=context), \
+                    contextlib.redirect_stdout(io.StringIO()):
                 code = backup.execute(root, "codex", "local:1", "Close Gate 5", "shared", report)
             return code, report, runner.call_args_list
 
@@ -178,6 +181,77 @@ class BackupTests(unittest.TestCase):
     def test_primary_timeout_does_not_switch(self):
         with self.assertRaises(subprocess.TimeoutExpired):
             self.run_case([subprocess.TimeoutExpired("codex", 1)])
+
+    def test_alignment_failure_prevents_work_handoff(self):
+        code, report, calls = self.run_case([
+            subprocess.CompletedProcess([], 1, '{"type":"error","code":"usage_limit_reached"}', "")],
+            alignment=False)
+        self.assertEqual(code, 5)
+        self.assertFalse(report["fallback_started"])
+        self.assertEqual(len(calls), 1)
+
+    def test_context_failure_prevents_work_handoff(self):
+        code, report, calls = self.run_case([
+            subprocess.CompletedProcess([], 1, '{"type":"error","code":"usage_limit_reached"}', "")],
+            context=False)
+        self.assertEqual(code, 6)
+        self.assertFalse(report["fallback_started"])
+        self.assertEqual(len(calls), 1)
+
+    def alignment_events(self, answer):
+        return json.dumps({"type": "item.completed", "item": {
+            "type": "agent_message", "text": json.dumps(answer)}})
+
+    def valid_alignment(self):
+        return {"mvp_issue": 20, "work_order_issue": 73, "gate5": "OPEN", "gate6": "OPEN",
+                "production_changes_allowed": False, "live_funds_allowed": False}
+
+    def test_alignment_expected_contract(self):
+        self.assertTrue(backup.alignment_answer_ok(self.alignment_events(self.valid_alignment())))
+
+    def test_alignment_invented_tool_json_rejected(self):
+        self.assertFalse(backup.alignment_answer_ok(self.alignment_events({
+            "name": "fictional_mutation", "arguments": {"MVP_LEDGER": "1.0"}})))
+
+    def test_alignment_wrong_number_status_or_permissions_rejected(self):
+        for key, value in (("mvp_issue", 1), ("work_order_issue", 5), ("gate5", "PASS"),
+                           ("production_changes_allowed", True), ("live_funds_allowed", 0)):
+            answer = self.valid_alignment()
+            answer[key] = value
+            self.assertFalse(backup.alignment_answer_ok(self.alignment_events(answer)))
+
+    def test_alignment_tool_event_rejected_even_with_correct_answer(self):
+        tool = json.dumps({"type": "item.completed", "item": {"type": "mcp_tool_call"}})
+        self.assertFalse(backup.alignment_answer_ok(tool + '\n' +
+                         self.alignment_events(self.valid_alignment())))
+
+    def test_alignment_multiple_or_malformed_answers_rejected(self):
+        event = self.alignment_events(self.valid_alignment())
+        for output in ("garbage", "", event + '\n' + event, '{"type":"error"}'):
+            self.assertFalse(backup.alignment_answer_ok(output))
+
+    def test_alignment_probe_explicitly_supplies_contract_read_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "AGENTS.md").write_text("FULL SHARED CONTRACT")
+            result = subprocess.CompletedProcess([], 0, self.alignment_events(self.valid_alignment()), "")
+            with patch.object(backup, "run_agent", return_value=result) as runner:
+                self.assertTrue(backup.alignment_probe(root, "codex", "local:1"))
+                self.assertIn("FULL SHARED CONTRACT", runner.call_args.args[2])
+                self.assertTrue(runner.call_args.kwargs["read_only"])
+        self.assertIn("read-only", backup.command("codex", "local:1", read_only=True))
+
+    def test_context_missing_small_or_unknown_fails_closed(self):
+        for runtime in ({"models": []}, {"models": [{"name": "local:1", "context_length": 4096}]},
+                        {"models": [{"name": "local:1", "context_length": "unknown"}]}):
+            with patch.object(backup, "request_json", return_value=runtime):
+                self.assertFalse(backup.context_fits("local:1", "prompt"))
+
+    def test_context_large_enough_accepts_without_truncation(self):
+        with patch.object(backup, "request_json", return_value={"models": [
+                {"name": "local:1", "context_length": 8192}]}):
+            self.assertTrue(backup.context_fits("local:1", "small prompt"))
+            self.assertFalse(backup.context_fits("local:1", "x" * 8192))
 
 
 if __name__ == "__main__":

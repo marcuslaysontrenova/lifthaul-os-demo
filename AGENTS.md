@@ -1,6 +1,8 @@
 # LiftHaul shared coding-agent instructions
 
-Applies equally to OpenAI-hosted Codex and Codex CLI using local Ollama.
+Applies equally to OpenAI-hosted Codex, Gemini, Grok and Codex CLI using local Ollama.
+Provider availability must be verified separately; shared instructions do not
+activate a provider or authorize paid calls. See docs/ai/BACKUP_PROVIDERS.json.
 
 ## Source of truth and objective
 

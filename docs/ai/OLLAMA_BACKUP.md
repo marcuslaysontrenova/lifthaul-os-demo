@@ -48,6 +48,19 @@ This checks repository identity/branch, CLI installation, localhost API and tool
 capability only. No install, model download, inference, billing or production change
 is performed by the check.
 
+Next run a read-only model alignment check with the entire shared contract
+explicitly supplied in the prompt:
+
+```powershell
+python scripts/ai/ollama_backup.py --model MODEL --verify-alignment
+```
+
+Only a single JSON answer with the correct issue numbers, OPEN gate statuses and
+denied production/funds permissions passes. Invented tool JSON, actual tool events,
+extra fields, malformed output and incorrect answers fail closed. Model output is
+never evaluated as executable code. A pass checks this narrow contract response;
+it does not certify general reasoning, future safety, coding ability or MVP readiness.
+
 ## Start a task with automatic quota handoff
 
 Create a plain UTF-8 task file outside the repository, containing the specific
@@ -62,7 +75,13 @@ The launcher runs `codex exec --json --sandbox workspace-write` using the curren
 primary configuration. On nonzero exit plus a recognized CLI quota error event,
 it runs a fresh `codex exec --oss --local-provider ollama -m MODEL` with the shared
 checkpoint. Auth, billing, test, network, unknown failures and timeouts do not
-switch providers. Ollama gets one attempt, not an endless retry loop. Some CLI
+switch providers. Before any local work handoff, the runner repeats the read-only
+alignment probe and checks the actual active context via `/api/ps`. It uses a
+conservative UTF-8 byte bound plus a 4096-token harness/output reserve. If that
+budget does not fit, the work handoff stops rather than truncating instructions.
+This conservative guard can reject prompts that a tokenizer might fit. A small
+active context is sufficient for a smoke test but not proof of full task capacity.
+Ollama gets one alignment probe and at most one work attempt, not an endless retry loop. Some CLI
 versions may use an unrecognized quota schema: they stop until explicitly tested.
 
 Sandbox flags and instructions do not remove inherited credentials or MCP access;
@@ -105,6 +124,11 @@ Sanitized execution status is stored under `.git/lifthaul-ai/last-status.json`,
 outside tracked source. Raw provider output and prompts are not logged. If the
 launcher stops with a lock, verify no agent is running before removing the stale
 `.git/lifthaul-ai/runner.lock`. Preserve changes on interruption; do not reset them.
+
+`STOPPED_OLLAMA_ALIGNMENT_FAILED` means the backup did not reproduce the shared
+contract. `STOPPED_OLLAMA_CONTEXT_TOO_SMALL` means its active context cannot safely
+carry the full handoff. Neither is a quota condition; do not bypass either guard
+or mark handover active. Resolve the cause and rerun the read-only probe first.
 
 ## Offline validation
 

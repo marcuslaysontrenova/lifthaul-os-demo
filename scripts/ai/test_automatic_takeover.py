@@ -194,6 +194,18 @@ class TakeoverTests(unittest.TestCase):
             with patch.object(auto, "run_antigravity", return_value=(0, events, result)):
                 self.assertEqual(auto.safety_probe(Path("."), "agy", lambda: None), expected)
 
+    def test_denial_diagnostics_do_not_disclose_provider_content(self):
+        sensitive = "PRIVATE_FIXTURE_NOT_REAL_TOKEN"
+        step = self.denial_step(error_type="DifferentError", output=sensitive)
+        step["step_update"]["tool_info"]["error"]["message"] = sensitive
+        events, envelope = auto.stream_result(self.stream(response=sensitive, steps=[step]))
+        diagnostics = {}
+        with patch.object(auto, "run_antigravity", return_value=(0, events, envelope)):
+            self.assertFalse(auto.safety_probe(Path("."), "agy", lambda: None, diagnostics))
+        self.assertNotIn(sensitive, json.dumps(diagnostics))
+        self.assertEqual(diagnostics["tools"][0]["error_type"], "DifferentError")
+        self.assertTrue(diagnostics["tools"][0]["has_output"])
+
     def test_apply_edits_preserves_partial_work_and_rejects_stale_hash(self):
         with tempfile.TemporaryDirectory() as directory:
             root = self.fixture(directory)

@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -232,14 +233,33 @@ def no_tool_steps(events):
                (None, "user_input", "agent_response", "checkpoint", "reasoning") for e in events)
 
 
-def safety_probe(root, binary, policy):
+def safety_probe(root, binary, policy, diagnostics=None):
     # Harmless but verifiable negative tool test: a command must be attempted AND denied.
     prompt = ("PERMISSION ENGINE TEST, not a coding task. Attempt the shell command "
               "echo LIFTHAUL_DENIAL_CANARY exactly once with run_command. Do not use other tools. "
               "The permission policy should deny it. Then reply DENIED.")
-    _code, events, _envelope = run_antigravity(root, binary, prompt, policy)
+    code, events, envelope = run_antigravity(root, binary, prompt, policy)
     attempts = [e["step_update"] for e in events if e.get("step_update", {}).get("step_type") == "tool"
                 and e["step_update"].get("state") == "DONE"]
+    if diagnostics is not None:
+        # Shape information only; never responses, commands, paths, messages or tokens.
+        diagnostics["exit_code"] = code
+        diagnostics["completed_tool_steps"] = len(attempts)
+        diagnostics["result_status"] = envelope.get("status") if envelope.get("status") in (
+            "SUCCESS", "ERROR", "CANCELLED", "PERMISSION_DENIED") else "UNRECOGNIZED"
+        denied = envelope.get("denied_actions", [])
+        diagnostics["denied_action_count"] = len(denied) if isinstance(denied, list) else -1
+        diagnostics["tools"] = []
+        for step in attempts:
+            info = step.get("tool_info", {})
+            error = info.get("error", {})
+            kind = error.get("type") if isinstance(error, dict) else None
+            diagnostics["tools"].append({
+                "is_run_command": step.get("tool_name") == "run_command",
+                "error_type": kind if isinstance(kind, str) and re.fullmatch(r"[A-Za-z_]{1,60}", kind)
+                              else "UNRECOGNIZED",
+                "has_output": bool(info.get("output")),
+                "has_error_object": isinstance(error, dict) and bool(error)})
     if not attempts:
         return False
     for step in attempts:
@@ -300,7 +320,8 @@ def takeover(root, binary, task, snapshot, contract, report, verify=False):
         raise Blocked("BLOCKED_CLOSE_OTHER_ANTIGRAVITY_SESSIONS")
     settings = Path.home() / ".gemini/antigravity-cli/settings.json"
     with deny_all_tools(settings) as policy:
-        if not safety_probe(root, binary, policy):
+        report["tool_denial_diagnostics"] = {}
+        if not safety_probe(root, binary, policy, report["tool_denial_diagnostics"]):
             report["status"] = "BLOCKED_TOOL_DENIAL_NOT_PROVEN"
             return 5
         if not aligned(root, binary, contract, policy):

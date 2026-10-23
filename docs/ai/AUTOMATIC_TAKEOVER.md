@@ -83,7 +83,10 @@ changes. Do not upload recovery files, logs, account identities or raw provider
 output. No automatic global permissions are relaxed.
 An omitted/null default `toolPermission` preference is accepted only with the full
 deny profile intact. CLI stream initialization must still report `request-review`,
-and the actual command denial challenge must pass before alignment or patch work.
+and the command challenge must show an actual denial before alignment or patch
+work. An explicitly empty advertised tools list with no tool steps is a separate
+acceptable capability check. A missing tools list or a model's textual refusal
+does not count as proof; any successful command output blocks the run.
 
 After all Antigravity sessions are closed, recover a stopped run with:
 

@@ -206,6 +206,22 @@ class TakeoverTests(unittest.TestCase):
         self.assertEqual(diagnostics["tools"][0]["error_type"], "DifferentError")
         self.assertTrue(diagnostics["tools"][0]["has_output"])
 
+    def test_empty_advertised_capabilities_distinguished_from_textual_refusal(self):
+        for exposed, expected in (([], True), (["run_command"], False), (None, False)):
+            events, result = auto.stream_result(self.stream(response="I cannot run tools"))
+            if exposed is not None:
+                events[0]["init"]["tools"] = exposed
+            diagnostics = {}
+            with patch.object(auto, "run_antigravity", return_value=(0, events, result)):
+                self.assertEqual(auto.safety_probe(Path("."), "agy", lambda: None, diagnostics), expected)
+            self.assertEqual(diagnostics["advertised_tool_count"], len(exposed) if exposed is not None else -1)
+
+    def test_empty_capabilities_cannot_mask_a_tool_step(self):
+        events, result = auto.stream_result(self.stream(steps=[self.denial_step(output="executed")]))
+        events[0]["init"]["tools"] = []
+        with patch.object(auto, "run_antigravity", return_value=(0, events, result)):
+            self.assertFalse(auto.safety_probe(Path("."), "agy", lambda: None))
+
     def test_apply_edits_preserves_partial_work_and_rejects_stale_hash(self):
         with tempfile.TemporaryDirectory() as directory:
             root = self.fixture(directory)

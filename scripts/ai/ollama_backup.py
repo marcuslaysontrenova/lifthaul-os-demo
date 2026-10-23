@@ -136,10 +136,11 @@ def command(binary, model=None):
     args = prefix + ["exec", "--json", "--sandbox", "workspace-write",
             "-c", 'web_search="disabled"']
     if model:
-        # Non-thinking models (including qwen2.5-coder) reject reasoning metadata.
-        # Scope this compatibility setting to the local backup process only.
+        # Codex 0.163.0 accepts effort=none; Ollama maps it to think=false.
+        # The legacy model_supports_reasoning_summaries key is ignored there.
+        # Scope compatibility to the local backup process only.
         args += ["--oss", "--local-provider", "ollama", "-m", model,
-                 "-c", "model_supports_reasoning_summaries=false"]
+                 "-c", "model_reasoning_effort=none"]
     return args + ["-"]
 
 

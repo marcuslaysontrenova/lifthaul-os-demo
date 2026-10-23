@@ -66,6 +66,14 @@ class BackupTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     backup.check_checkout(root)
 
+    def test_git_forward_slash_root_accepted_on_windows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "AGENTS.md").write_text("shared instructions")
+            with patch.object(backup, "git", side_effect=[root.as_posix(),
+                    f"https://github.com/{backup.REPO}.git", "work/test", ""]):
+                self.assertEqual(backup.check_checkout(root), "work/test")
+
     def test_wrong_origin_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

@@ -6,6 +6,16 @@ It does not replace the existing Codex -> Ollama executable launcher. Antigravit
 have read-only alignment adapters here; automatic quota handoff and a Grok execution adapter
 are NOT implemented. Never treat this registry as a live router.
 
+### Review limitation: Antigravity tool isolation
+
+The current Antigravity probe requests no tool use in its prompt; its flags do
+not enforce an empty tool allowlist or an operating-system read-only sandbox.
+Rejecting `denied_actions` after completion detects denied requests only, not all
+successful tool executions. A PASS establishes answer alignment, not tool isolation.
+Do not use the probe as unattended execution approval. A verified execution-level
+tool denial mechanism and a negative tool-attempt test remain activation blockers.
+The runner lock coordinates launcher processes only, not an external interactive agent.
+
 Use root AGENTS.md, issue #73 work order and issue #20 release ledger across all
 providers. GEMINI.md imports the shared contract. GROK.md is a manual/future-adapter
 handoff file, not an automatically loaded configuration. Keep keys, account
@@ -45,6 +55,8 @@ The probe explicitly passes the entire text of `AGENTS.md` and verifies:
 Failure conditions (authentication, quota, timeout, CLI, parsing, alignment) are
 distinguished and categorized cleanly. No credentials or raw provider output are
 ever printed or logged. Successful alignment does not activate automatic handover.
+JSON mode must contain exactly one complete result envelope; mixed output,
+multiple envelopes, or a nonempty error on a success envelope fail validation.
 
 ## Gemini on Windows
 

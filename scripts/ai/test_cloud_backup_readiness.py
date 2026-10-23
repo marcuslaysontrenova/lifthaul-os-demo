@@ -18,6 +18,8 @@ class CloudReadinessTests(unittest.TestCase):
                           json.dumps({"type": "result", "status": "success"})])
 
     def antigravity_payload(self, answer, status="SUCCESS", error="", denied=None):
+        if isinstance(answer, dict) and "mvp_issue" in answer:
+            answer = dict(answer, mvp_status="NO-GO")
         doc = {"conversation_id": "test-convo", "status": status,
                "response": json.dumps(answer) if isinstance(answer, (dict, list)) else str(answer)}
         if error:
@@ -207,14 +209,38 @@ class CloudReadinessTests(unittest.TestCase):
         self.assertEqual(args[args.index("--print") + 1], "test-prompt")
 
     def test_find_antigravity_binary_discovery(self):
-        with patch.object(cloud.shutil, "which", return_value="C:\\bin\\agy.exe"):
-            self.assertEqual(cloud.find_antigravity_binary(), str(Path("C:/bin/agy.exe").resolve()))
+        executable = str(Path(tempfile.gettempdir()) / "bin" / "agy.exe")
+        with patch.object(cloud.shutil, "which", return_value=executable):
+            self.assertEqual(cloud.find_antigravity_binary(), str(Path(executable).resolve()))
         with patch.object(cloud.shutil, "which", return_value=None), \
              patch.dict(os.environ, {"LOCALAPPDATA": "C:\\fake_app_data"}, clear=True), \
              patch.object(cloud.Path, "is_file", return_value=True):
             resolved = cloud.find_antigravity_binary()
             self.assertIsNotNone(resolved)
             self.assertTrue(resolved.endswith("agy.exe"))
+
+    def test_antigravity_rejects_mixed_or_multiple_envelopes(self):
+        good = self.antigravity_payload(self.valid_answer())
+        for output in ("unrecognized output\n" + good, good + "\n" + good,
+                       '{"status":"ERROR"}\n' + good):
+            self.assertFalse(cloud.antigravity_answer_ok(output))
+
+    def test_antigravity_rejects_error_on_success_envelope(self):
+        payload = self.antigravity_payload(self.valid_answer(), error="execution failed")
+        self.assertEqual(cloud.antigravity_evaluate_result(0, payload, ""),
+                         ("CLI_FAILURE", False))
+
+    def test_antigravity_requires_mvp_no_go(self):
+        envelope = json.loads(self.antigravity_payload(self.valid_answer()))
+        answer = json.loads(envelope["response"])
+        for status in (None, "GO"):
+            wrong = dict(answer)
+            if status is None:
+                wrong.pop("mvp_status")
+            else:
+                wrong["mvp_status"] = status
+            envelope["response"] = json.dumps(wrong)
+            self.assertFalse(cloud.antigravity_answer_ok(json.dumps(envelope)))
 
 
 if __name__ == "__main__":

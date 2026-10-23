@@ -7,6 +7,8 @@ Applies equally to OpenAI-hosted Codex and Codex CLI using local Ollama.
 - Overall MVP acceptance ledger: GitHub issue #20.
 - Current Gate 5/6 work order: GitHub issue #73. Read its latest body and comments.
 - Integration candidate: PR #64, `integration/gate5-gate6-controlled-20261019`.
+- Acceptance baseline for this work order: Gate 5 OPEN, Gate 6 OPEN, MVP NO-GO.
+  Reconcile newer authoritative evidence before changing that baseline.
 - Inspect current branches, exact SHA, working-tree changes, PRs and CI before editing.
 - Work toward evidence-backed MVP acceptance. No fabricated completion percentages.
 

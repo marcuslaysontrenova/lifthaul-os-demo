@@ -13,8 +13,10 @@
       "automatic_enabled": false,
       "authentication": "local_session",
       "probe_mode": "print",
+      "task_runner": "scripts/ai/automatic_takeover.py",
+      "task_mode": "quota_triggered_tool_denied_patch",
       "budget_policy": "free_quota_only_no_automatic_overage",
-      "remaining": ["bounded_task", "quota_handoff_adapter"]
+      "remaining": ["local_tool_denial_verification", "local_bounded_patch_test", "genuine_quota_handoff"]
     },
     "gemini": {
       "kind": "google_gemini_cli",

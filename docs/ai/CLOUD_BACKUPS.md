@@ -1,6 +1,9 @@
 # Antigravity, Gemini and Grok backup setup
 
 Status: staged readiness configuration, not active multi-provider execution.
+For the executable, bounded Codex-to-Antigravity patch transition, see
+`AUTOMATIC_TAKEOVER.md`. It is a separately launched task runner; the registry
+does not activate it, and local live verification is required.
 `BACKUP_PROVIDERS.json` describes desired Codex -> Antigravity -> Gemini -> Ollama -> Grok order.
 It does not replace the existing Codex -> Ollama executable launcher. Antigravity and Gemini
 have read-only alignment adapters here; automatic quota handoff and a Grok execution adapter

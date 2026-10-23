@@ -23,4 +23,4 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m unittest scripts.ai.test_ollama_backup scripts.ai.test_cloud_backup_readiness -v
+      - run: python -m unittest discover -s scripts/ai -v

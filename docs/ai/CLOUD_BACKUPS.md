@@ -42,6 +42,11 @@ without model requests. No credentials, paths, account IDs or provider output ar
 printed. A lock must never be removed until its owning process is verified stopped;
 the checker does not remove locks or reset authentication/configuration.
 
+Windows npm launchers use the installed `@google/gemini-cli/package.json` `bin`
+mapping, supporting both bundled and unbundled layouts rather than guessing a
+single JS path. The entry must stay inside the named package and exist; Node is
+resolved beside the launcher or on PATH. No command-shell interpolation is used.
+
 The first command is offline readiness only. The second makes one Gemini CLI
 request using plan (read-only) mode and explicitly supplies AGENTS.md. It validates
 the same alignment fields as Ollama, rejects tool events and does not execute

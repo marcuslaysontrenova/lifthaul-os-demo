@@ -19,10 +19,32 @@ CONFIG = ROOT / "docs/ai/BACKUP_PROVIDERS.json"
 def gemini_command(binary):
     prefix = [binary]
     if Path(binary).suffix.lower() in (".cmd", ".bat", ".ps1"):
-        entry = Path(binary).parent / "node_modules/@google/gemini-cli/dist/index.js"
-        node = shutil.which("node")
-        if not entry.is_file() or not node:
-            raise ValueError("Standard npm Gemini installation required")
+        directory = Path(binary).resolve().parent
+        candidates = [directory / "node_modules/@google/gemini-cli",
+                      directory.parent / "@google/gemini-cli", directory]
+        entry = None
+        for package in candidates:
+            metadata = package / "package.json"
+            if not metadata.is_file():
+                continue
+            try:
+                data = json.loads(metadata.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                continue
+            if data.get("name") != "@google/gemini-cli":
+                continue
+            commands = data.get("bin")
+            target = commands.get("gemini") if isinstance(commands, dict) else commands
+            if not isinstance(target, str) or not target or Path(target).is_absolute():
+                continue
+            candidate = (package / target).resolve()
+            if candidate.is_relative_to(package.resolve()) and candidate.is_file():
+                entry = candidate
+                break
+        local_node = directory / "node.exe"
+        node = str(local_node) if local_node.is_file() else shutil.which("node")
+        if entry is None or not node:
+            raise ValueError("Gemini package bin entry or Node runtime unresolved")
         prefix = [node, str(entry)]
     return prefix + ["--approval-mode", "plan", "--output-format", "stream-json",
                      "--prompt", "Complete the read-only alignment task supplied on stdin. No tools."]

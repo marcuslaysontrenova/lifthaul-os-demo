@@ -37,6 +37,58 @@ class CloudReadinessTests(unittest.TestCase):
         self.assertEqual(args[args.index("--approval-mode") + 1], "plan")
         self.assertNotIn("yolo", args)
 
+    def windows_fixture(self, directory, target, name="@google/gemini-cli", as_string=False):
+        package = Path(directory) / "node_modules/@google/gemini-cli"
+        package.mkdir(parents=True)
+        (package / "package.json").write_text(json.dumps({"name": name, "bin": target if as_string
+                                                       else {"gemini": target}}))
+        if isinstance(target, str):
+            entry = package / target
+            entry.parent.mkdir(parents=True, exist_ok=True)
+            entry.write_text("// fixture")
+        return package
+
+    def test_windows_reads_bundled_entry_from_package_bin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = self.windows_fixture(directory, "bundle/gemini.js")
+            with patch.object(cloud.shutil, "which", return_value="node.exe"):
+                args = cloud.gemini_command(str(Path(directory) / "gemini.cmd"))
+            self.assertEqual(args[:2], ["node.exe", str((package / "bundle/gemini.js").resolve())])
+            self.assertNotIn("cmd.exe", args)
+
+    def test_windows_reads_standard_string_bin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = self.windows_fixture(directory, "dist/index.js", as_string=True)
+            with patch.object(cloud.shutil, "which", return_value="node.exe"):
+                args = cloud.gemini_command(str(Path(directory) / "gemini.cmd"))
+            self.assertEqual(args[1], str((package / "dist/index.js").resolve()))
+
+    def test_windows_rejects_package_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.windows_fixture(directory, "../outside.js")
+            with patch.object(cloud.shutil, "which", return_value="node.exe"):
+                with self.assertRaises(ValueError):
+                    cloud.gemini_command(str(Path(directory) / "gemini.cmd"))
+
+    def test_windows_rejects_wrong_package_or_missing_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(cloud.shutil, "which", return_value="node.exe"):
+                with self.assertRaises(ValueError):
+                    cloud.gemini_command(str(Path(directory) / "gemini.cmd"))
+            self.windows_fixture(directory, "dist/index.js", name="unrelated-package")
+            with patch.object(cloud.shutil, "which", return_value="node.exe"):
+                with self.assertRaises(ValueError):
+                    cloud.gemini_command(str(Path(directory) / "gemini.cmd"))
+
+    def test_windows_uses_adjacent_node_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.windows_fixture(directory, "dist/index.js")
+            node = Path(directory) / "node.exe"
+            node.write_text("fixture")
+            with patch.object(cloud.shutil, "which", return_value=None):
+                args = cloud.gemini_command(str(Path(directory) / "gemini.cmd"))
+            self.assertEqual(args[0], str(node.resolve()))
+
     def test_registry_cannot_claim_activation(self):
         config = json.loads(cloud.CONFIG.read_text())
         with patch.object(cloud.shutil, "which", return_value="installed"):

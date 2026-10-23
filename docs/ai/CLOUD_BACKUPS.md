@@ -35,6 +35,13 @@ python scripts/ai/cloud_backup_readiness.py
 python scripts/ai/cloud_backup_readiness.py --verify-gemini
 ```
 
+If setup is blocked, `--verify-gemini` prints named checks rather than a generic
+guess: Google sign-in environment mode, canonical work branch, CLI discovery,
+Windows npm entrypoint and launcher lock. Run `--diagnose` for those checks alone,
+without model requests. No credentials, paths, account IDs or provider output are
+printed. A lock must never be removed until its owning process is verified stopped;
+the checker does not remove locks or reset authentication/configuration.
+
 The first command is offline readiness only. The second makes one Gemini CLI
 request using plan (read-only) mode and explicitly supplies AGENTS.md. It validates
 the same alignment fields as Ollama, rejects tool events and does not execute

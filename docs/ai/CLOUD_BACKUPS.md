@@ -1,0 +1,136 @@
+# Antigravity, Gemini and Grok backup setup
+
+Status: staged readiness configuration, not active multi-provider execution.
+For the executable, bounded Codex-to-Antigravity patch transition, see
+`AUTOMATIC_TAKEOVER.md`. It is a separately launched task runner; the registry
+does not activate it, and local live verification is required.
+`BACKUP_PROVIDERS.json` describes desired Codex -> Antigravity -> Gemini -> Ollama -> Grok order.
+It does not replace the existing Codex -> Ollama executable launcher. Antigravity and Gemini
+have read-only alignment adapters here; automatic quota handoff and a Grok execution adapter
+are NOT implemented. Never treat this registry as a live router.
+
+### Review limitation: Antigravity tool isolation
+
+The current Antigravity probe requests no tool use in its prompt; its flags do
+not enforce an empty tool allowlist or an operating-system read-only sandbox.
+Rejecting `denied_actions` after completion detects denied requests only, not all
+successful tool executions. A PASS establishes answer alignment, not tool isolation.
+Do not use the probe as unattended execution approval. A verified execution-level
+tool denial mechanism and a negative tool-attempt test remain activation blockers.
+The runner lock coordinates launcher processes only, not an external interactive agent.
+
+Use root AGENTS.md, issue #73 work order and issue #20 release ledger across all
+providers. GEMINI.md imports the shared contract. GROK.md is a manual/future-adapter
+handoff file, not an automatically loaded configuration. Keep keys, account
+identities, device metadata and raw runtime output out of public artifacts.
+
+## Antigravity CLI on Windows
+
+Antigravity CLI is installed locally as a native Windows executable `agy.exe`,
+located on PATH or within `%LOCALAPPDATA%\agy\bin\agy.exe`.
+
+The readiness tool validates Antigravity CLI's presence and executes a read-only
+alignment probe using only flags confirmed by `agy.exe --help`:
+
+* `--print <prompt>`: Runs non-interactively for a single turn.
+* `--output-format json`: Emits single-object JSON execution and response status.
+* `--effort low`: Constrains reasoning overhead for deterministic alignment checks.
+* `--disable-slash-commands`: Prevents unintended slash-command and skill expansion.
+
+### Running Antigravity Alignment
+
+After verifying working checkout and launcher locks:
+
+```powershell
+python scripts/ai/cloud_backup_readiness.py --diagnose
+python scripts/ai/cloud_backup_readiness.py --verify-antigravity
+```
+
+The probe explicitly passes the entire text of `AGENTS.md` and verifies:
+* MVP acceptance ledger issue #20
+* Gate 5/6 work order issue #73
+* Gate 5 status is OPEN
+* Gate 6 status is OPEN
+* MVP status is NO-GO
+* `production_changes_allowed` is `false`
+* `live_funds_allowed` is `false`
+
+Failure conditions (authentication, quota, timeout, CLI, parsing, alignment) are
+distinguished and categorized cleanly. No credentials or raw provider output are
+ever printed or logged. Successful alignment does not activate automatic handover.
+JSON mode must contain exactly one complete result envelope; mixed output,
+multiple envelopes, or a nonempty error on a success envelope fail validation.
+
+## Gemini on Windows
+
+In a separate PowerShell window, install the official stable client:
+
+```powershell
+npm.cmd install -g @google/gemini-cli
+gemini.cmd
+```
+
+Use browser-based Sign in with Google locally. Enter credentials and codes only
+in Google's own login pages. Individual Google sign-in has a free quota; eligibility
+and limits are account-specific. Headless mode can reuse cached authentication.
+Do not enable paid overage, buy credits or assume a web subscription proves API access.
+Set the CLI's billing overage strategy to never in its own settings if offered.
+The probe does not change account or global CLI settings and cannot attest the
+account has no credits; verify free-quota mode locally before invoking it.
+
+After the current launcher finishes, update the work checkout and run:
+
+```powershell
+python scripts/ai/cloud_backup_readiness.py
+python scripts/ai/cloud_backup_readiness.py --verify-gemini
+```
+
+If setup is blocked, `--verify-gemini` prints named checks rather than a generic
+guess: Google sign-in environment mode, canonical work branch, CLI discovery,
+Windows npm entrypoint and launcher lock. Run `--diagnose` for those checks alone,
+without model requests. No credentials, paths, account IDs or provider output are
+printed. A lock must never be removed until its owning process is verified stopped;
+the checker does not remove locks or reset authentication/configuration.
+
+Windows npm launchers use the installed `@google/gemini-cli/package.json` `bin`
+mapping, supporting both bundled and unbundled layouts rather than guessing a
+single JS path. The entry must stay inside the named package and exist; Node is
+resolved beside the launcher or on PATH. No command-shell interpolation is used.
+
+The first command is offline readiness only. The second makes one Gemini CLI
+request using plan (read-only) mode and explicitly supplies AGENTS.md. It validates
+the same alignment fields as Ollama, rejects tool events and does not execute
+model-produced instructions. Requires already-cached local Google sign-in; it
+rejects obvious API-key/Vertex environment modes. It shares the existing launcher
+lock; do not interrupt another active agent or run two agents in one checkout.
+Successful alignment does not enable automatic task execution or certify safety.
+
+## Grok
+
+The fixed API base URL and key environment-variable NAME are staged in the registry.
+No key is read, stored, copied or sent by this readiness tool. No Grok calls occur.
+Official API onboarding requires an API account, credits and an API key. A chat
+login does not establish API authentication. Before paid integration, require an
+explicit budget cap and authorized secure local credential setup. Then implement
+and validate the scoped adapter, common alignment, isolation, quota handling and
+bounded coding task. Keep this provider disabled until all are proved.
+
+## Local alternatives to evaluate
+
+- `qwen3.5:4b`: open-source Apache 2.0 family; tools/vision/thinking in Ollama.
+- `qwen3:4b`: Apache 2.0; tools/thinking; a smaller local candidate.
+
+These are candidates, not approved replacements. Download size is not runtime RAM.
+Keep only one loaded model during capacity tests. Context, instruction following,
+tool behavior and bounded coding must pass before any automatic handover.
+
+Sources checked 23 October 2026:
+- https://geminicli.com/docs/get-started/installation/
+- https://geminicli.com/docs/get-started/authentication/
+- https://geminicli.com/docs/cli/headless/
+- https://geminicli.com/docs/cli/plan-mode/
+- https://geminicli.com/docs/resources/quota-and-pricing/
+- https://docs.x.ai/developers/quickstart
+- https://docs.x.ai/developers/pricing
+- https://ollama.com/library/qwen3.5:4b
+- https://ollama.com/library/qwen3:4b

@@ -73,7 +73,7 @@ push/merge/deploy itself. Review generated changes and run tests before publishi
 
 - On the Windows PC, record installed CLI/Ollama versions and local model name.
 - Run a separate harmless local smoke task with
-  `codex exec --oss --local-provider ollama -m MODEL -c model_supports_reasoning_summaries=false --sandbox read-only "Read AGENTS.md and summarize the Gate 5/6 constraints. Do not edit files."`
+  `codex exec --oss --local-provider ollama -m MODEL -c model_reasoning_effort=none --sandbox read-only "Read AGENTS.md and summarize the Gate 5/6 constraints. Do not edit files."`
 - Verify it actually runs on local hardware (`ollama ps`) and follows the shared
   contract. Test a bounded development coding task and its regression checks.
 - Run the launcher through a genuine quota failure and verify one handoff, preserved
@@ -86,12 +86,21 @@ push/merge/deploy itself. Review generated changes and run tests before publishi
 Marcus's Windows screenshots show Codex CLI 0.163.0 and local
 `qwen2.5-coder:latest` (7.6B Q4_K_M, tools, 32768 context). The first read-only
 smoke request reached Ollama but failed with `does not support thinking` while
-Codex advertised medium reasoning. The local launcher now supplies
-`-c model_supports_reasoning_summaries=false` to suppress reasoning metadata
-for the backup process only, leaving the primary's settings unchanged. This
-correction has offline regression coverage; the corrected live request remains
-unverified until the PC test succeeds. The separate model-catalog decode warnings
-seen on that screen may require further diagnosis if they remain blocking.
+Codex advertised medium reasoning. A subsequent test with the legacy
+`model_supports_reasoning_summaries=false` key failed because 0.163.0 explicitly
+ignored that setting. That attempted correction is superseded.
+
+The local launcher now supplies `-c model_reasoning_effort=none` for the backup
+process only, leaving the primary's settings unchanged. Codex's tagged 0.163.0
+source accepts the None effort and Ollama's compatibility layer maps `none` to
+`think=false`. The correction has offline regression coverage; the corrected live
+request remains unverified until the PC test succeeds. Separate model-catalog
+decode warnings may require diagnosis if they remain blocking.
+
+Version source checks:
+- https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/config/src/config_toml.rs
+- https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/protocol/src/openai_models.rs
+- https://github.com/ollama/ollama/blob/main/openai/openai.go
 
 Sanitized execution status is stored under `.git/lifthaul-ai/last-status.json`,
 outside tracked source. Raw provider output and prompts are not logged. If the

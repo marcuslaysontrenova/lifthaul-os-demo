@@ -58,6 +58,15 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(args[:2], ["node.exe", str(entry)])
             self.assertNotIn("cmd.exe", args)
 
+    def test_local_backup_suppresses_reasoning_metadata(self):
+        args = backup.command("codex", "qwen2.5-coder:latest")
+        index = args.index("model_supports_reasoning_summaries=false")
+        self.assertEqual(args[index - 1], "-c")
+
+    def test_primary_reasoning_configuration_unchanged(self):
+        self.assertFalse(any("model_supports_reasoning_summaries" in arg
+                             for arg in backup.command("codex")))
+
     def test_production_branch_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

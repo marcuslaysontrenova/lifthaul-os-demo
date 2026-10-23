@@ -72,7 +72,7 @@ def git(root, *args):
 
 
 def check_checkout(root):
-    if git(root, "rev-parse", "--show-toplevel") != str(root):
+    if Path(git(root, "rev-parse", "--show-toplevel")).resolve() != root:
         raise ValueError("Run from the repository root")
     remote = git(root, "remote", "get-url", "origin")
     if remote not in (f"https://github.com/{REPO}.git", f"https://github.com/{REPO}",

@@ -1,0 +1,22 @@
+name: Ollama backup offline contracts
+on:
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - 'scripts/ai/**'
+      - 'docs/ai/OLLAMA_BACKUP.md'
+      - '.github/workflows/ollama-backup-contract.yml'
+permissions:
+  contents: read
+jobs:
+  offline-contracts:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest scripts.ai.test_ollama_backup -v

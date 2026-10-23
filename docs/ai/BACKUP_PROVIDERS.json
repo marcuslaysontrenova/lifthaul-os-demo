@@ -2,12 +2,20 @@
   "schema_version": 1,
   "mode": "readiness_only",
   "automatic_handover_enabled": false,
-  "desired_order": ["codex", "gemini", "ollama", "grok"],
+  "desired_order": ["codex", "antigravity", "gemini", "ollama", "grok"],
   "shared_contract": "AGENTS.md",
   "work_order_issue": 73,
   "mvp_ledger_issue": 20,
   "providers": {
     "codex": {"kind": "primary_cli", "automatic_enabled": false},
+    "antigravity": {
+      "kind": "antigravity_cli",
+      "automatic_enabled": false,
+      "authentication": "local_session",
+      "probe_mode": "print",
+      "budget_policy": "free_quota_only_no_automatic_overage",
+      "remaining": ["bounded_task", "quota_handoff_adapter"]
+    },
     "gemini": {
       "kind": "google_gemini_cli",
       "automatic_enabled": false,

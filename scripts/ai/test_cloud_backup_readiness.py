@@ -17,6 +17,15 @@ class CloudReadinessTests(unittest.TestCase):
                                      "content": json.dumps(answer)}),
                           json.dumps({"type": "result", "status": "success"})])
 
+    def antigravity_payload(self, answer, status="SUCCESS", error="", denied=None):
+        doc = {"conversation_id": "test-convo", "status": status,
+               "response": json.dumps(answer) if isinstance(answer, (dict, list)) else str(answer)}
+        if error:
+            doc["error"] = error
+        if denied is not None:
+            doc["denied_actions"] = denied
+        return json.dumps(doc)
+
     def test_shared_alignment_contract(self):
         self.assertTrue(cloud.gemini_answer_ok(self.stream(self.valid_answer())))
 
@@ -95,6 +104,7 @@ class CloudReadinessTests(unittest.TestCase):
             result = cloud.readiness(config)
         self.assertFalse(result["automatic_handover_enabled"])
         self.assertFalse(result["gemini"]["authentication_verified"])
+        self.assertFalse(result["antigravity"]["authentication_verified"])
         self.assertFalse(result["grok"]["adapter_implemented"])
         self.assertFalse(result["grok"]["paid_calls_allowed"])
 
@@ -135,6 +145,76 @@ class CloudReadinessTests(unittest.TestCase):
             checks = self.setup_diagnosis(bad_entry=True)
         self.assertTrue(checks["GEMINI_CLI_ON_PATH"])
         self.assertFalse(checks["GEMINI_ENTRYPOINT"])
+
+    # Antigravity CLI tests
+    def test_antigravity_alignment_contract(self):
+        payload = self.antigravity_payload(self.valid_answer())
+        self.assertTrue(cloud.antigravity_answer_ok(payload))
+        status, passed = cloud.antigravity_evaluate_result(0, payload, "")
+        self.assertTrue(passed)
+        self.assertEqual(status, "SUCCESS")
+
+    def test_antigravity_fictional_mutation_rejected(self):
+        payload = self.antigravity_payload({"fictional": "mutation"})
+        status, passed = cloud.antigravity_evaluate_result(0, payload, "")
+        self.assertFalse(passed)
+        self.assertEqual(status, "ALIGNMENT_FAILURE")
+
+    def test_antigravity_tool_use_rejected(self):
+        payload = self.antigravity_payload(self.valid_answer(), denied=[{"action": "command"}])
+        status, passed = cloud.antigravity_evaluate_result(0, payload, "")
+        self.assertFalse(passed)
+        self.assertEqual(status, "ALIGNMENT_FAILURE")
+
+    def test_antigravity_parsing_failure(self):
+        for bad_output in ("not json", "", "[]", json.dumps({"status": "SUCCESS", "response": "not json"})):
+            status, passed = cloud.antigravity_evaluate_result(0, bad_output, "")
+            self.assertFalse(passed)
+            self.assertEqual(status, "PARSING_FAILURE")
+
+    def test_antigravity_quota_failure(self):
+        payload = self.antigravity_payload({}, status="ERROR", error="rate limit exceeded: quota exhausted")
+        status, passed = cloud.antigravity_evaluate_result(1, payload, "429 quota exhausted")
+        self.assertFalse(passed)
+        self.assertEqual(status, "QUOTA_FAILURE")
+
+    def test_antigravity_auth_failure(self):
+        payload = self.antigravity_payload({}, status="ERROR", error="unauthenticated session: login required")
+        status, passed = cloud.antigravity_evaluate_result(1, payload, "unauthorized")
+        self.assertFalse(passed)
+        self.assertEqual(status, "AUTHENTICATION_FAILURE")
+
+    def test_antigravity_cli_failure(self):
+        payload = self.antigravity_payload({}, status="ERROR", error="syntax error in argument")
+        status, passed = cloud.antigravity_evaluate_result(1, payload, "error: unrecognized flag")
+        self.assertFalse(passed)
+        self.assertEqual(status, "CLI_FAILURE")
+
+    def test_antigravity_timeout_handling(self):
+        with patch.object(cloud.subprocess, "run", side_effect=cloud.subprocess.TimeoutExpired(cmd="agy", timeout=600)):
+            status, passed = cloud.antigravity_probe(Path("."), "agy")
+            self.assertFalse(passed)
+            self.assertEqual(status, "TIMEOUT_FAILURE")
+
+    def test_antigravity_command_flags(self):
+        args = cloud.antigravity_command("agy.exe", prompt="test-prompt")
+        self.assertIn("--output-format", args)
+        self.assertEqual(args[args.index("--output-format") + 1], "json")
+        self.assertIn("--effort", args)
+        self.assertEqual(args[args.index("--effort") + 1], "low")
+        self.assertIn("--disable-slash-commands", args)
+        self.assertIn("--print", args)
+        self.assertEqual(args[args.index("--print") + 1], "test-prompt")
+
+    def test_find_antigravity_binary_discovery(self):
+        with patch.object(cloud.shutil, "which", return_value="C:\\bin\\agy.exe"):
+            self.assertEqual(cloud.find_antigravity_binary(), str(Path("C:/bin/agy.exe").resolve()))
+        with patch.object(cloud.shutil, "which", return_value=None), \
+             patch.dict(os.environ, {"LOCALAPPDATA": "C:\\fake_app_data"}, clear=True), \
+             patch.object(cloud.Path, "is_file", return_value=True):
+            resolved = cloud.find_antigravity_binary()
+            self.assertIsNotNone(resolved)
+            self.assertTrue(resolved.endswith("agy.exe"))
 
 
 if __name__ == "__main__":

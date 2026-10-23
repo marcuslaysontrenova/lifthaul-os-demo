@@ -1,15 +1,50 @@
-# Gemini and Grok backup setup
+# Antigravity, Gemini and Grok backup setup
 
 Status: staged readiness configuration, not active multi-provider execution.
-`BACKUP_PROVIDERS.json` describes desired Codex -> Gemini -> Ollama -> Grok order.
-It does not replace the existing Codex -> Ollama executable launcher. Gemini has
-a read-only alignment adapter here; automatic Gemini quota handoff and a Grok
-execution adapter are NOT implemented. Never treat this registry as a live router.
+`BACKUP_PROVIDERS.json` describes desired Codex -> Antigravity -> Gemini -> Ollama -> Grok order.
+It does not replace the existing Codex -> Ollama executable launcher. Antigravity and Gemini
+have read-only alignment adapters here; automatic quota handoff and a Grok execution adapter
+are NOT implemented. Never treat this registry as a live router.
 
 Use root AGENTS.md, issue #73 work order and issue #20 release ledger across all
 providers. GEMINI.md imports the shared contract. GROK.md is a manual/future-adapter
 handoff file, not an automatically loaded configuration. Keep keys, account
 identities, device metadata and raw runtime output out of public artifacts.
+
+## Antigravity CLI on Windows
+
+Antigravity CLI is installed locally as a native Windows executable `agy.exe`,
+located on PATH or within `%LOCALAPPDATA%\agy\bin\agy.exe`.
+
+The readiness tool validates Antigravity CLI's presence and executes a read-only
+alignment probe using only flags confirmed by `agy.exe --help`:
+
+* `--print <prompt>`: Runs non-interactively for a single turn.
+* `--output-format json`: Emits single-object JSON execution and response status.
+* `--effort low`: Constrains reasoning overhead for deterministic alignment checks.
+* `--disable-slash-commands`: Prevents unintended slash-command and skill expansion.
+
+### Running Antigravity Alignment
+
+After verifying working checkout and launcher locks:
+
+```powershell
+python scripts/ai/cloud_backup_readiness.py --diagnose
+python scripts/ai/cloud_backup_readiness.py --verify-antigravity
+```
+
+The probe explicitly passes the entire text of `AGENTS.md` and verifies:
+* MVP acceptance ledger issue #20
+* Gate 5/6 work order issue #73
+* Gate 5 status is OPEN
+* Gate 6 status is OPEN
+* MVP status is NO-GO
+* `production_changes_allowed` is `false`
+* `live_funds_allowed` is `false`
+
+Failure conditions (authentication, quota, timeout, CLI, parsing, alignment) are
+distinguished and categorized cleanly. No credentials or raw provider output are
+ever printed or logged. Successful alignment does not activate automatic handover.
 
 ## Gemini on Windows
 

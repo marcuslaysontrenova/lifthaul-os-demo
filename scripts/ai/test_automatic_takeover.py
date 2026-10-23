@@ -173,7 +173,7 @@ class TakeoverTests(unittest.TestCase):
 
     def test_stream_prompt_avoids_windows_command_length_and_shell(self):
         prompt = "TASK " + "x" * 40000
-        result = SimpleNamespace(stdout=self.stream(), returncode=0)
+        result = SimpleNamespace(stdout=self.stream(), stderr="", returncode=0)
         with patch.object(auto.subprocess, "run", return_value=result) as run:
             auto.run_antigravity(Path("."), "agy.exe", prompt, lambda: None)
         args, kwargs = run.call_args
@@ -220,6 +220,41 @@ class TakeoverTests(unittest.TestCase):
         events, result = auto.stream_result(self.stream(steps=[self.denial_step(output="executed")]))
         events[0]["init"]["tools"] = []
         with patch.object(auto, "run_antigravity", return_value=(0, events, result)):
+            self.assertFalse(auto.safety_probe(Path("."), "agy", lambda: None))
+
+    def test_error_state_denied_tool_is_recognized(self):
+        step = self.denial_step()
+        step["step_update"]["state"] = "ERROR"
+        events, envelope = auto.stream_result(self.stream(steps=[step]))
+        diagnostics = {}
+        with patch.object(auto, "run_antigravity", return_value=(0, events, envelope)):
+            self.assertTrue(auto.safety_probe(Path("."), "agy", lambda: None, diagnostics))
+        self.assertEqual(diagnostics["error_tool_steps"], 1)
+        self.assertEqual(diagnostics["completed_tool_steps"], 0)
+
+    def test_cli_denial_envelope_with_error_step_without_info(self):
+        step = {"event": "step_update", "step_update": {
+            "step_type": "tool", "tool_name": "run_command", "state": "ERROR"}}
+        events, envelope = auto.stream_result(self.stream(steps=[step]))
+        for signal, passed in (([], False), ([{"action": "command"}], True),
+                               ([{"action": "mcp"}], False)):
+            envelope["denied_actions"] = signal
+            with patch.object(auto, "run_antigravity", return_value=(0, events, envelope)):
+                self.assertEqual(auto.safety_probe(Path("."), "agy", lambda: None), passed)
+
+    def test_cli_denial_notice_distinct_from_model_refusal(self):
+        for stderr, passed in (("permission check failed for command echo", True), ("", False)):
+            result = SimpleNamespace(stdout=self.stream(response="permission check failed for command echo"),
+                                     stderr=stderr, returncode=0)
+            with patch.object(auto.subprocess, "run", return_value=result):
+                events, envelope = auto.run_antigravity(Path("."), "agy", "test", lambda: None)[1:]
+            self.assertEqual(envelope["_lifthaul_command_denial"], passed)
+
+    def test_successful_command_never_masked_by_denial_notice(self):
+        step = self.denial_step(output="LIFTHAUL_DENIAL_CANARY")
+        events, envelope = auto.stream_result(self.stream(steps=[step]))
+        envelope["denied_actions"] = [{"action": "command"}]
+        with patch.object(auto, "run_antigravity", return_value=(0, events, envelope)):
             self.assertFalse(auto.safety_probe(Path("."), "agy", lambda: None))
 
     def test_apply_edits_preserves_partial_work_and_rejects_stale_hash(self):

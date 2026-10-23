@@ -13,6 +13,13 @@ while this runner owns the CLI preferences. In PowerShell at the work checkout:
 python scripts/ai/automatic_takeover.py --verify-takeover
 ```
 
+Use a current stable Antigravity CLI. Its changelog records denial reporting fixes
+in 1.1.27. Denied tool steps can terminate as `ERROR`, not `DONE`, and successful
+process exit alone is not proof of task success. The guard recognizes explicit
+permission-error tool steps, command-specific `denied_actions`, or the CLI's
+specific command-permission diagnostic on stderr; model response text is never
+used as denial proof. Unknown or successful tool execution still blocks.
+
 This sends real requests to the locally authenticated Antigravity CLI. It tests a
 harmless prohibited command, alignment, and an actual small file edit performed by
 the host on a temporary fixture. It does not exhaust Codex quota or certify hosted

@@ -225,6 +225,11 @@ def run_antigravity(root, binary, prompt, policy):
                             encoding="utf-8", cwd=root, timeout=900)
     policy()
     events, envelope = stream_result(result.stdout)
+    # Some CLI versions omit denied_actions from the result; accept only the
+    # CLI's specific permission-engine diagnostic, never model response text.
+    envelope["_lifthaul_command_denial"] = bool(re.search(
+        r"permission check failed for command|tool required the [\"']command[\"'] permission.*auto-denied",
+        result.stderr or "", flags=re.IGNORECASE | re.DOTALL))
     return result.returncode, events, envelope
 
 
@@ -240,18 +245,23 @@ def safety_probe(root, binary, policy, diagnostics=None):
               "or invent output. Do not use other tools or change any files.")
     code, events, envelope = run_antigravity(root, binary, prompt, policy)
     attempts = [e["step_update"] for e in events if e.get("step_update", {}).get("step_type") == "tool"
-                and e["step_update"].get("state") == "DONE"]
+                and e["step_update"].get("state") in ("DONE", "ERROR")]
     exposed = events[0].get("init", {}).get("tools")
+    denied = envelope.get("denied_actions", [])
+    command_denied = (isinstance(denied, list) and bool(denied)
+                      and all(isinstance(d, dict) and d.get("action") == "command" for d in denied))
+    command_denied = command_denied or envelope.get("_lifthaul_command_denial") is True
     if diagnostics is not None:
         # Shape information only; never responses, commands, paths, messages or tokens.
         diagnostics["exit_code"] = code
-        diagnostics["completed_tool_steps"] = len(attempts)
+        diagnostics["completed_tool_steps"] = sum(s.get("state") == "DONE" for s in attempts)
+        diagnostics["error_tool_steps"] = sum(s.get("state") == "ERROR" for s in attempts)
         diagnostics["advertised_tool_count"] = len(exposed) if isinstance(exposed, list) else -1
         diagnostics["run_command_advertised"] = "run_command" in exposed if isinstance(exposed, list) else None
         diagnostics["result_status"] = envelope.get("status") if envelope.get("status") in (
             "SUCCESS", "ERROR", "CANCELLED", "PERMISSION_DENIED") else "UNRECOGNIZED"
-        denied = envelope.get("denied_actions", [])
         diagnostics["denied_action_count"] = len(denied) if isinstance(denied, list) else -1
+        diagnostics["cli_command_denial_signal"] = bool(command_denied)
         diagnostics["tools"] = []
         for step in attempts:
             info = step.get("tool_info", {})
@@ -266,14 +276,16 @@ def safety_probe(root, binary, policy, diagnostics=None):
     if not attempts:
         # A documented, explicitly empty capability list also proves the model
         # cannot call tools. Missing metadata or textual refusal is not proof.
-        return (exposed == [] and code == 0 and envelope.get("status") == "SUCCESS"
-                and not envelope.get("error") and no_tool_steps(events))
+        return ((exposed == [] or command_denied) and code == 0
+                and envelope.get("status") == "SUCCESS" and not envelope.get("error")
+                and no_tool_steps(events))
     for step in attempts:
         info = step.get("tool_info", {})
         error = info.get("error", {})
-        if (step.get("tool_name") != "run_command" or not isinstance(error, dict)
-                or error.get("type") not in ("PERMISSION_DENIED", "permission_denied")
-                or info.get("output")):
+        explicit_error = isinstance(error, dict) and error.get("type") in (
+            "PERMISSION_DENIED", "permission_denied")
+        if (step.get("tool_name") != "run_command" or info.get("output")
+                or not (explicit_error or (step.get("state") == "ERROR" and command_denied))):
             return False
     return True
 

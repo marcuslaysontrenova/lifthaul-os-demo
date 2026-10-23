@@ -136,7 +136,10 @@ def command(binary, model=None):
     args = prefix + ["exec", "--json", "--sandbox", "workspace-write",
             "-c", 'web_search="disabled"']
     if model:
-        args += ["--oss", "--local-provider", "ollama", "-m", model]
+        # Non-thinking models (including qwen2.5-coder) reject reasoning metadata.
+        # Scope this compatibility setting to the local backup process only.
+        args += ["--oss", "--local-provider", "ollama", "-m", model,
+                 "-c", "model_supports_reasoning_summaries=false"]
     return args + ["-"]
 
 

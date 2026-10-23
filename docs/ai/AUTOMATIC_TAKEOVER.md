@@ -81,6 +81,9 @@ and locks; verify it is stopped before manually reconciling the recovery file an
 removing locks. Never blindly delete a lock or overwrite concurrent preference
 changes. Do not upload recovery files, logs, account identities or raw provider
 output. No automatic global permissions are relaxed.
+An omitted/null default `toolPermission` preference is accepted only with the full
+deny profile intact. CLI stream initialization must still report `request-review`,
+and the actual command denial challenge must pass before alignment or patch work.
 
 After all Antigravity sessions are closed, recover a stopped run with:
 

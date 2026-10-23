@@ -115,6 +115,20 @@ class TakeoverTests(unittest.TestCase):
             self.assertEqual(json.loads(settings.read_bytes()),
                              {"colorScheme": "terminal", "new_preference": True})
 
+    def test_cli_omitted_default_mode_keeps_denial_and_recovers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Path(directory) / "settings.json"
+            settings.write_text('{"colorScheme":"terminal"}')
+            with auto.deny_all_tools(settings) as policy:
+                config = json.loads(settings.read_bytes())
+                config.pop("toolPermission")
+                settings.write_text(json.dumps(config))
+                policy()
+                self.assertTrue(auto.policy_matches(config))
+                config["toolPermission"] = "always-proceed"
+                self.assertFalse(auto.policy_matches(config))
+            self.assertEqual(json.loads(settings.read_bytes()), {"colorScheme": "terminal"})
+
     def test_allow_rule_added_during_run_blocks_restore(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = Path(directory) / "settings.json"

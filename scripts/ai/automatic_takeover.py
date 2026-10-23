@@ -117,7 +117,9 @@ def policy_matches(config):
     return (isinstance(deny, list) and all(isinstance(rule, str) for rule in deny)
             and set(deny) == set(DENY)
             and permissions.get("allow", []) == [] and permissions.get("ask", []) == []
-            and config.get("toolPermission") == "request-review"
+            # CLI may omit the default preference when saving settings. The
+            # deny rules remain mandatory; stream init must also report review mode.
+            and config.get("toolPermission") in (None, "request-review")
             and config.get("agentMode", "") == "")
 
 

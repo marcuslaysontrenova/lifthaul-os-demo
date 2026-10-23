@@ -106,6 +106,60 @@ def atomic_write(path, data):
             os.unlink(temporary)
 
 
+def policy_matches(config):
+    """Ignore JSON formatting and rule order, never changes to effective permission fields."""
+    if not isinstance(config, dict):
+        return False
+    permissions = config.get("permissions", {})
+    if not isinstance(permissions, dict):
+        return False
+    deny = permissions.get("deny", [])
+    return (isinstance(deny, list) and all(isinstance(rule, str) for rule in deny)
+            and set(deny) == set(DENY)
+            and permissions.get("allow", []) == [] and permissions.get("ask", []) == []
+            and config.get("toolPermission") == "request-review"
+            and config.get("agentMode", "") == "")
+
+
+def restore_preferences(settings, recovery):
+    record = json.loads(recovery.read_text(encoding="utf-8"))
+    original = record["original"].encode("utf-8")
+    before = json.loads(original)
+    current = json.loads(settings.read_bytes())
+    if not policy_matches(current):
+        raise Blocked("BLOCKED_POLICY_FIELDS_CHANGED_RECOVERY_RETAINED")
+    expected = dict(before, permissions={"deny": DENY, "allow": [], "ask": []},
+                    toolPermission="request-review", agentMode="")
+    if current == expected:
+        if record["existed"]:
+            atomic_write(settings, original)
+        else:
+            settings.unlink()
+    else:
+        # CLI may persist unrelated preferences while normalizing settings.
+        # Restore only the fields this runner owned; preserve all unrelated changes.
+        for key in ("permissions", "toolPermission", "agentMode"):
+            if key in before:
+                current[key] = before[key]
+            else:
+                current.pop(key, None)
+        atomic_write(settings, json.dumps(current, indent=2).encode("utf-8"))
+    recovery.unlink()
+
+
+def recover_settings(settings):
+    if active_antigravity():
+        raise Blocked("BLOCKED_CLOSE_OTHER_ANTIGRAVITY_SESSIONS")
+    recovery = settings.parent / "lifthaul-settings-recovery.json"
+    if not recovery.exists():
+        return "NO_SETTINGS_RECOVERY_NEEDED"
+    if settings.is_symlink() or recovery.is_symlink():
+        raise Blocked("BLOCKED_SETTINGS_RECOVERY_PATH")
+    with shared.single_owner(settings.parent / "lifthaul-takeover.lock"):
+        restore_preferences(settings, recovery)
+    return "SETTINGS_RECOVERED_UNRELATED_PREFERENCES_PRESERVED"
+
+
 @contextlib.contextmanager
 def deny_all_tools(settings):
     """Temporary global deny profile. Preserve exact original bytes and concurrent edits."""
@@ -133,19 +187,12 @@ def deny_all_tools(settings):
                        "restricted_sha256": digest(restricted)}, stream)
         atomic_write(settings, restricted)
         def assert_policy():
-            if settings.read_bytes() != restricted:
-                raise Blocked("BLOCKED_CONCURRENT_PREFERENCE_CHANGE")
+            if not policy_matches(json.loads(settings.read_bytes())):
+                raise Blocked("BLOCKED_POLICY_FIELDS_CHANGED")
         try:
             yield assert_policy
         finally:
-            if settings.read_bytes() != restricted:
-                # Keep recovery; never overwrite somebody else's preference changes.
-                raise Blocked("BLOCKED_CONCURRENT_PREFERENCE_CHANGE_RECOVERY_RETAINED")
-            if existed:
-                atomic_write(settings, original)
-            else:
-                settings.unlink()
-            recovery.unlink()
+            restore_preferences(settings, recovery)
 
 
 def stream_result(output):
@@ -314,6 +361,8 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--task-file", type=Path)
     group.add_argument("--verify-takeover", action="store_true")
+    group.add_argument("--recover-settings", action="store_true",
+                       help="Restore only runner-owned preferences after a stopped run; no model request")
     args = parser.parse_args()
     root = Path.cwd().resolve()
     report = {"status": "BLOCKED", "fallback_started": False,
@@ -323,6 +372,9 @@ def main():
         shared.check_checkout(root)
         state = Path(shared.git(root, "rev-parse", "--absolute-git-dir")) / "lifthaul-ai"
         state.mkdir(exist_ok=True)
+        if args.recover_settings:
+            report["status"] = recover_settings(Path.home() / ".gemini/antigravity-cli/settings.json")
+            return 0
         agy = cloud.find_antigravity_binary()
         if not agy:
             raise ValueError("Antigravity missing")

@@ -90,6 +90,61 @@ class TakeoverTests(unittest.TestCase):
             self.assertEqual(json.loads(settings.read_text()), {"new_preference": True})
             self.assertTrue((settings.parent / "lifthaul-settings-recovery.json").exists())
 
+    def test_cli_reformat_and_rule_order_do_not_look_like_policy_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Path(directory) / "settings.json"
+            original = b'{"colorScheme":"terminal"}\n'
+            settings.write_bytes(original)
+            with auto.deny_all_tools(settings) as policy:
+                config = json.loads(settings.read_bytes())
+                config["permissions"]["deny"].reverse()
+                settings.write_text(json.dumps(config, sort_keys=True))
+                policy()
+            self.assertEqual(json.loads(settings.read_bytes()), json.loads(original))
+            self.assertFalse((settings.parent / "lifthaul-settings-recovery.json").exists())
+
+    def test_unrelated_cli_preferences_preserved_on_restore(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Path(directory) / "settings.json"
+            settings.write_text('{"colorScheme":"terminal"}')
+            with auto.deny_all_tools(settings) as policy:
+                config = json.loads(settings.read_bytes())
+                config["new_preference"] = True
+                settings.write_text(json.dumps(config))
+                policy()
+            self.assertEqual(json.loads(settings.read_bytes()),
+                             {"colorScheme": "terminal", "new_preference": True})
+
+    def test_allow_rule_added_during_run_blocks_restore(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Path(directory) / "settings.json"
+            settings.write_text("{}")
+            with self.assertRaises(auto.Blocked):
+                with auto.deny_all_tools(settings) as policy:
+                    config = json.loads(settings.read_bytes())
+                    config["permissions"]["allow"] = ["command(git)"]
+                    settings.write_text(json.dumps(config))
+                    policy()
+            self.assertEqual(json.loads(settings.read_bytes())["permissions"]["allow"], ["command(git)"])
+            self.assertTrue((settings.parent / "lifthaul-settings-recovery.json").exists())
+
+    def test_recover_old_byte_guard_record_after_harmless_rewrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Path(directory) / "settings.json"
+            original = '{"colorScheme":"terminal"}'
+            record = {"existed": True, "original": original, "restricted_sha256": "old-byte-hash"}
+            recovery = settings.parent / "lifthaul-settings-recovery.json"
+            recovery.write_text(json.dumps(record))
+            settings.write_text(json.dumps({"colorScheme": "terminal", "new_preference": True,
+                "permissions": {"deny": list(reversed(auto.DENY)), "allow": [], "ask": []},
+                "toolPermission": "request-review", "agentMode": ""}))
+            with patch.object(auto, "active_antigravity", return_value=False):
+                self.assertEqual(auto.recover_settings(settings),
+                                 "SETTINGS_RECOVERED_UNRELATED_PREFERENCES_PRESERVED")
+            self.assertEqual(json.loads(settings.read_bytes()),
+                             {"colorScheme": "terminal", "new_preference": True})
+            self.assertFalse(recovery.exists())
+
     def test_pending_recovery_blocks_new_session(self):
         with tempfile.TemporaryDirectory() as directory:
             settings = Path(directory) / "settings.json"

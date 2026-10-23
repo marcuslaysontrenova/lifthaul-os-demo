@@ -71,14 +71,26 @@ logs. Never run an external agent concurrently; the runner checks active CLI
 processes and holds both a checkout lock and a global preferences lock. External
 processes do not honor those locks, so operators must keep other sessions closed.
 
-The exact previous preference bytes are restored after success or an ordinary
-exception. A private recovery copy is retained beside settings until restoration
-finishes. If another process changes preferences, the runner stops and preserves
-that change and the recovery copy. A killed process may leave restrictive settings
+When preferences are otherwise unchanged, the exact previous bytes are restored
+after success or an ordinary exception. JSON formatting and rule order are not
+permission changes. If the CLI saves unrelated preferences, only the runner's
+three owned fields are restored, preserving those unrelated updates. A private
+recovery copy is retained beside settings until restoration finishes. If effective
+permission fields change, the runner stops and retains recovery. A killed process may leave restrictive settings
 and locks; verify it is stopped before manually reconciling the recovery file and
 removing locks. Never blindly delete a lock or overwrite concurrent preference
 changes. Do not upload recovery files, logs, account identities or raw provider
 output. No automatic global permissions are relaxed.
+
+After all Antigravity sessions are closed, recover a stopped run with:
+
+```powershell
+python scripts/ai/automatic_takeover.py --recover-settings
+```
+
+Recovery makes no model request. It restores only the runner's owned fields when
+the deny profile is still intact; a real policy change remains blocked for manual
+reconciliation. It never blindly copies the old settings over new preferences.
 
 ## Validation limits
 

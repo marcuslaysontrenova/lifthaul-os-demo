@@ -81,21 +81,20 @@ push/merge/deploy itself. Review generated changes and run tests before publishi
 - Only then mark local inference/handoff VERIFIED in #73. Keep hosted acceptance
   separate. A successful agent exit does not prove its code/tests or MVP acceptance.
 
-### Observed qwen2.5-coder compatibility issue
+### Non-thinking-model compatibility
 
-Marcus's Windows screenshots show Codex CLI 0.163.0 and local
-`qwen2.5-coder:latest` (7.6B Q4_K_M, tools, 32768 context). The first read-only
-smoke request reached Ollama but failed with `does not support thinking` while
-Codex advertised medium reasoning. A subsequent test with the legacy
-`model_supports_reasoning_summaries=false` key failed because 0.163.0 explicitly
-ignored that setting. That attempted correction is superseded.
+A non-thinking local model can reject requests with `does not support thinking`
+when a client sends reasoning effort. Codex CLI 0.163.0 does not recognize the
+legacy `model_supports_reasoning_summaries` configuration override; do not rely
+on that key to suppress thinking.
 
 The local launcher now supplies `-c model_reasoning_effort=none` for the backup
 process only, leaving the primary's settings unchanged. Codex's tagged 0.163.0
 source accepts the None effort and Ollama's compatibility layer maps `none` to
 `think=false`. The correction has offline regression coverage; the corrected live
-request remains unverified until the PC test succeeds. Separate model-catalog
-decode warnings may require diagnosis if they remain blocking.
+request must be verified on the operator's host before activation. Model-catalog
+decode warnings require diagnosis if they block execution. Keep private device,
+capacity and runtime observations out of public issues, PRs and documentation.
 
 Version source checks:
 - https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/config/src/config_toml.rs

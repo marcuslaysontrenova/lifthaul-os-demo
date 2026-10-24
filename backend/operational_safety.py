@@ -38,7 +38,9 @@ def state(env=None):
 def require(capability, *, synthetic_local=False):
     if capability not in FIELDS:
         raise core.ForbiddenError("unknown operational capability")
-    if synthetic_local and os.getenv("APP_ENV", "development").strip().lower() in LOCAL_ENVS:
+    # The exception requires an explicit local/test environment. Missing APP_ENV
+    # must agree with the UNKNOWN status and never unlock dispatch/assignment.
+    if synthetic_local and os.getenv("APP_ENV", "").strip().lower() in LOCAL_ENVS:
         return  # deterministic local service execution only; never network adapters
     if state() is not True:
         raise core.ForbiddenError("live operation disabled or unverified")

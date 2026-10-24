@@ -252,6 +252,8 @@ def transition_job(conn, actor, job_id, to_status, *, evidence=None, reason=None
             if sr and sr["result"] != "PASS":
                 raise ConflictError("dispatch block: latest safety check did not PASS")
     if to_status == "DISPATCHED":
+        import operational_safety
+        operational_safety.require("live_dispatch_enabled", synthetic_local=True)
         if not _payment_verified(conn, j["booking_id"]):
             raise ConflictError("dispatch block: downpayment not verified")
     with conn:

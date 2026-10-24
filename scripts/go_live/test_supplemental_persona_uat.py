@@ -44,6 +44,13 @@ class SupplementApi(FakeApi):
             if actor in ("truck_owner", "motorcycle_owner") and owner in ("truck_owner", "motorcycle_owner"):
                 return 200, {"fixture": self.data[owner if self.leak else actor]["marker"]}
             return (200, {"fixture": self.data[owner]["marker"]}) if self.leak else (403, {})
+        if path == "/admin/security/operational-safety":
+            if self.tokens[bearer] != "administrator":
+                return 403, {}
+            return 200, {"schema": "lifthaul.operational-safety.v1", "result": "PASS",
+                         "enforcement": "shared_process_interlock_v1", "release_sha": SHA,
+                         "deployment_id": "dep-1", "observed_at": "2026-10-24T15:00:00+00:00",
+                         "capabilities": self.safety}
         status, body = super().__call__(method, path, payload, bearer)
         if path.endswith("protected-payment-live-status") and status == 200:
             body.update(self.safety)
@@ -74,11 +81,38 @@ class SupplementTests(unittest.TestCase):
         self.assertEqual(result["checks"]["live_dispatch_enabled"], "BLOCKED")
 
     def test_live_or_nonboolean_safety_signal_fails(self):
-        for value in (True, "false", 0, None):
+        for value in (True, "false", 0):
             data = fixtures()
             api = SupplementApi(data)
             api.safety["live_dispatch_enabled"] = value
             with self.subTest(value=value), self.assertRaises(AssertionError):
+                supplement.execute(data, SHA, api)
+
+    def test_unknown_capability_blocks(self):
+        data = fixtures()
+        api = SupplementApi(data)
+        api.safety["automatic_assignment_enabled"] = None
+        self.assertEqual(supplement.execute(data, SHA, api)["result"], "BLOCKED")
+
+    def test_status_identity_mismatch_blocks_and_revokes(self):
+        data = fixtures()
+        class WrongIdentity(SupplementApi):
+            def __call__(self, method, path, payload=None, bearer=None):
+                code, body = super().__call__(method, path, payload, bearer)
+                if path == "/admin/security/operational-safety" and code == 200:
+                    body["release_sha"] = "b" * 40
+                return code, body
+        api = WrongIdentity(data)
+        with self.assertRaisesRegex(supplement.Blocked, "RELEASE_IDENTITY"):
+            supplement.execute(data, SHA, api)
+        self.assertEqual(len(api.revoked), 6)
+
+    def test_each_enabled_capability_fails(self):
+        for field in supplement.SAFETY_FIELDS:
+            data = fixtures()
+            api = SupplementApi(data)
+            api.safety[field] = True
+            with self.subTest(field=field), self.assertRaises(AssertionError):
                 supplement.execute(data, SHA, api)
 
     def test_cross_role_leak_fails_and_sessions_are_revoked(self):

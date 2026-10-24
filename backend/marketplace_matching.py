@@ -784,6 +784,8 @@ def select_offer(conn, actor, booking_id, offer_id, model="MANAGED_SELECTION"):
 
 def create_assignment(conn, actor, booking_id):
     core.require(actor, "marketplace.assignment.create")
+    import operational_safety
+    operational_safety.require("automatic_assignment_enabled", synthetic_local=True)
     b = _guarded(conn, actor, "mkt_bookings", booking_id)
     o = conn.execute("SELECT * FROM mkt_offers WHERE booking_id=? AND status='SELECTED' ORDER BY id DESC LIMIT 1",
                      (booking_id,)).fetchone()

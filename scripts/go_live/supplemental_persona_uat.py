@@ -29,6 +29,8 @@ OBJECT_PATTERNS = {
 SAFETY_FIELDS = (
     "live_dispatch_enabled", "live_collection_enabled", "live_refunds_enabled",
     "live_payouts_enabled", "live_settlement_enabled",
+    "live_escrow_disbursement_enabled", "automatic_assignment_enabled",
+    "external_financial_provider_enabled",
 )
 
 
@@ -110,16 +112,36 @@ def execute(manifest, expected_sha, call=primary.http_call):
                 or safety.get("live_protected_payment") != "BLOCKED"):
             raise AssertionError("LIVE_FUNDS_NOT_PROVEN_DISABLED")
         checks["protected_funds_master_switch_off"] = "PASS"
-        # The current endpoint lacks these signals. Absence is explicitly BLOCKED.
+        # Read the shared enforcement interlock as administrator, never finance.
+        for persona in (*OBJECT_PATTERNS, "finance"):
+            denied, _ = call("GET", "/admin/security/operational-safety", bearer=tokens[persona])
+            if denied != 403:
+                raise AssertionError("SAFETY_STATUS_ACCESS_DENIAL_FAILED")
+        code, observed = call("GET", "/admin/security/operational-safety", bearer=tokens["administrator"])
+        if code != 200:
+            raise Blocked("BLOCKED_GATE5_SAFETY_OBSERVABILITY")
+        if (observed.get("release_sha") != expected_sha
+                or observed.get("deployment_id") != ready["deployment_id"]):
+            raise Blocked("BLOCKED_RELEASE_IDENTITY_MISMATCH")
+        if (observed.get("schema") != "lifthaul.operational-safety.v1"
+                or observed.get("enforcement") != "shared_process_interlock_v1"
+                or not observed.get("observed_at")):
+            raise Blocked("BLOCKED_GATE5_SAFETY_OBSERVABILITY")
+        checks["safety_status_role_restrictions"] = "PASS"
         missing = False
+        safety = observed.get("capabilities")
+        if not isinstance(safety, dict):
+            raise Blocked("BLOCKED_GATE5_SAFETY_OBSERVABILITY")
         for field in SAFETY_FIELDS:
-            if field not in safety:
+            if field not in safety or safety[field] is None:
                 checks[field] = "BLOCKED"
                 missing = True
             elif safety[field] is not False:
                 raise AssertionError("LIVE_ACTION_NOT_PROVEN_DISABLED")
             else:
                 checks[field] = "PASS"
+        if observed.get("result") != "PASS":
+            missing = True
         status, after = call("GET", "/readyz")
         if (status != 200 or after.get("status") != "ready"
                 or after.get("release_sha") != expected_sha
@@ -129,7 +151,8 @@ def execute(manifest, expected_sha, call=primary.http_call):
                 "result": "BLOCKED" if missing else "PASS",
                 "blocker": "BLOCKED_GATE5_SAFETY_OBSERVABILITY" if missing else None,
                 "release_sha": expected_sha, "deployment_id": ready["deployment_id"],
-                "checks": checks, "independent_signoff": "PENDING"}
+                "checks": checks, "safety_observed_at": observed["observed_at"],
+                "independent_signoff": "PENDING"}
     finally:
         failed = False
         for token in tokens.values():

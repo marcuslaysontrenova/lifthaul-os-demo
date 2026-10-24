@@ -54,11 +54,35 @@ login/logout calls, verifies its own six session revocations and pins release an
 deployment before/after. These six sessions are separate from the primary ten.
 No credentials, markers, paths, object IDs or response bodies enter its artifact.
 
-The existing finance status endpoint proves only its protected-funds master
-switch. It currently lacks authoritative booleans for live dispatch, collection,
-refunds, payouts and settlement. Their absence produces
-`BLOCKED_GATE5_SAFETY_OBSERVABILITY`, never a presumed OFF result. Do not inject
-constant booleans or treat absence of test mutations as proof of runtime policy.
-Actual runtime-enforced safety status or separately witnessed exact-release
-evidence remains required. This supplement alone is not full browser landing-page
-UAT, administrator tenant-scope certification, independent review or gate closure.
+The finance endpoint retains only its protected-funds contract. The updated
+supplement additionally reads `GET /admin/security/operational-safety` using the
+administrator persona and proves finance/external persona denial. The administrator
+must have a security-authorized administrative role (the existing manifest's
+`super_admin` option supports this; `user_administrator` alone is insufficient).
+
+The endpoint reads the same process interlock enforced before Xendit/Wise network
+calls, non-MOCK protected-payment adapter selection, assignment creation, trip
+activation/progression and legacy dispatch. It reports all eight capabilities,
+release/deployment identity and an observation timestamp, without credentials.
+`LH_LIVE_OPERATIONS=off` explicitly locks live operations. `on` removes this
+interlock only; existing provider/legal/certification/authorization gates remain.
+Missing/invalid policy is UNKNOWN and denies live operations. Local synthetic
+execution cannot certify OFF. No endpoint writes the policy.
+
+**Separately approved production action required:** after independent review and
+exact-SHA release authorization, the authorized infrastructure operator sets the
+non-secret application variable `LH_LIVE_OPERATIONS` to literal `off` in the
+verified production project/environment/service before deploying the reviewed
+candidate. Record owner approval, window, target and rollback; never set `on` for
+this gate. This packet does not authorize a configuration change. Missing policy
+must remain BLOCKED rather than auto-provisioned by UAT. Recovery also requires
+this policy, disabled external callbacks and its independently approved isolation.
+
+The supplement requires eight literal false values, a PASS observation and the
+same SHA/deployment as `/readyz`. UNKNOWN is BLOCKED; enabled or invalid values
+FAIL. No constant boolean injection or absence-of-mutations inference is permitted.
+No schema migration is introduced. Rollback to an older release removes this new
+interlock: the operator must independently verify that release's existing financial
+and dispatch controls remain OFF; variable presence alone cannot certify rollback.
+Full browser landing-page UAT, administrator tenant-scope certification and
+independent sign-offs remain mandatory. This supplement cannot close either gate.

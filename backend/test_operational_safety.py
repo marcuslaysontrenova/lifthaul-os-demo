@@ -96,6 +96,7 @@ class OperationalSafetyTests(unittest.TestCase):
     def test_dispatch_and_assignment_denied_before_database_access(self):
         conn = Mock()
         for call in (lambda: marketplace_matching.create_assignment(conn, ADMIN, 1),
+                     lambda: marketplace_matching.request_substitution(conn, ADMIN, 1, new_driver_id=2),
                      lambda: marketplace_trips.activate_trip(conn, ADMIN, 1),
                      lambda: marketplace_trips.advance_trip(conn, ADMIN, 1, "EN_ROUTE_PICKUP")):
             with self.assertRaises(core.ForbiddenError):
@@ -105,6 +106,15 @@ class OperationalSafetyTests(unittest.TestCase):
                 patch.object(ops, "_payment_verified", return_value=True):
             with self.assertRaises(core.ForbiddenError):
                 ops.transition_job(conn, ADMIN, 1, "DISPATCHED", evidence="synthetic")
+        conn.execute.assert_not_called()
+
+    def test_existing_dispatch_cannot_progress_with_interlock_off(self):
+        conn = Mock()
+        for old, new in (("DISPATCHED", "IN_TRANSIT"), ("IN_TRANSIT", "ON_SITE"),
+                         ("ON_SITE", "IN_PROGRESS")):
+            with self.subTest(old=old), patch.object(ops, "_job", return_value={"status": old}):
+                with self.assertRaises(core.ForbiddenError):
+                    ops.transition_job(conn, ADMIN, 1, new, evidence="synthetic")
         conn.execute.assert_not_called()
 
     def test_database_config_cannot_bypass_external_interlock(self):

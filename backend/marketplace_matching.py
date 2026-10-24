@@ -877,6 +877,8 @@ def confirm_assignment(conn, actor, assignment_id, decision="accept"):
 def request_substitution(conn, actor, assignment_id, new_vehicle_id=None, new_driver_id=None):
     """Any substitution reruns eligibility deterministically before it is accepted."""
     core.require(actor, "marketplace.assignment.confirm")
+    import operational_safety
+    operational_safety.require("automatic_assignment_enabled", synthetic_local=True)
     a = _guarded(conn, actor, "mkt_assignments", assignment_id)
     b = _row(conn, "mkt_bookings", a["booking_id"])
     veh = new_vehicle_id or a["vehicle_id"]

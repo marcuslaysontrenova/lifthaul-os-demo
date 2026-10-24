@@ -123,6 +123,12 @@ class OperationsWorkflowContractTests(unittest.TestCase):
         self.assertFalse(gate.evaluate({"OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"})["monitor_passed"])
         self.assertFalse(gate.evaluate({**configured, "INCIDENT_CONFIGURED": "false", "OWNERSHIP_OUTCOME": "success", "SURFACE_OUTCOME": "success"})["monitor_passed"])
 
+    def test_monitor_verdict_receives_explicit_owner_configuration(self):
+        workflow = (ROOT / ".github" / "workflows" / "production-health-monitor.yml").read_text()
+        verdict_step = workflow.split("name: Enforce independent, fail-closed monitoring verdict", 1)[1].split("      - id: alert_drill", 1)[0]
+        self.assertIn("OPS_CONFIGURED: ${{ vars.LH_PROD_OPERATIONS_OWNER != '' }}", verdict_step)
+        self.assertIn("INCIDENT_CONFIGURED: ${{ vars.LH_PROD_INCIDENT_OWNER != '' }}", verdict_step)
+
     def test_rollback_workflow_binds_sha_and_deployment_identity(self):
         text = (ROOT / ".github" / "workflows" / "production-rollback-evidence.yml").read_text()
         for required in (

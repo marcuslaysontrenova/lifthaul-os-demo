@@ -95,6 +95,8 @@ jobs:
         env:
           OWNERSHIP_OUTCOME: ${{ steps.ownership.outcome }}
           SURFACE_OUTCOME: ${{ steps.surface.outcome }}
+          OPS_CONFIGURED: ${{ vars.LH_PROD_OPERATIONS_OWNER != '' }}
+          INCIDENT_CONFIGURED: ${{ vars.LH_PROD_INCIDENT_OWNER != '' }}
           MONITOR_EVIDENCE_PATH: evidence/monitor-gate.json
         run: python scripts/go_live/monitor_gate.py
       - id: alert_drill

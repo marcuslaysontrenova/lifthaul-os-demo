@@ -43,7 +43,12 @@ jobs:
           LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
         run: |
           set -euo pipefail
-          test -n "$LH_PROD_PERSONA_CREDENTIALS_JSON"
+          if [ -z "$LH_PROD_PERSONA_CREDENTIALS_JSON" ]; then
+            mkdir -p evidence
+            printf '{"schema":"lifthaul.gate5.blocker.v1","status":"BLOCKED_HUMAN_IDENTITY_SETUP","hosted_acceptance_verified":false,"live_funds_enabled":false}\n' > evidence/production-persona-blocker.json
+            echo "Gate 5 blocked: protected persona manifest is absent; no production accounts were modified." >&2
+            exit 1
+          fi
           python -c 'import json,os; from scripts.go_live.prod_persona_uat import load_manifest; load_manifest(os.environ["LH_PROD_PERSONA_CREDENTIALS_JSON"])'
       - name: Run exact-release hosted persona evidence
         env:
@@ -64,6 +69,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: production-persona-uat-${{ inputs.release_sha }}
-          path: evidence/production-persona-uat.json
+          path: |
+            evidence/production-persona-uat.json
+            evidence/production-persona-blocker.json
           if-no-files-found: error
           retention-days: 90

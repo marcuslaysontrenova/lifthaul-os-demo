@@ -85,6 +85,10 @@ jobs:
   financial-regression:
     name: Revenue, payment, payout and recovery regression
     runs-on: ubuntu-latest
+    # This offline mock-fixture job must opt into synthetic local execution.
+    # Missing APP_ENV intentionally fails closed in the runtime interlock.
+    env:
+      APP_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

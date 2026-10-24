@@ -28,8 +28,11 @@ jobs:
         name: Validate monitored production ownership
         continue-on-error: true
         env:
-          OPERATIONS_OWNER: ${{ vars.LH_PROD_OPERATIONS_OWNER }}
-          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
+          OPERATIONS_OWNER: ${{ vars.LH_PROD_OPERATIONS_OWNER || github.repository_owner }}
+          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER || github.repository_owner }}
+          FALLBACK_OWNER: ${{ github.repository_owner }}
+          OPS_CONFIGURED: ${{ vars.LH_PROD_OPERATIONS_OWNER != '' }}
+          INCIDENT_CONFIGURED: ${{ vars.LH_PROD_INCIDENT_OWNER != '' }}
         run: |
           set -euo pipefail
           mkdir -p evidence
@@ -41,9 +44,19 @@ jobs:
               json.dump({
                   'operations_owner': os.environ['OPERATIONS_OWNER'],
                   'incident_owner': os.environ['INCIDENT_OWNER'],
-                  'configured': True,
+                  'configured': os.environ['OPS_CONFIGURED'] == 'true' and os.environ['INCIDENT_CONFIGURED'] == 'true',
+                  'operations_source': 'explicit' if os.environ['OPS_CONFIGURED'] == 'true' else 'repository_owner_fallback',
+                  'incident_source': 'explicit' if os.environ['INCIDENT_CONFIGURED'] == 'true' else 'repository_owner_fallback',
+                  'fallback_owner': os.environ['FALLBACK_OWNER'],
+                  'requires_human_alert_acknowledgment': True,
               }, handle, indent=2)
           PY
+          # A repository-owner fallback preserves alert routing, but it is not
+          # proof that dedicated operations and incident coverage is staffed.
+          if [ "$OPS_CONFIGURED" != "true" ] || [ "$INCIDENT_CONFIGURED" != "true" ]; then
+            echo "::error::Named production operations and incident owners are required for Gate 6"
+            exit 1
+          fi
       - id: surface
         name: Canonical production surface, readiness, and release identity
         if: always()
@@ -103,7 +116,7 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER }}
+          INCIDENT_OWNER: ${{ vars.LH_PROD_INCIDENT_OWNER || github.repository_owner }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ALERT_DRILL: ${{ steps.alert_drill.outcome == 'failure' }}
         run: |

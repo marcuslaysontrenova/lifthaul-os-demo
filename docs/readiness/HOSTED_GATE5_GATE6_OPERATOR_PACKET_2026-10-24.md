@@ -35,3 +35,30 @@ Test app rollback in isolated environment only to a known-good compatible SHA an
 
 ## 4. Sign-off record
 Store redacted run URLs/artifact IDs and privately approved witness attestations against **the exact release SHA**. Update #36 and #35 only after all checks pass and independent owners sign; then update #20 Gate 7 entry. Do not mark MVP GO until all mandatory MVP criteria pass. Gate 5 and Gate 6 status: OPEN pending hosted proof.
+
+## 5. Supplemental direct-object acceptance (PR #77)
+The same protected persona manifest additionally needs an approved `object_path`
+on four existing rows: booker `/portal/client/bookings/<id>`, accredited_driver
+`/driver/trips/<id>`, motorcycle_owner and truck_owner
+`/admin/carrier-portal/overview/<id>` (distinct carrier IDs). Use only existing
+authorized synthetic objects whose response contains the owner's unique marker.
+Do not publish IDs or create fixtures through UAT. The supplementary runner first
+proves authorized owner access, then verifies direct-object cross-role denial and
+same-role carrier isolation. Carrier HTTP 200 is acceptable only if foreign IDs
+are ignored and only the requesting carrier's marker is returned. Protected API
+URLs are tested directly; public HTML shells are not authorization evidence.
+
+The workflow runs `supplemental_persona_uat.py` and uploads
+`production-persona-security.json`. It performs only GET and authentication
+login/logout calls, verifies its own six session revocations and pins release and
+deployment before/after. These six sessions are separate from the primary ten.
+No credentials, markers, paths, object IDs or response bodies enter its artifact.
+
+The existing finance status endpoint proves only its protected-funds master
+switch. It currently lacks authoritative booleans for live dispatch, collection,
+refunds, payouts and settlement. Their absence produces
+`BLOCKED_GATE5_SAFETY_OBSERVABILITY`, never a presumed OFF result. Do not inject
+constant booleans or treat absence of test mutations as proof of runtime policy.
+Actual runtime-enforced safety status or separately witnessed exact-release
+evidence remains required. This supplement alone is not full browser landing-page
+UAT, administrator tenant-scope certification, independent review or gate closure.

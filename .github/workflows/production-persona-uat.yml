@@ -58,6 +58,11 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/go_live/prod_persona_uat.py
+      - name: Supplement direct-object and runtime safety evidence
+        env:
+          EXPECTED_SHA: ${{ inputs.release_sha }}
+          LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
+        run: python scripts/go_live/supplemental_persona_uat.py
       - name: Require hardened exact-release acceptance evidence
         env:
           EXPECTED_SHA: ${{ inputs.release_sha }}
@@ -72,5 +77,6 @@ jobs:
           path: |
             evidence/production-persona-uat.json
             evidence/production-persona-blocker.json
+            evidence/production-persona-security.json
           if-no-files-found: error
           retention-days: 90

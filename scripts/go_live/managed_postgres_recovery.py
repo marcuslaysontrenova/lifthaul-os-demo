@@ -80,10 +80,18 @@ def validate_metadata() -> dict:
         raise SystemExit("RECOVERY_POINT_AT cannot be later than INCIDENT_AT")
     if restore_finished < restore_started:
         raise SystemExit("RESTORE_FINISHED_AT cannot be before RESTORE_STARTED_AT")
+    # Distinct URLs do not establish infrastructure isolation; require separately
+    # approved, operator-verified references before producing evidence.
+    if required("RECOVERY_ISOLATION_APPROVAL_REF") == required("RESTORE_TARGET_REFERENCE"):
+        raise SystemExit("independent isolation approval reference required")
+    if required("RECOVERY_TIMESTAMP_PROVENANCE") not in {"provider-exported", "tool-observed", "operator-supplied"}:
+        raise SystemExit("unsupported recovery timestamp provenance")
     return {
         "source_url": source_url,
         "restore_url": restore_url,
         "recovery_owner": required("RECOVERY_OWNER"),
+        "isolation_approval_reference": required("RECOVERY_ISOLATION_APPROVAL_REF"),
+        "timestamp_provenance": required("RECOVERY_TIMESTAMP_PROVENANCE"),
         "provider_backup_reference": required("PROVIDER_BACKUP_REFERENCE"),
         "restore_target_reference": required("RESTORE_TARGET_REFERENCE"),
         "backup_retention_days": retention_days,
@@ -124,13 +132,14 @@ def main() -> int:
     metadata = validate_metadata()
     source, restored = reconcile(metadata.pop("source_url"), metadata.pop("restore_url"))
     if source != restored:
-        raise SystemExit(f"restore reconciliation failed: source={source}, restored={restored}")
+        raise SystemExit("restore reconciliation failed: critical table counts differ")
 
     rto_seconds = (metadata["restore_finished_at"] - metadata["restore_started_at"]).total_seconds()
     rpo_seconds = (metadata["incident_at"] - metadata["recovery_point_at"]).total_seconds()
     digest = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
     evidence = {
         "result": "PASS",
+        "component": "read_only_count_reconciliation_only",
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "pitr_enabled": True,
         "backup_retention_days": metadata["backup_retention_days"],
@@ -146,6 +155,11 @@ def main() -> int:
         "critical_table_counts": source,
         "reconciliation_digest": digest,
         "source_and_restore_are_distinct": True,
+        "infrastructure_isolation_verified": False,
+        "witnessed_restore_verified": False,
+        "provider_restore_attestation_verified": False,
+        "independent_witness_signoff": "PENDING",
+        "gate6_closure": "BLOCKED",
     }
     path = Path(required("EVIDENCE_PATH"))
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -32,6 +32,8 @@ class ManagedRecoveryContractTests(unittest.TestCase):
             "RECOVERY_OWNER": "platform-oncall",
             "PROVIDER_BACKUP_REFERENCE": "railway-backup-123",
             "RESTORE_TARGET_REFERENCE": "railway-restore-456",
+            "RECOVERY_ISOLATION_APPROVAL_REF": "ISOLATION-APPROVAL-456",
+            "RECOVERY_TIMESTAMP_PROVENANCE": "provider-exported",
             "RECOVERY_POINT_AT": "2026-10-16T10:00:00Z",
             "INCIDENT_AT": "2026-10-16T10:05:00Z",
             "RESTORE_STARTED_AT": "2026-10-16T10:06:00Z",

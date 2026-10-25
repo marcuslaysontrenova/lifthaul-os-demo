@@ -15,6 +15,9 @@ BASE = {
     "RECOVERY_APPROVED_BASELINE_COUNTS_JSON":"{\"customers\":0,\"bookings\":0,\"mkt_bookings\":0,\"audit_logs\":0,\"schema_version\":1}",
     "RECOVERY_APPROVED_SCHEMA_DIGEST":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "RECOVERY_BASELINE_APPROVAL_REF":"BACKUP-BASELINE-APPROVED",
+    "RECOVERY_APPROVED_RPO_SECONDS":"600",
+    "RECOVERY_APPROVED_RTO_SECONDS":"1800",
+    "RECOVERY_OBJECTIVES_APPROVAL_REF":"RTO-RPO-APPROVED",
     "RECOVERY_POINT_AT":"2026-10-25T10:00:00Z",
     "INCIDENT_AT":"2026-10-25T10:01:00Z",
     "RESTORE_STARTED_AT":"2026-10-25T10:02:00Z",
@@ -46,6 +49,19 @@ class RecoveryIsolationContractTests(unittest.TestCase):
             recovery.validate_metadata()
     def test_invalid_catalog_digest_blocks(self):
         env=dict(BASE, RECOVERY_APPROVED_SCHEMA_DIGEST="not-a-real-digest")
+        with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
+            recovery.validate_metadata()
+    def test_missing_objective_approval_refused(self):
+        env=dict(BASE)
+        env.pop("RECOVERY_OBJECTIVES_APPROVAL_REF")
+        with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
+            recovery.validate_metadata()
+    def test_invalid_rto_target_refused(self):
+        env=dict(BASE, RECOVERY_APPROVED_RTO_SECONDS="0")
+        with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
+            recovery.validate_metadata()
+    def test_invalid_rpo_target_refused(self):
+        env=dict(BASE, RECOVERY_APPROVED_RPO_SECONDS="-1")
         with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
             recovery.validate_metadata()
     def test_valid_metadata_does_not_claim_restore(self):

@@ -17,6 +17,7 @@ import json
 import pathlib
 import re
 import sys
+import subprocess
 
 try:
     from . import prod_persona_uat as gate5
@@ -107,6 +108,26 @@ def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
             raise supplement.Blocked("BLOCKED_RELEASE_IDENTITY_MISMATCH")
         evidence["security_supplement"] = supplemental
         evidence["browser_journeys"] = "BLOCKED_WITNESSED_BROWSER_EVIDENCE"
+        if getattr(args, "browser", False):
+            # Credentials are supplied to the local child process through a
+            # private pipe, never argv, environment, logs or temporary files.
+            runner = pathlib.Path(__file__).resolve().parents[2] / "ci/browser/operator-hosted-acceptance.js"
+            try:
+                child = subprocess.run(
+                    ["node", str(runner), "--execute"],
+                    input=json.dumps({"expected_sha": args.expected_sha,
+                                      "approval_reference": args.approval_reference,
+                                      "manifest": manifest}),
+                    text=True, capture_output=True, timeout=240, check=False)
+                data = json.loads(child.stdout)
+                if data.get("release_sha") == args.expected_sha and data.get("deployment_id") == observed["deployment_id"]:
+                    # Runner deliberately does not self-certify browser navigation.
+                    evidence["browser_journeys"] = data.get("result", "BLOCKED")
+                else:
+                    evidence["browser_journeys"] = "BLOCKED_RELEASE_IDENTITY_MISMATCH"
+            except Exception:
+                evidence["browser_journeys"] = "BLOCKED_BROWSER_RUNTIME_OR_DEPENDENCY"
+
         evidence["administrator_tenant_scope"] = "BLOCKED_WITNESSED_ADMIN_SCOPE"
         evidence["audit_qa_identity_attestation"] = "PENDING"
         evidence["authentication_email_evidence_or_approved_limitation"] = "PENDING"
@@ -140,6 +161,8 @@ def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--browser", action="store_true",
+                        help="Run optional local private-input Playwright browser checks; missing dependencies BLOCKED")
     parser.add_argument("--execute", action="store_true",
                         help="Run authorized hosted persona UAT (default is safe mode)")
     parser.add_argument("--expected-sha", default="")

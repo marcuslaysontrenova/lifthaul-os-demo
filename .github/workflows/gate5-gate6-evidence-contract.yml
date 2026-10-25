@@ -1,0 +1,25 @@
+name: LiftHaul Gate 5 and Gate 6 Evidence Safety Contracts
+on:
+  pull_request:
+    paths:
+      - 'scripts/go_live/validate_gate_closure.py'
+      - 'scripts/go_live/test_validate_gate_closure.py'
+      - 'scripts/go_live/validate_browser_evidence.py'
+      - 'scripts/go_live/test_validate_browser_evidence.py'
+      - 'scripts/go_live/managed_postgres_recovery.py'
+      - 'scripts/go_live/test_managed_recovery_provenance.py'
+      - '.github/workflows/gate5-gate6-evidence-contract.yml'
+permissions:
+  contents: read
+jobs:
+  evidence-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify fail-closed evidence and recovery metadata
+        run: |
+          python -m unittest scripts.go_live.test_validate_gate_closure scripts.go_live.test_validate_browser_evidence scripts.go_live.test_managed_recovery_provenance -v

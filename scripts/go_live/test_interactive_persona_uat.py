@@ -46,6 +46,7 @@ class InteractivePersonaUatTests(unittest.TestCase):
 
     def test_approved_existing_accounts_produce_redacted_evidence(self):
         original = MOD.gate5.execute
+        original_supplement = MOD.supplement.execute
         saved = {}
         def execute(manifest, sha, call=None):
             saved["num"] = len(manifest)
@@ -53,10 +54,14 @@ class InteractivePersonaUatTests(unittest.TestCase):
                     "sessions_revoked": 10, "live_funds_enabled": False,
                     "external_persona_fixture_isolation": "PASS"}
         def secret(prompt):
-            persona = MOD.gate5.PERSONAS[(secret.index // 3)]
-            part = secret.index % 3
+            if secret.index < 33:
+                persona = MOD.gate5.PERSONAS[secret.index // 3]
+                part = secret.index % 3
+                value = (persona + "@uat.invalid", "SyntheticLongPassword!", "fixture-" + persona)[part]
+            else:
+                value = ("/portal/client/bookings/101", "/driver/trips/102", "/admin/carrier-portal/overview/103", "/admin/carrier-portal/overview/104")[secret.index - 33]
             secret.index += 1
-            return (persona + "@uat.invalid", "SyntheticLongPassword!", "fixture-" + persona)[part]
+            return value
         secret.index = 0
         def sink(content):
             saved["evidence"] = content
@@ -70,6 +75,7 @@ class InteractivePersonaUatTests(unittest.TestCase):
             def write_text(self, text, **kwargs): sink(text)
             def chmod(self, *_): pass
         MOD.gate5.execute = execute
+        MOD.supplement.execute = lambda *a, **kw: {"result":"PASS","deployment_id":"x"}
         MOD.pathlib.Path = StubPath
         try:
             fake = lambda method, path: (200, {"status": "ready",
@@ -79,6 +85,7 @@ class InteractivePersonaUatTests(unittest.TestCase):
                              secret_prompt=secret), 0)
         finally:
             MOD.gate5.execute = original
+            MOD.supplement.execute = original_supplement
             MOD.pathlib.Path = original_path
         self.assertEqual(saved["num"], 11)
         self.assertNotIn("SyntheticLongPassword", saved["evidence"])

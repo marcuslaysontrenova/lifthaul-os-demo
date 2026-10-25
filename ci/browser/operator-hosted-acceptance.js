@@ -82,6 +82,20 @@ async function checkPage(page, persona, row) {
   }
   throw new Error('UNSUPPORTED_PERSONA');
 }
+async function verifyForbiddenAdminUrl(page, persona) {
+  if (persona==='administrator' || persona==='operations' || persona==='driver_applicant')
+    return;
+  const status=await page.evaluate(async ({driver}) => {
+    const token=sessionStorage.getItem(driver?'lifthaul_driver_token':'lifthaul_api_token');
+    if (!token) return 0;
+    try {
+      const response=await fetch('/admin/users',{
+        method:'GET',headers:{'Authorization':'Bearer '+token,'Accept':'application/json'}});
+      return response.status;
+    } catch {return 0}
+  },{driver:persona==='accredited_driver'});
+  if (status!==401 && status!==403) throw new Error('UNAUTHORIZED_DIRECT_API_URL_NOT_DENIED');
+}
 async function revokePageSession(page, persona) {
   return await page.evaluate(async ({driver}) => {
     const token=sessionStorage.getItem(driver?'lifthaul_driver_token':'lifthaul_api_token');
@@ -145,6 +159,7 @@ async function main() {
         const landing=await page.goto(BASE+'/'+FIELDS[persona],{waitUntil:'domcontentloaded'});
         if (!landing || !landing.ok()) throw new Error('LANDING_UNAVAILABLE');
         await checkPage(page,persona,rows[persona]);
+        await verifyForbiddenAdminUrl(page,persona);
         result='PASS';
       } catch {
         result='FAIL';

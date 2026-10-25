@@ -65,7 +65,15 @@ async function run() {
         // generic public shell alone cannot pass this check.
         const hasWorkspace=await page.locator('main, [role="main"], #app, #nav').first().isVisible();
         if (!hasWorkspace) throw new Error('AUTHENTICATED_WORKSPACE_MISSING');
-        checks[persona]='BLOCKED_ROLE_NAVIGATION_NOT_YET_ASSERTED';
+        if (persona === 'booker') {
+          const offers = page.locator('#nav').getByRole('button', {name:'Offers & comparison',exact:true});
+          await offers.waitFor({state:'visible',timeout:10000});
+          await offers.click();
+          await page.getByRole('heading', {name:'Offers & comparison'}).waitFor({state:'visible',timeout:10000});
+          checks[persona]='PASS_AUTHENTICATED_CLIENT_NAVIGATION';
+        } else {
+          checks[persona]='BLOCKED_ROLE_NAVIGATION_NOT_YET_ASSERTED';
+        }
       } catch {
         checks[persona]='FAIL';
       } finally {

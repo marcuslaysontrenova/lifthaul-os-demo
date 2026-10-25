@@ -97,16 +97,17 @@ async function verifyForbiddenAdminUrl(page, persona) {
   if (status!==401 && status!==403) throw new Error('UNAUTHORIZED_DIRECT_API_URL_NOT_DENIED');
 }
 async function revokePageSession(page, persona) {
-  return await page.evaluate(async ({driver}) => {
+  return await page.evaluate(async ({driver,pending}) => {
     const token=sessionStorage.getItem(driver?'lifthaul_driver_token':'lifthaul_api_token');
-    if (!token) return true; // denied pending-applicant login
+    if (!token) return pending; // only denied applicant may lack a session
     try {
       const headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'};
       const out=await fetch('/logout',{method:'POST',headers,body:'{}'});
       const stale=await fetch('/me/permissions',{method:'GET',headers});
       return (out.status===200 || out.status===204) && (stale.status===401 || stale.status===403);
     } catch { return false; }
-  },{driver:persona==='accredited_driver'||persona==='driver_applicant'});
+  },{driver:persona==='accredited_driver'||persona==='driver_applicant',
+     pending:persona==='driver_applicant'});
 }
 async function main() {
   if (process.argv[2]!=='--execute') {

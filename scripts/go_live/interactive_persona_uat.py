@@ -20,8 +20,10 @@ import sys
 
 try:
     from . import prod_persona_uat as gate5
+    from . import supplemental_persona_uat as supplement
 except ImportError:
     import prod_persona_uat as gate5
+    import supplemental_persona_uat as supplement
 
 
 APPROVAL_PHRASE = "I AUTHORIZE READ-ONLY HOSTED PERSONA UAT"
@@ -37,8 +39,16 @@ def collect_existing_accounts(secret_fn):
             "password": secret_fn("Existing account password (hidden): "),
             "marker": secret_fn("Existing owned fixture marker (hidden): ").strip(),
         }
-    # Mirrors the GitHub Actions manifest validation, including uniqueness.
-    return gate5.load_manifest(json.dumps(manifest))
+    # Four pre-approved, existing objects are required for supplementary IDOR tests.
+    # Never print paths: IDs may disclose fixture relationships.
+    for persona in supplement.OBJECT_PATTERNS:
+        manifest[persona]["object_path"] = secret_fn("Existing approved object path (hidden): ").strip()
+    validated = gate5.load_manifest(json.dumps(manifest))
+    for persona, pattern in supplement.OBJECT_PATTERNS.items():
+        if not re.fullmatch(pattern, manifest[persona]["object_path"]):
+            raise supplement.Blocked("BLOCKED_APPROVED_SYNTHETIC_OBJECT_FIXTURES")
+        validated[persona]["object_path"] = manifest[persona]["object_path"]
+    return validated
 
 
 def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
@@ -90,6 +100,19 @@ def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
                 or evidence.get("live_funds_enabled") is not False
                 or evidence.get("external_persona_fixture_isolation") != "PASS"):
             raise AssertionError("full Gate 5 hosted acceptance contract was not satisfied")
+        supplemental = supplement.execute(manifest, args.expected_sha, call=effective_call)
+        if supplemental.get("result") != "PASS":
+            raise supplement.Blocked(supplemental.get("blocker") or "BLOCKED_GATE5_SUPPLEMENTARY_EVIDENCE")
+        if supplemental.get("deployment_id") != observed["deployment_id"]:
+            raise supplement.Blocked("BLOCKED_RELEASE_IDENTITY_MISMATCH")
+        evidence["security_supplement"] = supplemental
+        evidence["browser_journeys"] = "BLOCKED_WITNESSED_BROWSER_EVIDENCE"
+        evidence["administrator_tenant_scope"] = "BLOCKED_WITNESSED_ADMIN_SCOPE"
+        evidence["audit_qa_identity_attestation"] = "PENDING"
+        evidence["authentication_email_evidence_or_approved_limitation"] = "PENDING"
+        evidence["security_signoff"] = "PENDING"
+        evidence["release_owner_signoff"] = "PENDING"
+        evidence["gate5_closure"] = "BLOCKED"
         evidence["execution_channel"] = "authorized_private_interactive_operator"
         evidence["approval_reference"] = args.approval_reference.strip()
         # No approved QA review is claimed merely because an operator ran tests.
@@ -110,7 +133,7 @@ def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
         output.chmod(0o600)
     except OSError:
         pass
-    print("Hosted UAT PASS; REDACTED evidence saved for independent QA signoff.")
+    print("Primary and supplementary API checks PASS; full Gate 5 remains BLOCKED pending browser, admin scope, auth-email and human approvals.")
     print("This is NOT automatic Gate 5 closure or production release approval.")
     return 0
 

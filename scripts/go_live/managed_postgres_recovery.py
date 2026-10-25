@@ -86,7 +86,23 @@ def validate_metadata() -> dict:
         raise SystemExit("independent isolation approval reference required")
     if required("RECOVERY_TIMESTAMP_PROVENANCE") not in {"provider-exported", "tool-observed", "operator-supplied"}:
         raise SystemExit("unsupported recovery timestamp provenance")
+    # Restore a historical backup against its approved recovery-point baseline,
+    # not a live source whose rows or schema may have changed after the incident.
+    try:
+        baseline_counts = json.loads(required("RECOVERY_APPROVED_BASELINE_COUNTS_JSON"))
+    except ValueError as exc:
+        raise SystemExit("approved recovery-point counts must be JSON") from exc
+    if (not isinstance(baseline_counts, dict) or set(baseline_counts) != set(CRITICAL_TABLES)
+            or any(type(v) is not int or v < 0 for v in baseline_counts.values())):
+        raise SystemExit("approved recovery-point counts are incomplete")
+    baseline_catalog_digest = required("RECOVERY_APPROVED_SCHEMA_DIGEST")
+    if len(baseline_catalog_digest) != 64 or any(x not in "0123456789abcdef" for x in baseline_catalog_digest):
+        raise SystemExit("approved recovery-point schema digest is invalid")
+    baseline_approval_ref = required("RECOVERY_BASELINE_APPROVAL_REF")
     return {
+        "approved_baseline_counts": baseline_counts,
+        "approved_schema_digest": baseline_catalog_digest,
+        "baseline_approval_reference": baseline_approval_ref,
         "source_url": source_url,
         "restore_url": restore_url,
         "recovery_owner": required("RECOVERY_OWNER"),
@@ -153,18 +169,18 @@ def schema_catalog(conn) -> tuple[str, dict[str, int]]:
     return digest, {"columns": len(columns), "indexes": len(indexes), "constraints": len(constraints)}
 
 
-def verify_restore_catalog(source_url: str, restore_url: str) -> tuple[str, dict[str, int]]:
-    """Read-only snapshot of structural compatibility, separate from actual restore."""
+def inspect_restore_target(restore_url: str) -> tuple[dict[str, int], str, dict[str, int]]:
+    """Read-only recovered target; no query against changing production source."""
     try:
         import psycopg
     except ImportError as exc:
-        raise SystemExit("psycopg is required for structural recovery verification") from exc
-    with psycopg.connect(source_url) as source, psycopg.connect(restore_url) as target:
-        source_digest, source_counts = schema_catalog(source)
-        target_digest, target_counts = schema_catalog(target)
-    if source_digest != target_digest:
-        raise SystemExit("restore schema/index/constraint metadata mismatch")
-    return target_digest, target_counts
+        raise SystemExit("psycopg is required for target inspection") from exc
+    with psycopg.connect(restore_url) as target:
+        counts = snapshot(target)
+    with psycopg.connect(restore_url) as target:
+        digest, catalog_counts = schema_catalog(target)
+    return counts, digest, catalog_counts
+
 
 def reconcile(source_url: str, restore_url: str) -> tuple[dict[str, int], dict[str, int]]:
     try:
@@ -179,17 +195,20 @@ def main() -> int:
     metadata = validate_metadata()
     source_url = metadata.pop("source_url")
     restore_url = metadata.pop("restore_url")
-    source, restored = reconcile(source_url, restore_url)
-    catalog_digest, catalog_counts = verify_restore_catalog(source_url, restore_url)
-    if source != restored:
-        raise SystemExit("restore reconciliation failed: critical table counts differ")
+    restored, catalog_digest, catalog_counts = inspect_restore_target(restore_url)
+    if restored != metadata["approved_baseline_counts"]:
+        raise SystemExit("restore reconciliation failed against approved recovery-point counts")
+    if catalog_digest != metadata["approved_schema_digest"]:
+        raise SystemExit("restore schema/index/constraint digest differs from approved recovery point")
 
     rto_seconds = (metadata["restore_finished_at"] - metadata["restore_started_at"]).total_seconds()
     rpo_seconds = (metadata["incident_at"] - metadata["recovery_point_at"]).total_seconds()
-    digest = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+    digest = hashlib.sha256(json.dumps(restored, sort_keys=True).encode()).hexdigest()
     evidence = {
         "result": "PASS",
-        "component": "read_only_count_reconciliation_only",
+        "component": "read_only_approved_baseline_reconciliation_only",
+        "baseline_approval_reference": metadata["baseline_approval_reference"],
+        "baseline_authenticity_verified": False,
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "pitr_enabled": True,
         "backup_retention_days": metadata["backup_retention_days"],
@@ -202,7 +221,7 @@ def main() -> int:
         "restore_finished_at": metadata["restore_finished_at"].isoformat(),
         "rto_seconds": rto_seconds,
         "rpo_seconds": rpo_seconds,
-        "critical_table_counts": source,
+        "critical_table_counts": restored,
         "schema_catalog_digest": catalog_digest,
         "schema_catalog_counts": catalog_counts,
         "schema_catalog_compatible": True,

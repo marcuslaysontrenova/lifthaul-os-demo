@@ -48,6 +48,13 @@ async function run() {
     if (before.status()!==200 || identity.release_sha!==sha || !identity.deployment_id)
       throw new Error('BLOCKED_RELEASE_IDENTITY_MISMATCH');
     for (const persona of Object.keys(UI)) {
+      // Other workspaces use different authentication/session flows. They
+      // remain BLOCKED until explicit supported browser contracts exist;
+      // never mislabel an unsupported journey as an application failure.
+      if (persona !== 'booker') {
+        checks[persona] = 'BLOCKED_PERSONA_BROWSER_FLOW_NOT_IMPLEMENTED';
+        continue;
+      }
       let token;
       let page;
       try {

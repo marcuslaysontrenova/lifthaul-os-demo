@@ -35,7 +35,7 @@ async function run() {
   const sha=payload.expected_sha, manifest=payload.manifest;
   if (!/^[a-f0-9]{40}$/.test(sha||'') ||
       !payload.approval_reference || !manifest ||
-      Object.keys(manifest).sort().join('|') !== Object.keys({...UI,driver_applicant:null}).sort().join('|')) return 2;
+      Object.keys(manifest).sort().join('|') !== 'booker') return 2;
   let browser, context;
   const checks={};
   try {

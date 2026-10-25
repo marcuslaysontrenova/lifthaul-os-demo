@@ -99,10 +99,21 @@ def validate_metadata() -> dict:
     if len(baseline_catalog_digest) != 64 or any(x not in "0123456789abcdef" for x in baseline_catalog_digest):
         raise SystemExit("approved recovery-point schema digest is invalid")
     baseline_approval_ref = required("RECOVERY_BASELINE_APPROVAL_REF")
+    try:
+        rpo_objective = float(required("RECOVERY_APPROVED_RPO_SECONDS"))
+        rto_objective = float(required("RECOVERY_APPROVED_RTO_SECONDS"))
+    except ValueError as exc:
+        raise SystemExit("approved recovery objectives must be numeric seconds") from exc
+    if not (0 <= rpo_objective < 31536000 and 0 < rto_objective < 31536000):
+        raise SystemExit("approved recovery objectives are outside permitted bounds")
+    objectives_reference = required("RECOVERY_OBJECTIVES_APPROVAL_REF")
     return {
         "approved_baseline_counts": baseline_counts,
         "approved_schema_digest": baseline_catalog_digest,
         "baseline_approval_reference": baseline_approval_ref,
+        "rpo_objective_seconds": rpo_objective,
+        "rto_objective_seconds": rto_objective,
+        "objectives_approval_reference": objectives_reference,
         "source_url": source_url,
         "restore_url": restore_url,
         "recovery_owner": required("RECOVERY_OWNER"),
@@ -206,6 +217,8 @@ def main() -> int:
 
     rto_seconds = (metadata["restore_finished_at"] - metadata["restore_started_at"]).total_seconds()
     rpo_seconds = (metadata["incident_at"] - metadata["recovery_point_at"]).total_seconds()
+    if rpo_seconds > metadata["rpo_objective_seconds"] or rto_seconds > metadata["rto_objective_seconds"]:
+        raise SystemExit("measured recovery exceeds one or more approved objectives")
     digest = hashlib.sha256(json.dumps(restored, sort_keys=True).encode()).hexdigest()
     evidence = {
         "result": "PASS",
@@ -224,6 +237,11 @@ def main() -> int:
         "restore_finished_at": metadata["restore_finished_at"].isoformat(),
         "rto_seconds": rto_seconds,
         "rpo_seconds": rpo_seconds,
+        "rpo_objective_seconds": metadata["rpo_objective_seconds"],
+        "rto_objective_seconds": metadata["rto_objective_seconds"],
+        "objective_approval_reference": metadata["objectives_approval_reference"],
+        "objectives_authenticity_verified": False,
+        "measured_objectives_within_bounds": True,
         "critical_table_counts": restored,
         "schema_catalog_digest": catalog_digest,
         "schema_catalog_counts": catalog_counts,

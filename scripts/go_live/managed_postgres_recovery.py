@@ -118,10 +118,11 @@ def validate_metadata() -> dict:
     }
 
 
-def snapshot(conn) -> dict[str, int]:
+def snapshot(conn, *, readonly_started=False) -> dict[str, int]:
     result: dict[str, int] = {}
     with conn.cursor() as cursor:
-        cursor.execute("SET TRANSACTION READ ONLY")
+        if not readonly_started:
+            cursor.execute("SET TRANSACTION READ ONLY")
         for table in CRITICAL_TABLES:
             cursor.execute(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
@@ -136,10 +137,11 @@ def snapshot(conn) -> dict[str, int]:
 
 
 
-def schema_catalog(conn) -> tuple[str, dict[str, int]]:
+def schema_catalog(conn, *, readonly_started=False) -> tuple[str, dict[str, int]]:
     """Hash only structural catalog metadata; never select or export row values."""
     with conn.cursor() as cursor:
-        cursor.execute("SET TRANSACTION READ ONLY")
+        if not readonly_started:
+            cursor.execute("SET TRANSACTION READ ONLY")
         cursor.execute(
             "SELECT table_name, column_name, data_type, is_nullable "
             "FROM information_schema.columns WHERE table_schema='public' "
@@ -176,9 +178,10 @@ def inspect_restore_target(restore_url: str) -> tuple[dict[str, int], str, dict[
     except ImportError as exc:
         raise SystemExit("psycopg is required for target inspection") from exc
     with psycopg.connect(restore_url) as target:
-        counts = snapshot(target)
-    with psycopg.connect(restore_url) as target:
-        digest, catalog_counts = schema_catalog(target)
+        with target.cursor() as cursor:
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        counts = snapshot(target, readonly_started=True)
+        digest, catalog_counts = schema_catalog(target, readonly_started=True)
     return counts, digest, catalog_counts
 
 

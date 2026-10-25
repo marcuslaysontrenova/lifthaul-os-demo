@@ -86,3 +86,14 @@ interlock: the operator must independently verify that release's existing financ
 and dispatch controls remain OFF; variable presence alone cannot certify rollback.
 Full browser landing-page UAT, administrator tenant-scope certification and
 independent sign-offs remain mandatory. This supplement cannot close either gate.
+
+
+## Operator-local certification integration (2026-10-25, development-only)
+
+These steps update the existing packet. They are not authorization to run hosted tests or restoration.
+
+1. Confirm independently reviewed and explicitly approved deployed SHA and UAT change reference. Run `python scripts/go_live/interactive_persona_uat.py` in safe mode first. Authorized operator executes with `--execute --expected-sha <approved-deployed-sha> --approval-reference <approved-uat-reference>` only from a private terminal. Primary and supplementary authorization checks use private identity/object prompts and write a sanitized combined artifact.
+2. Browser landing/navigation, administrator tenant scope, protected audit/QA identities, auth-email delivery or valid approved limitation, and human sign-offs are deliberately **BLOCKED** in that artifact until independently witnessed. HTTP status alone cannot establish browser acceptance.
+3. The recovery reconciliation helper remains read-only and **cannot restore**. It now requires `RECOVERY_ISOLATION_APPROVAL_REF` and `RECOVERY_TIMESTAMP_PROVENANCE` (provider-exported, tool-observed or operator-supplied) in addition to its existing inputs. Distinct database URLs are not proof of infrastructure isolation. Counts and supplied timestamps cannot certify a witnessed restore, real RPO/RTO, integrity or rollback.
+4. After approved hosted evidence and independently verifiable sign-offs, create a sanitized evidence index and run `python scripts/go_live/validate_gate_closure.py --evidence <sanitized-index.json> --release-sha <approved-deployed-sha>`. This index verifier conservatively leaves human-controlled criteria **BLOCKED** until independently checked against their real authority source. It cannot authorize a deployment or close either gate.
+5. Do not upload credentials, fixture markers/paths, customer records, connection strings, session tokens, or raw browser traces. Retain verified provider/reviewer/incident links; stop only the failed or missing stage and preserve earlier valid evidence. Issues #36 and #35 remain OPEN until accountable verification confirms all requirements.

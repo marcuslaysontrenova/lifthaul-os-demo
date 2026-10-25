@@ -117,7 +117,8 @@ def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
                     ["node", str(runner), "--execute"],
                     input=json.dumps({"expected_sha": args.expected_sha,
                                       "approval_reference": args.approval_reference,
-                                      "manifest": manifest}),
+                                      "manifest": {"booker": {"email": manifest["booker"]["email"],
+                                                               "password": manifest["booker"]["password"]}}}),
                     text=True, capture_output=True, timeout=240, check=False)
                 data = json.loads(child.stdout)
                 if data.get("release_sha") == args.expected_sha and data.get("deployment_id") == observed["deployment_id"]:

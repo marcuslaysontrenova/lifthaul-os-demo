@@ -35,6 +35,19 @@ class RecoveryIsolationContractTests(unittest.TestCase):
         env = dict(BASE, RECOVERY_TIMESTAMP_PROVENANCE="not-verified")
         with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
             recovery.validate_metadata()
+    def test_missing_recovery_point_baseline_blocks(self):
+        env=dict(BASE)
+        env.pop("RECOVERY_APPROVED_BASELINE_COUNTS_JSON")
+        with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
+            recovery.validate_metadata()
+    def test_wrong_baseline_structure_blocks(self):
+        env=dict(BASE, RECOVERY_APPROVED_BASELINE_COUNTS_JSON='{"customers":0}')
+        with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
+            recovery.validate_metadata()
+    def test_invalid_catalog_digest_blocks(self):
+        env=dict(BASE, RECOVERY_APPROVED_SCHEMA_DIGEST="not-a-real-digest")
+        with patch.dict(os.environ,env,clear=True), self.assertRaises(SystemExit):
+            recovery.validate_metadata()
     def test_valid_metadata_does_not_claim_restore(self):
         with patch.dict(os.environ,BASE,clear=True):
             result = recovery.validate_metadata()

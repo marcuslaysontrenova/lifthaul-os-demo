@@ -8,6 +8,7 @@ on:
       - 'scripts/go_live/test_validate_browser_evidence.py'
       - 'scripts/go_live/managed_postgres_recovery.py'
       - 'scripts/go_live/test_managed_recovery_provenance.py'
+      - 'scripts/go_live/test_recovery_schema_catalog.py'
       - '.github/workflows/gate5-gate6-evidence-contract.yml'
 permissions:
   contents: read
@@ -22,4 +23,4 @@ jobs:
           python-version: '3.12'
       - name: Verify fail-closed evidence and recovery metadata
         run: |
-          python -m unittest scripts.go_live.test_validate_gate_closure scripts.go_live.test_validate_browser_evidence scripts.go_live.test_managed_recovery_provenance -v
+          python -m unittest scripts.go_live.test_validate_gate_closure scripts.go_live.test_validate_browser_evidence scripts.go_live.test_managed_recovery_provenance scripts.go_live.test_recovery_schema_catalog -v

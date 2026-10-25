@@ -6,9 +6,10 @@ class Cursor:
     def __init__(self, columns, indexes, constraints):
         self.rows=[columns,indexes,constraints]
         self.i=0
+        self.queries=[]
     def __enter__(self): return self
     def __exit__(self,*a): return False
-    def execute(self,*args): pass
+    def execute(self,*args): self.queries.append(str(args[0]))
     def fetchall(self):
         data=self.rows[self.i];self.i+=1
         return data
@@ -36,7 +37,7 @@ class SchemaCatalogTests(unittest.TestCase):
     def test_structural_catalog_not_mutated(self):
         conn=self.fixture()
         mod.schema_catalog(conn)
-        queries=[str(call.args[0]) for call in conn.cursor.return_value.execute.call_args_list]
+        queries=conn.cursor.return_value.queries
         self.assertTrue(all(q.startswith("SET TRANSACTION READ ONLY") or q.startswith("SELECT") for q in queries))
 
 if __name__=="__main__":

@@ -119,6 +119,53 @@ def snapshot(conn) -> dict[str, int]:
     return result
 
 
+
+def schema_catalog(conn) -> tuple[str, dict[str, int]]:
+    """Hash only structural catalog metadata; never select or export row values."""
+    with conn.cursor() as cursor:
+        cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute(
+            "SELECT table_name, column_name, data_type, is_nullable "
+            "FROM information_schema.columns WHERE table_schema='public' "
+            "ORDER BY table_name, ordinal_position"
+        )
+        columns = [tuple(row) for row in cursor.fetchall()]
+        cursor.execute(
+            "SELECT tablename, indexname, indexdef FROM pg_indexes "
+            "WHERE schemaname='public' ORDER BY tablename, indexname"
+        )
+        indexes = [tuple(row) for row in cursor.fetchall()]
+        cursor.execute(
+            "SELECT table_name, constraint_name, constraint_type "
+            "FROM information_schema.table_constraints "
+            "WHERE table_schema='public' ORDER BY table_name, constraint_name"
+        )
+        constraints = [tuple(row) for row in cursor.fetchall()]
+    for table in CRITICAL_TABLES:
+        if not any(row[0] == table for row in columns):
+            raise RuntimeError("required schema table or columns missing")
+        if not any(row[0] == table for row in indexes):
+            raise RuntimeError("required table index missing")
+        if not any(row[0] == table and row[2] == "PRIMARY KEY" for row in constraints):
+            raise RuntimeError("required table primary key missing")
+    catalog = {"columns": columns, "indexes": indexes, "constraints": constraints}
+    digest = hashlib.sha256(json.dumps(catalog, sort_keys=True, default=str).encode()).hexdigest()
+    return digest, {"columns": len(columns), "indexes": len(indexes), "constraints": len(constraints)}
+
+
+def verify_restore_catalog(source_url: str, restore_url: str) -> tuple[str, dict[str, int]]:
+    """Read-only snapshot of structural compatibility, separate from actual restore."""
+    try:
+        import psycopg
+    except ImportError as exc:
+        raise SystemExit("psycopg is required for structural recovery verification") from exc
+    with psycopg.connect(source_url) as source, psycopg.connect(restore_url) as target:
+        source_digest, source_counts = schema_catalog(source)
+        target_digest, target_counts = schema_catalog(target)
+    if source_digest != target_digest:
+        raise SystemExit("restore schema/index/constraint metadata mismatch")
+    return target_digest, target_counts
+
 def reconcile(source_url: str, restore_url: str) -> tuple[dict[str, int], dict[str, int]]:
     try:
         import psycopg
@@ -130,7 +177,10 @@ def reconcile(source_url: str, restore_url: str) -> tuple[dict[str, int], dict[s
 
 def main() -> int:
     metadata = validate_metadata()
-    source, restored = reconcile(metadata.pop("source_url"), metadata.pop("restore_url"))
+    source_url = metadata.pop("source_url")
+    restore_url = metadata.pop("restore_url")
+    source, restored = reconcile(source_url, restore_url)
+    catalog_digest, catalog_counts = verify_restore_catalog(source_url, restore_url)
     if source != restored:
         raise SystemExit("restore reconciliation failed: critical table counts differ")
 
@@ -153,6 +203,9 @@ def main() -> int:
         "rto_seconds": rto_seconds,
         "rpo_seconds": rpo_seconds,
         "critical_table_counts": source,
+        "schema_catalog_digest": catalog_digest,
+        "schema_catalog_counts": catalog_counts,
+        "schema_catalog_compatible": True,
         "reconciliation_digest": digest,
         "source_and_restore_are_distinct": True,
         "infrastructure_isolation_verified": False,

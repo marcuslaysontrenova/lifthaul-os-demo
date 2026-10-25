@@ -164,7 +164,7 @@ async function main() {
       } catch {
         result='FAIL';
       } finally {
-        if (page) {
+        if (page && persona!=='booker') {
           try {if (!(await revokePageSession(page,persona))) result='FAIL_SESSION_CLEANUP'}
           catch {result='FAIL_SESSION_CLEANUP'}
         }

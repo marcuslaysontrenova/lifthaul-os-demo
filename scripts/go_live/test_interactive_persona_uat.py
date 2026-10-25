@@ -92,5 +92,52 @@ class InteractivePersonaUatTests(unittest.TestCase):
         self.assertNotIn("@uat.invalid", saved["evidence"])
         self.assertEqual(json.loads(saved["evidence"])["independent_qa_signoff"], "PENDING")
 
+    def test_browser_child_receives_only_booker_credentials(self):
+        originals = (MOD.collect_existing_accounts, MOD.gate5.execute,
+                     MOD.supplement.execute, MOD.subprocess.run, MOD.pathlib.Path)
+        captured = {}
+        class LocalPath:
+            def __init__(self, *args): pass
+            @property
+            def parent(self): return self
+            @property
+            def parents(self): return [self, self, self]
+            def resolve(self): return self
+            def __truediv__(self, other): return self
+            def mkdir(self, **kwargs): pass
+            def write_text(self, *args, **kwargs): pass
+            def chmod(self, *_): pass
+        def mock_child(command, **kwargs):
+            captured["payload"] = json.loads(kwargs["input"])
+            class Child:
+                stdout = json.dumps({"result": "BLOCKED", "release_sha": SHA,
+                                     "deployment_id": "x"})
+            return Child()
+        MOD.collect_existing_accounts = lambda _: {
+            "booker": {"email": "booker@uat.invalid", "password": "test-private-only",
+                       "marker": "private-fixture"}, "finance": {
+                "email": "finance@uat.invalid", "password": "never-transfer",
+                "marker": "never-transfer-marker"}}
+        MOD.gate5.execute = lambda *a, **kw: {
+            "result": "PASS", "personas_passed": 11, "sessions_revoked": 10,
+            "live_funds_enabled": False, "external_persona_fixture_isolation": "PASS"}
+        MOD.supplement.execute = lambda *a, **kw: {"result": "PASS", "deployment_id": "x"}
+        MOD.subprocess.run = mock_child
+        MOD.pathlib.Path = LocalPath
+        try:
+            args = self.args()
+            args.browser = True
+            api = lambda method, path: (200, {"status": "ready", "release_sha": SHA,
+                        "deployment_id": "x", "schema_version": 27})
+            self.assertEqual(MOD.run(args, terminal_ok=True, call=api,
+                                     confirm=lambda _: MOD.APPROVAL_PHRASE), 0)
+        finally:
+            (MOD.collect_existing_accounts, MOD.gate5.execute,
+             MOD.supplement.execute, MOD.subprocess.run,
+             MOD.pathlib.Path) = originals
+        self.assertEqual(set(captured["payload"]["manifest"]), {"booker"})
+        self.assertNotIn("never-transfer", json.dumps(captured["payload"]))
+        self.assertNotIn("private-fixture", json.dumps(captured["payload"]))
+
 if __name__ == "__main__":
     unittest.main()

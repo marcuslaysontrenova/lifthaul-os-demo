@@ -113,17 +113,31 @@ def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
             # private pipe, never argv, environment, logs or temporary files.
             runner = pathlib.Path(__file__).resolve().parents[2] / "ci/browser/operator-hosted-acceptance.js"
             try:
+                # Only email/password credentials needed by browser login; no
+                # fixture marker, protected object path or session token.
+                browser_rows = {persona: {
+                    "email": manifest[persona]["email"],
+                    "password": manifest[persona]["password"]}
+                    for persona in gate5.PERSONAS}
+                browser_rows["administrator"]["mfa"] = secret_prompt(
+                    "Approved admin MFA code, if required (hidden; blank if not): ")
                 child = subprocess.run(
                     ["node", str(runner), "--execute"],
                     input=json.dumps({"expected_sha": args.expected_sha,
                                       "approval_reference": args.approval_reference,
-                                      "manifest": {"booker": {"email": manifest["booker"]["email"],
-                                                               "password": manifest["booker"]["password"]}}}),
-                    text=True, capture_output=True, timeout=240, check=False)
+                                      "manifest": browser_rows}),
+                    text=True, capture_output=True, timeout=300, check=False)
+                browser_rows.clear()
                 data = json.loads(child.stdout)
                 if data.get("release_sha") == args.expected_sha and data.get("deployment_id") == observed["deployment_id"]:
-                    # Runner deliberately does not self-certify browser navigation.
                     evidence["browser_journeys"] = data.get("result", "BLOCKED")
+                    evidence["browser_component"] = {
+                        "schema": data.get("schema"),
+                        "result": data.get("result"),
+                        "release_sha": args.expected_sha,
+                        "deployment_id": observed["deployment_id"],
+                        "technical_checks": data.get("technical_checks", {}),
+                        "independent_qa_signoff": "PENDING"}
                 else:
                     evidence["browser_journeys"] = "BLOCKED_RELEASE_IDENTITY_MISMATCH"
             except Exception:
@@ -155,9 +169,9 @@ def run(args, *, confirm=input, secret_prompt=getpass.getpass, call=None,
         output.chmod(0o600)
     except OSError:
         pass
-    print("Primary and supplementary API checks PASS; full Gate 5 remains BLOCKED pending browser, admin scope, auth-email and human approvals.")
+    print("Primary and supplementary API checks completed; full Gate 5 remains BLOCKED pending admin scope, auth-email and accountable approvals.")
     print("This is NOT automatic Gate 5 closure or production release approval.")
-    return 0
+    return 1 if getattr(args, "browser", False) and evidence.get("browser_journeys") != "PASS" else 0
 
 
 def main(argv=None):

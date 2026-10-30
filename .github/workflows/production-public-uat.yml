@@ -1,0 +1,181 @@
+name: LiftHaul production public MVP acceptance (no credentials, no live funds)
+
+on:
+  push:
+    branches: [codex/production-public-uat-20261013]
+    paths: [.github/workflows/production-public-uat.yml]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  unauthenticated-boundaries:
+    name: Exact release and 7 protected-role denials
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify production identity, health, geography, RBAC denial
+        env:
+          BASE_URL: https://www.lifthaul.com.ph
+          EXPECTED_SHA: 41565f0be486d6be666214df99a47ae7dec207a5
+        run: |
+          mkdir -p evidence
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"]
+          evidence = {"run_type": "read_only_production_auth_denial", "release_sha": expected, "checks": {}}
+          def call(method, path, body=None, bearer=None):
+              headers = {"User-Agent": "LiftHaul-Authorized-MVP-UAT/1.0", "Accept": "application/json"}
+              if bearer is not None:
+                  headers["Authorization"] = "Bearer " + bearer
+              data = json.dumps(body).encode("utf-8") if body is not None else None
+              if data is not None:
+                  headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(base + path, data=data, method=method, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=18) as response:
+                      return response.status, response.read(1048576)
+              except urllib.error.HTTPError as error:
+                  return error.code, error.read(8192)
+
+          try:
+              code, raw = call("GET", "/readyz")
+              assert code == 200, f"Readiness HTTP {code}"
+              ready = json.loads(raw)
+              assert ready.get("status") == "ready" and ready.get("release_sha") == expected
+              assert ready.get("schema_version") is not None
+              evidence["checks"]["exact_readiness"] = {"http_code": code, "schema_version": ready["schema_version"]}
+              for path in ("/healthz", "/data/psgc/manifest.json"):
+                  code, raw = call("GET", path)
+                  assert code == 200, f"{path} HTTP {code}"
+                  assert isinstance(json.loads(raw), dict), f"{path} returned invalid JSON"
+                  evidence["checks"][path] = {"http_code": code}
+
+              roles = (
+                  ("booker", "GET", "/portal/client/overview"),
+                  ("fleet_owner", "GET", "/portal/carrier/overview"),
+                  ("driver", "GET", "/driver/trips"),
+                  ("staff", "GET", "/admin/marketplace/public-booking-queue"),
+                  ("finance", "GET", "/admin/marketplace/billing/accounts"),
+                  ("founder_mfa", "POST", "/founder/dashboard/summary"),
+                  ("platform_admin", "GET", "/admin/config"),
+              )
+              for role, method, path in roles:
+                  code, _ = call(method, path, body={} if method == "POST" else None)
+                  assert code in (401, 403), f"{role} unauthenticated HTTP {code}"
+                  evidence["checks"][role + "_unauthenticated"] = {"http_code": code}
+              code, _ = call("GET", "/portal/client/overview", bearer="invalid-synthetic-uat-token")
+              assert code in (401, 403), f"invalid bearer token returned HTTP {code}"
+              evidence["checks"]["invalid_token_rejected"] = {"http_code": code}
+              print("PRODUCTION READ-ONLY RBAC PASS: 7 roles rejected unauthenticated; invalid bearer rejected")
+          finally:
+              with open("evidence/production-rbac-readonly.json", "w", encoding="utf-8") as handle:
+                  json.dump(evidence, handle, indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lifthaul-production-unauthenticated-rbac
+          path: evidence/production-rbac-readonly.json
+          retention-days: 30
+
+  single-synthetic-public-booking:
+    name: One identifiable no-funds booking and tracking
+    needs: unauthenticated-boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Create one synthetic booking only after RBAC and exact SHA pass
+        env:
+          BASE_URL: https://www.lifthaul.com.ph
+          EXPECTED_SHA: 41565f0be486d6be666214df99a47ae7dec207a5
+        run: |
+          mkdir -p evidence
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          evidence = {"run_type": "single_nonfinancial_public_booking", "expected_sha": os.environ["EXPECTED_SHA"], "checks": {}}
+          def call(method, path, body=None):
+              headers = {"User-Agent": "LiftHaul-Authorized-MVP-UAT/1.0", "Accept": "application/json"}
+              payload = json.dumps(body).encode("utf-8") if body is not None else None
+              if payload is not None:
+                  headers["Content-Type"] = "application/json"
+              request = urllib.request.Request(base + path, method=method, data=payload, headers=headers)
+              try:
+                  with urllib.request.urlopen(request, timeout=25) as response:
+                      code, raw = response.status, response.read(262144)
+              except urllib.error.HTTPError as error:
+                  code, raw = error.code, error.read(8192)
+              try:
+                  parsed = json.loads(raw)
+                  if isinstance(parsed, dict) and isinstance(parsed.get("data"), dict):
+                      parsed = parsed["data"]
+              except (UnicodeDecodeError, json.JSONDecodeError):
+                  parsed = {}
+              return code, parsed
+
+          try:
+              code, ready = call("GET", "/readyz")
+              assert code == 200 and ready.get("status") == "ready" and ready.get("release_sha") == os.environ["EXPECTED_SHA"], "Release identity changed before test"
+
+              run_id = os.environ["GITHUB_RUN_ID"]
+              booking = {
+                  "contact_name": "LIFTHAUL SYNTHETIC QA - DO NOT DISPATCH",
+                  "contact_email": "qa-run-" + run_id + "@example.invalid",
+                  "origin_island": "Luzon", "dest_island": "Luzon",
+                  "origin_city": "Makati", "dest_city": "Quezon City",
+                  "vehicle": "moto", "km": 12, "weight_kg": 2,
+                  "cargo_category": "BOXES_GENERAL", "cargo": "Synthetic test parcel (no physical shipment)",
+                  "package_count": 1, "package_length_cm": 20,
+                  "package_width_cm": 20, "package_height_cm": 20,
+                  "excluded_charges_ack": True,
+                  "payment": "protected",
+                  "notes": "SYNTHETIC TEST ONLY: do not assign, dispatch, collect or pay",
+                  "idempotency_key": "mvp-public-test-" + run_id
+              }
+              code, created = call("POST", "/public/bookings", booking)
+              assert code == 200, f"Public booking HTTP {code}"
+              token = created.get("tracking_token")
+              ref = created.get("ref")
+              assert isinstance(token, str) and token.startswith("pbk_"), "Missing protected tracking token"
+              assert isinstance(ref, str) and ref.startswith("LH-"), "Missing booking reference"
+              assert created.get("status") == "REQUEST_RECEIVED", "Unexpected booking initial state"
+              assert created.get("payment_preference", {}).get("charged") is False, "Unexpected payment charge"
+              assert created.get("protected_payment", {}).get("live_funds_enabled") is False, "Live funds should be separately gated"
+              evidence["booking_reference"] = ref
+              evidence["checks"]["submission"] = {"http_code": code, "booking_state": created["status"], "charged": False, "live_funds_enabled": False}
+              print("SYNTHETIC PUBLIC BOOKING SUBMITTED:", ref)
+
+              code, tracking = call("GET", "/public/bookings/track/" + token)
+              assert code == 200, f"Tracking HTTP {code}"
+              assert tracking.get("ref") == ref, "Tracking did not return same persisted booking"
+              assert tracking.get("customer_status"), "No customer-safe booking status"
+              assert tracking.get("service") == "Domestic", "Wrong geographic route type"
+              assert tracking.get("cargo", {}).get("weight_kg") == 2, "Tracking cargo does not match booking"
+              for private_field in ("tracking_token", "booking_id", "internal_notes", "carrier_bank_account", "tenant_id"):
+                  assert private_field not in tracking, f"Tracking leaked {private_field}"
+              evidence["checks"]["tracking"] = {"http_code": code, "same_reference": True, "domestic_route": True}
+              code, _ = call("GET", "/public/bookings/track/pbk_intentionally_invalid_nonexistent_uat")
+              assert code in (400, 404), f"Unknown tracking token returned HTTP {code}"
+              evidence["checks"]["unknown_token_denial"] = {"http_code": code}
+              print("SYNTHETIC TRACKING AND PRIVACY PASS; NO MONEY MOVED")
+          finally:
+              with open("evidence/production-synthetic-booking.json", "w", encoding="utf-8") as handle:
+                  json.dump(evidence, handle, indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lifthaul-production-synthetic-booking
+          path: evidence/production-synthetic-booking.json
+          retention-days: 30

@@ -3093,6 +3093,14 @@ def _founder_routes():
 ROUTES.update(_founder_routes())
 
 
+def _operational_safety_status(actor, body, params):
+    import operational_safety
+    return operational_safety.status(actor, _release_metadata())
+
+
+ROUTES[("GET", "/admin/security/operational-safety")] = _operational_safety_status
+
+
 def _match(method, path):
     for (m, tmpl), fn in ROUTES.items():
         if m != method:

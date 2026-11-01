@@ -32,6 +32,13 @@ PERSONAS = (
     "finance",
     "administrator",
 )
+# Only externally scoped personas must see their own synthetic records.
+# Administrators and operations have intentionally broader queue access.
+PRIVATE_PERSONAS = (
+    "booker", "accredited_driver", "motorcycle_owner",
+    "light_vehicle_owner", "truck_owner", "fleet_owner",
+    "specialized_provider",
+)
 ROLE_RULES = {
     "booker": {"customer"},
     "accredited_driver": {"driver_principal"},
@@ -124,6 +131,7 @@ def execute(manifest, expected_sha, call=http_call):
     assert ready.get("deployment_id") and ready.get("schema_version"), "deployment identity is incomplete"
 
     tokens, results = {}, []
+    acceptance = None
     try:
         for persona in PERSONAS:
             row = manifest[persona]
@@ -141,6 +149,12 @@ def execute(manifest, expected_sha, call=http_call):
             if persona != "administrator":
                 denied, _ = call("GET", "/admin/users", bearer=token)
                 assert denied == 403, f"{persona}: user administration was not denied"
+            if persona in PRIVATE_PERSONAS or persona == "operations":
+                denied, _ = call(
+                    "GET", "/admin/marketplace/protected-payment-live-status",
+                    bearer=token,
+                )
+                assert denied == 403, f"{persona}: restricted finance status was not denied"
 
             journey_payloads = []
             for path in JOURNEYS[persona]:
@@ -148,6 +162,12 @@ def execute(manifest, expected_sha, call=http_call):
                 assert code == 200, f"{persona}: journey endpoint failed"
                 journey_payloads.append(payload)
             assert _contains(journey_payloads, row["marker"]), f"{persona}: dedicated synthetic fixture missing"
+            if persona in PRIVATE_PERSONAS:
+                for other in PRIVATE_PERSONAS:
+                    if other != persona:
+                        assert not _contains(journey_payloads, manifest[other]["marker"]), (
+                            f"{persona}: unrelated persona fixture visible"
+                        )
             results.append({"persona": persona, "result": "PASS", "control": "login_role_scope_fixture"})
 
         admin_token = tokens["administrator"]
@@ -161,7 +181,7 @@ def execute(manifest, expected_sha, call=http_call):
         assert code == 200, "finance: protected-payment status unavailable"
         assert live.get("LIVE_PROTECTED_FUNDS_ENABLED") is False, "live protected funds unexpectedly enabled"
         assert live.get("live_protected_payment") == "BLOCKED", "live-funds boundary is not fail-closed"
-        return {
+        acceptance = {
             "schema": "lifthaul.production-persona-uat.v1",
             "result": "PASS",
             "expected_release_sha": expected_sha,
@@ -171,15 +191,45 @@ def execute(manifest, expected_sha, call=http_call):
             "personas_required": len(PERSONAS),
             "personas_passed": len(results),
             "live_funds_enabled": False,
+            "external_persona_fixture_isolation": "PASS",
             "accounts": [{"persona": p, "account_fingerprint": _fingerprint(manifest[p]["email"])} for p in PERSONAS],
             "results": results,
         }
+        return acceptance
     finally:
-        for token in tokens.values():
+        # An apparent logout success must not count as proof of revocation.
+        # Verify every authenticated test session is unusable before allowing
+        # the Gate 5 PASS return to escape this finally block.
+        unrevoked = []
+        for persona, token in tokens.items():
             try:
-                call("POST", "/logout", {}, bearer=token)
+                logout_status, _ = call("POST", "/logout", {}, bearer=token)
+                if logout_status not in (200, 204):
+                    unrevoked.append(persona)
+                    continue
+                stale_status, _ = call("GET", "/me/permissions", bearer=token)
+                if stale_status not in (401, 403):
+                    unrevoked.append(persona)
             except Exception:
-                pass
+                unrevoked.append(persona)
+        if unrevoked:
+            # Persona labels are fixed non-secret identifiers; never print
+            # bearer tokens, email addresses or raw provider responses.
+            raise AssertionError(
+                "Gate 5 authenticated session revocation failed for: "
+                + ", ".join(sorted(unrevoked))
+            )
+        if acceptance is not None:
+            # This record is written only after all ten authenticated test
+            # sessions demonstrably reject their prior bearer token. The
+            # driver_applicant is deliberately denied authentication.
+            assert len(tokens) == len(PERSONAS) - 1, (
+                "Gate 5 session count does not match authenticated personas"
+            )
+            acceptance["sessions_revoked"] = len(tokens)
+            acceptance["revocation_control"] = (
+                "logout_http_200_or_204_and_stale_bearer_401_or_403"
+            )
 
 
 def main():

@@ -96,17 +96,24 @@ class FakeApi:
 
 
 class Gate5ProvisionContract(unittest.TestCase):
-    def test_hosted_persona_workflow_has_no_long_lived_deploy_token_dependency(self):
+    def test_hosted_persona_workflow_only_consumes_approved_existing_identities(self):
         workflow = (HERE.parent.parent / ".github" / "workflows" / "production-persona-uat.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("LH_PROD_PERSONA_PROVISION_SEED", workflow)
-        self.assertIn("LH_PROD_PERSONA_ADMIN_EMAIL", workflow)
-        self.assertIn("LH_PROD_PERSONA_ADMIN_PASSWORD", workflow)
-        self.assertIn("Wait for the exact release to become ready", workflow)
-        self.assertNotIn("RAILWAY_PROJECT_TOKEN", workflow)
-        self.assertNotIn("railway variable set", workflow)
-        self.assertNotIn("railway redeploy", workflow)
+        self.assertIn("secrets.LH_PROD_PERSONA_CREDENTIALS_JSON", workflow)
+        self.assertIn("BLOCKED_HUMAN_IDENTITY_SETUP", workflow)
+        self.assertIn("validate_persona_acceptance.py", workflow)
+        self.assertIn("ref: ${{ inputs.release_sha }}", workflow)
+        self.assertIn('git merge-base --is-ancestor "$RELEASE_SHA" origin/main', workflow)
+        for forbidden in (
+            "LH_PROD_PERSONA_PROVISION_SEED", "LH_PROD_PERSONA_ADMIN_EMAIL",
+            "LH_PROD_PERSONA_ADMIN_PASSWORD", "prod_persona_provision.py",
+            "prod_persona_credentials.py", "railway_set_bootstrap_identity.py",
+            "variableCollectionUpsert", "RAILWAY_PROJECT_TOKEN",
+            "railway variable set", "railway redeploy",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, workflow)
 
     def test_derivation_is_repeatable_unique_and_strong(self):
         seed = "x" * 48

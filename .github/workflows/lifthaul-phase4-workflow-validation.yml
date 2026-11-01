@@ -10,6 +10,12 @@ on:
       - 'backend/test_phase4_workflow.py'
       - '.github/workflows/lifthaul-phase4-workflow-validation.yml'
 
+# Synthetic validation runs in an explicit test environment so the
+# operational-safety interlock's local exemption applies. Production
+# still requires LH_LIVE_OPERATIONS=on; financial paths are never exempt.
+env:
+  APP_ENV: test
+
 jobs:
   regression:
     name: SQLite regression (full suite + Phase 4)

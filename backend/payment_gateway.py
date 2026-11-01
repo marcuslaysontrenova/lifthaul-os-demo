@@ -435,6 +435,10 @@ class XenditClient:
         return cls(cfg["secret_key"], cfg["api_base_url"])
 
     def _request(self, method, path, payload=None):
+        import operational_safety
+        operational_safety.require("external_financial_provider_enabled")
+        if method != "GET":
+            operational_safety.require("live_refunds_enabled" if path == "/refunds" else "live_collection_enabled")
         body = None if payload is None else json.dumps(payload).encode()
         auth = base64.b64encode((self.secret_key + ":").encode()).decode()
         req = urllib.request.Request(self.base_url + path, data=body, method=method, headers={

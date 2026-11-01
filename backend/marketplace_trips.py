@@ -283,6 +283,8 @@ def create_trip(conn, actor, assignment_id, gps_provider_name="MOCK", **coords):
 def activate_trip(conn, actor, trip_id):
     """Fail-closed: a trip may activate ONLY when Increment-4 protected funding gate is eligible."""
     core.require(actor, "marketplace.trip.activate")
+    import operational_safety
+    operational_safety.require("live_dispatch_enabled", synthetic_local=True)
     trip = _guarded(conn, actor, "mkt_trips", trip_id)
     if trip["status"] != "CREATED":
         raise ValueError(f"cannot activate a trip in status {trip['status']}")
@@ -309,6 +311,8 @@ def activate_trip(conn, actor, trip_id):
 
 def advance_trip(conn, actor, trip_id, to_status, note=None, gps=None):
     core.require(actor, "marketplace.trip.execute")
+    import operational_safety
+    operational_safety.require("live_dispatch_enabled", synthetic_local=True)
     trip = _guarded(conn, actor, "mkt_trips", trip_id)
     frm = trip["status"]
     if to_status not in TRIP_STATUSES:

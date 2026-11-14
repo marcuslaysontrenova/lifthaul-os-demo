@@ -237,6 +237,11 @@ _PROVIDERS = {"MOCK": DeterministicMockProtectedPaymentProvider(),
 
 
 def provider(name="MOCK"):
+    if (name or "MOCK").upper() != "MOCK":
+        import operational_safety
+        for capability in ("external_financial_provider_enabled", "live_collection_enabled",
+                           "live_refunds_enabled", "live_payouts_enabled", "live_escrow_disbursement_enabled"):
+            operational_safety.require(capability)
     p = _PROVIDERS.get((name or "MOCK").upper())
     if not p:
         raise ValueError(f"unknown provider {name}")

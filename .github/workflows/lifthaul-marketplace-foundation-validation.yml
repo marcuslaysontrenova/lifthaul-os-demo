@@ -13,6 +13,12 @@ on:
       - 'backend/server.py'
       - '.github/workflows/lifthaul-marketplace-foundation-validation.yml'
 
+# Synthetic validation runs in an explicit test environment so the
+# operational-safety interlock's local exemption applies. Production
+# still requires LH_LIVE_OPERATIONS=on; financial paths are never exempt.
+env:
+  APP_ENV: test
+
 jobs:
   regression:
     name: SQLite regression (full suite + marketplace)

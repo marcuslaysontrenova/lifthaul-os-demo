@@ -5,7 +5,11 @@ from pathlib import Path
 
 
 def evaluate(env):
-    ownership = env.get("OWNERSHIP_OUTCOME") == "success"
+    # Routing to the repository owner is a fallback, not proof of staffed on-call.
+    # Missing signals must fail closed even if individual workflow steps say success.
+    operators_configured = (env.get("OPS_CONFIGURED") == "true"
+                            and env.get("INCIDENT_CONFIGURED") == "true")
+    ownership = env.get("OWNERSHIP_OUTCOME") == "success" and operators_configured
     surface = env.get("SURFACE_OUTCOME") == "success"
     return {
         "ownership_passed": ownership,

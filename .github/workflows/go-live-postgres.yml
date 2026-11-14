@@ -89,6 +89,12 @@ jobs:
         run: BASE_URL=http://localhost:8787 python scripts/go_live/preflight.py
 
       - name: Gates 3b/4 — full acceptance lifecycle + two-tenant isolation (on PostgreSQL)
+        # This in-process harness uses the disposable localhost CI database and
+        # MOCK providers only. Exercise assignment with the interlock lifted in
+        # THIS process only; the HTTP server and all hosted jobs keep it locked.
+        # These results are never live-OFF or hosted acceptance evidence.
+        env:
+          LH_LIVE_OPERATIONS: "on"
         run: python scripts/go_live/pg_lifecycle.py
         # Onboarding -> booking -> pricing -> matching -> assignment -> Protected Payment (MOCK) ->
         # SETTLED -> carrier settlement -> recipient OTP, then Tenant B denied on every Tenant A resource.

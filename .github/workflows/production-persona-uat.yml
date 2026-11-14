@@ -11,10 +11,6 @@ on:
 permissions:
   contents: read
 
-# This workflow deliberately provisions its synthetic test fixtures only through
-# governed production APIs. It must never mutate Railway variables or redeploy
-# production as part of acceptance testing.
-
 concurrency:
   group: lifthaul-production-persona-uat
   cancel-in-progress: false
@@ -40,78 +36,47 @@ jobs:
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           git fetch origin main --no-tags
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
-      - name: Verify protected synthetic provisioning seed
+      # Production accounts must be provisioned and approved separately.
+      # Never rotate a bootstrap administrator or mutate Railway from UAT.
+      - name: Verify protected read-only persona manifest
         env:
-          PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
-          PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
-          PROVISION_ADMIN_PASSWORD: ${{ secrets.LH_PROD_PERSONA_ADMIN_PASSWORD }}
+          LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
         run: |
           set -euo pipefail
-          test -n "$PROVISION_SEED"
-          test -n "$PROVISION_ADMIN_EMAIL"
-          test -n "$PROVISION_ADMIN_PASSWORD"
-      - name: Derive private synthetic credentials
-        env:
-          LH_PROD_PERSONA_PROVISION_SEED: ${{ secrets.LH_PROD_PERSONA_PROVISION_SEED }}
-        run: |
-          set -euo pipefail
-          python scripts/go_live/prod_persona_credentials.py \
-            --manifest-out "$RUNNER_TEMP/gate5-personas.json" \
-            --admin-email-out "$RUNNER_TEMP/gate5-admin-email" \
-            --admin-password-out "$RUNNER_TEMP/gate5-admin-password"
-      - name: Materialize protected provisioning identity
-        env:
-          PROVISION_ADMIN_EMAIL: ${{ secrets.LH_PROD_PERSONA_ADMIN_EMAIL }}
-          PROVISION_ADMIN_PASSWORD: ${{ secrets.LH_PROD_PERSONA_ADMIN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          umask 077
-          printf '%s' "$PROVISION_ADMIN_EMAIL" > "$RUNNER_TEMP/gate5-admin-email"
-          printf '%s' "$PROVISION_ADMIN_PASSWORD" > "$RUNNER_TEMP/gate5-admin-password"
-      - name: Wait for the exact release to become ready
-        env:
-          EXPECTED_SHA: ${{ inputs.release_sha }}
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 90); do
-            actual=$(curl -fsS https://www.lifthaul.com.ph/readyz | \
-              python -c 'import json,sys; print(json.load(sys.stdin).get("release_sha", ""))' || true)
-            [ "$actual" = "$EXPECTED_SHA" ] && exit 0
-            sleep 10
-          done
-          echo "production never reported the exact Gate 5 release" >&2
-          exit 1
-      - name: Provision governed synthetic personas and fixtures
-        env:
-          EXPECTED_SHA: ${{ inputs.release_sha }}
-        run: |
-          set -euo pipefail
-          python scripts/go_live/prod_persona_provision.py \
-            --manifest "$RUNNER_TEMP/gate5-personas.json" \
-            --admin-email "$RUNNER_TEMP/gate5-admin-email" \
-            --admin-password "$RUNNER_TEMP/gate5-admin-password" \
-            --output evidence/production-persona-provision.json
+          if [ -z "$LH_PROD_PERSONA_CREDENTIALS_JSON" ]; then
+            mkdir -p evidence
+            printf '{"schema":"lifthaul.gate5.blocker.v1","status":"BLOCKED_HUMAN_IDENTITY_SETUP","hosted_acceptance_verified":false,"live_funds_enabled":false}\n' > evidence/production-persona-blocker.json
+            echo "Gate 5 blocked: protected persona manifest is absent; no production accounts were modified." >&2
+            exit 1
+          fi
+          python -c 'import json,os; from scripts.go_live.prod_persona_uat import load_manifest; load_manifest(os.environ["LH_PROD_PERSONA_CREDENTIALS_JSON"])'
       - name: Run exact-release hosted persona evidence
         env:
           EXPECTED_SHA: ${{ inputs.release_sha }}
           OUTPUT_PATH: evidence/production-persona-uat.json
+          LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
         run: |
           set -euo pipefail
-          export LH_PROD_PERSONA_CREDENTIALS_JSON="$(cat "$RUNNER_TEMP/gate5-personas.json")"
           python scripts/go_live/prod_persona_uat.py
-          unset LH_PROD_PERSONA_CREDENTIALS_JSON
-      - name: Remove private runner files
-        if: always()
+      - name: Supplement direct-object and runtime safety evidence
+        env:
+          EXPECTED_SHA: ${{ inputs.release_sha }}
+          LH_PROD_PERSONA_CREDENTIALS_JSON: ${{ secrets.LH_PROD_PERSONA_CREDENTIALS_JSON }}
+        run: python scripts/go_live/supplemental_persona_uat.py
+      - name: Require hardened exact-release acceptance evidence
+        env:
+          EXPECTED_SHA: ${{ inputs.release_sha }}
         run: |
-          rm -f "$RUNNER_TEMP/gate5-personas.json" \
-            "$RUNNER_TEMP/gate5-admin-email" "$RUNNER_TEMP/gate5-admin-password"
+          set -euo pipefail
+          python scripts/go_live/validate_persona_acceptance.py --evidence evidence/production-persona-uat.json --release-sha "$EXPECTED_SHA"
       - name: Upload redacted Gate 5 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-persona-uat-${{ inputs.release_sha }}
           path: |
-            evidence/production-persona-provision.json
             evidence/production-persona-uat.json
+            evidence/production-persona-blocker.json
+            evidence/production-persona-security.json
           if-no-files-found: error
           retention-days: 90

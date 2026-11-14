@@ -128,6 +128,10 @@ class WiseAdminFeeClient:
         return f"{self.cfg['api_base']}/{self.cfg['api_release']}/{path.lstrip('/')}"
 
     def _request(self, method, path, payload=None, correlation_id=None):
+        import operational_safety
+        operational_safety.require("external_financial_provider_enabled")
+        if method != "GET":
+            operational_safety.require("live_settlement_enabled")
         body = None if payload is None else json.dumps(payload).encode("utf-8")
         headers = {
             "Authorization": "Bearer " + self.cfg["api_token"],

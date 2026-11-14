@@ -80,10 +80,45 @@ def validate_metadata() -> dict:
         raise SystemExit("RECOVERY_POINT_AT cannot be later than INCIDENT_AT")
     if restore_finished < restore_started:
         raise SystemExit("RESTORE_FINISHED_AT cannot be before RESTORE_STARTED_AT")
+    # Distinct URLs do not establish infrastructure isolation; require separately
+    # approved, operator-verified references before producing evidence.
+    if required("RECOVERY_ISOLATION_APPROVAL_REF") == required("RESTORE_TARGET_REFERENCE"):
+        raise SystemExit("independent isolation approval reference required")
+    if required("RECOVERY_TIMESTAMP_PROVENANCE") not in {"provider-exported", "tool-observed", "operator-supplied"}:
+        raise SystemExit("unsupported recovery timestamp provenance")
+    # Restore a historical backup against its approved recovery-point baseline,
+    # not a live source whose rows or schema may have changed after the incident.
+    try:
+        baseline_counts = json.loads(required("RECOVERY_APPROVED_BASELINE_COUNTS_JSON"))
+    except ValueError as exc:
+        raise SystemExit("approved recovery-point counts must be JSON") from exc
+    if (not isinstance(baseline_counts, dict) or set(baseline_counts) != set(CRITICAL_TABLES)
+            or any(type(v) is not int or v < 0 for v in baseline_counts.values())):
+        raise SystemExit("approved recovery-point counts are incomplete")
+    baseline_catalog_digest = required("RECOVERY_APPROVED_SCHEMA_DIGEST")
+    if len(baseline_catalog_digest) != 64 or any(x not in "0123456789abcdef" for x in baseline_catalog_digest):
+        raise SystemExit("approved recovery-point schema digest is invalid")
+    baseline_approval_ref = required("RECOVERY_BASELINE_APPROVAL_REF")
+    try:
+        rpo_objective = float(required("RECOVERY_APPROVED_RPO_SECONDS"))
+        rto_objective = float(required("RECOVERY_APPROVED_RTO_SECONDS"))
+    except ValueError as exc:
+        raise SystemExit("approved recovery objectives must be numeric seconds") from exc
+    if not (0 <= rpo_objective < 31536000 and 0 < rto_objective < 31536000):
+        raise SystemExit("approved recovery objectives are outside permitted bounds")
+    objectives_reference = required("RECOVERY_OBJECTIVES_APPROVAL_REF")
     return {
+        "approved_baseline_counts": baseline_counts,
+        "approved_schema_digest": baseline_catalog_digest,
+        "baseline_approval_reference": baseline_approval_ref,
+        "rpo_objective_seconds": rpo_objective,
+        "rto_objective_seconds": rto_objective,
+        "objectives_approval_reference": objectives_reference,
         "source_url": source_url,
         "restore_url": restore_url,
         "recovery_owner": required("RECOVERY_OWNER"),
+        "isolation_approval_reference": required("RECOVERY_ISOLATION_APPROVAL_REF"),
+        "timestamp_provenance": required("RECOVERY_TIMESTAMP_PROVENANCE"),
         "provider_backup_reference": required("PROVIDER_BACKUP_REFERENCE"),
         "restore_target_reference": required("RESTORE_TARGET_REFERENCE"),
         "backup_retention_days": retention_days,
@@ -94,10 +129,11 @@ def validate_metadata() -> dict:
     }
 
 
-def snapshot(conn) -> dict[str, int]:
+def snapshot(conn, *, readonly_started=False) -> dict[str, int]:
     result: dict[str, int] = {}
     with conn.cursor() as cursor:
-        cursor.execute("SET TRANSACTION READ ONLY")
+        if not readonly_started:
+            cursor.execute("SET TRANSACTION READ ONLY")
         for table in CRITICAL_TABLES:
             cursor.execute(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
@@ -111,6 +147,55 @@ def snapshot(conn) -> dict[str, int]:
     return result
 
 
+
+def schema_catalog(conn, *, readonly_started=False) -> tuple[str, dict[str, int]]:
+    """Hash only structural catalog metadata; never select or export row values."""
+    with conn.cursor() as cursor:
+        if not readonly_started:
+            cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute(
+            "SELECT table_name, column_name, data_type, is_nullable "
+            "FROM information_schema.columns WHERE table_schema='public' "
+            "ORDER BY table_name, ordinal_position"
+        )
+        columns = [tuple(row) for row in cursor.fetchall()]
+        cursor.execute(
+            "SELECT tablename, indexname, indexdef FROM pg_indexes "
+            "WHERE schemaname='public' ORDER BY tablename, indexname"
+        )
+        indexes = [tuple(row) for row in cursor.fetchall()]
+        cursor.execute(
+            "SELECT table_name, constraint_name, constraint_type "
+            "FROM information_schema.table_constraints "
+            "WHERE table_schema='public' ORDER BY table_name, constraint_name"
+        )
+        constraints = [tuple(row) for row in cursor.fetchall()]
+    for table in CRITICAL_TABLES:
+        if not any(row[0] == table for row in columns):
+            raise RuntimeError("required schema table or columns missing")
+        if not any(row[0] == table for row in indexes):
+            raise RuntimeError("required table index missing")
+        if not any(row[0] == table and row[2] == "PRIMARY KEY" for row in constraints):
+            raise RuntimeError("required table primary key missing")
+    catalog = {"columns": columns, "indexes": indexes, "constraints": constraints}
+    digest = hashlib.sha256(json.dumps(catalog, sort_keys=True, default=str).encode()).hexdigest()
+    return digest, {"columns": len(columns), "indexes": len(indexes), "constraints": len(constraints)}
+
+
+def inspect_restore_target(restore_url: str) -> tuple[dict[str, int], str, dict[str, int]]:
+    """Read-only recovered target; no query against changing production source."""
+    try:
+        import psycopg
+    except ImportError as exc:
+        raise SystemExit("psycopg is required for target inspection") from exc
+    with psycopg.connect(restore_url) as target:
+        with target.cursor() as cursor:
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        counts = snapshot(target, readonly_started=True)
+        digest, catalog_counts = schema_catalog(target, readonly_started=True)
+    return counts, digest, catalog_counts
+
+
 def reconcile(source_url: str, restore_url: str) -> tuple[dict[str, int], dict[str, int]]:
     try:
         import psycopg
@@ -122,15 +207,24 @@ def reconcile(source_url: str, restore_url: str) -> tuple[dict[str, int], dict[s
 
 def main() -> int:
     metadata = validate_metadata()
-    source, restored = reconcile(metadata.pop("source_url"), metadata.pop("restore_url"))
-    if source != restored:
-        raise SystemExit(f"restore reconciliation failed: source={source}, restored={restored}")
+    source_url = metadata.pop("source_url")
+    restore_url = metadata.pop("restore_url")
+    restored, catalog_digest, catalog_counts = inspect_restore_target(restore_url)
+    if restored != metadata["approved_baseline_counts"]:
+        raise SystemExit("restore reconciliation failed against approved recovery-point counts")
+    if catalog_digest != metadata["approved_schema_digest"]:
+        raise SystemExit("restore schema/index/constraint digest differs from approved recovery point")
 
     rto_seconds = (metadata["restore_finished_at"] - metadata["restore_started_at"]).total_seconds()
     rpo_seconds = (metadata["incident_at"] - metadata["recovery_point_at"]).total_seconds()
-    digest = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+    if rpo_seconds > metadata["rpo_objective_seconds"] or rto_seconds > metadata["rto_objective_seconds"]:
+        raise SystemExit("measured recovery exceeds one or more approved objectives")
+    digest = hashlib.sha256(json.dumps(restored, sort_keys=True).encode()).hexdigest()
     evidence = {
         "result": "PASS",
+        "component": "read_only_approved_baseline_reconciliation_only",
+        "baseline_approval_reference": metadata["baseline_approval_reference"],
+        "baseline_authenticity_verified": False,
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "pitr_enabled": True,
         "backup_retention_days": metadata["backup_retention_days"],
@@ -143,9 +237,22 @@ def main() -> int:
         "restore_finished_at": metadata["restore_finished_at"].isoformat(),
         "rto_seconds": rto_seconds,
         "rpo_seconds": rpo_seconds,
-        "critical_table_counts": source,
+        "rpo_objective_seconds": metadata["rpo_objective_seconds"],
+        "rto_objective_seconds": metadata["rto_objective_seconds"],
+        "objective_approval_reference": metadata["objectives_approval_reference"],
+        "objectives_authenticity_verified": False,
+        "measured_objectives_within_bounds": True,
+        "critical_table_counts": restored,
+        "schema_catalog_digest": catalog_digest,
+        "schema_catalog_counts": catalog_counts,
+        "schema_catalog_compatible": True,
         "reconciliation_digest": digest,
         "source_and_restore_are_distinct": True,
+        "infrastructure_isolation_verified": False,
+        "witnessed_restore_verified": False,
+        "provider_restore_attestation_verified": False,
+        "independent_witness_signoff": "PENDING",
+        "gate6_closure": "BLOCKED",
     }
     path = Path(required("EVIDENCE_PATH"))
     path.parent.mkdir(parents=True, exist_ok=True)

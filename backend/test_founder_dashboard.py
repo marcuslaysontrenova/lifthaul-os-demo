@@ -96,7 +96,9 @@ class FounderDashboardTests(unittest.TestCase):
 
     def test_financial_report_separates_volume_revenue_and_liabilities(self):
         self.confirm_founder_mfa()
-        now = core.now()
+        # Rows must fall inside the reported period (anchor 2026-10-12, monthly).
+        # core.now() made this test pass only during October 2026.
+        now = "2026-10-12T10:00:00+00:00"
         self.conn.execute(
             "INSERT INTO mkt_payment_requirements(booking_id,assignment_id,gross_value,carrier_amount,"
             "platform_fee,payment_fee,tax,protected_amount_required,funded_amount,released_amount,"
